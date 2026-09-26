@@ -429,3 +429,52 @@ app.processEvents()
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
                             timeout=60, env=env)
     assert result.returncode == 0 and "Traceback" not in result.stderr, result.stderr
+
+
+def _start_ide(tmp_path, *args):
+    """Start the IDE in its own process, with its settings in tmp_path."""
+    import subprocess
+    import sys
+
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen", VP6_SETTINGS_DIR=str(tmp_path),
+               PYTHONPATH=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return subprocess.Popen([sys.executable, "-m", "vp6.ide", *args], env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+
+def _interrupt_after_startup(process, seconds=4.0):
+    import signal
+    import time
+
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        assert process.poll() is None, process.communicate()[1]  # still starting / running
+        time.sleep(0.1)
+    process.send_signal(signal.SIGINT)  # what Ctrl+C in the terminal sends
+    return process.communicate(timeout=30)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="SIGINT from another process is POSIX")
+def test_ctrl_c_quits_like_file_exit(tmp_path):
+    project = create_project(str(tmp_path), "Demo", "exe")
+    process = _start_ide(tmp_path, project)
+    _out, err = _interrupt_after_startup(process)
+    assert process.returncode == 0, err
+    assert "Traceback" not in err and "KeyboardInterrupt" not in err
+    # File > Exit saves the window layout on the way out
+    assert "geometry" in (tmp_path / "VP6 IDE.ini").read_text()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="SIGINT from another process is POSIX")
+def test_ctrl_c_closes_the_start_dialog_and_quits(tmp_path):
+    process = _start_ide(tmp_path)  # no project: the New Project dialog is open
+    _out, err = _interrupt_after_startup(process)
+    assert process.returncode == 0, err
+    assert "Traceback" not in err
+
+
+def test_settings_dir_override(tmp_path, monkeypatch):
+    from vp6.ide.theme import ide_settings
+
+    monkeypatch.setenv("VP6_SETTINGS_DIR", str(tmp_path / "alt"))
+    assert ide_settings().fileName() == str(tmp_path / "alt" / "VP6 IDE.ini")

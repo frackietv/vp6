@@ -615,4 +615,5 @@ suite redirects to a temporary INI file.
 | `VP6_PYTHON` | project script (line 2) | interpreter used by `./Project.vp6p` |
 | `VP6_IDE_SCHEME` | `appearance.ide_scheme` | IDE appearance passed to programs started with F5 |
 | `VP6_NO_ERROR_DIALOG` | `app.report_runtime_error` | print tracebacks without showing the error box |
+| `VP6_SETTINGS_DIR` | `theme.ide_settings` | keep the IDE's settings in `VP6 IDE.ini` in this folder instead of the normal store (separate IDE instances; tests that start the IDE) |
 | `QT_QPA_PLATFORM=offscreen` | tests, headless runs | run Qt without a display |

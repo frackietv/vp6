@@ -392,6 +392,16 @@ prepended to `PYTHONPATH` for programs started with F5.
   * `running`, `_update_title`, `_update_actions`.
 * **`closeEvent`** asks to save, then stores `geometry` and `state`.
 
+`_QuitOnInterrupt` makes **Ctrl+C** in the terminal that started the IDE work
+like File > Exit (Quit VP6).
+
+* Qt's event loop keeps Python from running signal handlers, so it uses
+  `signal.set_wakeup_fd` with a socket pair and a `QSocketNotifier` to get
+  control back to Python.
+* It closes any open modal dialog first (e.g. New Project at startup).
+* It ignores repeats while the save prompt is showing.
+* `main()` installs it. MainWindows created in tests don't have it.
+
 Module functions:
 
 * `create_project(location, name, template)` creates a project folder. Every
@@ -661,7 +671,8 @@ The Tools > Options dialog. It edits a copy of the theme manager's
   added.
 * **`BUILTIN_THEMES`**: Light (VB6-like) and Dark (VS Code Dark+-like).
 * **Store and font:** `ide_settings()` is the IDE's `QSettings` store (always
-  use it); `default_code_font()`.
+  use it). With `VP6_SETTINGS_DIR` set, it's `VP6 IDE.ini` in that folder.
+  Also `default_code_font()`.
 * **`EditorSettings`**: `selection`, `system_light`, `system_dark`,
   `font_family`, `font_size`, `frame_style`, `show_grid`, `themes`.
 * **`ThemeManager(QObject)`** (signal `changed`):
@@ -738,7 +749,7 @@ All tests run headless. `conftest.py`:
 | `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results. |
 | `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames (controls, form classes, class and module references in other files), the console template. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
-| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module and unopened-form Names, renaming modules and forms from the Properties window, a renamed Form1 still running, the IDE exiting without errors. |
+| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module and unopened-form Names, renaming modules and forms from the Properties window, a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`. |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |

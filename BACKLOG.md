@@ -62,3 +62,4 @@
 - **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)
 - **[Controls]** Label rich text: bold parts and links in a caption (self-hosting: the Properties description pane and the About box)
 - **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: menus, graphics methods, MDI forms, Common Dialog, and TreeView / TabStrip / StatusBar / Toolbar / UpDown from the common controls
+- **[Language and runtime]** Ctrl+C in the terminal should end a VP6 program started from it (`./Project.vp6p`, `python Form1.py`), like closing its forms; today Qt's event loop keeps Python from handling SIGINT, as it did for the IDE before 0.3.1

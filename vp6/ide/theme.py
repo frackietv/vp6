@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from dataclasses import asdict, dataclass, field
 
 from PySide6.QtCore import QObject, QSettings, Qt, Signal
@@ -124,7 +125,12 @@ BUILTIN_THEMES: dict[str, Theme] = {
 def ide_settings() -> QSettings:
     """The IDE's settings store. Uses QSettings' default format, so tests can
     redirect it to a temporary INI file (QSettings("org", "app") would always
-    use the native store, e.g. the macOS plist)."""
+    use the native store, e.g. the macOS plist). The VP6_SETTINGS_DIR
+    environment variable keeps the settings in an INI file in that folder
+    instead (for separate IDE instances, and tests that start the IDE)."""
+    directory = os.environ.get("VP6_SETTINGS_DIR")
+    if directory:
+        return QSettings(os.path.join(directory, "VP6 IDE.ini"), QSettings.IniFormat)
     return QSettings(QSettings.defaultFormat(), QSettings.UserScope, "VP6", "VP6 IDE")
 
 

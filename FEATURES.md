@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.3.1
+**Date:** 2026-09-29
+
+## IDE
+
+- Ctrl+C in the terminal that started VP6 quits it like File > Exit / Quit VP6: unsaved changes are offered for saving (Cancel keeps VP6 open), and an open dialog such as New Project is closed first
+- `VP6_SETTINGS_DIR` environment variable: keep the IDE's settings in an INI file in that folder
+
+---
+
 **Version:** 0.3.0
 **Date:** 2026-09-29
 
