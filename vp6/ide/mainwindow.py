@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
         state = self.settings.value("state")
         if state is not None:
             self.restoreState(state)
+        self._tab_bottom_docks()  # a layout saved before may have them side by side
         self._update_title()
         self._update_actions()
         self._apply_workspace_colors()
@@ -137,7 +138,37 @@ class MainWindow(QMainWindow):
         dock.setObjectName(name)
         dock.setWidget(widget)
         self.addDockWidget(area, dock)
+        # Bound methods (not lambdas), so they're disconnected on shutdown
+        dock.dockLocationChanged.connect(self._on_dock_moved)
+        dock.topLevelChanged.connect(self._on_dock_moved)
+        dock.visibilityChanged.connect(self._on_dock_moved)
         return dock
+
+    # -- bottom edge: panels there are always tabs ---------------------------------------------
+    def _on_dock_moved(self, *_):
+        # Coalesce: dragging a panel emits several signals in a row
+        if not getattr(self, "_bottom_tabs_pending", False):
+            self._bottom_tabs_pending = True
+            QTimer.singleShot(0, self._tab_bottom_docks)
+
+    def _tab_bottom_docks(self):
+        """When more than one open panel is docked at the bottom edge, join them
+        into one tab group (a tab with the title of each, one body shown). Qt's
+        ForceTabbedDocks would do this for every edge, but the right edge keeps
+        Project and Properties stacked."""
+        self._bottom_tabs_pending = False
+        docks = [dock for dock in self.findChildren(QDockWidget)
+                 if self.dockWidgetArea(dock) == Qt.BottomDockWidgetArea
+                 and not dock.isFloating()
+                 and dock.toggleViewAction().isChecked()]  # open, even if not the current tab
+        if len(docks) < 2:
+            return
+        first = docks[0]
+        grouped = {first, *self.tabifiedDockWidgets(first)}
+        for dock in docks[1:]:
+            if dock not in grouped:
+                self.tabifyDockWidget(first, dock)  # adds it as a tab and shows it
+                grouped.add(dock)
 
     def _action(self, text, slot, shortcut=None, icon=None, tip=None) -> QAction:
         action = QAction(text, self)

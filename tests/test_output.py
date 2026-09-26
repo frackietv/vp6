@@ -50,7 +50,9 @@ print("python stdout")
 os.write(2, b"c-level stderr\\n")                # like a C library
 qWarning("qt warning")                         # Qt's own messages
 deadline = QDeadlineTimer(5000)
-while "qt warning" not in "".join(t for _, t in received) and not deadline.hasExpired():
+expected = ("python stdout", "c-level stderr", "qt warning")  # separate pipes and threads
+while not all(e in "".join(t for _, t in received) for e in expected) \\
+        and not deadline.hasExpired():
     app.processEvents()
 capture.stop()
 open({str(result_file)!r}, "w").write(repr(received))

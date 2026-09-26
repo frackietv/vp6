@@ -42,7 +42,7 @@ The IDE opens with a VB-style **New Project** dialog. Every new project has
 | Output window               | The IDE's own output, including library messages such as Qt warnings (hidden by default; View > Output Window) |
 | Format menu                 | Align, Make Same Size, Center in Form, Bring to Front (Ctrl+J), Send to Back (Ctrl+K) |
 | Run (F5 or Cmd+Enter / Ctrl+Enter, Shift+F5, End) | Saves everything and runs the project in a separate process; the title shows `[design]` / `[run]` |
-| Toolbar and layout          | Sun/moon switch at the right end of the toolbar toggles light/dark; View > Toolbars shows a hidden toolbar; View > Reset Window Layout restores all panels |
+| Toolbar and layout          | Sun/moon switch at the right end of the toolbar toggles light/dark; View > Toolbars shows a hidden toolbar; View > Reset Window Layout restores all panels; panels at the bottom edge are always tabs |
 
 ### Themes: light and dark
 

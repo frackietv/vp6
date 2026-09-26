@@ -313,6 +313,13 @@ flowchart TD
   `outputcapture.OutputCapture` redirects file descriptors 1 and 2 through
   pipes, so library output such as Qt's warnings is included, and still
   copies everything to the terminal;
+* **dock areas:** the Toolbox in the left dock area, Project over Properties
+  in the right one, Immediate (and Output) in the bottom one. Panels in the
+  **bottom** dock area are always tabs, with one title per panel and one
+  body shown: `MainWindow._tab_bottom_docks` rejoins them whenever a panel is
+  moved, docked, shown or hidden, and after restoring a saved layout. The
+  right area keeps its panels stacked, which is why Qt's `ForceTabbedDocks`
+  (every area) isn't used;
 * a **Standard** toolbar ending with the light/dark switch;
 * menus: File, Edit, View, Project, Format, Run, Tools, Window, Help.
 

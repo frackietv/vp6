@@ -488,3 +488,59 @@ def test_output_window_hidden_by_default(window):
     assert window.output_dock in window.tabifiedDockWidgets(window.immediate_dock)
     window.reset_layout()  # back to the default: hidden again
     assert window.output_dock.isHidden() and not window.immediate_dock.isHidden()
+
+
+def _bottom_group(window):
+    first = window.immediate_dock
+    return {first, *window.tabifiedDockWidgets(first)}
+
+
+def _shown_bodies(window, docks):
+    """Docks whose body is on screen. Qt keeps non-current tabs "visible" but
+    parks them outside the window, so check the geometry."""
+    return [d for d in docks if d.isVisible() and d.geometry().intersects(window.rect())]
+
+
+def _bottom_tab_titles(window):
+    from PySide6.QtWidgets import QTabBar
+
+    return [[bar.tabText(i) for i in range(bar.count())]
+            for bar in window.findChildren(QTabBar) if bar.isVisible()]
+
+
+def test_bottom_edge_panels_are_tabs(window):
+    from PySide6.QtCore import Qt
+
+    assert QTest.qWaitForWindowExposed(window)
+    window.act_view_output.trigger()
+    QTest.qWait(20)
+    assert _bottom_group(window) == {window.immediate_dock, window.output_dock}
+    # Put Output beside Immediate (like dragging it next to it): it becomes a tab again
+    window.splitDockWidget(window.immediate_dock, window.output_dock, Qt.Horizontal)
+    QTest.qWait(20)
+    assert window.output_dock in _bottom_group(window)
+    # Move another panel to the bottom edge: it joins the tabs too
+    window.addDockWidget(Qt.BottomDockWidgetArea, window.properties_dock)
+    QTest.qWait(20)
+    group = _bottom_group(window)
+    assert group == {window.immediate_dock, window.output_dock, window.properties_dock}
+    assert len(_shown_bodies(window, group)) == 1  # one body shown...
+    assert ["Immediate", "Output", "Properties"] in _bottom_tab_titles(window)  # ...all titles
+    # The right edge keeps its panels stacked, not tabbed
+    assert window.tabifiedDockWidgets(window.explorer_dock) == []
+
+
+def test_bottom_tabs_after_restoring_a_side_by_side_layout(qapp, tmp_path):
+    from PySide6.QtCore import Qt
+
+    first = MainWindow()
+    first.show()
+    first.output_dock.show()
+    first.splitDockWidget(first.immediate_dock, first.output_dock, Qt.Horizontal)
+    first.settings.setValue("state", first.saveState())  # as a previous session left it
+    first.close()
+    second = MainWindow()
+    second.show()
+    QTest.qWait(20)
+    assert second.output_dock in second.tabifiedDockWidgets(second.immediate_dock)
+    second.close()

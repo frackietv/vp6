@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.3.3
+**Date:** 2026-09-29
+
+## IDE
+
+- Panels at the bottom edge (the bottom dock area) are always tabs: one tab per panel with its title, one panel body shown. This holds when panels are dragged there, placed side by side, shown, hidden, or restored from a saved layout. The left and right edges keep their panels stacked.
+
+---
+
 **Version:** 0.3.2
 **Date:** 2026-09-29
 
