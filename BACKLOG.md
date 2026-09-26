@@ -1,29 +1,49 @@
 # VP6 backlog
 
-- **[Controls]** Common controls: ProgressBar, Slider, TreeView, ListView, TabStrip, StatusBar, Toolbar, ImageList, and others
+- **[Controls]** TreeView: nodes with text, keys and children, expand/collapse, `SelectedItem`, `NodeClick` / `Expand` / `Collapse` events, node icons, and a way to fill it in the designer (Kitchen Sink redesign: the navigation tree; self-hosting: the Project Explorer and the Outline window)
+- **[Language and runtime]** Embedding a form inside a container control (e.g. showing a live form in a PictureBox), with its Load/Unload and Resize events as the container shows, hides and resizes it (Kitchen Sink redesign: each demo is its own form shown in the content pane; self-hosting: the form designer's canvas)
+- **[Controls]** PictureBox `Align` (None, Top, Bottom, Left, Right) like VB: the control docks to that edge of the form and follows its size (Kitchen Sink redesign: the navigation pane on the left and the content pane beside it; self-hosting: toolbars and panels)
+- **[Controls]** Splitter control for resizable panes (Kitchen Sink redesign: between the navigation tree and the demo; self-hosting: the Properties window's grid/description split)
+- **[Controls]** Scrollable container: a PictureBox/Frame that scrolls its contents with automatic scroll bars (Kitchen Sink redesign: demos taller than the content pane; self-hosting: the designer canvas)
+- **[Controls]** Label rich text: bold parts, headings and links in a caption (Kitchen Sink redesign: the introduction page; self-hosting: the Properties description pane and the About box)
+- **[Kitchen Sink]** Redesign the Kitchen Sink explorer-style: instead of everything on one form, a navigation tree on the left lists all the features, controls and APIs, and choosing an item shows its demo in the main pane. The first item is an introduction with introductory text. Depends on the items above; tests/test_kitchen_sink.py must keep checking that everything is demonstrated.
+- **[Controls]** Common controls: ProgressBar, Slider, ListView, TabStrip, StatusBar, Toolbar, ImageList, UpDown, and others
 - **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)
 - **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)
-- **[Controls]** Label rich text: bold parts and links in a caption (self-hosting: the Properties description pane and the About box)
+- **[Controls]** ListBox/ComboBox completeness: `NewIndex`, `TopIndex`, `SelCount`, ListBox `Style = Checkbox` with the `ItemCheck` event, ComboBox `Style = 1` (simple combo) and the `DropDown` event
+- **[Controls]** Label access keys: `&` in a Label's Caption underlines the letter and Alt+letter focuses the next control in the tab order, as in VB (today the `&` is just removed), plus `UseMnemonic`
+- **[Controls]** Label `BackStyle` (Transparent / Opaque)
 - **[Controls]** File system controls: DriveListBox, DirListBox, FileListBox
 - **[Controls]** RichTextBox: text with colors, bold and italic, and appending formatted text (self-hosting: the code editor and the colored Immediate output)
 - **[Controls]** TextBox/RichTextBox editing API: line/column ↔ position, caret screen position, scroll position, undo/redo, a `SelChange` event, and an option for Tab to insert a tab instead of moving focus (self-hosting: completion, combos following the cursor, go-to-line, indentation)
 - **[Controls]** A code-editor capable text control: syntax-highlighting hook, line-number gutter, current-line highlight, hidden (folded) lines and read-only ranges (self-hosting: the code window and its protected designer region)
 - **[Controls]** Grid control with editable cells and per-cell editors (like MSFlexGrid) (self-hosting: the Properties window and the Options color table)
-- **[Controls]** Splitter control for resizable panes (self-hosting: the Properties window's grid/description split)
-- **[Controls]** Scrollable container: a PictureBox/Frame that scrolls its contents with automatic scroll bars (self-hosting: the designer canvas)
 - **[Controls]** Dockable tool windows (docking, floating, closing and restoring panels) (self-hosting: Toolbox, Project Explorer, Properties and Immediate panels)
-- **[Kitchen Sink]** Redesign kitchen sink in an exlorer-style: rather than everything on one page, left edge should have navigation tree listing all features/widgets/etc and clicking on it displays the demo/sample of the item.  First item should be an introduction and should display introductory text.
+- **[Controls]** Shape
+- **[Controls]** UserControl: designing your own reusable controls in VP6 (VB's UserControl), with their own properties and events, placed from the Toolbox
 - **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)
 - **[Language and runtime]** Default form instances: using `Form2.Show()` without creating an instance first
+- **[Language and runtime]** `Form_QueryUnload` with `UnloadMode` (closed by the user, by code, or because the program is ending), before `Form_Unload`
+- **[Language and runtime]** `Validate` event and `CausesValidation`: checking a control's value before the focus leaves it
+- **[Language and runtime]** `Form.ActiveControl` and `Screen.ActiveControl` (the control with the focus)
+- **[Language and runtime]** Moving a control to another container at run time (assigning `Container`, as VB's `Set Command1.Container = Frame1`)
+- **[Language and runtime]** Drag and drop: `DragMode`, `Drag`, `DragDrop` / `DragOver` events, and OLE drag and drop of text and files from other programs
+- **[Language and runtime]** `SendKeys`: sending keystrokes to the active form
+- **[Language and runtime]** Form `Picture`: a background picture on the form
 - **[Controls]** Common Dialog control (open, save, color, font, print dialogs)
 - **[Language and runtime]** Form `Icon` property and an application icon (self-hosting: window icons of the IDE and its MDI windows)
-- **[Controls]** `MousePointer` / `MouseIcon` properties for cursor shapes such as resize arrows and crosshair (self-hosting: the designer's handles and drawing tool)
+- **[Controls]** `MousePointer` / `MouseIcon` properties for cursor shapes such as resize arrows and crosshair, and `Screen.MousePointer` (e.g. an hourglass during long work) (self-hosting: the designer's handles and drawing tool)
 - **[Language and runtime]** `SaveSetting` / `GetSetting` / `DeleteSetting` for per-user settings (self-hosting: recent projects, themes, window layout)
 - **[Language and runtime]** Graphics methods: `Line`, `Circle`, `PSet` and `Print` drawing on forms and PictureBoxes. `PictureBox.Cls()` exists but only clears the picture.
 - **[Language and runtime]** `Paint` event and `AutoRedraw` on forms and PictureBoxes, so programs can draw custom surfaces (self-hosting: the designer's window frame, grid dots and selection handles, the code editor's gutter)
 - **[Language and runtime]** Text measurement: `TextWidth` / `TextHeight` on forms and PictureBoxes (self-hosting: gutter width, eliding captions)
-- **[Language and runtime]** Off-screen pictures: draw into an image in memory, use it as a `Picture`/icon, and save it (`SavePicture`) (self-hosting: the IDE's drawn icons and the Kitchen Sink image)
-- **[Controls]** Shape
+- **[Language and runtime]** Picture objects: `LoadPicture`, drawing into an image in memory, using it as a `Picture`/icon, and saving it (`SavePicture`); today `Picture` is only a file path (self-hosting: the IDE's drawn icons and the Kitchen Sink image)
+- **[Language and runtime]** Clipboard pictures and formats: `Clipboard.GetData` / `SetData` / `GetFormat` (today text only)
+- **[Language and runtime]** `Printer` object and `Printers` collection: printing text and graphics
+- **[Language and runtime]** More of VB's `App` object: `Major` / `Minor` / `Revision`, `PrevInstance`, `ProductName`, and the command line (VB's `Command()`)
+- **[IDE]** Find and Replace in all files of the project (today: the current code window only)
+- **[IDE]** Properties window Categorized view (VB's Alphabetic / Categorized tabs)
+- **[IDE]** Object Browser: the classes, members, events and constants of `vp6` and of the project's forms and modules
 - **[IDE]** Save Project As (copying a project to a new folder)
 - **[IDE]** Renaming and deleting files from the Project Explorer (today Remove only takes a file out of the project)
 - **[IDE]** Locking controls in the designer (Format > Lock Controls)
@@ -36,9 +56,8 @@
 - **[Language and runtime]** An event when the OS switches between light and dark, and a way to ask which one is active (self-hosting: repainting custom-drawn surfaces and icons)
 - **[Language and runtime]** MDI forms (MDI parent and child forms)
 - **[Language and runtime]** Borderless popup forms that don't take the focus from the form that opened them (self-hosting: the code completion list)
-- **[Language and runtime]** Embedding a form inside a container control (e.g. showing a live form in a PictureBox) (self-hosting: the form designer's canvas)
 - **[Language and runtime]** Starting a program asynchronously with output, exit and error events and a way to write to its stdin (a Process object beyond VB's `Shell`) (self-hosting: F5 and the Immediate window)
-- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: menus, graphics methods, MDI forms, Common Dialog, and TreeView / TabStrip / StatusBar / Toolbar / UpDown from the common controls
+- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: graphics methods, MDI forms, Common Dialog, and TreeView / TabStrip / StatusBar / Toolbar / UpDown from the common controls
 - **[Language and runtime]** Twips and VB's `ScaleMode`; VP6 uses pixels only
 - **[Controls]** Data-bound controls
 - **[IDE]** Designer window frames with rounded bottom corners on macOS
