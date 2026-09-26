@@ -402,6 +402,11 @@ like File > Exit (Quit VP6).
 * It ignores repeats while the save prompt is showing.
 * `main()` installs it. MainWindows created in tests don't have it.
 
+`main()` also starts an `OutputCapture` before the `QApplication` exists, so
+Qt's startup messages are included. It attaches the capture to the Output
+window (`output`, dock `output_dock`, hidden by default and tabbed with the
+Immediate window; View > Output Window) and stops it on quit.
+
 Module functions:
 
 * `create_project(location, name, template)` creates a project folder. Every
@@ -564,7 +569,30 @@ window.
   has no specs). `set_property("Name", …)` calls the main window's
   `_rename_file_object`.
 
-### `vp6/ide/panels.py` (≈330 lines)
+### `vp6/ide/outputcapture.py` (≈130 lines)
+
+Captures the IDE process's stdout and stderr for the Output window.
+
+* **At the file-descriptor level.** Replacing `sys.stdout` would miss
+  libraries that write to fds 1 and 2 directly, such as Qt's warnings and C
+  extensions.
+* `OutputCapture(streams=((1, "out"), (2, "err")))` points each descriptor at a
+  pipe (`os.dup2`) and starts a reader thread per pipe (`_pump`). Each thread:
+  * copies the bytes to the original descriptor, so a terminal still shows
+    them;
+  * decodes them incrementally as UTF-8, so a character split across reads is
+    kept whole;
+  * delivers the text.
+* **Delivery** (`_deliver`): text is kept in a bounded history and sent
+  through `_Relay.received`, a signal queued to the GUI thread.
+  `attach(append)` replays the history (startup output) and then forwards new
+  text.
+* `stop()` restores the descriptors, lets the readers drain and finish, then
+  closes the duplicates.
+* `mainwindow.main()` starts it before Qt, unless `VP6_NO_OUTPUT_CAPTURE` is
+  set.
+
+### `vp6/ide/panels.py` (≈370 lines)
 
 * **`Toolbox`:**
   * checkable tool buttons (the pointer plus `CONTROL_TYPES`) with signals
@@ -582,16 +610,21 @@ window.
   * `projectSelected` / `fileSelected(path)` fire when the current item
     changes; `select_project()` and `project_selected()`. Selecting the
     project shows its properties in the Properties window.
-* **`ImmediateWindow`:**
-  * **Output and input:** an `output` (`QPlainTextEdit`) plus an `input` line
-    (enabled by `set_running(True)` while a console program runs, emits
-    `inputSubmitted`). `clear()` empties the output.
-  * **Writing:** `append(text, kind)` where kind is `out`, `err`, `info` or
-    `in`. The kind is stored on the text, so `apply_theme()` can recolor
-    existing output.
+* **`_OutputPane`** is the shared base of the two output panels:
+  * an `output` (`QPlainTextEdit`, read-only);
+  * `append(text, kind)` where kind is `out`, `err`, `info` or `in`. The kind
+    is stored on the text, so `apply_theme()` can recolor existing output.
+    New text keeps the view at the end only if it was already there;
+  * `clear()`;
+  * a context menu built by the subclass's `_context_menu()`.
+* **`ImmediateWindow(_OutputPane)`** shows the running program's output:
+  * **Input:** an `input` line, enabled by `set_running(True)` while a console
+    program runs, emits `inputSubmitted`.
   * **Traceback links:** double-clicking a `File "...", line N` line emits
     `openLocation`.
-  * **Context menu:** `_context_menu()` is the standard menu plus Clear.
+  * **Context menu:** the standard text menu plus Clear.
+* **`OutputWindow(_OutputPane)`** shows the IDE's own stdout and stderr (see
+  `outputcapture.py`). Its context menu is Select All, Copy and Clear.
 * `pump_process_output(process, window)` connects a `QProcess`'s stdout and
   stderr to the window.
 
@@ -754,6 +787,7 @@ All tests run headless. `conftest.py`:
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
 | `test_docs.py` | The docs keep up with the code: every source file in the source reference, every test file in the test table, every public API name in `api.md` (key-code ranges count), the generated `api.md` tables up to date with a section per control, every property with a description, and every relative link and anchor in the Markdown files resolving. |
+| `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme; its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload). |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6. |
 

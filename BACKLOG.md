@@ -5,8 +5,6 @@
 - **[IDE - Outline]** outline panel items should be sortable in ascending and descending order by order defined in file, name, or type, using small buttons at the top of the panel
 - **[IDE - Outline]** when initially opened using the menu, outline panel should be placed under the properties panel
 - **[IDE - Outline]** clicking on an item in the outline panel should take the user to the appropriate line in the code editor
-- **[IDE - Output]** vp6 should have a hidden by default output panel that displays current output from all vp6 stdout and stderr output, including any possible output from the libraries it's using
-- **[IDE - Output]** output panel must have select all, copy, and clear context menun items
 - **[Language and runtime]** Control arrays: several controls sharing a name and handlers with an `Index` argument. Today handlers can be attached in code instead, as the Calculator and Kitchen Sink do.
 - **[Language and runtime]** Menus on forms, and the Menu Editor to design them
 - **[Controls]** Shape

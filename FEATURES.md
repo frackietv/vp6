@@ -1,5 +1,17 @@
 # VP6 features
 
+**Version:** 0.3.2
+**Date:** 2026-09-29
+
+## IDE
+
+- Output window, hidden by default (View > Output Window, tabbed with the Immediate window): shows everything the IDE process writes to stdout and stderr, including libraries such as Qt, captured at the file-descriptor level; output still appears in the terminal too, and output from startup is included
+- Output window context menu: Select All, Copy and Clear
+- The Immediate and Output windows keep following new output only while scrolled to the end, so earlier output can be read while more arrives
+- `VP6_NO_OUTPUT_CAPTURE` environment variable turns the capture off
+
+---
+
 **Version:** 0.3.1
 **Date:** 2026-09-29
 

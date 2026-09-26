@@ -27,7 +27,9 @@ from .designer import FormDesigner, is_identifier
 from .dialogs import ABOUT_HTML, NewProjectDialog, ProjectPropertiesDialog
 from .documents import Document, FormDocument, open_document
 from .options import OptionsDialog
-from .panels import ImmediateWindow, ProjectExplorer, Toolbox, pump_process_output
+from .outputcapture import OutputCapture
+from .panels import (ImmediateWindow, OutputWindow, ProjectExplorer, Toolbox,
+                     pump_process_output)
 from .projectprops import FileTarget, ProjectTarget
 from .properties import PropertiesWindow
 from .theme import SYSTEM, ide_settings, theme_manager
@@ -64,6 +66,7 @@ class MainWindow(QMainWindow):
         self.explorer = ProjectExplorer()
         self.properties = PropertiesWindow()
         self.immediate = ImmediateWindow()
+        self.output = OutputWindow()  # the IDE's own stdout/stderr (hidden by default)
         self.toolbox_dock = self._dock("Toolbox", self.toolbox, Qt.LeftDockWidgetArea, "toolbox")
         self.explorer_dock = self._dock("Project", self.explorer, Qt.RightDockWidgetArea,
                                         "project")
@@ -71,6 +74,7 @@ class MainWindow(QMainWindow):
                                           Qt.RightDockWidgetArea, "properties")
         self.immediate_dock = self._dock("Immediate", self.immediate, Qt.BottomDockWidgetArea,
                                          "immediate")
+        self.output_dock = self._dock("Output", self.output, Qt.BottomDockWidgetArea, "output")
         self.toolbox_dock.setFixedWidth(84)
         # Opening/closing the Project panel changes what Properties follows
         self.explorer_dock.visibilityChanged.connect(self._on_explorer_changed)
@@ -176,6 +180,8 @@ class MainWindow(QMainWindow):
         self.act_view_toolbox = a("Toolbo&x", lambda: self._show_dock(self.toolbox_dock))
         self.act_view_immediate = a("&Immediate Window", lambda: self._show_dock(
             self.immediate_dock), "Ctrl+G")
+        self.act_view_output = a("O&utput Window", lambda: self._show_dock(self.output_dock),
+                                 tip="The IDE's own output, including library messages")
 
         self.act_run = a("&Start", self.run_project, "F5", "Run", "Run the project")
         # Also Cmd+Enter on macOS / Ctrl+Enter elsewhere (Qt's "Ctrl" is Command on macOS),
@@ -204,7 +210,8 @@ class MainWindow(QMainWindow):
 
         view = bar.addMenu("&View")
         for act in (self.act_view_code, self.act_view_object, None, self.act_view_immediate,
-                    self.act_view_project, self.act_view_props, self.act_view_toolbox):
+                    self.act_view_output, self.act_view_project, self.act_view_props,
+                    self.act_view_toolbox):
             view.addSeparator() if act is None else view.addAction(act)
         view.addSeparator()
         toolbars = view.addMenu("Tool&bars")
@@ -301,6 +308,12 @@ class MainWindow(QMainWindow):
             dock.setFloating(False)
             self.addDockWidget(area, dock, Qt.Vertical)
             dock.show()
+        # The Output window shares the bottom area with the Immediate window, as a
+        # tab, and is hidden by default (View > Output Window)
+        self.output_dock.setFloating(False)
+        self.tabifyDockWidget(self.immediate_dock, self.output_dock)
+        self.output_dock.hide()
+        self.immediate_dock.raise_()
         self.resizeDocks([self.immediate_dock], [150], Qt.Vertical)
         self.resizeDocks([self.explorer_dock, self.properties_dock], [180, 420], Qt.Vertical)
         self.resizeDocks([self.properties_dock], [290], Qt.Horizontal)
@@ -1048,11 +1061,18 @@ class _QuitOnInterrupt(QObject):
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv if argv is None else argv
+    # Capture the IDE's stdout/stderr (for the Output window) before Qt starts,
+    # so its startup messages are included. VP6_NO_OUTPUT_CAPTURE turns it
+    # off, e.g. to see the last messages of a hard crash directly.
+    capture = None if os.environ.get("VP6_NO_OUTPUT_CAPTURE") else OutputCapture()
     app = QApplication.instance() or QApplication(argv)
     app.setApplicationName("VP6")
     app.setOrganizationName("VP6")
     window = MainWindow()
     window._interrupt_handler = _QuitOnInterrupt(window)
+    if capture is not None:
+        capture.attach(window.output.append)
+        app.aboutToQuit.connect(capture.stop)
     window.show()
     if len(argv) > 1 and os.path.exists(argv[1]):
         window.open_project(argv[1])

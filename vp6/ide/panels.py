@@ -1,4 +1,4 @@
-"""Toolbox, Project Explorer and Immediate window."""
+"""Toolbox, Project Explorer, Immediate window and Output window."""
 
 from __future__ import annotations
 
@@ -210,13 +210,10 @@ class ProjectExplorer(QWidget):
         menu.exec(self.tree.viewport().mapToGlobal(pos))
 
 
-class ImmediateWindow(QWidget):
-    """Program output (stdout/stderr, Debug.Print) plus a line for stdin."""
-
-    openLocation = Signal(str, int)  # path, line
-    inputSubmitted = Signal(str)
-
-    _LOCATION_RE = re.compile(r'File "([^"]+)", line (\d+)')
+class _OutputPane(QWidget):
+    """A read-only, themed text pane for program output. Text is appended with
+    a kind (out, err, info, in) that picks its color; the kind is stored on
+    the text, so a theme change recolors what's already there."""
 
     _KIND = QTextFormat.UserProperty + 1  # char format property: output kind
 
@@ -225,27 +222,27 @@ class ImmediateWindow(QWidget):
         self.output = QPlainTextEdit()
         self.output.setReadOnly(True)
         self.output.setMaximumBlockCount(20000)
-        self.output.mouseDoubleClickEvent = self._on_double_click
         self.output.setContextMenuPolicy(Qt.CustomContextMenu)
         self.output.customContextMenuRequested.connect(self._on_context_menu)
-        self.input = QLineEdit()
-        self.input.setPlaceholderText("Type input for the running program and press Enter")
-        self.input.returnPressed.connect(self._submit)
-        self.input.setEnabled(False)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.output)
-        layout.addWidget(self.input)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(0)
+        self._layout.addWidget(self.output)
+
+    def _start_theming(self) -> None:
+        """Call at the end of the subclass constructor."""
         self.apply_theme()
         theme_manager().changed.connect(self.apply_theme)
+
+    def _themed_widgets(self) -> list[QWidget]:
+        return [self.output]
 
     def apply_theme(self) -> None:
         theme = theme_manager().current()
         colors = theme.colors
         font = theme_manager().font()
         font.setPointSize(max(font.pointSize() - 1, 6))
-        for widget in (self.output, self.input):
+        for widget in self._themed_widgets():
             palette = widget.palette()
             for group in (QPalette.Active, QPalette.Inactive):
                 palette.setColor(group, QPalette.Base, QColor(colors["background"]))
@@ -293,11 +290,44 @@ class ImmediateWindow(QWidget):
         self.output.clear()
 
     def append(self, text: str, kind: str = "out") -> None:
-        cursor = self.output.textCursor()
+        # Keep following the end only if the user was already there
+        scrollbar = self.output.verticalScrollBar()
+        at_end = scrollbar.value() >= scrollbar.maximum() - 2
+        cursor = QTextCursor(self.output.document())
         cursor.movePosition(QTextCursor.End)
         cursor.insertText(text, self._format(kind))
-        self.output.setTextCursor(cursor)
-        self.output.ensureCursorVisible()
+        if at_end:
+            scrollbar.setValue(scrollbar.maximum())
+
+    def _context_menu(self) -> QMenu:
+        raise NotImplementedError
+
+    def _on_context_menu(self, pos) -> None:
+        menu = self._context_menu()
+        menu.exec(self.output.viewport().mapToGlobal(pos))
+        menu.deleteLater()
+
+
+class ImmediateWindow(_OutputPane):
+    """Program output (stdout/stderr, Debug.Print) plus a line for stdin."""
+
+    openLocation = Signal(str, int)  # path, line
+    inputSubmitted = Signal(str)
+
+    _LOCATION_RE = re.compile(r'File "([^"]+)", line (\d+)')
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.output.mouseDoubleClickEvent = self._on_double_click
+        self.input = QLineEdit()
+        self.input.setPlaceholderText("Type input for the running program and press Enter")
+        self.input.returnPressed.connect(self._submit)
+        self.input.setEnabled(False)
+        self._layout.addWidget(self.input)
+        self._start_theming()
+
+    def _themed_widgets(self) -> list[QWidget]:
+        return [self.output, self.input]
 
     def set_running(self, running: bool) -> None:
         self.input.setEnabled(running)
@@ -318,11 +348,6 @@ class ImmediateWindow(QWidget):
         clear.setEnabled(not self.output.document().isEmpty())
         return menu
 
-    def _on_context_menu(self, pos) -> None:
-        menu = self._context_menu()
-        menu.exec(self.output.viewport().mapToGlobal(pos))
-        menu.deleteLater()  # createStandardContextMenu() hands us ownership
-
     def _on_double_click(self, event) -> None:
         cursor = self.output.cursorForPosition(event.position().toPoint())
         line = cursor.block().text()
@@ -331,6 +356,27 @@ class ImmediateWindow(QWidget):
             self.openLocation.emit(match.group(1), int(match.group(2)))
         else:
             QPlainTextEdit.mouseDoubleClickEvent(self.output, event)
+
+
+class OutputWindow(_OutputPane):
+    """The IDE's own stdout and stderr, including libraries such as Qt (see
+    ``outputcapture.OutputCapture``). Hidden by default; View > Output Window."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._start_theming()
+
+    def _context_menu(self) -> QMenu:
+        menu = QMenu(self.output)
+        select_all = menu.addAction("Select All", self.output.selectAll)
+        copy = menu.addAction("Copy", self.output.copy)
+        menu.addSeparator()
+        clear = menu.addAction("Clear", self.clear)
+        empty = self.output.document().isEmpty()
+        select_all.setEnabled(not empty)
+        copy.setEnabled(self.output.textCursor().hasSelection())
+        clear.setEnabled(not empty)
+        return menu
 
 
 def pump_process_output(process: QProcess, window: ImmediateWindow) -> None:

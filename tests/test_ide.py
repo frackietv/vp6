@@ -478,3 +478,13 @@ def test_settings_dir_override(tmp_path, monkeypatch):
 
     monkeypatch.setenv("VP6_SETTINGS_DIR", str(tmp_path / "alt"))
     assert ide_settings().fileName() == str(tmp_path / "alt" / "VP6 IDE.ini")
+
+
+def test_output_window_hidden_by_default(window):
+    assert window.output_dock.isHidden()
+    window.act_view_output.trigger()  # View > Output Window
+    assert not window.output_dock.isHidden()
+    # it opens as a tab next to the Immediate window (Qt lists shown tabs only)
+    assert window.output_dock in window.tabifiedDockWidgets(window.immediate_dock)
+    window.reset_layout()  # back to the default: hidden again
+    assert window.output_dock.isHidden() and not window.immediate_dock.isHidden()

@@ -47,7 +47,8 @@ vp6/                    runtime library - "from vp6 import *"
     codeeditor.py       CodeWindow / CodeEditor / PythonHighlighter
     properties.py       Properties window (property grid)
     projectprops.py     the project as a Properties window target
-    panels.py           Toolbox, Project Explorer, Immediate window
+    panels.py           Toolbox, Project Explorer, Immediate and Output windows
+    outputcapture.py    captures the IDE's own stdout/stderr for the Output window
     documents.py        Document / FormDocument (open files)
     dialogs.py          New Project, Project Properties, About
     kitchensink.py      the Kitchen Sink project template
@@ -304,9 +305,14 @@ flowchart TD
 * a central `QMdiArea` holding designer windows (`FormDesigner`) and code
   windows (`CodeWindow`), one of each per file at most, created on demand and
   hidden rather than deleted when closed;
-* four docks: **Toolbox** (`panels.Toolbox`), **Project**
+* five docks: **Toolbox** (`panels.Toolbox`), **Project**
   (`panels.ProjectExplorer`), **Properties**
-  (`properties.PropertiesWindow`), **Immediate** (`panels.ImmediateWindow`);
+  (`properties.PropertiesWindow`), **Immediate** (`panels.ImmediateWindow`, the
+  running program's output) and **Output** (`panels.OutputWindow`, the IDE's
+  own stdout/stderr). Output is hidden by default and tabbed with Immediate;
+  `outputcapture.OutputCapture` redirects file descriptors 1 and 2 through
+  pipes, so library output such as Qt's warnings is included, and still
+  copies everything to the terminal;
 * a **Standard** toolbar ending with the light/dark switch;
 * menus: File, Edit, View, Project, Format, Run, Tools, Window, Help.
 
@@ -615,5 +621,6 @@ suite redirects to a temporary INI file.
 | `VP6_PYTHON` | project script (line 2) | interpreter used by `./Project.vp6p` |
 | `VP6_IDE_SCHEME` | `appearance.ide_scheme` | IDE appearance passed to programs started with F5 |
 | `VP6_NO_ERROR_DIALOG` | `app.report_runtime_error` | print tracebacks without showing the error box |
+| `VP6_NO_OUTPUT_CAPTURE` | `mainwindow.main` | don't capture the IDE's stdout/stderr for the Output window (e.g. to see the last messages of a hard crash directly) |
 | `VP6_SETTINGS_DIR` | `theme.ide_settings` | keep the IDE's settings in `VP6 IDE.ini` in this folder instead of the normal store (separate IDE instances; tests that start the IDE) |
 | `QT_QPA_PLATFORM=offscreen` | tests, headless runs | run Qt without a display |

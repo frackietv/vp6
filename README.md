@@ -39,6 +39,7 @@ The IDE opens with a VB-style **New Project** dialog. Every new project has
 | Code window (F7)            | Object and Procedure dropdowns that create handler stubs, Python highlighting, auto-indent, `self.` / `self.Control.` completion, Ctrl+/ comments |
 | Project Explorer (Ctrl+R)   | Forms and modules, View Code / View Object, set startup form; follows the active window |
 | Immediate window (Ctrl+G)   | Program output and `Debug.Print`, stdin for console apps, double-click a traceback line to jump to it |
+| Output window               | The IDE's own output, including library messages such as Qt warnings (hidden by default; View > Output Window) |
 | Format menu                 | Align, Make Same Size, Center in Form, Bring to Front (Ctrl+J), Send to Back (Ctrl+K) |
 | Run (F5 or Cmd+Enter / Ctrl+Enter, Shift+F5, End) | Saves everything and runs the project in a separate process; the title shows `[design]` / `[run]` |
 | Toolbar and layout          | Sun/moon switch at the right end of the toolbar toggles light/dark; View > Toolbars shows a hidden toolbar; View > Reset Window Layout restores all panels |
