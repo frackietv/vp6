@@ -5,20 +5,106 @@ from __future__ import annotations
 
 import inspect
 import os
+import signal
+import socket
 import sys
+import threading
 import traceback
 
-from PySide6.QtCore import QEventLoop
+from PySide6.QtCore import QEventLoop, QObject, QSocketNotifier, QTimer
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+
+_interrupt_handler = None  # installed by ensure_app() for VP6 programs
 
 
 def ensure_app() -> QApplication:
-    """Return the QApplication, creating it on first use."""
+    """Return the QApplication, creating it on first use. A VP6 program
+    creates it here, so this is also where Ctrl+C gets wired to closing the
+    program's forms. (The IDE and the tests create their own QApplication
+    and keep their own Ctrl+C behavior.)"""
+    global _interrupt_handler
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv[:1])
+        _interrupt_handler = install_interrupt_handler(close_all_windows)
     return app
+
+
+# --- Ctrl+C -----------------------------------------------------------------------------
+
+class InterruptHandler(QObject):
+    """Makes Ctrl+C (SIGINT) in the terminal run ``action`` in a Qt program.
+
+    Python runs signal handlers only when it gets control back, and Qt's
+    event loop can stay in C++ indefinitely, so SIGINT would be ignored. The
+    signal module writes to a socket on every signal (``set_wakeup_fd``); a
+    socket notifier on it returns control to Python, which then runs the
+    handler. Before ``action``, any open modal window (a MsgBox, a dialog, a
+    form shown with vpModal) is closed, since it would block. A repeated
+    Ctrl+C while ``action`` is still running (e.g. a Form_Unload asking
+    "Close?") is ignored."""
+
+    def __init__(self, action, parent=None):
+        super().__init__(parent)
+        self._action = action
+        self._busy = False
+        self._receive, self._send = socket.socketpair()
+        for sock in (self._receive, self._send):
+            sock.setblocking(False)
+        signal.set_wakeup_fd(self._send.fileno())
+        signal.signal(signal.SIGINT, self._on_interrupt)
+        self._notifier = QSocketNotifier(self._receive.fileno(), QSocketNotifier.Read, self)
+        self._notifier.activated.connect(self._drain)
+
+    def _drain(self, *_):
+        try:
+            self._receive.recv(64)
+        except OSError:
+            pass
+        # Back in Python: the pending SIGINT handler runs now
+
+    def _on_interrupt(self, signum, frame):
+        QTimer.singleShot(0, self._run)
+
+    def _run(self):
+        if self._busy:
+            return
+        modal = QApplication.activeModalWidget()
+        if modal is not None:
+            # Close it, then continue once its event loop has returned
+            modal.reject() if isinstance(modal, QDialog) else modal.close()
+            QTimer.singleShot(0, self._run)
+            return
+        self._busy = True
+        try:
+            self._action()
+        finally:
+            self._busy = False
+
+
+def install_interrupt_handler(action, parent=None) -> InterruptHandler | None:
+    """Run ``action`` on Ctrl+C. Returns None where signals can't be handled
+    (not the main thread)."""
+    if threading.current_thread() is not threading.main_thread():
+        return None
+    try:
+        return InterruptHandler(action, parent)
+    except (ValueError, OSError):
+        return None
+
+
+def close_all_windows() -> None:
+    """Ctrl+C in a VP6 program: close its windows like their close buttons
+    would, so each Form_Unload runs (and may cancel). When the last one
+    closes, the program ends."""
+    app = QApplication.instance()
+    windows = [w for w in app.topLevelWidgets() if w.isVisible()]
+    if not windows:
+        app.quit()  # an event loop without windows: just stop it
+        return
+    for window in windows:
+        window.close()
 
 
 def DoEvents() -> None:

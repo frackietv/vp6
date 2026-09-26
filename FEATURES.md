@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.3.5
+**Date:** 2026-09-29
+
+## Programming model (the `vp6` library)
+
+- Ctrl+C in the terminal that started a VP6 program (`./Project.vp6p`, `python Form1.py`, `vp6-run`) closes its forms like their close buttons would: an open `MsgBox` or modal form closes first, each `Form_Unload` runs and can cancel (a repeated Ctrl+C while it asks is ignored), and the program ends when the last form is gone
+- Ctrl+C in a console program (e.g. at `input()`) ends it quietly with exit code 130 instead of a `KeyboardInterrupt` traceback
+
+## IDE
+
+- The IDE's Ctrl+C handling now shares its implementation with programs (`vp6.app.InterruptHandler`)
+
+---
+
 **Version:** 0.3.4
 **Date:** 2026-09-29
 

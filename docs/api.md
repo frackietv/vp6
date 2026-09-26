@@ -559,6 +559,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 |---|---|
 | `DoEvents()` | processes pending GUI events (keep the UI alive in long loops) |
 | `End()` | ends the program immediately; `Form_Unload` handlers do **not** run |
+| Ctrl+C | Not a function, but part of how programs end. Pressed in the terminal that started a program, it closes the program's forms like their close buttons would: an open `MsgBox` or modal form closes first, each `Form_Unload` runs and may cancel, and the program ends when the last form is gone. A console program waiting at `input()` ends with exit code 130. |
 | `Beep()` | system beep |
 
 ### Global objects

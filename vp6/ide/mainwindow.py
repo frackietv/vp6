@@ -4,21 +4,19 @@ from __future__ import annotations
 
 import os
 import shutil
-import signal
-import socket
 import sys
 
-from PySide6.QtCore import (QObject, QProcess, QProcessEnvironment, QSocketNotifier, Qt,
-                            QTimer)
+from PySide6.QtCore import QProcess, QProcessEnvironment, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QDockWidget, QFileDialog, QLineEdit, QMainWindow, QMdiArea,
+    QApplication, QDockWidget, QFileDialog, QLineEdit, QMainWindow, QMdiArea,
     QMdiSubWindow, QMessageBox, QPlainTextEdit, QSizePolicy, QWidget,
 )
 
 import vp6
 
 from .. import formfile
+from ..app import install_interrupt_handler
 from ..appearance import IDE_SCHEME_ENV, SCHEME_NAMES, scheme_from_name
 from ..project import EXTENSION, SUB_MAIN, Project
 from . import icons, kitchensink
@@ -1088,54 +1086,6 @@ def create_project(location: str, name: str, template: str) -> str:
     return path
 
 
-class _QuitOnInterrupt(QObject):
-    """Ctrl+C in the terminal that started the IDE works like File > Exit
-    (Quit VP6): unsaved changes are still offered for saving.
-
-    Python runs signal handlers only when it gets control back, and Qt's event
-    loop can stay in C++ indefinitely, so SIGINT would be ignored. The signal
-    module writes to a socket on every signal (set_wakeup_fd); a socket
-    notifier on it returns control to Python, which then runs the handler."""
-
-    def __init__(self, window: "MainWindow"):
-        super().__init__(window)
-        self._window = window
-        self._quitting = False
-        self._receive, self._send = socket.socketpair()
-        for sock in (self._receive, self._send):
-            sock.setblocking(False)
-        signal.set_wakeup_fd(self._send.fileno())
-        signal.signal(signal.SIGINT, self._on_interrupt)
-        self._notifier = QSocketNotifier(self._receive.fileno(), QSocketNotifier.Read, self)
-        self._notifier.activated.connect(self._drain)
-
-    def _drain(self, *_):
-        try:
-            self._receive.recv(64)
-        except OSError:
-            pass
-        # Back in Python: the pending SIGINT handler runs now
-
-    def _on_interrupt(self, signum, frame):
-        QTimer.singleShot(0, self._quit)
-
-    def _quit(self):
-        if self._quitting:  # already asking whether to save: ignore repeats
-            return
-        modal = QApplication.activeModalWidget()
-        if modal is not None:
-            # An open dialog (e.g. New Project at startup) would block quitting:
-            # close it, then continue once its event loop has returned
-            modal.reject() if isinstance(modal, QDialog) else modal.close()
-            QTimer.singleShot(0, self._quit)
-            return
-        self._quitting = True
-        try:
-            self._window.act_exit.trigger()  # exactly what File > Exit does
-        finally:
-            self._quitting = False
-
-
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv if argv is None else argv
     # Capture the IDE's stdout/stderr (for the Output window) before Qt starts,
@@ -1146,7 +1096,9 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName("VP6")
     app.setOrganizationName("VP6")
     window = MainWindow()
-    window._interrupt_handler = _QuitOnInterrupt(window)
+    # Ctrl+C in the terminal works like File > Exit (Quit VP6): unsaved
+    # changes are still offered for saving
+    window._interrupt_handler = install_interrupt_handler(window.act_exit.trigger, window)
     if capture is not None:
         capture.attach(window.output.append)
         app.aboutToQuit.connect(capture.stop)

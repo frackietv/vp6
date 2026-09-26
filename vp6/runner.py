@@ -55,7 +55,12 @@ def run_project(path: str) -> int:
     App.Title = project.name
     appearance.project_scheme = appearance.scheme_from_name(project.color_scheme)
     if project.startup == SUB_MAIN:
-        result = find_main(project)()
+        try:
+            result = find_main(project)()
+        except KeyboardInterrupt:
+            # Ctrl+C before any window exists (e.g. at a console input()):
+            # end quietly with the conventional exit code instead of a traceback
+            return 130
         if project.type == "console":
             return result if isinstance(result, int) else 0
         from .app import run_event_loop

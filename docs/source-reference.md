@@ -49,7 +49,19 @@ value to the widget; `_read_<Name>()` returns the live value.
 Application-level services.
 
 * `ensure_app()` creates the `QApplication` on first use. Every entry point
-  that needs Qt calls it.
+  that needs Qt calls it. When it creates the application (a VP6 program), it
+  also installs the Ctrl+C handler.
+* **Ctrl+C:**
+  * `InterruptHandler(action)` makes SIGINT run `action` inside Qt's event
+    loop. Qt keeps Python from running signal handlers, so it uses
+    `signal.set_wakeup_fd`, a socket pair and a `QSocketNotifier`. Before
+    `action` it closes any open modal window, and it ignores repeats while
+    `action` runs.
+  * `install_interrupt_handler(action, parent)` returns None outside the main
+    thread.
+  * `close_all_windows()` is the action for programs: it closes every open
+    window, so each `Form_Unload` runs and may cancel. The IDE's action is
+    File > Exit.
 * `DoEvents()`, `Beep()`, `End()`. `End` closes all windows and calls
   `os._exit(0)`, like VB's `End`, without running `Form_Unload` handlers.
 * Singleton objects:
@@ -308,6 +320,8 @@ Starts a project. `run_project(path)`:
    * **`Sub Main`:** calls `find_main(project)()` (modules are searched
      first, then forms). A console project exits with Main's return value if
      it's an int. A GUI project then runs the event loop while forms are open.
+     Ctrl+C before any window exists (e.g. at a console `input()`) ends the
+     program quietly with exit code 130.
    * **A form:** calls `run(find_form_class(project, startup))`. Modules are
      imported by file name (`_import_file`).
 
@@ -402,15 +416,11 @@ prepended to `PYTHONPATH` for programs started with F5.
   * `running`, `_update_title`, `_update_actions`.
 * **`closeEvent`** asks to save, then stores `geometry` and `state`.
 
-`_QuitOnInterrupt` makes **Ctrl+C** in the terminal that started the IDE work
-like File > Exit (Quit VP6).
-
-* Qt's event loop keeps Python from running signal handlers, so it uses
-  `signal.set_wakeup_fd` with a socket pair and a `QSocketNotifier` to get
-  control back to Python.
-* It closes any open modal dialog first (e.g. New Project at startup).
-* It ignores repeats while the save prompt is showing.
-* `main()` installs it. MainWindows created in tests don't have it.
+**Ctrl+C** in the terminal that started the IDE works like File > Exit (Quit
+VP6). `main()` installs `app.install_interrupt_handler(act_exit.trigger)`,
+which closes any open modal dialog first (e.g. New Project at startup) and
+ignores repeats while the save prompt is showing. MainWindows created in
+tests don't have it.
 
 `main()` also starts an `OutputCapture` before the `QApplication` exists, so
 Qt's startup messages are included. It attaches the capture to the Output
@@ -830,6 +840,7 @@ All tests run headless. `conftest.py`:
 | `test_docs.py` | The docs keep up with the code: every source file in the source reference, every test file in the test table, every public API name in `api.md` (key-code ranges count), the generated `api.md` tables up to date with a section per control, every property with a description, and every relative link and anchor in the Markdown files resolving. |
 | `test_outline.py` | The outline of the Kitchen Sink's Form1 matches the backlog example exactly; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: hidden by default, opened under Properties, following the Project panel or active window, clicking items goes to the line (unfolding the designer region). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
+| `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
 | `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme; its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload). |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6. |
 
