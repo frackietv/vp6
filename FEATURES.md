@@ -1,5 +1,30 @@
 # VP6 features
 
+**Version:** 0.3.9
+**Date:** 2026-09-29
+
+## Programming model (the `vp6` library)
+
+- Menus on forms: the `Menu` control, whose parent is the form (a menu on the menu bar) or another menu (an item or submenu of it), e.g. `self.mnuFileOpen = Menu(self.mnuFile, Caption='&Open...', Shortcut='Ctrl+O')`
+- Menu properties: `Caption` (`&` access keys; `-` makes a separator line), `Checked`, `Enabled`, `Visible`, `Shortcut` (VB's list of keys: Ctrl+A..Z, F1..F12, Ctrl/Shift/Ctrl+Shift+F-keys, Ctrl+Shift+A..Z, Ctrl+Ins, Shift+Ins, Del, Shift+Del, Alt+Backspace) and `Tag`, all changeable at run time
+- Menu `Click` event: when an item is chosen (also with its shortcut), and for a menu with items just before it opens; choosing an item doesn't change `Checked` (the handler does, like VB)
+- Menu control arrays, e.g. a recent files list: `Load(self.mnuRecent, i)` adds an item right after the array's last element, `Unload` removes it
+- On Windows and Linux the menu bar is inside the window, above the form's area: the window grows, and `Height`, `ScaleHeight` and control positions stay those of the area below the menu bar; on macOS the menus are in the macOS menu bar
+
+## IDE
+
+- Menu Editor (Tools > Menu Editor, Ctrl+E, also in the designer's context menu), like VB's: Caption, Name, Index, Shortcut, Checked, Enabled and Visible for each item; ← → to change an item's level, ↑ ↓ to move it, Next, Insert and Delete; the indented list of all items; OK checks the menus (names, arrays, levels, separators)
+- Renaming a menu in the Menu Editor renames its event handlers; making it a control array (or not) adds (or removes) their `Index` parameter; one undo step
+- The designer shows the form's menu bar under the title bar in every frame style; clicking a menu there shows its drop-down as it will look (shortcuts, check marks, separators, submenus), and choosing an item opens its Click code
+- Menus appear in the Properties window's object list and can be edited there (including the Shortcut list); they aren't on the canvas, so selecting, aligning, copying and moving leave them out
+- Menus appear in the code window's Object list with their Click event
+
+## Kitchen Sink
+
+- File (Dialog... with Ctrl+D, a separator, Close), View (Clock running, checked while the clock runs; the color schemes as the menu control array `mnuScheme`, whose check marks follow the option buttons) and Help (Keys, About) menus
+
+---
+
 **Version:** 0.3.8
 **Date:** 2026-09-29
 

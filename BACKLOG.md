@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** Menus on forms, and the Menu Editor to design them
 - **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)
 - **[Language and runtime]** Default form instances: using `Form2.Show()` without creating an instance first
 - **[Controls]** Common Dialog control (open, save, color, font, print dialogs)

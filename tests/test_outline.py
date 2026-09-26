@@ -43,7 +43,9 @@ def test_kitchen_sink_form1_matches_the_backlog_example():
         "Form1::lblZBlue_Click", "Form1::show_z_order", "Form1::cmdMore_Click",
         "Form1::cmdDialog_Click",
         "Form1::cmdClipboard_Click", "Form1::cmdAbout_Click", "Form1::cmdClose_Click",
-        GLOBAL_CODE,
+        "Form1::mnuFileDialog_Click", "Form1::mnuFileClose_Click", "Form1::mnuView_Click",
+        "Form1::mnuViewClock_Click", "Form1::mnuScheme_Click", "Form1::mnuHelpKeys_Click",
+        "Form1::mnuHelpAbout_Click", GLOBAL_CODE,
     ]
     assert flatten(outline(source)) == expected
 

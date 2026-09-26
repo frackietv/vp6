@@ -65,6 +65,7 @@ if __name__ == "__main__":
   names refer to.
 * You can also create controls in code at run time, e.g. in `Form_Load`, the
   same way.
+* Menus are [`Menu`](#menu) controls, written after the other controls.
 * Controls can share a name as a [control array](#control-arrays):
   `self.cmdDigit = ControlArray()`, then `self.cmdDigit[0] = CommandButton(...)`.
 
@@ -572,6 +573,54 @@ Default size 32 × 32.
 Events: `Timer`. Default event (double-click in the designer): `Timer`.
 <!-- END GENERATED -->
 
+### Menu
+
+A form's menus: the menu bar, the menus on it, their items, submenus and
+separator lines. Design them with the IDE's **Menu Editor** (Tools > Menu
+Editor, Ctrl+E); the designer draws the menu bar under the form's title bar,
+and clicking a menu there shows it, where choosing an item opens its `Click`
+code. In code, a menu's parent is the form (a menu on the menu bar) or
+another menu (an item of that menu):
+
+```python
+self.mnuFile = Menu(self, Caption='&File')
+self.mnuFileOpen = Menu(self.mnuFile, Caption='&Open...', Shortcut='Ctrl+O')
+self.mnuFileSep = Menu(self.mnuFile, Caption='-')          # a separator line
+self.mnuFileExit = Menu(self.mnuFile, Caption='E&xit')
+
+def mnuFileOpen_Click(self):
+    ...
+```
+
+* `Click` fires when an item is chosen (also with its `Shortcut`), and for a
+  menu with items just before it opens, a place to update them.
+* `Checked` shows a check mark. Choosing the item doesn't change it: your
+  `Click` handler does, as in VB (`self.mnuBold.Checked = not
+  self.mnuBold.Checked`).
+* `&` marks the access key; `-` as the Caption makes a separator.
+* Menus can be [control arrays](#control-arrays), e.g. a list of recent
+  files: `Load(self.mnuRecent, i)` adds an item right after the array's
+  last one.
+* On Windows and Linux the menu bar is inside the window, above the form's
+  area: the window grows by its height, and `Height`, `ScaleHeight` and
+  control positions stay those of the area below it. On macOS the menus are
+  in the macOS menu bar at the top of the screen while the form is active.
+
+<!-- BEGIN GENERATED: control Menu -->
+Not in the Toolbox: designed with the Menu Editor.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Caption` | str | `''` | The text shown; & marks the access key (&File), and '-' makes a separator line |
+| `Checked` | bool | `False` | Shows a check mark next to the item |
+| `Enabled` | bool | `True` | Whether the item can be chosen |
+| `Shortcut` | shortcut key | `''` | A key that chooses the item without opening the menu, from VB's list: Ctrl+A..Z, F1..F12, Ctrl+, Shift+ and Ctrl+Shift+F1..F12, Ctrl+Shift+A..Z, Ctrl+Ins, Shift+Ins, Del, Shift+Del, Alt+Backspace |
+| `Tag` | str | `''` | Free for your own use |
+| `Visible` | bool | `True` | Whether the item is shown |
+
+Events: `Click`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
 ---
 
 ## 5. Functions and global objects
@@ -637,8 +686,8 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 
 `Form`, `Control` (base class), `Label`, `TextBox`, `CommandButton`,
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
-`HScrollBar`, `VScrollBar`, `PictureBox`, and `ControlArray` for
-[control arrays](#control-arrays).
+`HScrollBar`, `VScrollBar`, `PictureBox`, [`Menu`](#menu), and
+`ControlArray` for [control arrays](#control-arrays).
 
 ---
 
@@ -787,4 +836,6 @@ format.
 * **Control arrays are `ControlArray` objects.** Elements are `self.cmd[i]`
   (or VB's `self.cmd(i)`); `Load` and `Unload` take the array and the Index
   (`Load(self.cmd, 5)` for `Load cmd(5)`).
+* **Menus on macOS** are in the macOS menu bar at the top of the screen, not
+  in the window.
 * **Not implemented yet:** see [BACKLOG.md](../BACKLOG.md).

@@ -220,6 +220,8 @@ class MainWindow(QMainWindow):
         self.act_replace.setShortcut(QKeySequence(
             "Ctrl+Alt+F" if sys.platform == "darwin" else "Ctrl+H"))
         self.act_goto_line = a("&Go to Line…", self.goto_line, "Ctrl+L")
+        self.act_menu_editor = a("&Menu Editor…", self.show_menu_editor, "Ctrl+E",
+                                 tip="Design the menus of the current form")
 
         self.act_view_code = a("&Code", lambda: self._view_current("code"), "F7")
         self.act_view_object = a("O&bject", lambda: self._view_current("object"), "Shift+F7")
@@ -303,6 +305,8 @@ class MainWindow(QMainWindow):
             run.addAction(act)
 
         tools = bar.addMenu("&Tools")
+        tools.addAction(self.act_menu_editor)
+        tools.addSeparator()
         tools.addAction(self._action("&Options…", self.show_options, QKeySequence.Preferences))
 
         window = bar.addMenu("&Window")
@@ -1067,6 +1071,26 @@ class MainWindow(QMainWindow):
 
     def find_previous(self):
         self._find_again(backward=True)
+
+    def _current_designer(self) -> FormDesigner | None:
+        """The active designer, or the designer of the form whose code window
+        is active (not necessarily open)."""
+        sub = self.mdi.currentSubWindow()
+        widget = sub.widget() if sub is not None else None
+        if isinstance(widget, FormDesigner):
+            return widget
+        path = self._path_of(widget) if widget is not None else None
+        if path is not None and isinstance(self.documents.get(path), FormDocument):
+            return self._designer_for(path)
+        return None
+
+    def show_menu_editor(self):
+        """Tools > Menu Editor (Ctrl+E), for the current form."""
+        designer = self._current_designer()
+        if designer is None:
+            self.statusBar().showMessage("Open a form to design its menus", 4000)
+            return
+        designer.show_menu_editor()
 
     def goto_line(self):
         editor = self._code_editor()

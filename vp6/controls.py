@@ -11,9 +11,10 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QKeyEvent, QPainter, QPalette, QPen, QPixmap
+from PySide6.QtGui import (QAction, QColor, QFont, QKeyEvent, QKeySequence, QPainter, QPalette,
+                           QPen, QPixmap)
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QCheckBox, QComboBox, QFrame, QGroupBox, QLabel,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QFrame, QGroupBox, QLabel, QMenu,
     QLineEdit, QListWidget, QPlainTextEdit, QPushButton, QRadioButton, QScrollBar, QWidget,
 )
 
@@ -149,6 +150,7 @@ class Control(PropertyHost):
     # synthesized from mouse events.
     _synthesize_click = False
     _qss_type = "QWidget"
+    InToolbox = True  # Menu is designed with the Menu Editor instead
 
     def __init__(self, parent, Name: str = "", **props):
         self.__dict__.setdefault("_values", {})
@@ -258,6 +260,19 @@ class Control(PropertyHost):
 
     def _connect_signals(self) -> None:
         pass
+
+    def _place_after(self, other: "Control") -> None:
+        """Where a control loaded into a control array goes; menus override it."""
+
+    def _dispose(self) -> None:
+        """Remove the control's Qt objects (an unloaded control array element)."""
+        timer = getattr(self, "_timer", None)
+        if timer is not None:
+            timer.stop()
+        if self._widget is not None:
+            self._widget.hide()
+            self._widget.setParent(None)
+            self._widget.deleteLater()
 
     # -- event dispatch ----------------------------------------------------------------
     def _handler(self, event: str):
@@ -1132,10 +1147,137 @@ class PictureBox(Control):
 
 
 # Controls in toolbox order.
+def _shortcut_choices() -> tuple[tuple[str, str], ...]:
+    """VB's Shortcut list, in Qt's key names ("" = none)."""
+    letters = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
+    keys = [f"Ctrl+{k}" for k in letters] + [f"F{n}" for n in range(1, 13)]
+    keys += [f"Ctrl+F{n}" for n in range(1, 13)] + [f"Shift+F{n}" for n in range(1, 13)]
+    keys += [f"Ctrl+Shift+F{n}" for n in range(1, 13)] + [f"Ctrl+Shift+{k}" for k in letters]
+    keys += ["Ctrl+Ins", "Shift+Ins", "Del", "Shift+Del", "Alt+Backspace"]
+    return (("", "(None)"), *((k, k) for k in keys))
+
+
+SHORTCUT_CHOICES = _shortcut_choices()
+
+
+class Menu(Control):
+    """A menu, menu item or separator, designed with the Menu Editor.
+
+    Menus whose parent is the form are the menu bar; the others are items in
+    their parent menu::
+
+        self.mnuFile = Menu(self, Caption='&File')
+        self.mnuFileOpen = Menu(self.mnuFile, Caption='&Open...', Shortcut='Ctrl+O')
+        self.mnuFileSep = Menu(self.mnuFile, Caption='-')        # a separator line
+
+    Click fires when an item is chosen, and for a menu with items, just
+    before it opens (to update its items, like VB). On macOS the menu bar is
+    the system's, at the top of the screen, while the form is active.
+    """
+
+    TypeName = "Menu"
+    DefaultEvent = "Click"
+    Events = ("Click",)
+    DefaultSize = (0, 0)
+    InToolbox = False
+    Properties = (
+        P("Caption", "str", "", always=True,
+          description="The text shown; & marks the access key (&File), and '-' makes a "
+                      "separator line"),
+        P("Checked", "bool", False, description="Shows a check mark next to the item"),
+        P("Enabled", "bool", True, description="Whether the item can be chosen"),
+        P("Visible", "bool", True, description="Whether the item is shown"),
+        P("Shortcut", "shortcut", "", SHORTCUT_CHOICES,
+          description="A key that chooses the item without opening the menu, from VB's list: "
+                      "Ctrl+A..Z, F1..F12, Ctrl+, Shift+ and Ctrl+Shift+F1..F12, "
+                      "Ctrl+Shift+A..Z, Ctrl+Ins, Shift+Ins, Del, Shift+Del, "
+                      "Alt+Backspace"),
+        P("Tag", "str", "", description="Free for your own use"),
+    )
+
+    def _build_widget(self) -> None:
+        self._widget = None
+        self.__dict__["_action"] = None
+        self.__dict__["_submenu"] = None
+        if not isinstance(self.Parent, Menu) and self.Parent is not self._form:
+            raise TypeError(f"Menu '{self._name}': the parent must be the form or a Menu")
+        if self._design_mode:
+            return  # the designer draws the menus itself
+        action = QAction(self._form._widget)
+        action.triggered.connect(self._on_triggered)
+        self.__dict__["_action"] = action
+        self.Parent._add_menu_item(self)
+
+    def _add_menu_item(self, item: "Menu") -> None:
+        """An item of this menu (it gets a drop-down menu)."""
+        if self._submenu is None:
+            submenu = QMenu(self._form._widget)
+            self._form._style_widget(submenu)
+            submenu.aboutToShow.connect(self._on_about_to_show)
+            self.__dict__["_submenu"] = submenu
+            self._action.setMenu(submenu)
+        self._submenu.addAction(item._action)
+        self._form._widget.addAction(item._action)  # its Shortcut works in the window
+
+    def _menu_container(self):
+        return self._submenu
+
+    def _place_after(self, other: Control) -> None:
+        container = self.Parent._menu_container()
+        if container is None or self._action is None or other._action is None:
+            return
+        container.removeAction(self._action)
+        actions = container.actions()
+        position = actions.index(other._action) + 1 if other._action in actions else len(actions)
+        container.insertAction(actions[position] if position < len(actions) else None,
+                               self._action)
+
+    def _dispose(self) -> None:
+        if self._action is None:
+            return
+        container = self.Parent._menu_container()
+        if container is not None:
+            container.removeAction(self._action)
+        self._form._widget.removeAction(self._action)
+        self._action.deleteLater()
+
+    # -- events ------------------------------------------------------------------------------
+    def _on_triggered(self, *_):
+        # Qt toggles a checkable item by itself; in VB only code changes Checked
+        self._action.setChecked(bool(self._values.get("Checked")))
+        self._fire("Click")
+
+    def _on_about_to_show(self):
+        self._fire("Click")
+
+    # -- properties ---------------------------------------------------------------------------
+    def _apply_Caption(self, v):
+        if self._action is not None:
+            self._action.setSeparator(v == "-")
+            self._action.setText(v)
+
+    def _apply_Checked(self, v):
+        if self._action is not None:
+            self._action.setCheckable(bool(v))
+            self._action.setChecked(bool(v))
+
+    def _apply_Enabled(self, v):
+        if self._action is not None:
+            self._action.setEnabled(bool(v))
+
+    def _apply_Visible(self, v):
+        if self._action is not None:
+            self._action.setVisible(bool(v))
+
+    def _apply_Shortcut(self, v):
+        if self._action is not None:
+            self._action.setShortcut(QKeySequence(v or ""))
+
+
 CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
-        ComboBox, ListBox, HScrollBar, VScrollBar, Timer,
+        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Menu,
     )
 }
 
@@ -1252,6 +1394,7 @@ class ControlArray:
             props["Visible"] = False
         control = type(template)(template.Parent, **props)
         control.__dict__["_loaded_at_runtime"] = True
+        control._place_after(self._items[self.UBound])  # menus: after the last element
         self[index] = control
         return control
 
@@ -1265,13 +1408,7 @@ class ControlArray:
         form = control._form
         if control in form._controls:
             form._controls.remove(control)
-        timer = getattr(control, "_timer", None)
-        if timer is not None:
-            timer.stop()
-        if control._widget is not None:
-            control._widget.hide()
-            control._widget.setParent(None)
-            control._widget.deleteLater()
+        control._dispose()
 
 
 __all__ = [*CONTROL_TYPES, "ControlArray"]

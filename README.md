@@ -41,6 +41,7 @@ The IDE opens with a VB-style **New Project** dialog. Every new project has
 | Immediate window (Ctrl+G)   | Program output and `Debug.Print`, stdin for console apps, double-click a traceback line to jump to it |
 | Outline window              | The structure of the current file: constants, variables, classes and their members, functions, top-level code, with type icons; sort by file order, name or type; click an item to go to its line (hidden by default; View > Outline Window) |
 | Output window               | The IDE's own output, including library messages such as Qt warnings (hidden by default; View > Output Window) |
+| Menu Editor (Ctrl+E)        | Tools > Menu Editor designs the form's menus like VB's: Caption (`-` for a separator), Name, Index, Shortcut, Checked, Enabled, Visible, with arrows to indent and move items. The designer shows the menu bar; click a menu to see it and an item to open its Click code |
 | Format menu                 | Align, Make Same Size, Center in Form, Bring to Front (Ctrl+J), Send to Back (Ctrl+K) |
 | Run (F5 or Cmd+Enter / Ctrl+Enter, Shift+F5, End) | Saves everything and runs the project in a separate process; the title shows `[design]` / `[run]` |
 | Toolbar and layout          | Sun/moon switch at the right end of the toolbar toggles light/dark; View > Toolbars shows a hidden toolbar; View > Reset Window Layout restores all panels; panels at the bottom edge are always tabs |
@@ -154,6 +155,9 @@ from vp6 import *
   `Picture1_MouseDown(self, Button, Shift, X, Y)`,
   `Text1_KeyPress(self, KeyAscii)`, ... Handlers may declare fewer
   parameters than VB passes.
+* **Menus**: `Menu` controls on the menu bar or in other menus, with `Click`
+  events, `Checked`, `Enabled`, `Visible` and `Shortcut`; menus can be control
+  arrays (e.g. a recent files list). On macOS they are in the macOS menu bar.
 * **Control arrays**: controls sharing a name, told apart by `Index`, with
   one handler that gets the `Index` first (`def cmdDigit_Click(self,
   Index)`). Elements are `self.cmdDigit[i]` or VB's `self.cmdDigit(i)`;
@@ -204,7 +208,6 @@ running a console project through the Immediate window.
 [FEATURES.md](FEATURES.md) lists everything VP6 implements.
 [BACKLOG.md](BACKLOG.md) lists what isn't implemented yet. The biggest gaps are:
 
-* menus (the Menu Editor);
 * debugging (breakpoints, stepping, evaluating code in the Immediate window);
 * graphics methods (`Line`, `Circle`, `PSet`);
 * more controls (Shape, Line, Image, DriveListBox, common controls);

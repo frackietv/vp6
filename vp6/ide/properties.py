@@ -183,7 +183,7 @@ class PropertiesWindow(QWidget):
     def _editor(self, spec: PropSpec, value) -> QWidget:
         mixed = value is _MIXED
         kind = spec.kind
-        if kind in ("bool", "enum"):
+        if kind in ("bool", "enum", "shortcut"):
             combo = QComboBox()
             choices = ((False, "False"), (True, "True")) if kind == "bool" else spec.choices
             for choice_value, label in choices:

@@ -21,7 +21,7 @@ import sys
 
 from PySide6.QtCore import QEvent, QEventLoop, Qt
 from PySide6.QtGui import QFont, QGuiApplication, QPalette
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 
 from . import appearance, colors
 from ._props import P, PropertyHost, enum_choices
@@ -73,6 +73,7 @@ class _FormWidget(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._vp_form._layout_menu_bar()
         self._vp_form._fire("Resize")
 
     def changeEvent(self, event):
@@ -109,6 +110,27 @@ class _FormWidget(QWidget):
 
     def keyReleaseEvent(self, event):
         self._vp_form._fire("KeyUp", vp_key_code(event.key()), vp_shift(event.modifiers()))
+
+
+class _FormClient(QWidget):
+    """The form's area below a menu bar drawn in the window (Windows, Linux):
+    the controls are on it. Its mouse events are the form's."""
+
+    def __init__(self, form_widget: _FormWidget):
+        super().__init__(form_widget)
+        self.setMouseTracking(True)
+
+    def mousePressEvent(self, event):
+        self.parentWidget().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self.parentWidget().mouseReleaseEvent(event)
+
+    def mouseMoveEvent(self, event):
+        self.parentWidget().mouseMoveEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        self.parentWidget().mouseDoubleClickEvent(event)
 
 
 class Form(PropertyHost):
@@ -162,6 +184,9 @@ class Form(PropertyHost):
         d["_shown_once"] = False
         d["_modal_loop"] = None
         d["_scheme_style"] = None  # Fusion for forced light/dark, None = native
+        d["_menubar"] = None  # created with the first Menu
+        d["_client"] = None  # the controls' area when the menu bar is in the window
+        d["_menu_height"] = 0  # height of a menu bar in the window
         d["_widget"] = _FormWidget(self)
         self._widget.resize(480, 360)
         self._init_values({"Caption": type(self).__name__})
@@ -186,7 +211,57 @@ class Form(PropertyHost):
         return self
 
     def _container_widget(self) -> QWidget:
-        return self._widget
+        return self._client if self._client is not None else self._widget
+
+    # -- menus ---------------------------------------------------------------------------------
+    def _menu_container(self):
+        return self._menubar
+
+    def _add_menu_item(self, menu) -> None:
+        """A top-level Menu: on the menu bar (created with the first one)."""
+        if self._menubar is None:
+            bar = QMenuBar(self._widget)
+            self.__dict__["_menubar"] = bar
+            self._style_widget(bar)
+            if not bar.isNativeMenuBar():  # macOS: the system menu bar, no room needed
+                self._make_client()
+        self._menubar.addAction(menu._action)
+        self._widget.addAction(menu._action)
+        self._layout_menu_bar()
+
+    def _make_client(self) -> None:
+        """Move the controls onto a client widget, so the menu bar can go above
+        them without changing their positions (or the form's Height)."""
+        client = _FormClient(self._widget)
+        for child in self._widget.children():
+            if isinstance(child, QWidget) and child not in (client, self._menubar) and \
+                    not child.isWindow():
+                shown = not child.isHidden()
+                child.setParent(client)
+                if shown:
+                    child.show()
+        self.__dict__["_client"] = client
+        client.show()
+
+    def _layout_menu_bar(self) -> None:
+        """Keep an in-window menu bar at the top and the client area below it.
+        The form's Height stays the client area's, so the window grows."""
+        if self._client is None:
+            return
+        widget = self._widget
+        height = self._menubar.heightForWidth(widget.width())
+        if height <= 0:
+            height = self._menubar.sizeHint().height()
+        if height != self._menu_height:
+            client_height = widget.height() - self._menu_height
+            self.__dict__["_menu_height"] = height
+            widget.setMinimumSize(0, 0)
+            widget.setMaximumSize(16777215, 16777215)
+            widget.resize(widget.width(), client_height + height)
+            if self._shown_once:
+                self._apply_fixed_size()
+        self._menubar.setGeometry(0, 0, widget.width(), height)
+        self._client.setGeometry(0, height, widget.width(), widget.height() - height)
 
     def _base_dir(self) -> str:
         module = sys.modules.get(type(self).__module__)
@@ -321,7 +396,7 @@ class Form(PropertyHost):
         return self._widget.width()
 
     def _read_Height(self):
-        return self._widget.height()
+        return self._widget.height() - self._menu_height
 
     def _apply_Width(self, v):
         self._widget.setMinimumSize(0, 0)
@@ -333,7 +408,7 @@ class Form(PropertyHost):
     def _apply_Height(self, v):
         self._widget.setMinimumSize(0, 0)
         self._widget.setMaximumSize(16777215, 16777215)
-        self._widget.resize(self._widget.width(), max(v, 1))
+        self._widget.resize(self._widget.width(), max(v, 1) + self._menu_height)
         if self._shown_once:
             self._apply_fixed_size()
 
@@ -421,7 +496,7 @@ class Form(PropertyHost):
 
     @property
     def ScaleHeight(self) -> int:
-        return self._widget.height()
+        return self._widget.height() - self._menu_height
 
     @property
     def Visible(self) -> bool:

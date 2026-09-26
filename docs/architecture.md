@@ -155,6 +155,12 @@ parent. A control registers itself with its form
 (`self.Command1 = CommandButton(self, ...)`) names it: `Form.__setattr__`
 sets the control's name from the attribute name.
 
+A **`Menu`** has no widget: it is a `QAction` on the form's `QMenuBar` or in
+its parent menu's `QMenu`. Where Qt draws the menu bar inside the window
+(Windows, Linux), the form moves its controls onto a client widget below
+the bar, so control positions and the form's `Height` keep meaning the area
+below the menu bar; on macOS the menu bar is the system's.
+
 A **control array** is a `ControlArray` assigned to a form attribute
 (`self.cmdDigit = ControlArray()`, named the same way). Assigning a control to
 one of its elements (`self.cmdDigit[3] = CommandButton(self, ...)`) gives the
@@ -372,6 +378,10 @@ flowchart LR
 ### 5.3 The designer
 
 The `FormDesigner` widget contains a `QScrollArea` with a `_Canvas`.
+A form's menus aren't on the canvas: the canvas draws the menu bar as part
+of the window frame (`chrome`), clicking a menu there shows its drop-down
+(choosing an item opens its Click code), and the Menu Editor
+(`menueditor.py`) changes them all at once through `set_menus`.
 It identifies controls by their key (`formfile.control_key`): the name, or
 `name(index)` for a control array element, e.g. `cmdDigit(3)`. Its
 `controls` dict, the selection and each `ControlDef`'s container use keys.
@@ -580,7 +590,10 @@ Rules for the region (`formfile.parse_region_body`):
     `self.<Name>[<int>] = <ControlType>(...)`, all of one type. A container
     may be an element: `self.<Container>[<int>]`.
 * A container (and a control array's declaration) must come before the
-  controls in it. Statement order is
+  controls in it.
+* Menus are `Menu` controls whose parent is the form (the menu bar) or
+  another `Menu`; their order is the menu order. The Menu Editor writes them
+  after the other controls. Statement order is
   creation order, which decides stacking among controls with equal `ZIndex`.
 * Values are literals only, read with `ast.literal_eval`. Colors are written
   as hex, like `0x00FF00` (VB BGR order).

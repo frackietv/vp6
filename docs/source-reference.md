@@ -145,7 +145,10 @@ The intrinsic controls.
     code window uses it to generate handler stubs.
   * `MOUSE_EVENTS`, `KEY_EVENTS`, `FOCUS_EVENTS`.
   * `CONTROL_TYPES`, at the end of the file: type name → class, in Toolbox
-    order. The designer, form-file parser and Toolbox all use it.
+    order. The designer, form-file parser and Toolbox all use it. `Menu` is
+    in it but has `InToolbox = False` (the Menu Editor designs menus).
+  * `SHORTCUT_CHOICES`: VB's list of menu shortcut keys, in Qt's key names
+    (`_shortcut_choices()`), for `Menu.Shortcut`.
 * **Translation helpers:**
   * `vp_key_code(qt_key)` converts a Qt key to a VB key code
     (`_QT_TO_VP_KEYS`, letters and digits pass through);
@@ -176,6 +179,8 @@ The intrinsic controls.
     applied in design mode), ToolTipText, fonts, colors (style sheet on
     `_qss_type`).
   * **Methods:** `SetFocus`, `Move`, `Refresh`, `ZOrder` (sets `ZIndex`).
+  * **Control arrays:** `_place_after(other)` (where a loaded element goes;
+    menus override it) and `_dispose()` (an unloaded element's Qt objects).
   * **Stacking:** `_stackable`, `_siblings`, `_restack` and `_apply_ZIndex`.
     Siblings are ordered by `(ZIndex, creation order)` on creation, on widget
     rebuild and on every `ZIndex` change.
@@ -199,6 +204,7 @@ The intrinsic controls.
 | `Timer` | none at run time (`QTimer`) | Stopwatch icon in design mode (`_timer_design_widget`). |
 | `HScrollBar`, `VScrollBar` | `QScrollBar` | `_ScrollBar` base; Change on value change, Scroll while dragging. |
 | `PictureBox` | `QLabel` | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle; `Cls()`. |
+| `Menu` | a `QAction` (none in design mode) | Parent: the form (the menu bar, `Form._add_menu_item`) or a `Menu`, whose `QMenu` (`_submenu`, created for its first item by `_add_menu_item`) holds it. Caption `-` is a separator; `Checked` (Qt's own toggling is undone in `_on_triggered`), `Enabled`, `Visible`, `Shortcut` (also added to the form widget so it works in the window). Click on `triggered`, and for a menu with items on `aboutToShow`. `_menu_container`, `_place_after` (loaded array elements follow the last one), `_dispose`. |
 
 * **`ControlArray`**, a VB control array (after `CONTROL_TYPES`, which it
   isn't part of). The form's `__setattr__` gives it its name.
@@ -247,6 +253,14 @@ The intrinsic controls.
     `_style_widget` (called for every new control widget).
   * **Keyboard:** `_preview_key`, `_handle_default_cancel`,
     `_apply_tab_order`.
+  * **Menus:** `_add_menu_item(menu)` puts a top-level `Menu` on the menu
+    bar (`_menubar`, a `QMenuBar` created with the first one). When Qt draws
+    it in the window (not the macOS menu bar), `_make_client` moves the
+    controls onto `_client`, a `_FormClient` below the bar (which passes its
+    mouse events to the form widget), and `_layout_menu_bar` (also on every
+    resize) keeps the bar at the top and grows the window by
+    `_menu_height`. `Height`, `ScaleHeight` and `_container_widget()` are
+    the client area's.
   * **Window:** `_apply_window_flags` (BorderStyle → Qt window flags, fixed
     size for fixed styles), `_position_on_first_show` (StartUpPosition).
   * **Property hooks:** Caption, Width/Height (client area), Left/Top,
@@ -410,6 +424,9 @@ prepended to `PYTHONPATH` for programs started with F5.
     window's editor, or with a designer current, its form's code window
     (opened if needed). `find_dialog` is one non-modal `FindReplaceDialog`,
     created when first needed.
+  * **Menu Editor:** `act_menu_editor` (Tools > Menu Editor, Ctrl+E) runs
+    `show_menu_editor`, which opens it for `_current_designer()`: the active
+    designer, or the designer of the form whose code window is active.
 * **Project lifecycle:**
   * `show_start_dialog`, `new_project`, `open_project_dialog`,
     `open_project(path)`, `close_project()`;
@@ -544,6 +561,16 @@ The form designer (architecture §5.3).
       `rename(new_name)` handles controls (the name of another control of
       the same type joins its control array) and the form class
       (`_rename_form`, which `form_name_taken` checks against the project);
+    * **menus:** `is_menu`, `menu_selected`, `menu_bar_keys` (the visible
+      top-level menus, drawn by `chrome`), `menu_rect`, `menu_at(pos)`,
+      `menu_popup(key)` (the drop-down as it will look; choosing an item
+      emits `viewCodeRequested(name, "Click")`), `show_menu_popup`,
+      `menu_entries`, `show_menu_editor` and `set_menus(entries)` (the Menu
+      Editor's OK: validates, replaces the `Menu` ControlDefs, renames the
+      handlers of renamed menus, adds or removes `Index` in them, reloads,
+      one undo step). Menus have no widget: selecting one keeps it alone,
+      and `select_all`, the band, `commit_geometry`, copying and the Format
+      commands skip them;
     * **control arrays:** `set_index(value)` (the Index property),
       `ask_create_array(name)` (VB's question; tests replace it),
       `_make_array(name)`, `_next_index`, `_rekey(key, name, index)` (renames
@@ -562,12 +589,16 @@ Window frames painted around the designed form.
   (`FRAME_STYLES` holds their labels); `resolve(style)` maps `AUTO` to the
   running OS's style.
 * `FrameInfo` holds what's needed from the form: caption, border style,
-  control box, min/max buttons, and whether the title bar and form are dark.
-  Its properties `tool`, `can_minimize` and `can_maximize` mirror the runtime
+  control box, min/max buttons, whether the title bar and form are dark, and
+  the captions of the form's menu bar (`menus`). Its properties `tool`, `can_minimize` and `can_maximize` mirror the runtime
   window-flag logic.
 * `metrics(style, info)` gives the title bar height and border width.
   BorderStyle 0 means no frame; tool windows get smaller title bars.
 * `frame_rect(client, style, info)` and `paint(p, style, client, info)`.
+  With menus, a menu bar (`MENU_HEIGHT`, `menu_height(info)`, drawn by
+  `_menu_bar` in the form's light/dark scheme) goes between the title bar
+  and the form; `menu_item_rects(client, info)` gives where each caption is,
+  for clicks.
 * Painters `_macos` (traffic lights), `_windows` (Windows 11 caption
   buttons), `_gnome` (Adwaita header bar) and `_classic` (VB6), plus helpers
   `_shadow`, `_top_rounded`, `_draw_title`.
@@ -628,7 +659,8 @@ Window frames painted around the designed form.
     (common properties across the selection; `_MIXED` marks differing
     values). A single control also gets the `Index` row (`INDEX_SPEC`, kind
     `index`, empty = not in a control array) under `(Name)`, when the target
-    has `supports_index`; `(Name)` shows the target's `name_value`.
+    has `supports_index`; `(Name)` shows the target's `name_value`. The
+    `shortcut` kind (`Menu.Shortcut`) is edited with a combo box.
   * **Editors:** `_editor(spec, value)` picks an editor by kind;
     `_color_editor`, `_choose_color`, `_edit_list`, `_edit_text` and
     `_browse_file` (stores paths relative to the form folder when possible).
@@ -693,6 +725,27 @@ Find and Replace in the code window, and Go to Line.
 * **`ask_line(editor, parent)`**, the Go to Line box (`QInputDialog.getInt`,
   1 to the line count, the current line suggested).
 
+### `vp6/ide/menueditor.py` (≈330 lines)
+
+The Menu Editor.
+
+* `MenuEntry` is one menu as the editor sees it: `level` (0 = the menu bar),
+  `caption`, `name`, `index`, `shortcut`, `checked`, `enabled`, `visible`,
+  other `props` kept as they are, and `original` (its key before editing,
+  so renames can move its handlers).
+* `entries_from(form_def)` lists the form's menus depth first;
+  `menu_defs(entries)` turns entries into `Menu` ControlDefs (parents from
+  the levels, only non-default values); `validate(entries, taken)` checks
+  names (valid, unused by other controls, unique keys, arrays with an Index
+  each), levels (at most one deeper than the item above, `MAX_LEVEL`) and
+  separators (not on the menu bar, no items of their own).
+* `MenuEditorDialog(entries, taken)`, like VB's: Caption, Name, Index,
+  Shortcut and Checked / Enabled / Visible for the current item, the arrow
+  buttons (`outdent`, `indent`, `move_up`, `move_down`), `next` (a new item
+  at the end), `insert`, `delete`, and the indented list (`····` per
+  level). `result_entries()` drops blank items; OK refuses invalid menus
+  with the `validate` message.
+
 ### `vp6/ide/outline.py` (≈230 lines)
 
 The Outline window: the structure of a source file.
@@ -745,7 +798,8 @@ Captures the IDE process's stdout and stderr for the Output window.
 ### `vp6/ide/panels.py` (≈370 lines)
 
 * **`Toolbox`:**
-  * checkable tool buttons (the pointer plus `CONTROL_TYPES`) with signals
+  * checkable tool buttons (the pointer plus the `CONTROL_TYPES` whose
+    `InToolbox` is true: not `Menu`) with signals
     `toolSelected(type | None)` and `toolActivated(type)` (double-click);
   * `reset()` goes back to the pointer; `refresh_icons()` is used after
     light/dark changes.
@@ -937,6 +991,7 @@ All tests run headless. `conftest.py`:
 | `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results. |
 | `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames (controls, form classes, class and module references in other files), the console template. |
 | `test_control_arrays.py` | Control arrays: elements, `[i]` / `(i)` / `Item`, iteration, bounds, read-only `Index`, handlers getting `Index` first, `Load`/`Unload` of run-time elements (copied properties, hidden, last in the tab order; designer elements can't be unloaded), one type per array; the form file round trip (elements as containers too) and invalid arrays; adding/removing the `Index` parameter and stubs; in the designer: paste asking to create an array, renaming into an array (and out, and into another type's name), the Index property (one-element arrays, moving, clearing, undo), containers that are elements; the Properties window's `(Name)`, `Index` row and object list; the code window's Object list, new handlers with `Index`, completion. |
+| `test_menus.py` | Menus at run time: the menu bar and items, separators, shortcuts; an in-window menu bar keeping `Height`, `ScaleHeight` and control positions for the area below it (the window grows), form mouse events there; Click on choosing an item and before a menu opens; `Checked` changing only in code; Enabled, Visible, Caption and Shortcut changes; menu control arrays loading after their last element and unloading; the parent check; the form file round trip; the Menu Editor's entries and ControlDefs, validation messages and dialog editing (Next, indent, shortcut, Insert, Delete, moving, outdent); the designer's menu bar (layout, hit testing, the drop-down opening Click code), menus kept off the canvas and edited in the Properties window, deleting a menu with its items, renames and arrays updating handlers, undo; the IDE's Tools > Menu Editor (Ctrl+E). |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`. |
@@ -947,7 +1002,7 @@ All tests run headless. `conftest.py`:
 | `test_outline.py` | The outline of the Kitchen Sink's Form1 matches the backlog example exactly; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: hidden by default, opened under Properties, following the Project panel or active window, clicking items goes to the line (unfolding the designer region). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme, and control arrays (an array, `Load`/`Unload`, `Count`, bounds, `Index` handlers); its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload), the option-button control array, and the `cmdMore` control array loading and unloading elements. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme, and control arrays (an array, `Load`/`Unload`, `Count`, bounds, `Index` handlers); its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload), the option-button control array, the `cmdMore` control array loading and unloading elements, and the menus (the View menu's control array and check marks kept in step with the option buttons and the clock, a menu's Click before it opens, a shortcut). |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6. |
 
 ## Samples: `samples/`

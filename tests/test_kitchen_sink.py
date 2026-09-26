@@ -193,10 +193,30 @@ def test_kitchen_sink_control_array_demo(sink_forms):
     form.Unload()
 
 
+def test_kitchen_sink_menus(sink_forms):
+    form = sink_forms["Form1"].Form1()
+    form.Show()
+    assert [a.text() for a in form._menubar.actions()] == ["&File", "&View", "&Help"]
+    form.mnuScheme[2]._action.trigger()  # View > Dark, a menu control array
+    assert form.optScheme[2].Value and form._effective_scheme() == vp6.vpSchemeDark
+    assert [m.Checked for m in form.mnuScheme] == [False, False, True, False]
+    form.optScheme[0].Value = True  # the option buttons update the menu too
+    assert [m.Checked for m in form.mnuScheme] == [True, False, False, False]
+    form.mnuViewClock._action.trigger()  # the check mark follows the clock
+    assert not form.tmrClock.Enabled and not form.mnuViewClock.Checked
+    assert form.chkTimer.Value == vp6.vpUnchecked
+    form.mnuViewClock._action.trigger()
+    assert form.tmrClock.Enabled and form.mnuViewClock.Checked
+    form.mnuView._submenu.aboutToShow.emit()  # a menu's Click before it opens
+    assert "View menu" in form.lblStatus.Caption
+    assert form.mnuFileDialog._action.shortcut().toString() == "Ctrl+D"
+    form.Unload()
+
+
 def test_kitchen_sink_z_order_demo(sink_forms):
     form = sink_forms["Form1"].Form1()
     form.Show()
-    widget = form._widget
+    widget = form._container_widget()  # the area below a menu bar in the window
     overlap = QPoint(100, 460)  # inside both lblZRed (16,440 132x40) and lblZBlue (80,452)
 
     def on_top():

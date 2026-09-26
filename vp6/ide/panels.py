@@ -32,7 +32,7 @@ class Toolbox(QWidget):
         grid.setSpacing(2)
         grid.setContentsMargins(4, 4, 4, 4)
         self.buttons: dict[str | None, QToolButton] = {}
-        tools = [None, *CONTROL_TYPES]
+        tools = [None, *(name for name, cls in CONTROL_TYPES.items() if cls.InToolbox)]
         for index, type_name in enumerate(tools):
             button = QToolButton()
             button.setIcon(icons.icon(type_name or "Pointer"))

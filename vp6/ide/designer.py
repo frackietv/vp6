@@ -24,7 +24,7 @@ from .._props import normalize
 from ..controls import CONTROL_TYPES, Control
 from ..form import Form
 from ..formfile import ControlDef, FormDef, control_key, set_index_parameter
-from . import chrome
+from . import chrome, menueditor
 from .documents import FormDocument
 from .theme import theme_manager
 
@@ -213,7 +213,8 @@ class _Overlay(QWidget):
             for key, rect in self._form_handles().items():
                 if rect.adjusted(-2, -2, 2, 2).contains(pos):
                     return None, key
-        elif len(d.selection) == 1 and d.controls[d.selection[0]].TypeName != "Timer":
+        elif len(d.selection) == 1 and d.controls[d.selection[0]].TypeName != "Timer" and \
+                d.canvas_rect(d.selection[0]) is not None:  # menus aren't on the canvas
             rect = d.canvas_rect(d.selection[0])
             for key, handle_rect in self._handles(rect).items():
                 if handle_rect.adjusted(-2, -2, 2, 2).contains(pos):
@@ -243,6 +244,10 @@ class _Overlay(QWidget):
             d.show_context_menu(event.globalPosition().toPoint())
             return
         if event.button() != Qt.LeftButton:
+            return
+        menu = d.menu_at(pos)
+        if menu is not None:  # the menu bar: show that menu, like VB's designer
+            d.show_menu_popup(menu, self.mapToGlobal(d.menu_rect(menu).bottomLeft()))
             return
         form_rect = d.form_canvas_rect()
 
@@ -356,7 +361,8 @@ class _Overlay(QWidget):
         elif kind == "band" and drag["moved"]:
             band = QRect(drag["start"], event.position().toPoint()).normalized()
             names = [c.key for c in d.form_def.controls
-                     if c.parent == drag["container"] and band.intersects(d.canvas_rect(c.key))]
+                     if c.parent == drag["container"] and d.canvas_rect(c.key) is not None
+                     and band.intersects(d.canvas_rect(c.key))]
             d.select((d.selection if drag["additive"] else []) + names)
         elif kind in ("move", "resize") and drag["moved"]:
             d.commit_geometry(list(drag["orig"]) if kind == "move" else [drag["name"]])
@@ -507,8 +513,7 @@ class FormDesigner(QWidget):
             control = cls(parent, Name=control_def.name)
         control.__dict__["_index"] = control_def.index
         self.controls[control_def.key] = control
-        self._prepare_widget(control)
-        control._widget.show()
+        self._prepare_widget(control)  # also shows it (menus have no widget)
         return control
 
     def _safe_set(self, obj, prop, value) -> None:
@@ -537,13 +542,16 @@ class FormDesigner(QWidget):
             caption=form.Caption, border_style=form.BorderStyle, control_box=form.ControlBox,
             min_button=form.MinButton, max_button=form.MaxButton,
             # The OS draws title bars in its own appearance at run time
-            title_dark=appearance.system_is_dark(), form_dark=form._is_dark())
+            title_dark=appearance.system_is_dark(), form_dark=form._is_dark(),
+            menus=tuple(self.form_def.control(key).props.get("Caption", "")
+                        for key in self.menu_bar_keys()))
 
     def _layout_form(self) -> None:
         """Place the form below the frame's title bar (its height depends on
         the frame style and BorderStyle)."""
-        title, border = chrome.metrics(self.frame_style(), self.frame_info())
-        position = QPoint(MARGIN + border, MARGIN + border + title)
+        info = self.frame_info()
+        title, border = chrome.metrics(self.frame_style(), info)
+        position = QPoint(MARGIN + border, MARGIN + border + title + chrome.menu_height(info))
         if self.form_widget().pos() != position:
             self.form_widget().move(position)
             self.overlay.update()
@@ -610,6 +618,8 @@ class FormDesigner(QWidget):
         for name in names:
             if name in self.controls and name not in seen:
                 seen.append(name)
+        if len(seen) > 1:  # a menu (chosen in the Properties window) is selected alone
+            seen = [n for n in seen if not self.is_menu(n)] or seen[-1:]
         self.selection = seen
         self.overlay.update()
         self.selectionChanged.emit()
@@ -664,7 +674,7 @@ class FormDesigner(QWidget):
 
     def commit_geometry(self, names: list[str]) -> None:
         before = self._snapshot()
-        for name in names:
+        for name in [n for n in names if not self.is_menu(n)]:
             geometry = self.controls[name]._widget.geometry()
             props = self.form_def.control(name).props
             props.update(Left=geometry.x(), Top=geometry.y())
@@ -781,7 +791,7 @@ class FormDesigner(QWidget):
 
     # -- clipboard --------------------------------------------------------------------------------------
     def copy_selection(self) -> None:
-        if not self.selection:
+        if not self.selection or self.menu_selected():  # menus: the Menu Editor
             return
         names = self._descendants(self.selection)
         roots = {n for n in names if self.form_def.control(n).parent not in names}
@@ -851,7 +861,8 @@ class FormDesigner(QWidget):
                 self._safe_set(self.controls[control_def.key], "TabIndex", index)
 
     def select_all(self) -> None:
-        self.select([c.key for c in self.form_def.controls if c.parent is None])
+        self.select([c.key for c in self.form_def.controls
+                     if c.parent is None and c.type != "Menu"])
 
     # -- properties ----------------------------------------------------------------------------------------
     def set_property(self, prop: str, value) -> str | None:
@@ -1043,10 +1054,10 @@ class FormDesigner(QWidget):
 
     # -- Format menu -------------------------------------------------------------------------------------------
     def _selected_rects(self):
-        return [(n, self.parent_rect(n)) for n in self.selection]
+        return [(n, self.parent_rect(n)) for n in self.selection if not self.is_menu(n)]
 
     def align(self, how: str) -> None:
-        if len(self.selection) < 2:
+        if len(self.selection) < 2 or self.menu_selected():
             return
         ref = self.parent_rect(self.selection[-1])
         for name, rect in self._selected_rects()[:-1]:
@@ -1080,7 +1091,7 @@ class FormDesigner(QWidget):
         self.commit_geometry(self.selection)
 
     def center_in_form(self, horizontal: bool) -> None:
-        if not self.selection:
+        if not self.selection or self.menu_selected():
             return
         rects = self._selected_rects()
         bounds = QRect(rects[0][1])
@@ -1095,6 +1106,8 @@ class FormDesigner(QWidget):
         self.commit_geometry(self.selection)
 
     def nudge(self, dx: int, dy: int, resize: bool = False) -> None:
+        if self.menu_selected():
+            return
         for name, rect in self._selected_rects():
             if resize:
                 if self.controls[name].TypeName == "Timer":
@@ -1144,7 +1157,127 @@ class FormDesigner(QWidget):
         add("Send to Back", lambda: self.z_order(False), bool(self.selection))
         menu.addSeparator()
         add("Align to Grid", lambda: self._align_to_grid(), bool(self.selection))
+        menu.addSeparator()
+        add("Menu Editor…", self.show_menu_editor)
         menu.exec(global_pos)
+
+    # -- menus -------------------------------------------------------------------------------------------------
+    def is_menu(self, key: str) -> bool:
+        control_def = self.form_def.control(key)
+        return control_def is not None and control_def.type == "Menu"
+
+    def menu_selected(self) -> bool:
+        return any(self.is_menu(key) for key in self.selection)
+
+    def _menu_children(self, key: str | None) -> list[ControlDef]:
+        return [c for c in self.form_def.controls if c.type == "Menu" and c.parent == key]
+
+    def menu_bar_keys(self) -> list[str]:
+        """The menus shown on the menu bar (visible top-level menus)."""
+        return [c.key for c in self._menu_children(None) if c.props.get("Visible", True)]
+
+    def menu_rect(self, key: str) -> QRect:
+        """Where a menu bar menu is drawn on the canvas."""
+        rects = chrome.menu_item_rects(self.form_canvas_rect(), self.frame_info())
+        return rects[self.menu_bar_keys().index(key)]
+
+    def menu_at(self, pos: QPoint) -> str | None:
+        """The menu bar menu at a canvas position."""
+        rects = chrome.menu_item_rects(self.form_canvas_rect(), self.frame_info())
+        return next((key for key, rect in zip(self.menu_bar_keys(), rects)
+                     if rect.contains(pos)), None)
+
+    def menu_popup(self, key: str) -> QMenu | None:
+        """The drop-down of a menu bar menu, as it will look; choosing an item
+        opens its Click code. None if the menu has no items."""
+        if not self._menu_children(key):
+            return None
+        popup = QMenu(self)
+        self._fill_menu_popup(popup, key)
+        return popup
+
+    def _fill_menu_popup(self, popup: QMenu, key: str) -> None:
+        for item in self._menu_children(key):
+            props = item.props
+            caption = props.get("Caption", "")
+            if caption == "-":
+                popup.addSeparator()
+                continue
+            text = caption + ("" if props.get("Visible", True) else "  (hidden)")
+            if self._menu_children(item.key):
+                self._fill_menu_popup(popup.addMenu(text), item.key)
+                continue
+            shortcut = props.get("Shortcut", "")
+            action = popup.addAction(text + (f"\t{shortcut}" if shortcut else ""))
+            action.setCheckable(bool(props.get("Checked")))
+            action.setChecked(bool(props.get("Checked")))
+            action.triggered.connect(
+                lambda _=False, name=item.name: self.viewCodeRequested.emit(name, "Click"))
+
+    def show_menu_popup(self, key: str, global_pos: QPoint) -> None:
+        self.select([key])
+        popup = self.menu_popup(key)
+        if popup is None:  # a menu without items: its Click code
+            self.viewCodeRequested.emit(self.form_def.control(key).name, "Click")
+            return
+        popup.exec(global_pos)
+        popup.deleteLater()
+
+    def menu_entries(self) -> list[menueditor.MenuEntry]:
+        return menueditor.entries_from(self.form_def)
+
+    def _names_besides_menus(self) -> set[str]:
+        return {c.name for c in self.form_def.controls if c.type != "Menu"} | \
+            {self.form_def.class_name}
+
+    def show_menu_editor(self) -> None:
+        """Tools > Menu Editor (Ctrl+E)."""
+        dialog = menueditor.MenuEditorDialog(self.menu_entries(), self._names_besides_menus(),
+                                             self)
+        if dialog.exec():
+            self.set_menus(dialog.result_entries())
+
+    def set_menus(self, entries: list[menueditor.MenuEntry]) -> str | None:
+        """Replace the form's menus (the Menu Editor's OK). Renamed menus take
+        their event handlers along, and handlers get or lose Index when a menu
+        becomes a control array or stops being one."""
+        error = menueditor.validate(entries, self._names_besides_menus())
+        if error:
+            return error
+        before = self._snapshot()
+        old = {c.key: c for c in self.form_def.controls if c.type == "Menu"}
+        old_names = {c.name for c in old.values()}
+        new_defs = menueditor.menu_defs(entries)
+        new_names = {c.name for c in new_defs}
+        # Renames: every element of an old name went to one new, unused name
+        targets: dict[str, set[str]] = {}
+        for entry in entries:
+            if entry.original in old:
+                targets.setdefault(old[entry.original].name, set()).add(entry.name)
+        renamed = {}
+        for old_name, names in targets.items():
+            new_name = next(iter(names))
+            if len(names) == 1 and new_name != old_name and new_name not in old_names and \
+                    old_name not in new_names:
+                renamed[new_name] = old_name
+                from ..formfile import rename_control_references
+
+                self.document.replace_text(
+                    rename_control_references(self.document.text, old_name, new_name))
+        for name in new_names:
+            was_array = any(c.index is not None for c in old.values()
+                            if c.name == renamed.get(name, name))
+            is_array = any(c.index is not None for c in new_defs if c.name == name)
+            existed = renamed.get(name, name) in old_names
+            if (existed and was_array != is_array) or (not existed and is_array):
+                self.document.replace_text(set_index_parameter(
+                    self.document.text, name, CONTROL_TYPES["Menu"].Events, is_array))
+        self.form_def.controls = [c for c in self.form_def.controls
+                                  if c.type != "Menu"] + new_defs
+        self.selection = []
+        self.load_def(self.form_def)
+        self._commit(before)
+        return None
 
     def _align_to_grid(self) -> None:
         for name, rect in self._selected_rects():

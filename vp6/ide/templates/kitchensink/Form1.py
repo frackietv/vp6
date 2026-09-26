@@ -139,6 +139,21 @@ class Form1(Form):
         self.tmrClock = Timer(self, Left=600, Top=440, Interval=1000)
         self.lblStatus = Label(self, Caption='Ready', Left=16, Top=496, Width=728, Height=25,
                                BorderStyle=1, TabIndex=39)
+        self.mnuFile = Menu(self, Caption='&File')
+        self.mnuFileDialog = Menu(self.mnuFile, Caption='&Dialog...', Shortcut='Ctrl+D')
+        self.mnuFileSep = Menu(self.mnuFile, Caption='-')
+        self.mnuFileClose = Menu(self.mnuFile, Caption='&Close')
+        self.mnuView = Menu(self, Caption='&View')
+        self.mnuViewClock = Menu(self.mnuView, Caption='&Clock running', Checked=True)
+        self.mnuViewSep = Menu(self.mnuView, Caption='-')
+        self.mnuScheme = ControlArray()
+        self.mnuScheme[0] = Menu(self.mnuView, Caption='&System colors', Checked=True)
+        self.mnuScheme[1] = Menu(self.mnuView, Caption='&Light')
+        self.mnuScheme[2] = Menu(self.mnuView, Caption='&Dark')
+        self.mnuScheme[3] = Menu(self.mnuView, Caption='Follow the &IDE')
+        self.mnuHelp = Menu(self, Caption='&Help')
+        self.mnuHelpKeys = Menu(self.mnuHelp, Caption='&Keys')
+        self.mnuHelpAbout = Menu(self.mnuHelp, Caption='&About')
     # endregion
 
     # --- form events -------------------------------------------------------------------
@@ -199,12 +214,15 @@ class Form1(Form):
         # optScheme is a control array: one handler for its four option buttons,
         # told apart by Index (also the element's place in SCHEMES)
         self.ColorScheme = SCHEMES[Index]
+        for item in self.mnuScheme:  # the View menu's matching items (a menu array)
+            item.Checked = item.Index == Index
 
     def chkBold_Click(self):
         self.lblClock.FontBold = self.chkBold.Value == vpChecked
 
     def chkTimer_Click(self):
         self.tmrClock.Enabled = self.chkTimer.Value == vpChecked
+        self.mnuViewClock.Checked = self.tmrClock.Enabled
 
     def chkPicture_Click(self):
         self.picLogo.Visible = self.chkPicture.Value == vpChecked
@@ -331,6 +349,31 @@ class Form1(Form):
 
     def cmdClose_Click(self):
         self.Unload()
+
+    # --- menus (Tools > Menu Editor) ---------------------------------------------------------
+    def mnuFileDialog_Click(self):
+        self.cmdDialog_Click()  # Ctrl+D, its Shortcut, works without opening the menu
+
+    def mnuFileClose_Click(self):
+        self.Unload()
+
+    def mnuView_Click(self):
+        # A menu's Click fires just before it opens: a place to update its items
+        self.lblStatus.Caption = "The View menu reflects the options on the form"
+
+    def mnuViewClock_Click(self):
+        # Checked only changes when code changes it: toggle the check box, whose
+        # Click handler starts or stops the clock and updates the check mark
+        self.chkTimer.Value = vpUnchecked if self.mnuViewClock.Checked else vpChecked
+
+    def mnuScheme_Click(self, Index):
+        self.optScheme[Index].Value = True  # optScheme_Click does the rest
+
+    def mnuHelpKeys_Click(self):
+        MsgBox(HELP, vpInformation, "Kitchen Sink help")
+
+    def mnuHelpAbout_Click(self):
+        self.cmdAbout_Click()
 
 
 if __name__ == "__main__":

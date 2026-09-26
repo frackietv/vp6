@@ -44,7 +44,8 @@ BLOCK_RE = re.compile(r"(<!-- BEGIN GENERATED: (?P<key>[^>]+?) -->\n)(?P<body>.*
                       r"(<!-- END GENERATED -->)", re.S)
 
 KIND = {"str": "str", "text": "str (multi-line)", "int": "int", "bool": "bool", "enum": "enum",
-        "color": "color", "list": "list[str]", "font": "font name", "file": "file path"}
+        "color": "color", "list": "list[str]", "font": "font name", "file": "file path",
+        "shortcut": "shortcut key"}
 
 # The property groups shared by controls, in the order they're documented
 GROUPS = [
@@ -119,7 +120,8 @@ def control(type_name: str) -> str:
     cls = CONTROL_TYPES[type_name]
     groups, own = _groups_of(cls)
     width, height = cls.DefaultSize
-    summary = [f"Default size {width} × {height}."]
+    summary = [f"Default size {width} × {height}." if cls.InToolbox else
+               "Not in the Toolbox: designed with the Menu Editor."]
     if cls.IsContainer:
         summary.append("A container: other controls can be placed on it.")
     if groups:

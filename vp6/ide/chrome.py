@@ -46,7 +46,8 @@ class FrameInfo:
     min_button: bool = True
     max_button: bool = True
     title_dark: bool = False  # title bar appearance
-    form_dark: bool = False  # the form's own scheme (classic frame only)
+    form_dark: bool = False  # the form's own scheme (classic frame, menu bar)
+    menus: tuple[str, ...] = ()  # captions of the form's menu bar, if it has one
 
     @property
     def tool(self) -> bool:
@@ -71,8 +72,18 @@ def metrics(style: str, info: FrameInfo) -> tuple[int, int]:
     return (tool_title if info.tool else title), border
 
 
+MENU_HEIGHT = 22
+_MENU_PADDING = 9
+
+
+def menu_height(info: FrameInfo) -> int:
+    """Height of the menu bar drawn between the title bar and the form."""
+    return MENU_HEIGHT if info.menus else 0
+
+
 def frame_rect(client: QRect, style: str, info: FrameInfo) -> QRect:
     title, border = metrics(style, info)
+    title += menu_height(info)
     return QRect(client.left() - border, client.top() - border - title,
                  client.width() + 2 * border, client.height() + title + 2 * border)
 
@@ -80,11 +91,53 @@ def frame_rect(client: QRect, style: str, info: FrameInfo) -> QRect:
 def paint(p: QPainter, style: str, client: QRect, info: FrameInfo) -> None:
     p.save()
     p.setRenderHint(QPainter.Antialiasing)
+    # The painters see the menu bar as part of the window's inside
+    inside = client.adjusted(0, -menu_height(info), 0, 0)
     if info.border_style == 0:
-        _shadow(p, QRectF(client), 0)
+        _shadow(p, QRectF(inside), 0)
     else:
         {MACOS: _macos, WINDOWS: _windows, GNOME: _gnome, CLASSIC: _classic}[style](
-            p, frame_rect(client, style, info), client, info)
+            p, frame_rect(client, style, info), inside, info)
+    if info.menus:
+        _menu_bar(p, client, info)
+    p.restore()
+
+
+def _menu_font() -> QFont:
+    font = QFont()
+    font.setPixelSize(13)
+    return font
+
+
+def _menu_text(caption: str) -> str:
+    return caption.replace("&&", "\0").replace("&", "").replace("\0", "&")
+
+
+def menu_item_rects(client: QRect, info: FrameInfo) -> list[QRect]:
+    """Where each menu bar caption is drawn (in info.menus order)."""
+    metrics_ = QFontMetrics(_menu_font())
+    rects, x = [], client.left() + 2
+    top = client.top() - MENU_HEIGHT
+    for caption in info.menus:
+        width = metrics_.horizontalAdvance(_menu_text(caption)) + 2 * _MENU_PADDING
+        rects.append(QRect(x, top, width, MENU_HEIGHT))
+        x += width
+    return rects
+
+
+def _menu_bar(p: QPainter, client: QRect, info: FrameInfo) -> None:
+    bar = QRect(client.left(), client.top() - MENU_HEIGHT, client.width(), MENU_HEIGHT)
+    dark = info.form_dark
+    p.setRenderHint(QPainter.Antialiasing, False)
+    p.fillRect(bar, QColor("#2b2b2b" if dark else "#f3f3f3"))
+    p.setPen(QColor("#3d3d3d" if dark else "#dcdcdc"))
+    p.drawLine(bar.bottomLeft(), bar.bottomRight())
+    p.setFont(_menu_font())
+    p.setPen(QColor("#e8e8e8" if dark else "#1a1a1a"))
+    p.save()
+    p.setClipRect(bar)
+    for caption, rect in zip(info.menus, menu_item_rects(client, info)):
+        p.drawText(rect, Qt.AlignCenter, _menu_text(caption))
     p.restore()
 
 

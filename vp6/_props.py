@@ -43,7 +43,7 @@ def enum_choices(*labels: str) -> tuple:
 def normalize(kind: str, value):
     if value is None:
         return None
-    if kind in ("str", "text", "file", "font"):
+    if kind in ("str", "text", "file", "font", "shortcut"):
         return str(value)
     if kind in ("int", "enum"):
         return int(value)
