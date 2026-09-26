@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vp6"
-version = "0.1.0"
+version = "0.2.1"
 description = "A Visual Basic 6 style IDE and GUI framework for Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,10 +15,13 @@ dev = ["pytest"]
 
 [project.scripts]
 vp6 = "vp6.ide.mainwindow:main"
-vp6-run = "vp6.run:main"
+vp6-run = "vp6.runner:main"
 
 [tool.setuptools.packages.find]
 include = ["vp6*"]
+
+[tool.setuptools.package-data]
+"vp6.ide" = ["templates/kitchensink/*.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -187,3 +187,63 @@ def test_handler_call_passes_only_declared_args():
     vp6_app.call_handler(lambda a, b: received.append((a, b)), 1, 2, 3, 4)
     vp6_app.call_handler(lambda *args: received.append(args), 1, 2)
     assert received == [(1, 2), (1, 2)]
+
+
+# --- ZIndex (stacking order) ------------------------------------------------------------
+
+def _stack(container_widget):
+    """Child widgets bottom to top (Qt keeps children in stacking order)."""
+    return [w._vp_control.Name for w in container_widget.children()
+            if getattr(w, "_vp_control", None) is not None]
+
+
+class StackForm(Form):
+    def InitializeComponent(self):
+        self.Label1 = Label(self, Caption="one", Left=0, Top=0, ZIndex=2)
+        self.Label2 = Label(self, Caption="two", Left=10, Top=10)
+        self.Label3 = Label(self, Caption="three", Left=20, Top=20)
+        self.Frame1 = Frame(self, Caption="f", Left=0, Top=40, ZIndex=-1)
+        self.Check1 = CheckBox(self.Frame1, Caption="in frame", ZIndex=5)
+        self.Check2 = CheckBox(self.Frame1, Caption="also in frame")
+        self.Timer1 = Timer(self, Interval=0)
+
+
+def test_zindex_orders_controls_at_creation(qapp):
+    form = StackForm()
+    # Equal ZIndex keeps creation order; higher is on top; containers stack separately
+    assert _stack(form._widget) == ["Frame1", "Label2", "Label3", "Label1"]
+    assert _stack(form.Frame1._widget) == ["Check2", "Check1"]
+    assert not hasattr(form.Timer1, "ZIndex") or "ZIndex" not in form.Timer1._specs
+
+
+def test_zindex_changes_take_effect_immediately(qapp):
+    form = StackForm()
+    form.Show()
+    form.Label2.ZIndex = 10
+    assert _stack(form._widget)[-1] == "Label2"
+    form.Label2.ZIndex = -10
+    assert _stack(form._widget)[0] == "Label2"
+    top_at = form._widget.childAt(15, 15)  # where Label1-3 overlap
+    assert top_at._vp_control is form.Label1  # ZIndex 2 beats Label3's 0
+    form.Unload()
+
+
+def test_zorder_method_sets_zindex(qapp):
+    form = StackForm()
+    form.Label2.ZOrder(0)  # bring to front
+    assert form.Label2.ZIndex == 3 and _stack(form._widget)[-1] == "Label2"
+    form.Label2.ZOrder(0)  # already on top: unchanged
+    assert form.Label2.ZIndex == 3
+    form.Label2.ZOrder(1)  # send to back
+    assert form.Label2.ZIndex == -2 and _stack(form._widget)[0] == "Label2"
+
+
+def test_rebuilt_widget_keeps_its_place(qapp):
+    class F(Form):
+        def InitializeComponent(self):
+            self.Text1 = TextBox(self, ZIndex=-1)
+            self.Label1 = Label(self)
+
+    form = F()
+    form.Text1.MultiLine = True  # replaces the widget
+    assert _stack(form._widget) == ["Text1", "Label1"]

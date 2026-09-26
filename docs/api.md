@@ -112,17 +112,43 @@ def Picture1_MouseMove(self, Button, Shift, X, Y): ...
 
 ### Event arguments
 
-| Event | Arguments | Notes |
-|---|---|---|
-| `Click`, `DblClick` | none | |
-| `Change` | none | TextBox/ComboBox text edited, scroll bar value changed |
-| `Scroll` | none | scroll bar thumb dragged |
-| `Timer` | none | every `Interval` ms |
-| `GotFocus`, `LostFocus` | none | |
-| `MouseDown`, `MouseUp`, `MouseMove` | `Button, Shift, X, Y` | `Button`: `vpLeftButton` 1, `vpRightButton` 2, `vpMiddleButton` 4 (a bitmask for MouseMove); `Shift`: `vpShiftMask` 1, `vpCtrlMask` 2 (⌘ on macOS), `vpAltMask` 4; `X`, `Y` in pixels relative to the object |
-| `KeyDown`, `KeyUp` | `KeyCode, Shift` | `KeyCode`: `vpKey*` constants |
-| `KeyPress` | `KeyAscii` | the character code |
-| `Load`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize` | none | form only |
+<!-- BEGIN GENERATED: event-arguments -->
+| Event | Arguments |
+|---|---|
+| `Click` | none |
+| `DblClick` | none |
+| `Change` | none |
+| `Scroll` | none |
+| `Timer` | none |
+| `GotFocus` | none |
+| `LostFocus` | none |
+| `MouseDown` | Button, Shift, X, Y |
+| `MouseUp` | Button, Shift, X, Y |
+| `MouseMove` | Button, Shift, X, Y |
+| `KeyDown` | KeyCode, Shift |
+| `KeyUp` | KeyCode, Shift |
+| `KeyPress` | KeyAscii |
+| `Initialize` | none |
+| `Load` | none |
+| `Unload` | none |
+| `Activate` | none |
+| `Deactivate` | none |
+| `Resize` | none |
+<!-- END GENERATED -->
+
+What the arguments mean:
+
+* **`Button`** is `vpLeftButton` 1, `vpRightButton` 2 or `vpMiddleButton` 4 (a
+  bitmask for `MouseMove`).
+* **`Shift`** is a bitmask of `vpShiftMask` 1, `vpCtrlMask` 2 (⌘ on macOS)
+  and `vpAltMask` 4.
+* **`X`, `Y`** are pixels relative to the object.
+* **`KeyCode`** is a `vpKey*` constant; **`KeyAscii`** is the character code.
+* `Change` fires when TextBox/ComboBox text is edited or a scroll bar's value
+  changes. `Scroll` fires while a scroll bar's thumb is dragged. `Timer`
+  fires every `Interval` ms.
+* `Load`, `Unload`, `Initialize`, `Activate`, `Deactivate` and `Resize` are
+  form events.
 
 ---
 
@@ -130,26 +156,35 @@ def Picture1_MouseMove(self, Button, Shift, X, Y): ...
 
 ### Form properties
 
-| Property | Type | Default | Values / notes |
+<!-- BEGIN GENERATED: form-properties -->
+| Property | Type | Default | Notes |
 |---|---|---|---|
-| `BackColor` | color | (default) | |
-| `BorderStyle` | enum | 2 - Sizable | 0 - None, 1 - Fixed Single, 2 - Sizable, 3 - Fixed Dialog, 4 - Fixed ToolWindow, 5 - Sizable ToolWindow |
-| `Caption` | str | the class name | window title |
-| `ColorScheme` | enum | 0 - Project Default | 0 - Project Default, 1 - System, 2 - Light, 3 - Dark, 4 - IDE; see [§7](#7-color-schemes-lightdark) |
-| `ControlBox` | bool | `True` | show the window buttons |
-| `Enabled` | bool | `True` | |
-| `FontBold`, `FontItalic`, `FontUnderline` | bool | `False` | |
-| `FontName` | font name | (default) | inherited by controls that don't set their own |
-| `FontSize` | int | (default) | points |
-| `ForeColor` | color | (default) | |
-| `Height` | int | `360` | client area height in pixels |
-| `KeyPreview` | bool | `False` | the form receives key events before its controls |
-| `Left`, `Top` | int | `0` | screen position; used when `StartUpPosition` is Manual |
-| `MaxButton`, `MinButton` | bool | `True` | |
-| `StartUpPosition` | enum | 2 - CenterScreen | 0 - Manual, 1 - CenterOwner, 2 - CenterScreen, 3 - Windows Default |
-| `Tag` | str | `''` | free for your use |
-| `Width` | int | `480` | client area width in pixels |
-| `WindowState` | enum | 0 - Normal | 0 - Normal, 1 - Minimized, 2 - Maximized |
+| `BackColor` | color | (default) | Background color; unset = the default |
+| `BorderStyle` | enum | 2 - Sizable | 0 - None, 1 - Fixed Single, 2 - Sizable, 3 - Fixed Dialog, 4 - Fixed ToolWindow, 5 - Sizable ToolWindow. The kind of window frame; fixed styles can't be resized |
+| `Caption` | str | `''` | The window title; defaults to the form's class name |
+| `ColorScheme` | enum | 0 - Project Default | 0 - Project Default, 1 - System, 2 - Light, 3 - Dark, 4 - IDE. Light or dark appearance. Project Default uses the project's color scheme; System follows the operating system; IDE follows the VP6 IDE's light/dark setting (System when run on its own). |
+| `ControlBox` | bool | `True` | Show the window buttons |
+| `Enabled` | bool | `True` | Whether the form responds to the user |
+| `FontBold` | bool | `False` | Bold text |
+| `FontItalic` | bool | `False` | Italic text |
+| `FontName` | font name | (default) | Font family; unset = the container's font |
+| `FontSize` | int | (default) | Font size in points; unset = the container's |
+| `FontUnderline` | bool | `False` | Underlined text |
+| `ForeColor` | color | (default) | Text color; unset = the default |
+| `Height` | int | `360` | Client area height in pixels |
+| `KeyPreview` | bool | `False` | Form receives key events before its controls |
+| `Left` | int | `0` | Screen position; used with StartUpPosition Manual |
+| `MaxButton` | bool | `True` | Show a maximize button (sizable forms) |
+| `MinButton` | bool | `True` | Show a minimize button |
+| `StartUpPosition` | enum | 2 - CenterScreen | 0 - Manual, 1 - CenterOwner, 2 - CenterScreen, 3 - Windows Default. Where the window first appears |
+| `Tag` | str | `''` | Free for your own use |
+| `Top` | int | `0` | Screen position; used with StartUpPosition Manual |
+| `Width` | int | `480` | Client area width in pixels |
+| `WindowState` | enum | 0 - Normal | 0 - Normal, 1 - Minimized, 2 - Maximized. Normal, minimized or maximized window |
+<!-- END GENERATED -->
+
+`Caption` defaults to the form's class name. `ColorScheme` is explained in
+[§7](#7-color-schemes-lightdark).
 
 Run-time only properties:
 
@@ -176,14 +211,12 @@ Run-time only properties:
 
 ### Form events
 
-`Load`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`,
-`DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`,
-`MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`,
-`KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`.
+<!-- BEGIN GENERATED: form-events -->
+Events: `Load`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Load`.
+<!-- END GENERATED -->
 
 * `Initialize` fires when the object is created.
 * `Load` fires before the first show.
-* The designer's default event (double-click on the form) is `Load`.
 
 ---
 
@@ -198,7 +231,7 @@ Run-time only properties:
 | `SetFocus()` | gives the control the keyboard focus |
 | `Move(Left, Top=None, Width=None, Height=None)` | moves / resizes |
 | `Refresh()` | repaints |
-| `ZOrder(Position=0)` | `0` brings to the front, `1` sends to the back |
+| `ZOrder(Position=0)` | `0` brings to the front, `1` sends to the back, by setting `ZIndex` just above or below the other controls in the same container |
 
 Setting a property that doesn't exist (e.g. `Command1.Captoin = "x"`) raises
 `AttributeError`, like VB's error 438.
@@ -208,128 +241,187 @@ Setting a property that doesn't exist (e.g. `Command1.Captoin = "x"`) raises
 Most controls share these properties. Each control's section says which
 groups it has.
 
-| Group | Properties |
-|---|---|
-| **Position** | `Left`, `Top`, `Width`, `Height` (int, pixels, relative to the container) |
-| **Colors** | `BackColor`, `ForeColor` (color, `None` = the default) |
-| **Font** | `FontName` (family or `None`), `FontSize` (points or `None`), `FontBold`, `FontItalic`, `FontUnderline` (bool). Unset values are inherited from the container. |
-| **Common** | `Enabled` (bool, `True`), `Visible` (bool, `True`), `TabIndex` (int, tab order), `ToolTipText` (str), `Tag` (str, free for your use) |
+<!-- BEGIN GENERATED: common-properties -->
+| Group | Property | Type | Default | Notes |
+|---|---|---|---|---|
+| Position | `Left` | int | `0` | Distance from the container's left edge, in pixels |
+| Position | `Top` | int | `0` | Distance from the container's top edge, in pixels |
+| Position | `Width` | int | per control | Width in pixels |
+| Position | `Height` | int | per control | Height in pixels |
+| Colors | `BackColor` | color | (default) | Background color; unset = the default |
+| Colors | `ForeColor` | color | (default) | Text color; unset = the default |
+| Font | `FontName` | font name | (default) | Font family; unset = the container's font |
+| Font | `FontSize` | int | (default) | Font size in points; unset = the container's |
+| Font | `FontBold` | bool | `False` | Bold text |
+| Font | `FontItalic` | bool | `False` | Italic text |
+| Font | `FontUnderline` | bool | `False` | Underlined text |
+| Common | `Enabled` | bool | `True` | Whether the control responds to the user |
+| Common | `Visible` | bool | `True` | Whether the control is shown at run time |
+| Common | `TabIndex` | int | `0` | Position in the Tab key order |
+| Common | `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
+| Common | `Tag` | str | `''` | Free for your own use |
+| Common | `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top. Equal values keep creation order (later on top). |
+<!-- END GENERATED -->
 
 The "Default event" is what the designer opens when you double-click the
 control.
 
+**Stacking (`ZIndex`).** When controls overlap, the one with the higher
+`ZIndex` is drawn on top.
+
+* It applies among controls in the same container; a control inside a Frame
+  is clipped to that Frame.
+* Equal values keep creation order: controls created later are on top.
+* Changing `ZIndex` at run time takes effect immediately:
+
+  ```python
+  self.Label1.ZIndex = 5          # now above siblings with lower values
+  self.Label2.ZOrder(0)           # VB's method: bring to front (sets ZIndex)
+  ```
+
+The Timer, invisible at run time, has no `ZIndex`.
+
 ### PictureBox
 
-A container that shows an image. Default size 121 × 97. Groups: Position,
-Colors, Common.
+A container that shows an image.
+
+<!-- BEGIN GENERATED: control PictureBox -->
+Default size 121 × 97. A container: other controls can be placed on it. Property groups: Position, Colors, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
-| `AutoSize` | bool | `False` | resize to the picture |
-| `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single |
-| `Picture` | file path | `''` | image file, relative to the form's folder |
-| `Stretch` | bool | `False` | scale the picture to the control |
+| `AutoSize` | bool | `False` | Resize to fit the picture |
+| `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A sunken border around the picture |
+| `Picture` | file path | `''` | Image file (relative to the form's folder) |
+| `Stretch` | bool | `False` | Scale the picture to fit the control |
 
-Methods: `Cls()` clears the picture. Events: `Click`, `DblClick`,
-`MouseDown`, `MouseMove`, `MouseUp`. Default event: `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
+Methods: `Cls()` clears the picture.
 
 ### Label
 
-Read-only text. Default size 97 × 25. Groups: Position, Colors, Font, Common.
+Read-only text.
+
+<!-- BEGIN GENERATED: control Label -->
+Default size 97 × 25. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
-| `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center |
-| `AutoSize` | bool | `False` | resize to the text |
-| `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single |
-| `Caption` | str | `''` | `&` marks are hidden (use `&&` for a literal `&`) |
-| `WordWrap` | bool | `False` | |
+| `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment |
+| `AutoSize` | bool | `False` | Resize to fit the text |
+| `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the label |
+| `Caption` | str | `''` | The text; & marks are hidden (&& shows a literal &) |
+| `WordWrap` | bool | `False` | Wrap long text onto several lines |
 
-Events: `Click`, `DblClick`, `MouseDown`, `MouseMove`, `MouseUp`. Default
-event: `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
 
 ### TextBox
 
-Editable text. Default size 121 × 25. Groups: Position, Colors, Font, Common.
+Editable text, on one line or several.
+
+<!-- BEGIN GENERATED: control TextBox -->
+Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
-| `Alignment` | enum | 0 - Left Justify | single-line only |
-| `Locked` | bool | `False` | read-only |
-| `MaxLength` | int | `0` | 0 = no limit (single-line) |
-| `MultiLine` | bool | `False` | multi-line editor |
-| `PasswordChar` | str | `''` | any character masks the input |
-| `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both (multi-line) |
-| `Text` | str (multi-line) | `''` | the contents |
+| `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment (single-line only) |
+| `Locked` | bool | `False` | Read-only: the text can't be edited |
+| `MaxLength` | int | `0` | Maximum length; 0 = no limit (single-line) |
+| `MultiLine` | bool | `False` | A multi-line editor instead of a single line |
+| `PasswordChar` | str | `''` | Any character masks the input |
+| `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Scroll bars of a multi-line TextBox |
+| `Text` | str (multi-line) | `''` | The contents |
 
-Run-time properties: `SelStart`, `SelLength`, `SelText` (the selection;
-setting `SelText` replaces it). Events: `Change`, `Click`, `DblClick`,
-`GotFocus`, `LostFocus`, `KeyDown`, `KeyPress`, `KeyUp`, `MouseDown`,
-`MouseMove`, `MouseUp`. Default event: `Change`.
+Events: `Change`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+<!-- END GENERATED -->
+
+Run-time properties: `SelStart`, `SelLength`, `SelText` (the selection; setting `SelText` replaces it).
 
 ### Frame
 
-A captioned container that groups controls (OptionButtons in a Frame form
-their own group). Default size 185 × 129. Groups: Position, Colors, Font,
-Common.
+A captioned container that groups controls. OptionButtons in a Frame form their own group.
 
-| Property | Type | Default |
-|---|---|---|
-| `Caption` | str | `''` |
+<!-- BEGIN GENERATED: control Frame -->
+Default size 185 × 129. A container: other controls can be placed on it. Property groups: Position, Colors, Font, Common.
 
-Events: `Click`, `DblClick`, `MouseDown`, `MouseMove`, `MouseUp`. Default
-event: `Click`.
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Caption` | str | `''` | The title shown on the frame |
+
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
 
 ### CommandButton
 
-Default size 97 × 33. Groups: Position, Colors, Font, Common.
+A push button.
+
+<!-- BEGIN GENERATED: control CommandButton -->
+Default size 97 × 33. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
-| `Cancel` | bool | `False` | clicked when Esc is pressed on the form |
-| `Caption` | str | `''` | `&` marks the access key |
-| `Default` | bool | `False` | clicked when Enter is pressed on the form |
+| `Cancel` | bool | `False` | Clicked when Esc is pressed on the form |
+| `Caption` | str | `''` | The text; & marks the access key |
+| `Default` | bool | `False` | Clicked when Enter is pressed on the form |
 
-Run-time: setting `Value = True` clicks the button. Events: `Click`,
-`GotFocus`, `LostFocus`, `KeyDown`, `KeyPress`, `KeyUp`, `MouseDown`,
-`MouseMove`, `MouseUp`. Default event: `Click`.
+Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
+Run-time: setting `Value = True` clicks the button.
 
 ### CheckBox
 
-Default size 121 × 25. Groups: Position, Colors, Font, Common.
+A check box.
+
+<!-- BEGIN GENERATED: control CheckBox -->
+Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
-| `Caption` | str | `''` | |
-| `Value` | enum | 0 - Unchecked | 0 - Unchecked (`vpUnchecked`), 1 - Checked (`vpChecked`), 2 - Grayed (`vpGrayed`) |
+| `Caption` | str | `''` | The text; & marks the access key |
+| `Value` | enum | 0 - Unchecked | 0 - Unchecked, 1 - Checked, 2 - Grayed. vpUnchecked, vpChecked or vpGrayed; changing it fires Click |
 
-`Click` fires whenever `Value` changes, including from code. Events: `Click`,
-`GotFocus`, `LostFocus`, `KeyDown`, `KeyPress`, `KeyUp`, `MouseDown`,
-`MouseMove`, `MouseUp`. Default event: `Click`.
+Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
+`Click` fires whenever `Value` changes, including from code.
 
 ### OptionButton
 
 A radio button. Buttons in the same container are mutually exclusive.
-Default size 121 × 25. Groups: Position, Colors, Font, Common.
 
-| Property | Type | Default |
-|---|---|---|
-| `Caption` | str | `''` |
-| `Value` | bool | `False` |
-
-`Click` fires when the button becomes selected. Events are the same as
-CheckBox. Default event: `Click`.
-
-### ComboBox
-
-Default size 121 × 25. Groups: Position, Colors, Font, Common.
+<!-- BEGIN GENERATED: control OptionButton -->
+Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
-| `List` | list[str] | `[]` | the items |
-| `Sorted` | bool | `False` | |
-| `Style` | enum | 0 - Dropdown Combo | 0 - Dropdown Combo (editable), 2 - Dropdown List (choose only) |
-| `Text` | str | `''` | the edit text / selected item |
+| `Caption` | str | `''` | The text; & marks the access key |
+| `Value` | bool | `False` | Selected; option buttons in the same container are exclusive |
+
+Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
+`Click` fires when the button becomes selected.
+
+### ComboBox
+
+A drop-down list, optionally with an editable text field.
+
+<!-- BEGIN GENERATED: control ComboBox -->
+Default size 121 × 25. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `List` | list[str] | `[]` | The items |
+| `Sorted` | bool | `False` | Keep the items in alphabetical order |
+| `Style` | enum | 0 - Dropdown Combo | 0 - Dropdown Combo, 2 - Dropdown List. Dropdown Combo: editable text; Dropdown List: choose an item only |
+| `Text` | str | `''` | The edit text or the selected item |
+
+Events: `Change`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
 
 Run-time members:
 
@@ -337,19 +429,23 @@ Run-time members:
 * `ListCount`;
 * `ListIndex` (-1 = none; setting it selects an item).
 
-Events: `Change` (text edited), `Click` (selection changed), `DblClick`,
-`GotFocus`, `LostFocus`, `KeyDown`, `KeyPress`, `KeyUp`. Default event:
-`Click`.
+`Change` fires when the text is edited, `Click` when the selection changes.
 
 ### ListBox
 
-Default size 121 × 97. Groups: Position, Colors, Font, Common.
+A list of items.
+
+<!-- BEGIN GENERATED: control ListBox -->
+Default size 121 × 97. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
-| `List` | list[str] | `[]` | the items |
-| `MultiSelect` | enum | 0 - None | 0 - None, 1 - Simple, 2 - Extended |
-| `Sorted` | bool | `False` | |
+| `List` | list[str] | `[]` | The items |
+| `MultiSelect` | enum | 0 - None | 0 - None, 1 - Simple, 2 - Extended. Whether several items can be selected |
+| `Sorted` | bool | `False` | Keep the items in alphabetical order |
+
+Events: `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
 
 Run-time members:
 
@@ -358,38 +454,63 @@ Run-time members:
 * `Text` (the selected item);
 * `Selected(Index)` (whether that item is selected).
 
-Events: `Click` (selection changed), `DblClick`, `GotFocus`, `LostFocus`,
-`KeyDown`, `KeyPress`, `KeyUp`, `MouseDown`, `MouseMove`, `MouseUp`. Default
-event: `Click`.
+`Click` fires when the selection changes.
 
-### HScrollBar / VScrollBar
+### HScrollBar
 
-Default size 121 × 17 (horizontal) and 17 × 121 (vertical). Groups: Position,
-Common.
+A horizontal scroll bar.
 
-| Property | Type | Default |
-|---|---|---|
-| `LargeChange` | int | `1` |
-| `Max` | int | `32767` |
-| `Min` | int | `0` |
-| `SmallChange` | int | `1` |
-| `Value` | int | `0` |
-
-Events: `Change` (value changed), `Scroll` (while dragging), `GotFocus`,
-`LostFocus`, `KeyDown`, `KeyPress`, `KeyUp`. Default event: `Change`.
-
-### Timer
-
-Invisible at run time. Shown as a stopwatch in the designer.
+<!-- BEGIN GENERATED: control HScrollBar -->
+Default size 121 × 17. Property groups: Position, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
-| `Enabled` | bool | `True` | |
-| `Interval` | int | `0` | milliseconds between `Timer` events; 0 = off |
-| `Left`, `Top` | int | `0` | position in the designer only |
-| `Tag` | str | `''` | |
+| `LargeChange` | int | `1` | Step for clicks on the track |
+| `Max` | int | `32767` | Largest Value |
+| `Min` | int | `0` | Smallest Value |
+| `SmallChange` | int | `1` | Step for the arrow buttons |
+| `Value` | int | `0` | The current position; changing it fires Change |
 
-Events: `Timer`. Default event: `Timer`.
+Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Change`.
+<!-- END GENERATED -->
+
+`Change` fires when the value changes, `Scroll` while the thumb is dragged.
+
+### VScrollBar
+
+A vertical scroll bar. It behaves like HScrollBar.
+
+<!-- BEGIN GENERATED: control VScrollBar -->
+Default size 17 × 121. Property groups: Position, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `LargeChange` | int | `1` | Step for clicks on the track |
+| `Max` | int | `32767` | Largest Value |
+| `Min` | int | `0` | Smallest Value |
+| `SmallChange` | int | `1` | Step for the arrow buttons |
+| `Value` | int | `0` | The current position; changing it fires Change |
+
+Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Change`.
+<!-- END GENERATED -->
+
+### Timer
+
+Invisible at run time. Shown as a stopwatch in the designer; it has no `ZIndex`.
+
+<!-- BEGIN GENERATED: control Timer -->
+Default size 32 × 32.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Enabled` | bool | `True` | Whether the Timer event fires |
+| `Interval` | int | `0` | Milliseconds between Timer events (0 = off) |
+| `Left` | int | `0` | Position in the designer only |
+| `Tag` | str | `''` | Free for your own use |
+| `Top` | int | `0` | Position in the designer only |
+
+Events: `Timer`. Default event (double-click in the designer): `Timer`.
+<!-- END GENERATED -->
 
 ---
 
@@ -511,48 +632,52 @@ self.ColorScheme = vpSchemeDark
 
 All constants are plain ints or strings.
 
-**MsgBox.**
-
-| Constants | Values |
-|---|---|
-| Buttons: `vpOKOnly`, `vpOKCancel`, `vpAbortRetryIgnore`, `vpYesNoCancel`, `vpYesNo`, `vpRetryCancel` | 0-5 |
-| Icons: `vpCritical`, `vpQuestion`, `vpExclamation`, `vpInformation` | 16, 32, 48, 64 |
-| Default button: `vpDefaultButton1`, `vpDefaultButton2`, `vpDefaultButton3` | 0, 256, 512 |
-| Results: `vpOK`, `vpCancel`, `vpAbort`, `vpRetry`, `vpIgnore`, `vpYes`, `vpNo` | 1-7 |
-
-**Forms and controls.**
-
-| Constants | Values |
-|---|---|
-| `Show`: `vpModeless`, `vpModal` | 0, 1 |
-| `CheckBox.Value`: `vpUnchecked`, `vpChecked`, `vpGrayed` | 0, 1, 2 |
-| Mouse buttons: `vpLeftButton`, `vpRightButton`, `vpMiddleButton` | 1, 2, 4 |
-| Shift state: `vpShiftMask`, `vpCtrlMask`, `vpAltMask` | 1, 2, 4 |
-| Alignment: `vpLeftJustify`, `vpRightJustify`, `vpCenter` | 0, 1, 2 |
-| `BorderStyle`: `vpBSNone`, `vpFixedSingle`, `vpSizable`, `vpFixedDialog`, `vpFixedToolWindow`, `vpSizableToolWindow` | 0-5 |
-| `WindowState`: `vpNormal`, `vpMinimized`, `vpMaximized` | 0, 1, 2 |
-| `StartUpPosition`: `vpStartUpManual`, `vpStartUpOwner`, `vpStartUpScreen`, `vpStartUpWindowsDefault` | 0-3 |
-| Color schemes: `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0-4 |
-
-**Strings.** `vpCr` `"\r"`, `vpLf` `"\n"`, `vpCrLf` `"\r\n"`, `vpNewLine`
-`"\n"`, `vpTab` `"\t"`, `vpNullString` `""`.
+<!-- BEGIN GENERATED: constants -->
+| Group | Constants | Values |
+|---|---|---|
+| MsgBox buttons | `vpOKOnly`, `vpOKCancel`, `vpAbortRetryIgnore`, `vpYesNoCancel`, `vpYesNo`, `vpRetryCancel` | 0, 1, 2, 3, 4, 5 |
+| MsgBox icons | `vpCritical`, `vpQuestion`, `vpExclamation`, `vpInformation` | 16, 32, 48, 64 |
+| MsgBox default button | `vpDefaultButton1`, `vpDefaultButton2`, `vpDefaultButton3` | 0, 256, 512 |
+| MsgBox results | `vpOK`, `vpCancel`, `vpAbort`, `vpRetry`, `vpIgnore`, `vpYes`, `vpNo` | 1, 2, 3, 4, 5, 6, 7 |
+| Form.Show | `vpModeless`, `vpModal` | 0, 1 |
+| CheckBox.Value | `vpUnchecked`, `vpChecked`, `vpGrayed` | 0, 1, 2 |
+| Mouse buttons / shift state | `vpLeftButton`, `vpRightButton`, `vpMiddleButton`, `vpShiftMask`, `vpCtrlMask`, `vpAltMask` | 1, 2, 4, 1, 2, 4 |
+| Alignment | `vpLeftJustify`, `vpRightJustify`, `vpCenter` | 0, 1, 2 |
+| Form.BorderStyle | `vpBSNone`, `vpFixedSingle`, `vpSizable`, `vpFixedDialog`, `vpFixedToolWindow`, `vpSizableToolWindow` | 0, 1, 2, 3, 4, 5 |
+| Form.WindowState | `vpNormal`, `vpMinimized`, `vpMaximized` | 0, 1, 2 |
+| Form.StartUpPosition | `vpStartUpManual`, `vpStartUpOwner`, `vpStartUpScreen`, `vpStartUpWindowsDefault` | 0, 1, 2, 3 |
+| Strings | `vpCr`, `vpLf`, `vpCrLf`, `vpNewLine`, `vpTab`, `vpNullString` | `'\r'`, `'\n'`, `'\r\n'`, `'\n'`, `'\t'`, `''` |
+| Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
+| Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
 **Key codes** (for `KeyDown` / `KeyUp`):
 
-| Constant | Value | Constant | Value |
-|---|---|---|---|
-| `vpKeyBack` | 8 | `vpKeyPageUp` | 33 |
-| `vpKeyTab` | 9 | `vpKeyPageDown` | 34 |
-| `vpKeyReturn` | 13 | `vpKeyEnd` | 35 |
-| `vpKeyShift` | 16 | `vpKeyHome` | 36 |
-| `vpKeyControl` | 17 | `vpKeyLeft` | 37 |
-| `vpKeyMenu` (Alt) | 18 | `vpKeyUp` | 38 |
-| `vpKeyPause` | 19 | `vpKeyRight` | 39 |
-| `vpKeyCapital` | 20 | `vpKeyDown` | 40 |
-| `vpKeyEscape` | 27 | `vpKeyInsert` | 45 |
-| `vpKeySpace` | 32 | `vpKeyDelete` | 46 |
-| `vpKey0`..`vpKey9` | 48-57 | `vpKeyA`..`vpKeyZ` | 65-90 |
-| `vpKeyF1`..`vpKeyF12` | 112-123 | | |
+| Key constant | Value |
+|---|---|
+| `vpKeyBack` | 8 |
+| `vpKeyTab` | 9 |
+| `vpKeyReturn` | 13 |
+| `vpKeyShift` | 16 |
+| `vpKeyControl` | 17 |
+| `vpKeyMenu` | 18 |
+| `vpKeyPause` | 19 |
+| `vpKeyCapital` | 20 |
+| `vpKeyEscape` | 27 |
+| `vpKeySpace` | 32 |
+| `vpKeyPageUp` | 33 |
+| `vpKeyPageDown` | 34 |
+| `vpKeyEnd` | 35 |
+| `vpKeyHome` | 36 |
+| `vpKeyLeft` | 37 |
+| `vpKeyUp` | 38 |
+| `vpKeyRight` | 39 |
+| `vpKeyDown` | 40 |
+| `vpKeyInsert` | 45 |
+| `vpKeyDelete` | 46 |
+| `vpKey0`..`vpKey9` | 48-57 |
+| `vpKeyA`..`vpKeyZ` | 65-90 |
+| `vpKeyF1`..`vpKeyF12` | 112-123 |
+<!-- END GENERATED -->
 
 ---
 
@@ -566,7 +691,7 @@ file. The project file is an executable launcher script:
 VP6_PYTHON=/path/to/venv/bin/python ./Calculator.vp6p
 python3 Calculator.vp6p                             # e.g. on Windows
 vp6-run Calculator.vp6p                             # the console script
-python -m vp6.run Calculator.vp6p
+python -m vp6.runner Calculator.vp6p
 ```
 
 Its `PROJECT` dict:
@@ -595,7 +720,5 @@ format.
 * **Constants use the `vp` prefix** instead of `vb`.
 * **Forms are classes.** Create instances explicitly (`frm = Form2();
   frm.Show()`); there are no implicit default instances.
-* **Not implemented yet:** control arrays (attach handlers in code
-  instead, as the Calculator sample does), menus (Menu Editor), graphics
-  methods (`Line`, `Circle`, `PSet`), MDI forms, and the Shape, Line, Image,
-  file-system and common-dialog controls.
+* **Not implemented yet:** see [BACKLOG.md](../BACKLOG.md), for example control
+  arrays (attach handlers in code instead, as the Calculator sample does).

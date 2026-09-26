@@ -225,6 +225,17 @@ def _moon(p):
     p.drawPath(disc.subtracted(bite))
 
 
+def _kitchensink(p):
+    # A 2 x 2 sampler of controls
+    for (x, y), drawer in zip(((0, 0), (12, 0), (0, 12), (12, 12)),
+                              (_commandbutton, _checkbox, _optionbutton, _listbox)):
+        p.save()
+        p.translate(x, y)
+        p.scale(0.5, 0.5)
+        drawer(p)
+        p.restore()
+
+
 def _console(p):
     p.setBrush(QColor("#1e1e1e"))
     p.setPen(QPen(C.ink, 1))
@@ -240,7 +251,7 @@ _DRAWERS = {
     "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
-    "Sun": _sun, "Moon": _moon,
+    "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,
 }
 
 _dark = False

@@ -64,6 +64,12 @@ These keep VP6 coherent. Please keep them when adding code.
    what it's for, and comment the *why*, not the *what*. Match the
    surrounding code.
 8. **Test what you add** (§6). The suite must stay headless and fast.
+9. **Keep the Kitchen Sink up to date** (§5.11). Every new control, event or
+   API function must be demonstrated in the Kitchen Sink template.
+   `tests/test_kitchen_sink.py` fails when it isn't.
+10. **Keep the documentation up to date** (§5.12). Run
+    `python tools/apidocs.py` after changing properties, events or constants.
+    `tests/test_docs.py` fails when the docs fall behind.
 
 ## 3. How a change flows through the system
 
@@ -77,7 +83,7 @@ easy to place.
 | add something the user *does in the designer* | `FormDesigner` method → `_snapshot()` … `_commit(before)`, called from `_Overlay`, a menu (`MainWindow._designer_call`) or the context menu |
 | add an IDE command | `MainWindow._create_actions` / `_create_menus` / `_create_toolbar` |
 | react to light/dark or setting changes | connect to `theme_manager().changed` and re-apply |
-| change how programs start | `vp6/run.py` (inside the program) and `MainWindow.run_project` (the IDE side) |
+| change how programs start | `vp6/runner.py` (inside the program) and `MainWindow.run_project` (the IDE side) |
 
 ---
 
@@ -113,7 +119,8 @@ Example: a `Label.BackStyle` (0 - Transparent, 1 - Opaque).
 
 4. **That's all for the IDE.** The Properties window, the designer region
    (defaults are omitted automatically) and completion all pick it up from the
-   spec.
+   spec. Give it a `description`: the Properties window shows it, and so does
+   the API reference after you run `python tools/apidocs.py`.
 
 5. **Test it** in `tests/test_runtime.py`: set it, check the widget. If
    generation matters, add a `tests/test_formfile.py` round trip.
@@ -205,10 +212,14 @@ Example: a `ProgressBar`.
    (`"ProgressBar": "Progress"` → `Progress1`, `Progress2`, …).
 4. **Toolbox icon:** add a drawer to `vp6/ide/icons.py` and register it in
    `_DRAWERS` under the exact `TypeName` (see §5.8).
-5. **Nothing else.** The Toolbox, the form-file parser and generator, the
+5. **Kitchen Sink:** place it on the Kitchen Sink's `Form1` and handle its
+   default event (§5.11). `test_kitchen_sink.py` fails until you do.
+   **API reference:** add its section to `docs/api.md` and run
+   `python tools/apidocs.py` (§5.12). `test_docs.py` fails until you do.
+6. **Nothing else.** The Toolbox, the form-file parser and generator, the
    Properties window, completion and the code window's object list all come
    from `CONTROL_TYPES` and the class metadata.
-6. **Tests:**
+7. **Tests:**
    * runtime behaviour in `test_runtime.py`;
    * `test_designer.py`: create it with `designer.create_control("ProgressBar",
      …)` and check the generated region;
@@ -265,8 +276,9 @@ def space_evenly(self, horizontal: bool) -> None:
   self._commit(before)
   ```
 
-  Keep **parents before children** in `form_def.controls`: the parser
-  requires it, and the list order is the z-order.
+  Keep **parents before children** in `form_def.controls`, which the parser
+  requires. The list order is creation order: it decides stacking only among
+  controls with equal `ZIndex`.
 * Then expose the operation:
   * through a menu, via `MainWindow._designer_call("space_evenly", True)`
     (§5.2);
@@ -418,7 +430,7 @@ In `vp6/ide/icons.py`:
    takes known keys.
 2. Edit it in `ProjectPropertiesDialog` (`vp6/ide/dialogs.py`): add a widget,
    then read it in `apply(project)`.
-3. Use it where it matters: `vp6/run.py` inside the running program, or
+3. Use it where it matters: `vp6/runner.py` inside the running program, or
    `MainWindow` in the IDE.
 4. Test the round trip in `tests/test_project.py`.
 
@@ -433,7 +445,83 @@ Rarely needed, and it affects every existing form, so be deliberate.
 * The region markers are `REGION_START` / `_START_RE` in `formfile.py`. The
   code editor's folding and protection rely on `_START_RE` / `_END_RE` too.
 * Update the samples (`samples/*/`) and the templates (`new_form_source`,
-  `options.PREVIEW`).
+  `options.PREVIEW`, and the Kitchen Sink forms, whose regions must stay
+  canonical, see §5.11).
+
+### 5.11 Keep the Kitchen Sink up to date
+
+The **Kitchen Sink** project template (New Project > Kitchen Sink)
+demonstrates every VP6 control and feature. It is a living example for users,
+so **every change that adds or changes something users can use must update
+it**.
+
+**Where it lives:**
+
+* The sources are in `vp6/ide/templates/kitchensink/`:
+  * `Form1.py` is the main demo form;
+  * `frmDialog.py` is a modal dialog with its own Dark color scheme;
+  * `Module1.py` holds `Main()`, which shows Form1.
+* `vp6/ide/kitchensink.py` copies them into a new project, draws the
+  PictureBox image (`vp6.png`) and returns the `Project`.
+
+**What `tests/test_kitchen_sink.py` enforces:**
+
+| Check | Fails when |
+|---|---|
+| `test_every_control_type_is_used` | a type in `CONTROL_TYPES` isn't on any Kitchen Sink form |
+| `test_every_control_type_handles_its_default_event` | no control of a type has a handler for its `DefaultEvent` |
+| `test_every_public_api_name_is_used` | a non-constant name in `vp6.__all__` (a function, class or object) isn't referenced |
+| `test_every_color_scheme_is_demonstrated` | a `vpScheme*` value isn't used |
+| `test_designer_regions_are_canonical` | a form's designer region isn't exactly what the designer would write |
+| `test_kitchen_sink_runs` | the demo raises errors or its main interactions stop working |
+
+**How to update it:**
+
+1. Create a Kitchen Sink project in the IDE and open `Form1` (or `frmDialog`).
+2. Add your control or feature with the designer and write the handler code
+   in the code window, like any VP6 user would. Keep the handlers short and
+   self-explanatory, and use the status bar (`lblStatus`) to show what
+   happened.
+3. Copy the changed files back into `vp6/ide/templates/kitchensink/`.
+   Because you edited them with the designer, their regions are canonical.
+4. If you added a file, list it in `kitchensink.FORMS` / `MODULES`.
+5. Run `pytest tests/test_kitchen_sink.py`, and extend `test_kitchen_sink_runs`
+   to exercise the new feature.
+
+New constants don't need to appear individually, since there are too many to
+require. Do demonstrate a new *group* of constants that changes behavior, as
+the color schemes are.
+
+### 5.12 Keep the documentation up to date
+
+`tests/test_docs.py` fails when the docs fall behind the code. The fix
+depends on what it reports:
+
+| Failure | Fix |
+|---|---|
+| a source file isn't in the source reference | add a section for it to `docs/source-reference.md` (it must mention the path, e.g. `` `vp6/ide/newthing.py` ``) |
+| a test file isn't in the test table | add a row to the test table in `docs/source-reference.md` |
+| a public API name isn't in the API reference | document it in `docs/api.md`, usually in §5 (functions and objects) |
+| `docs/api.md is out of date` | run `python tools/apidocs.py` |
+| a control has no generated section | add `### Name`, a sentence about it, and an empty `<!-- BEGIN GENERATED: control Name -->` / `<!-- END GENERATED -->` pair to `docs/api.md` §4, then run the generator |
+| a broken link | fix the link, or the heading it points to (anchors are GitHub-style) |
+
+**How `tools/apidocs.py` works.** It rewrites only the blocks between the
+`BEGIN GENERATED` / `END GENERATED` markers, from:
+
+* each class's `Properties`, `Events`, `DefaultEvent` and `DefaultSize`;
+* `EVENT_ARGS`;
+* the constants modules.
+
+Everything outside the markers is hand-written and stays as it is.
+
+**Where each kind of change goes:**
+
+* A property's notes in the tables are its `description` and enum choices,
+  so improve them in the code, not in the Markdown.
+* The run-time members and the prose around each control are yours to edit.
+* A new section of constants in `vp6/constants.py` (`# --- Title ---`)
+  becomes a row automatically.
 
 ---
 

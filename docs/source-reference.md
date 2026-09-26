@@ -146,7 +146,7 @@ The intrinsic controls.
     (`PictureBox.Picture`).
 * **Property groups** reused by the controls: `_geometry(w, h)` (Left, Top,
   Width, Height, always written), `_FONT`, `_COLORS`, `_COMMON` (Enabled,
-  Visible, TabIndex, ToolTipText, Tag).
+  Visible, TabIndex, ToolTipText, Tag, ZIndex).
 * **`_EventBridge`**: a `QObject` event filter forwarding widget events to
   `Control._on_qt_event`.
 * **`Control`**, the base class:
@@ -160,7 +160,10 @@ The intrinsic controls.
   * **Common property implementations:** geometry, Enabled, Visible (not
     applied in design mode), ToolTipText, fonts, colors (style sheet on
     `_qss_type`).
-  * **Methods:** `SetFocus`, `Move`, `Refresh`, `ZOrder`.
+  * **Methods:** `SetFocus`, `Move`, `Refresh`, `ZOrder` (sets `ZIndex`).
+  * **Stacking:** `_stackable`, `_siblings`, `_restack` and `_apply_ZIndex`.
+    Siblings are ordered by `(ZIndex, creation order)` on creation, on widget
+    rebuild and on every `ZIndex` change.
   * **Typo guard:** `__setattr__` raises on unknown capitalized names.
 * **Controls** (table below). Each one defines:
   * the metadata `TypeName`, `DefaultSize`, `DefaultEvent`, `Events`,
@@ -252,8 +255,10 @@ classes for their metadata.
     `_props_to_args` (skips defaults unless `always`);
   * `_wrap_call` fills arguments into 99-character lines.
 * **Templates:** `new_form_source(class_name)`, and
-  `new_module_source(with_main, console)` (the console template asks for a
-  name).
+  `new_module_source(with_main, console, startup_form)`. With `with_main`, the
+  module gets `Main()` and an `if __name__ == "__main__": Main()` block. The
+  console `Main` asks for a name; with `startup_form`, `Main` imports that
+  form and calls `run(Form)`.
 * **Refactoring:**
   * `rename_form_class` renames the class line and `run(Old)`;
   * `rename_control_references` renames `def Old_Event(` and `self.Old`,
@@ -282,7 +287,12 @@ architecture §6.2).
 * Constants: `EXTENSION = ".vp6p"`, `REGION_START` / `REGION_END`, and
   `_FIELDS` (the order the fields are written in).
 
-### `vp6/run.py` (≈75 lines)
+### `vp6/runner.py` (≈80 lines)
+
+It's deliberately not named `run.py`: importing a `vp6.run` submodule would
+replace the public `vp6.run()` function on the package, and `run(Form1)` in
+programs would then fail.
+
 
 Starts a project. `run_project(path)`:
 
@@ -296,7 +306,7 @@ Starts a project. `run_project(path)`:
    * **A form:** calls `run(find_form_class(project, startup))`. Modules are
      imported by file name (`_import_file`).
 
-`main(argv)` implements `python -m vp6.run PROJECT.vp6p` and the `vp6-run`
+`main(argv)` implements `python -m vp6.runner PROJECT.vp6p` and the `vp6-run`
 console script.
 
 ---
@@ -365,9 +375,17 @@ prepended to `PYTHONPATH` for programs started with F5.
   * `running`, `_update_title`, `_update_actions`.
 * **`closeEvent`** asks to save, then stores `geometry` and `state`.
 
-Module functions: `create_project(location, name, template)` creates a folder
-with `Form1.py` or `Module1.py` plus the `.vp6p`; `main(argv)` is the
-application entry point.
+Module functions:
+
+* `create_project(location, name, template)` creates a project folder. Every
+  template gets `Form1.py`, `Module1.py` and the `.vp6p`, and starts in Sub
+  Main. The console template's `Main` uses `print()`/`input()`; the Standard
+  EXE template's `Main` shows Form1. `"kitchensink"` delegates to
+  `kitchensink.create`, which also adds `frmDialog.py` and `vp6.png`.
+* `main(argv)` is the application entry point.
+
+`open_project` opens a windowed project's startup form designer, or its first
+form's when it starts in Sub Main, and a console project's Main module.
 
 ### `vp6/ide/designer.py` (≈1000 lines)
 
@@ -399,7 +417,9 @@ The form designer (architecture §5.3).
 * **`FormDesigner(QWidget)`** (signals: see architecture §5.3):
   * **Building:** `load_def(form_def)`, `_instantiate`, `_prepare_widget`
     (NoFocus), `_layout_form` (below the frame's title bar),
-    `update_canvas_size`.
+    `update_canvas_size`. `eventFilter` calls `update_canvas_size` on the
+    scroll area viewport's resize, so the canvas fills the window after
+    maximize and restore.
   * **Scheme and frame:** `set_project_scheme`, `refresh_scheme`,
     `frame_style()`, `frame_info()`, `_on_ide_theme_changed`.
   * **Geometry:** `form_widget`, `form_canvas_rect`, `canvas_rect(name)`,
@@ -491,8 +511,11 @@ Window frames painted around the designed form.
     `_browse_file` (stores paths relative to the form folder when possible).
   * `_commit(prop, value)` calls `designer.set_property` and shows any error.
   * The description pane shows the spec's `description`.
+  * `select_property(name)` focuses a property's row and editor.
+  * The window is bound to a target with `set_designer(target)`: a
+    `FormDesigner`, or the `ProjectTarget` (see `projectprops.py`).
 
-### `vp6/ide/projectprops.py` (≈140 lines)
+### `vp6/ide/projectprops.py` (≈120 lines)
 
 The project as a target of the Properties window.
 
@@ -529,7 +552,8 @@ The project as a target of the Properties window.
     project shows its properties in the Properties window.
 * **`ImmediateWindow`:**
   * **Output and input:** an `output` (`QPlainTextEdit`) plus an `input` line
-    (enabled while a console program runs, emits `inputSubmitted`).
+    (enabled by `set_running(True)` while a console program runs, emits
+    `inputSubmitted`). `clear()` empties the output.
   * **Writing:** `append(text, kind)` where kind is `out`, `err`, `info` or
     `in`. The kind is stored on the text, so `apply_theme()` can recolor
     existing output.
@@ -553,11 +577,38 @@ The project as a target of the Properties window.
   * `_on_text_changed` re-parses; signals `designReloaded` and `parseError`.
 * `open_document(path)` picks the class by content.
 
+### `vp6/ide/kitchensink.py` (≈70 lines) and `vp6/ide/templates/kitchensink/`
+
+The Kitchen Sink project template: a demo of every control and feature.
+
+* `create(directory, name)` copies `FORMS` (`Form1.py`, `frmDialog.py`) and
+  `MODULES` (`Module1.py`) from `TEMPLATE_DIR`, draws the PictureBox image
+  `PICTURE` (`vp6.png`, via `draw_picture`, so the package ships no binary),
+  and returns a Standard EXE `Project` that starts in Sub Main.
+  `mainwindow.create_project(..., "kitchensink")` calls it.
+* **`templates/kitchensink/Form1.py`** contains all 12 control types:
+  * Frames and a PictureBox as containers (a Label inside the picture);
+  * text boxes (multi-line, password, upper-casing KeyPress);
+  * Default and Cancel buttons;
+  * option buttons switching the form's `ColorScheme` at run time;
+  * check boxes, scroll bars, combo boxes, a sorted list with Add/Remove;
+  * a `DoEvents` loop, a Timer clock, and MsgBox/InputBox;
+  * Clipboard, App, Screen and Forms;
+  * a `KeyPreview` F1 help and Ctrl+Q `End()`;
+  * a `Form_Unload` confirmation, and a status bar kept at the bottom by
+    `Form_Resize`.
+* **`frmDialog.py`** is a modal dialog (`Show(vpModal)`) with its own Dark
+  color scheme, using `Load`/`Unload` and a `Result` attribute.
+* **`Module1.py`** is `Main()` with `run(Form1)`.
+* The files are package data (`pyproject.toml`). `tests/test_kitchen_sink.py`
+  keeps them covering every control and API name (development guide §5.11).
+
 ### `vp6/ide/dialogs.py` (≈230 lines)
 
-* `NewProjectDialog` has the New tab (templates `exe` / `console` with name
-  and location), the Existing tab (browse) and the Recent tab. After `exec()`,
-  `result_action` is `"new"` or `"open"` and the chosen values are available.
+* `NewProjectDialog` has the New tab (templates `exe`, `console` and
+  `kitchensink`, with name and location), the Existing tab (browse) and the
+  Recent tab. After `exec()`, `result_action` is `"new"` (see `template`,
+  `project_name`, `project_location`) or `"open"` (see `open_path`).
   Also `DEFAULT_LOCATION` (`~/VP6 Projects`), `TEMPLATES` and
   `next_free_name`.
 * `ProjectPropertiesDialog` edits the name, type, startup object and color
@@ -621,6 +672,32 @@ Icons drawn with `QPainter`, in light and dark variants.
 
 ---
 
+## Tools: `tools/`
+
+### `tools/apidocs.py` (≈200 lines)
+
+Generates the reference tables in `docs/api.md` from the code, so they can't
+drift.
+
+* **Generated blocks:** `docs/api.md` has blocks between
+  `<!-- BEGIN GENERATED: <key> -->` and `<!-- END GENERATED -->`. `update(text)`
+  re-renders all of them and `block_keys(text)` lists them.
+* **Keys and their renderers:**
+  * `form-properties` and `form-events` (`form_properties`, `form_events`);
+  * `control <TypeName>` (`control`): the default size, container flag,
+    shared property groups, a table of the control's own properties, and its
+    events;
+  * `common-properties` (`common_properties`): the shared groups `GROUPS`,
+    taken from `controls._geometry`, `_COLORS`, `_FONT` and `_COMMON`;
+  * `event-arguments` (`event_arguments`), from `controls.EVENT_ARGS`;
+  * `constants` (`constants_block`), from the `# --- Title ---` sections of
+    `constants.py`, the color and scheme constants, and the key-code ranges.
+* **Where table notes come from:** each property's `description` and enum
+  choices. Improving a description improves the Properties window's
+  description pane and the API reference at the same time.
+* `main(argv)`: `python tools/apidocs.py` rewrites the file;
+  `--check` exits 1 if it's out of date.
+
 ## Tests: `tests/`
 
 All tests run headless. `conftest.py`:
@@ -638,11 +715,13 @@ All tests run headless. `conftest.py`:
 |---|---|
 | `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results. |
 | `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames, the console template. |
-| `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, z-order and Format, code-side undo reloading the designer, region protection in the editor. |
-| `test_ide.py` | New projects, adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing. |
+| `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
+| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window. |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
+| `test_docs.py` | The docs keep up with the code: every source file in the source reference, every test file in the test table, every public API name in `api.md` (key-code ranges count), the generated `api.md` tables up to date with a section per control, every property with a description, and every relative link and anchor in the Markdown files resolving. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme; its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload). |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6. |
 
 ## Samples: `samples/`

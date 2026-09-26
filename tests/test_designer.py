@@ -117,9 +117,28 @@ def test_z_order_and_format(designer):
     d.make_same_size("width")
     label2 = d.form_def.control("Label2").props
     assert label2["Left"] == 16 and label2["Width"] == 96
-    d.select(["Label1"])
-    d.z_order(True)
-    assert [c.name for c in d.form_def.controls] == ["Label2", "Label1"]
+
+
+def test_z_order_uses_zindex_and_clicks_pick_the_top_control(designer):
+    d = designer
+    # Two overlapping buttons: Command2 (created later) starts on top
+    d.create_control("CommandButton", QRect(form_point(d, 16, 16), form_point(d, 112, 48)), None)
+    d.create_control("CommandButton", QRect(form_point(d, 48, 24), form_point(d, 144, 56)), None)
+    overlap = form_point(d, 80, 36)
+    assert d.control_at(overlap) == "Command2"
+    d.select(["Command1"])
+    d.z_order(True)  # Bring to Front
+    assert d.controls["Command1"].ZIndex > d.controls["Command2"].ZIndex
+    assert d.control_at(overlap) == "Command1"
+    assert "ZIndex=1" in d.document.text
+    d.undo()
+    assert d.control_at(overlap) == "Command2"
+    d.select(["Command2"])
+    d.z_order(False)  # Send to Back
+    assert d.control_at(overlap) == "Command1"
+    d.select(["Command1"])
+    assert d.set_property("ZIndex", -5) is None  # from the Properties window
+    assert d.control_at(overlap) == "Command2"
 
 
 def test_code_side_undo_reloads_designer(designer):
@@ -154,3 +173,28 @@ def test_region_is_protected_in_code_editor(designer):
     editor.setTextCursor(cursor)
     QTest.keyClicks(editor, "#ok")
     assert "#ok" in designer.document.text
+
+
+def test_workspace_fills_designer_after_maximize_and_restore(qapp, tmp_path):
+    from PySide6.QtWidgets import QMdiArea
+
+    path = tmp_path / "Form1.py"
+    path.write_text(formfile.new_form_source("Form1"))
+    mdi = QMdiArea()
+    mdi.resize(1400, 900)
+    mdi.show()
+    d = FormDesigner(FormDocument(str(path)), str(tmp_path))
+    sub = mdi.addSubWindow(d)
+    sub.resize(700, 500)
+    sub.show()
+
+    def canvas_covers_viewport():
+        viewport, canvas = d.scroll.viewport().size(), d.canvas.size()
+        return canvas.width() >= viewport.width() and canvas.height() >= viewport.height()
+
+    for change in (lambda: None, sub.showMaximized, sub.showNormal, sub.showMaximized):
+        change()
+        QTest.qWait(20)
+        assert canvas_covers_viewport()
+        assert d.overlay.geometry() == d.canvas.rect()  # mouse handling covers it too
+    mdi.close()

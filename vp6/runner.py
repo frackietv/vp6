@@ -1,5 +1,8 @@
 """Run a VP6 project: ``./Project1.vp6p`` (the project file is a launcher
-script that calls ``run_project``) or ``python -m vp6.run Project1.vp6p``.
+script that calls ``run_project``) or ``python -m vp6.runner Project1.vp6p``.
+
+(Not named ``run``: importing a ``vp6.run`` submodule would replace the public
+``vp6.run()`` function on the package, breaking ``run(Form1)`` in programs.)
 
 The startup object is either a form (shown, then the event loop runs until
 all forms are closed) or ``Sub Main`` - a ``Main()`` function in one of the
@@ -66,7 +69,7 @@ def run_project(path: str) -> int:
 def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) != 1:
-        raise SystemExit("usage: python -m vp6.run PROJECT.vp6p")
+        raise SystemExit("usage: python -m vp6.runner PROJECT.vp6p")
     sys.exit(run_project(argv[0]))
 
 

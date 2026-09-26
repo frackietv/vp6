@@ -20,9 +20,14 @@ python3 -m venv .venv
 .venv/bin/vp6 samples/Calculator/Calculator.vp6p
 ```
 
-The IDE opens with a VB-style **New Project** dialog: *Standard EXE* (a
-windowed app with `Form1`) or *Console Application* (a `Sub Main` in
-`Module1` using `print()` / `input()`).
+The IDE opens with a VB-style **New Project** dialog. Every new project has
+`Form1` and `Module1` and starts in `Sub Main`, the `Main()` function in
+`Module1`:
+
+* *Standard EXE:* `Main()` shows `Form1` with `run(Form1)`.
+* *Console Application:* `Main()` talks through `print()` / `input()`.
+* *Kitchen Sink:* a demo project showing every VP6 control and feature. Open
+  it to see how things work, and copy code out of it.
 
 ## The IDE
 
@@ -30,12 +35,13 @@ windowed app with `Form1`) or *Console Application* (a `Sub Main` in
 |-----------------------------|--------------------------------------------------------------|
 | Toolbox                     | Pointer, PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton, ComboBox, ListBox, HScrollBar, VScrollBar, Timer |
 | Form designer               | Draw controls, move/resize with 8px grid snapping (hold Alt to skip it), rubber-band select, Ctrl+drag inside a Frame, arrows nudge, Shift+arrows resize, cut/copy/paste, undo/redo |
-| Properties window (F4)      | Object combo, alphabetical grid, enum/color/list/font/file editors, multi-select editing, description pane |
+| Properties window (F4)      | Object combo, alphabetical grid, enum/color/list/font/file editors, multi-select editing, description pane; select the project in the Project Explorer to edit its Name, Type, StartupObject and ColorScheme |
 | Code window (F7)            | Object and Procedure dropdowns that create handler stubs, Python highlighting, auto-indent, `self.` / `self.Control.` completion, Ctrl+/ comments |
-| Project Explorer (Ctrl+R)   | Forms and modules, View Code / View Object, set startup form |
+| Project Explorer (Ctrl+R)   | Forms and modules, View Code / View Object, set startup form; follows the active window |
 | Immediate window (Ctrl+G)   | Program output and `Debug.Print`, stdin for console apps, double-click a traceback line to jump to it |
 | Format menu                 | Align, Make Same Size, Center in Form, Bring to Front (Ctrl+J), Send to Back (Ctrl+K) |
 | Run (F5 or Cmd+Enter / Ctrl+Enter, Shift+F5, End) | Saves everything and runs the project in a separate process; the title shows `[design]` / `[run]` |
+| Toolbar and layout          | Sun/moon switch at the right end of the toolbar toggles light/dark; View > Toolbars shows a hidden toolbar; View > Reset Window Layout restores all panels |
 
 ### Themes: light and dark
 
@@ -183,9 +189,15 @@ The tests run headless (`QT_QPA_PLATFORM=offscreen`). They cover the
 runtime, the form file format, designer operations and the IDE, including
 running a console project through the Immediate window.
 
-## Not yet implemented
+## Features and backlog
 
-Control arrays, menus (the Menu Editor), debugging (breakpoints, stepping,
-evaluating code in the Immediate window), graphics methods (`Line`,
-`Circle`, `PSet`), more controls (Shape, Line, Image, DriveListBox,
-common controls), MDI forms, and packaging an app as an executable.
+[FEATURES.md](FEATURES.md) lists everything VP6 implements.
+[BACKLOG.md](BACKLOG.md) lists what isn't implemented yet. The biggest gaps are:
+
+* control arrays;
+* menus (the Menu Editor);
+* debugging (breakpoints, stepping, evaluating code in the Immediate window);
+* graphics methods (`Line`, `Circle`, `PSet`);
+* more controls (Shape, Line, Image, DriveListBox, common controls);
+* MDI forms;
+* packaging an app as an executable.

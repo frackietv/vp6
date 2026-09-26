@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 import keyword
 
-from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (QAction, QBrush, QColor, QGuiApplication, QPainter, QPalette, QPen,
                            QPixmap)
 from PySide6.QtWidgets import QApplication, QMenu, QScrollArea, QVBoxLayout, QWidget
@@ -426,6 +426,7 @@ class FormDesigner(QWidget):
         self.scroll.setWidget(self.canvas)
         self.scroll.setWidgetResizable(False)
         self.scroll.setFrameShape(QScrollArea.NoFrame)
+        self.scroll.viewport().installEventFilter(self)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.scroll)
@@ -448,9 +449,14 @@ class FormDesigner(QWidget):
             self.form._apply_ColorScheme()
         self.canvas.update()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.update_canvas_size()
+    def eventFilter(self, watched, event):
+        # Size the canvas from the scroll area's viewport once *it* has been
+        # resized. The designer's own resizeEvent comes before the layout
+        # resizes the scroll area, so a single jump (maximize/restore) would
+        # leave the canvas at the previous size.
+        if watched is self.scroll.viewport() and event.type() == QEvent.Resize:
+            self.update_canvas_size()
+        return super().eventFilter(watched, event)
 
     # -- building the live form ---------------------------------------------------------------
     def form_widget(self) -> QWidget:
@@ -564,19 +570,18 @@ class FormDesigner(QWidget):
         return QRect(self.controls[name]._widget.geometry())
 
     def control_at(self, pos: QPoint) -> str | None:
-        for control_def in reversed(self.form_def.controls):
-            rect = self.canvas_rect(control_def.name)
-            if rect is None or not rect.contains(pos):
-                continue
-            parent = control_def.parent
-            clipped = False
-            while parent is not None:
-                if not self.canvas_rect(parent).contains(pos):
-                    clipped = True
-                    break
-                parent = self.form_def.control(parent).parent
-            if not clipped and self.form_canvas_rect().contains(pos):
-                return control_def.name
+        """The control drawn on top at a canvas position. Asks Qt which widget
+        is there, so it follows the real stacking (ZIndex) and clipping by
+        containers."""
+        if not self.form_canvas_rect().contains(pos):
+            return None
+        form_widget = self.form_widget()
+        widget = form_widget.childAt(form_widget.mapFrom(self.canvas, pos))
+        while widget is not None and widget is not form_widget:
+            control = getattr(widget, "_vp_control", None)  # set on each control's widget
+            if control is not None and self.controls.get(control.Name) is control:
+                return control.Name
+            widget = widget.parentWidget()
         return None
 
     def container_at(self, pos: QPoint) -> str | None:
@@ -948,23 +953,17 @@ class FormDesigner(QWidget):
         self.commit_geometry(self.selection)
 
     def z_order(self, front: bool) -> None:
+        """Bring to Front / Send to Back: set ZIndex just above / below the
+        other controls in the same container (the runtime ZOrder method)."""
         if not self.selection:
             return
         before = self._snapshot()
         for name in self.selection:
-            subtree = self._descendants([name])
-            moving = [self.form_def.control(n) for n in subtree]
-            rest = [c for c in self.form_def.controls if c.name not in subtree]
-            parent = moving[0].parent
-            if front:
-                self.form_def.controls = rest + moving
-                self.controls[name]._widget.raise_()
-            else:
-                index = 0 if parent is None else \
-                    next(i for i, c in enumerate(rest) if c.name == parent) + 1
-                self.form_def.controls = rest[:index] + moving + rest[index:]
-                self.controls[name]._widget.lower()
-        self.overlay.raise_()
+            control = self.controls[name]
+            if not control._stackable():  # e.g. a Timer
+                continue
+            control.ZOrder(0 if front else 1)
+            self.form_def.control(name).props["ZIndex"] = control.ZIndex
         self._commit(before)
 
     # -- context menu --------------------------------------------------------------------------------------------

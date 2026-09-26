@@ -18,7 +18,7 @@ import vp6
 from .. import formfile
 from ..appearance import IDE_SCHEME_ENV, SCHEME_NAMES, scheme_from_name
 from ..project import EXTENSION, SUB_MAIN, Project
-from . import icons
+from . import icons, kitchensink
 from .codeeditor import CodeWindow
 from .designer import FormDesigner
 from .dialogs import ABOUT_HTML, NewProjectDialog, ProjectPropertiesDialog
@@ -446,17 +446,21 @@ class MainWindow(QMainWindow):
         self._refresh_explorer()
         self._update_title()
         self._update_actions()
-        # Show the startup object
-        if project.startup == SUB_MAIN:
+        # Show the startup object. A windowed project opens a form's designer: the
+        # startup form, or the first form when it starts in Sub Main (which
+        # normally shows that form). A console project opens its Main module.
+        forms = [p for p, d in self.documents.items() if isinstance(d, FormDocument)]
+        startup_form = next((p for p in forms if self.documents[p].name == project.startup),
+                            None)
+        if project.type != "console" and (startup_form or forms):
+            self.view_object(startup_form or forms[0])
+        elif project.startup == SUB_MAIN:
             module = next((p for p, d in self.documents.items()
                            if "def Main(" in d.text), None)
             if module:
                 self.view_code(module)
-        else:
-            form = next((p for p, d in self.documents.items()
-                         if isinstance(d, FormDocument) and d.name == project.startup), None)
-            if form:
-                self.view_object(form)
+        elif startup_form:
+            self.view_object(startup_form)
         self.statusBar().showMessage(f"Opened {project.path}", 5000)
         return True
 
@@ -663,6 +667,10 @@ class MainWindow(QMainWindow):
         return sub
 
     def _activate(self, sub: QMdiSubWindow):
+        # Closing a subwindow keeps it for reuse (WA_DeleteOnClose is off), but
+        # Qt also closes - i.e. hides - the widget inside it. Show both, or a
+        # reopened code window or designer would be an empty frame.
+        sub.widget().show()
         sub.show()
         if sub.isMinimized():
             sub.showNormal()
@@ -884,16 +892,23 @@ class MainWindow(QMainWindow):
 
 def create_project(location: str, name: str, template: str) -> str:
     """Create a new project folder from a template; returns the .vp6p path."""
+    # Every new project has Form1 and Module1, and starts in Module1's Main():
+    # a console Main talks through print()/input(), a windowed one shows Form1.
     directory = os.path.join(location, name)
     os.makedirs(directory, exist_ok=True)
-    if template == "console":
-        with open(os.path.join(directory, "Module1.py"), "w", encoding="utf-8") as f:
-            f.write(formfile.new_module_source(with_main=True, console=True))
-        project = Project(name=name, type="console", startup=SUB_MAIN, modules=["Module1.py"])
-    else:
-        with open(os.path.join(directory, "Form1.py"), "w", encoding="utf-8") as f:
-            f.write(formfile.new_form_source("Form1"))
-        project = Project(name=name, type="exe", startup="Form1", forms=["Form1.py"])
+    if template == "kitchensink":
+        project = kitchensink.create(directory, name)
+        path = os.path.join(directory, name + EXTENSION)
+        project.save(path)
+        return path
+    console = template == "console"
+    with open(os.path.join(directory, "Form1.py"), "w", encoding="utf-8") as f:
+        f.write(formfile.new_form_source("Form1"))
+    with open(os.path.join(directory, "Module1.py"), "w", encoding="utf-8") as f:
+        f.write(formfile.new_module_source(with_main=True, console=console,
+                                           startup_form=None if console else "Form1"))
+    project = Project(name=name, type="console" if console else "exe", startup=SUB_MAIN,
+                      forms=["Form1.py"], modules=["Module1.py"])
     path = os.path.join(directory, name + EXTENSION)
     project.save(path)
     return path

@@ -1,0 +1,32 @@
+# VP6 backlog
+
+- **[Language and runtime]** Control arrays: several controls sharing a name and handlers with an `Index` argument. Today handlers can be attached in code instead, as the Calculator and Kitchen Sink do.
+- **[Language and runtime]** Menus on forms, and the Menu Editor to design them
+- **[Controls]** Shape
+- **[Controls]** Line
+- **[Controls]** Image (a lightweight picture control)
+- **[Controls]** File system controls: DriveListBox, DirListBox, FileListBox
+- **[Controls]** Common controls: ProgressBar, Slider, TreeView, ListView, TabStrip, StatusBar, Toolbar, ImageList, and others
+- **[Controls]** Common Dialog control (open, save, color, font, print dialogs)
+- **[Language and runtime]** Graphics methods: `Line`, `Circle`, `PSet` and `Print` drawing on forms and PictureBoxes. `PictureBox.Cls()` exists but only clears the picture.
+- **[Language and runtime]** MDI forms (MDI parent and child forms)
+- **[Language and runtime]** Default form instances: using `Form2.Show()` without creating an instance first
+- **[Language and runtime]** Twips and VB's `ScaleMode`; VP6 uses pixels only
+- **[IDE - Debugging]** breakpoints, stepping, watches
+- **[IDE - Debugging]** evaluating expressions in the Immediate window
+- **[IDE - Debugging]** editing code while the program is paused
+- **[IDE]** Find and Replace in the code window
+- **[IDE]** Find and Replace to have regex, case sensitivity, and whole word options; when using regexes, escape sequences like \n for new line, etc must be allowed, and regex groups must be supported in find and in replace
+- **[IDE]** Go to line
+- **[IDE]** Save Project As (copying a project to a new folder)
+- **[IDE]** Renaming and deleting files from the Project Explorer (today Remove only takes a file out of the project)
+- **[IDE]** Showing a form's properties when it's selected in the Project Explorer but its designer isn't open
+- **[IDE]** Automatic renumbering of `TabIndex` when controls are added or removed
+- **[IDE]** Locking controls in the designer (Format > Lock Controls)
+- **[Distribution and tooling]** Packaging a program as a standalone executable
+- **[Distribution and tooling]** Publishing VP6 as an installable package (e.g. on PyPI)
+- **[IDE]** Designer window frames with rounded bottom corners on macOS
+- **[Controls]** Data-bound controls
+- **[Appearance]** Per-window title bar color: a forced Light or Dark form still gets a title bar in the OS appearance, since Qt can't set it per window on macOS
+- **[Appearance]** Picking up a macOS light/dark change live for System forms in the designer while the IDE is forced to Light or Dark (they update on the next redraw)
+- **[Appearance]** Programs started from the IDE with the "IDE" color scheme follow the IDE's appearance at launch only, not later IDE theme changes

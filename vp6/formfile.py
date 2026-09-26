@@ -234,23 +234,33 @@ def new_form_source(class_name: str, caption: str | None = None) -> str:
     )
 
 
-def new_module_source(with_main: bool = False, console: bool = False) -> str:
+def new_module_source(with_main: bool = False, console: bool = False,
+                      startup_form: str | None = None) -> str:
+    """Source of a new module.
+
+    with_main adds ``Main()`` (the project's Sub Main) and an
+    ``if __name__ == "__main__"`` block, so the module runs on its own too:
+
+    * console: Main() asks for a name and greets you;
+    * startup_form: Main() shows that form and runs until it is closed;
+    * otherwise Main() is empty.
+    """
+    header = "from vp6 import *\n"
     if not with_main:
-        return "from vp6 import *\n\n\n"
+        return header + "\n\n"
     if console:
-        return (
-            "from vp6 import *\n\n\n"
-            "def Main():\n"
-            '    name = input("What is your name? ")\n'
-            '    print(f"Hello, {name}!")\n\n\n'
+        body = ('    name = input("What is your name? ")\n'
+                '    print(f"Hello, {name}!")\n')
+    elif startup_form:
+        header += f"from {startup_form} import {startup_form}\n"
+        body = ("    # Show the startup form and run until it is closed\n"
+                f"    run({startup_form})\n")
+    else:
+        body = "    pass\n"
+    return (header + "\n\n"
+            "def Main():\n" + body + "\n\n"
             'if __name__ == "__main__":\n'
-            "    Main()\n"
-        )
-    return (
-        "from vp6 import *\n\n\n"
-        "def Main():\n"
-        "    pass\n"
-    )
+            "    Main()\n")
 
 
 def rename_form_class(source: str, old: str, new: str) -> str:

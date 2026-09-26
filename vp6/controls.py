@@ -93,18 +93,32 @@ def resolve_path(owner, path: str) -> str:
 # --- property groups ------------------------------------------------------------
 
 def _geometry(width, height):
-    return (P("Left", "int", 0, always=True), P("Top", "int", 0, always=True),
-            P("Width", "int", width, always=True), P("Height", "int", height, always=True))
+    return (P("Left", "int", 0, always=True,
+              description="Distance from the container's left edge, in pixels"),
+            P("Top", "int", 0, always=True,
+              description="Distance from the container's top edge, in pixels"),
+            P("Width", "int", width, always=True, description="Width in pixels"),
+            P("Height", "int", height, always=True, description="Height in pixels"))
 
 
 _FONT = (
-    P("FontName", "font", None), P("FontSize", "int", None),
-    P("FontBold", "bool", False), P("FontItalic", "bool", False),
-    P("FontUnderline", "bool", False),
+    P("FontName", "font", None, description="Font family; unset = the container's font"),
+    P("FontSize", "int", None, description="Font size in points; unset = the container's"),
+    P("FontBold", "bool", False, description="Bold text"),
+    P("FontItalic", "bool", False, description="Italic text"),
+    P("FontUnderline", "bool", False, description="Underlined text"),
 )
-_COLORS = (P("BackColor", "color", None), P("ForeColor", "color", None))
-_COMMON = (P("Enabled", "bool", True), P("Visible", "bool", True),
-           P("TabIndex", "int", 0), P("ToolTipText", "str", ""), P("Tag", "str", ""))
+_COLORS = (P("BackColor", "color", None, description="Background color; unset = the default"),
+           P("ForeColor", "color", None, description="Text color; unset = the default"))
+_COMMON = (P("Enabled", "bool", True, description="Whether the control responds to the user"),
+           P("Visible", "bool", True, description="Whether the control is shown at run time"),
+           P("TabIndex", "int", 0, description="Position in the Tab key order"),
+           P("ToolTipText", "str", "", description="Text shown when the mouse rests on it"),
+           P("Tag", "str", "", description="Free for your own use"),
+           P("ZIndex", "int", 0,
+             description="Stacking order among controls in the same container: higher "
+                         "values are drawn on top. Equal values keep creation order "
+                         "(later on top)."))
 _ALIGNMENT = enum_choices("Left Justify", "Right Justify", "Center")
 _QT_ALIGN = {0: Qt.AlignLeft, 1: Qt.AlignRight, 2: Qt.AlignHCenter}
 
@@ -148,6 +162,8 @@ class Control(PropertyHost):
         self._build_widget()
         self._init_values(props)
         self._form._register_control(self)
+        if self._stackable():
+            self._restack()  # a new widget starts on top; put it where ZIndex says
 
     # -- identity ------------------------------------------------------------
     @property
@@ -218,6 +234,8 @@ class Control(PropertyHost):
             old.deleteLater()
         if not self._design_mode and self._values.get("Visible", True):
             self._widget.show()
+        if self._stackable() and self in self._form._controls:
+            self._restack()  # the new widget starts on top
         notify = getattr(self._form, "_control_widget_changed", None)
         if notify:
             notify(self)
@@ -397,9 +415,41 @@ class Control(PropertyHost):
             self._widget.update()
 
     def ZOrder(self, Position: int = 0) -> None:
-        """0 brings the control to the front, 1 sends it to the back."""
-        if self._widget:
-            self._widget.raise_() if Position == 0 else self._widget.lower()
+        """0 brings the control to the front, 1 sends it to the back, by setting
+        ZIndex just above or below the other controls in the same container."""
+        if not self._stackable():
+            return
+        others = [c.ZIndex for c in self._siblings() if c is not self]
+        if not others:
+            return
+        if Position == 0:
+            if self.ZIndex <= max(others):
+                self.ZIndex = max(others) + 1
+        elif self.ZIndex >= min(others):
+            self.ZIndex = min(others) - 1
+
+    # -- stacking (ZIndex) ---------------------------------------------------------------
+    def _stackable(self) -> bool:
+        return self._widget is not None and "ZIndex" in self._specs
+
+    def _siblings(self) -> list["Control"]:
+        """Stackable controls in the same container, in creation order."""
+        return [c for c in self._form._controls if c.Parent is self.Parent and c._stackable()]
+
+    def _restack(self) -> None:
+        """Order the container's children: higher ZIndex on top, equal values
+        in creation order (later on top)."""
+        siblings = self._siblings()
+        order = sorted(range(len(siblings)),
+                       key=lambda i: (siblings[i]._values.get("ZIndex", 0), i))
+        for i in order:
+            siblings[i]._widget.raise_()
+
+    def _apply_ZIndex(self, v):
+        # During construction the control isn't registered yet; __init__
+        # restacks once it is.
+        if self._stackable() and self in self._form._controls:
+            self._restack()
 
 
 def _container_palette(control: Control) -> None:
@@ -429,12 +479,14 @@ class Label(Control):
     _synthesize_click = True
     _qss_type = "QLabel"
     Properties = (
-        P("Caption", "str", "", always=True),
+        P("Caption", "str", "", always=True,
+          description="The text; & marks are hidden (&& shows a literal &)"),
         *_geometry(*DefaultSize),
-        P("Alignment", "enum", 0, _ALIGNMENT),
-        P("AutoSize", "bool", False),
-        P("WordWrap", "bool", False),
-        P("BorderStyle", "enum", 0, enum_choices("None", "Fixed Single")),
+        P("Alignment", "enum", 0, _ALIGNMENT, description="Horizontal text alignment"),
+        P("AutoSize", "bool", False, description="Resize to fit the text"),
+        P("WordWrap", "bool", False, description="Wrap long text onto several lines"),
+        P("BorderStyle", "enum", 0, enum_choices("None", "Fixed Single"),
+          description="A thin border around the label"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -472,14 +524,16 @@ class TextBox(Control):
     Events = ("Change", "Click", "DblClick", "GotFocus", "LostFocus",
               "KeyDown", "KeyPress", "KeyUp", "MouseDown", "MouseMove", "MouseUp")
     Properties = (
-        P("MultiLine", "bool", False),
-        P("Text", "text", "", always=True),
+        P("MultiLine", "bool", False, description="A multi-line editor instead of a single line"),
+        P("Text", "text", "", always=True, description="The contents"),
         *_geometry(*DefaultSize),
-        P("Alignment", "enum", 0, _ALIGNMENT),
-        P("PasswordChar", "str", ""),
-        P("MaxLength", "int", 0),
-        P("Locked", "bool", False),
-        P("ScrollBars", "enum", 0, enum_choices("None", "Horizontal", "Vertical", "Both")),
+        P("Alignment", "enum", 0, _ALIGNMENT,
+          description="Horizontal text alignment (single-line only)"),
+        P("PasswordChar", "str", "", description="Any character masks the input"),
+        P("MaxLength", "int", 0, description="Maximum length; 0 = no limit (single-line)"),
+        P("Locked", "bool", False, description="Read-only: the text can't be edited"),
+        P("ScrollBars", "enum", 0, enum_choices("None", "Horizontal", "Vertical", "Both"),
+          description="Scroll bars of a multi-line TextBox"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -605,10 +659,10 @@ class CommandButton(Control):
               "MouseDown", "MouseMove", "MouseUp")
     _qss_type = "QPushButton"
     Properties = (
-        P("Caption", "str", "", always=True),
+        P("Caption", "str", "", always=True, description="The text; & marks the access key"),
         *_geometry(*Control.DefaultSize),
-        P("Default", "bool", False, description="Clicked when Enter is pressed"),
-        P("Cancel", "bool", False, description="Clicked when Esc is pressed"),
+        P("Default", "bool", False, description="Clicked when Enter is pressed on the form"),
+        P("Cancel", "bool", False, description="Clicked when Esc is pressed on the form"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -645,9 +699,10 @@ class CheckBox(Control):
               "MouseDown", "MouseMove", "MouseUp")
     _qss_type = "QCheckBox"
     Properties = (
-        P("Caption", "str", "", always=True),
+        P("Caption", "str", "", always=True, description="The text; & marks the access key"),
         *_geometry(121, 25),
-        P("Value", "enum", 0, enum_choices("Unchecked", "Checked", "Grayed")),
+        P("Value", "enum", 0, enum_choices("Unchecked", "Checked", "Grayed"),
+          description="vpUnchecked, vpChecked or vpGrayed; changing it fires Click"),
         *_COLORS, *_FONT, *_COMMON,
     )
     DefaultSize = (121, 25)
@@ -679,9 +734,10 @@ class OptionButton(Control):
     _qss_type = "QRadioButton"
     DefaultSize = (121, 25)
     Properties = (
-        P("Caption", "str", "", always=True),
+        P("Caption", "str", "", always=True, description="The text; & marks the access key"),
         *_geometry(121, 25),
-        P("Value", "bool", False),
+        P("Value", "bool", False,
+          description="Selected; option buttons in the same container are exclusive"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -710,11 +766,9 @@ class Frame(Control):
     Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp")
     _synthesize_click = True
     Properties = (
-        P("Caption", "str", "", always=True),
+        P("Caption", "str", "", always=True, description="The title shown on the frame"),
         *_geometry(*DefaultSize),
-        *_COLORS, *_FONT,
-        P("Enabled", "bool", True), P("Visible", "bool", True),
-        P("TabIndex", "int", 0), P("ToolTipText", "str", ""), P("Tag", "str", ""),
+        *_COLORS, *_FONT, *_COMMON,
     )
 
     def _create_widget(self, parent):
@@ -765,9 +819,10 @@ class ListBox(_ListMixin, Control):
     _qss_type = "QListWidget"
     Properties = (
         *_geometry(*DefaultSize),
-        P("List", "list", []),
-        P("Sorted", "bool", False),
-        P("MultiSelect", "enum", 0, enum_choices("None", "Simple", "Extended")),
+        P("List", "list", [], description="The items"),
+        P("Sorted", "bool", False, description="Keep the items in alphabetical order"),
+        P("MultiSelect", "enum", 0, enum_choices("None", "Simple", "Extended"),
+          description="Whether several items can be selected"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -826,11 +881,12 @@ class ComboBox(_ListMixin, Control):
               "KeyUp")
     _qss_type = "QComboBox"
     Properties = (
-        P("Style", "enum", 0, ((0, "0 - Dropdown Combo"), (2, "2 - Dropdown List"))),
+        P("Style", "enum", 0, ((0, "0 - Dropdown Combo"), (2, "2 - Dropdown List")),
+          description="Dropdown Combo: editable text; Dropdown List: choose an item only"),
         *_geometry(*DefaultSize),
-        P("List", "list", []),
-        P("Text", "str", "", always=True),
-        P("Sorted", "bool", False),
+        P("List", "list", [], description="The items"),
+        P("Text", "str", "", always=True, description="The edit text or the selected item"),
+        P("Sorted", "bool", False, description="Keep the items in alphabetical order"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -891,10 +947,11 @@ class Timer(Control):
     DefaultSize = (32, 32)
     Events = ("Timer",)
     Properties = (
-        P("Left", "int", 0, always=True), P("Top", "int", 0, always=True),
+        P("Left", "int", 0, always=True, description="Position in the designer only"),
+        P("Top", "int", 0, always=True, description="Position in the designer only"),
         P("Interval", "int", 0, description="Milliseconds between Timer events (0 = off)"),
-        P("Enabled", "bool", True),
-        P("Tag", "str", ""),
+        P("Enabled", "bool", True, description="Whether the Timer event fires"),
+        P("Tag", "str", "", description="Free for your own use"),
     )
 
     def __init__(self, parent, Name: str = "", **props):
@@ -988,8 +1045,11 @@ class _ScrollBar(Control):
 def _scroll_props(width, height):
     return (
         *_geometry(width, height),
-        P("Min", "int", 0), P("Max", "int", 32767), P("Value", "int", 0),
-        P("SmallChange", "int", 1), P("LargeChange", "int", 1),
+        P("Min", "int", 0, description="Smallest Value"),
+        P("Max", "int", 32767, description="Largest Value"),
+        P("Value", "int", 0, description="The current position; changing it fires Change"),
+        P("SmallChange", "int", 1, description="Step for the arrow buttons"),
+        P("LargeChange", "int", 1, description="Step for clicks on the track"),
         *_COMMON,
     )
 
@@ -1018,9 +1078,10 @@ class PictureBox(Control):
     Properties = (
         *_geometry(*DefaultSize),
         P("Picture", "file", "", description="Image file (relative to the form's folder)"),
-        P("Stretch", "bool", False),
-        P("AutoSize", "bool", False),
-        P("BorderStyle", "enum", 1, enum_choices("None", "Fixed Single")),
+        P("Stretch", "bool", False, description="Scale the picture to fit the control"),
+        P("AutoSize", "bool", False, description="Resize to fit the picture"),
+        P("BorderStyle", "enum", 1, enum_choices("None", "Fixed Single"),
+          description="A sunken border around the picture"),
         *_COLORS, *_COMMON,
     )
 

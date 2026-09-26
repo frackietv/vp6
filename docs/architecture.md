@@ -38,7 +38,7 @@ vp6/                    runtime library - "from vp6 import *"
   form.py               Form, Forms, Load, Unload, run
   formfile.py           parse/generate the designer region of form files
   project.py            .vp6p project files (executable launcher scripts)
-  run.py                run a project (form or Sub Main)
+  runner.py             run a project (form or Sub Main)
   ide/                  the IDE - "python -m vp6.ide" or the "vp6" command
     __main__.py         entry point
     mainwindow.py       MainWindow: menus, docks, MDI, running programs
@@ -50,10 +50,13 @@ vp6/                    runtime library - "from vp6 import *"
     panels.py           Toolbox, Project Explorer, Immediate window
     documents.py        Document / FormDocument (open files)
     dialogs.py          New Project, Project Properties, About
+    kitchensink.py      the Kitchen Sink project template
+    templates/kitchensink/   its sources: Form1.py, frmDialog.py, Module1.py
     options.py          Tools > Options dialog
     theme.py            editor themes, IDE light/dark, settings store
     icons.py            icons drawn in code (light + dark variants)
 tests/                  pytest suite (runs headless)
+tools/apidocs.py        generates the reference tables in docs/api.md
 samples/                Calculator (GUI) and GuessNumber (console)
 docs/                   this documentation
 ```
@@ -74,7 +77,7 @@ flowchart LR
         MW --> Imm[Immediate window]
     end
     subgraph Prog["Program process"]
-        Script["Project.vp6p<br/>(launcher script)"] --> Run[vp6.run.run_project]
+        Script["Project.vp6p<br/>(launcher script)"] --> Run[vp6.runner.run_project]
         Run --> Forms[Forms / Sub Main]
     end
     MW -- "F5: QProcess(python -u Project.vp6p)<br/>env: PYTHONPATH, VP6_IDE_SCHEME" --> Script
@@ -86,7 +89,7 @@ flowchart LR
   documents and windows, and never imports or executes project code.
 * **The program process** is started by F5 (`MainWindow.run_project`) as
   `sys.executable -u Project.vp6p`. The project file is itself a launcher
-  script (see §6.2) that calls `vp6.run.run_project(__file__)`. The IDE
+  script (see §6.2) that calls `vp6.runner.run_project(__file__)`. The IDE
   passes:
   * `PYTHONPATH` prefixed with the directory containing the `vp6` package,
     so the program imports the same VP6 the IDE uses,
@@ -176,6 +179,17 @@ when the color scheme changes.
 (family, size, bold...). The rest is inherited from the container, so
 changing the form's font affects controls that don't override it.
 
+**Stacking.** Every control visible at run time (all but `Timer`) has a
+`ZIndex`:
+
+* within a container, higher values are drawn on top, and equal values keep
+  creation order;
+* `Control._restack()` raises the container's children in `(ZIndex, creation
+  order)` order. It runs when a control is created, when its widget is
+  rebuilt, and whenever `ZIndex` changes, so run-time changes show
+  immediately;
+* `ZOrder(0|1)` sets `ZIndex` just above or below the siblings.
+
 ### 4.3 Event dispatch
 
 ```mermaid
@@ -248,7 +262,7 @@ stateDiagram-v2
 * `Width` and `Height` are the **client area** in pixels (VB6 used twips and
   included the border).
 * `run(FormClass)` creates the form, shows it and runs the event loop until
-  all windows close. `vp6.run.run_project` does the same for a project's
+  all windows close. `vp6.runner.run_project` does the same for a project's
   startup form, or calls `Main()` for `Sub Main` projects.
 
 ### 4.5 Color schemes (`appearance.py`)
@@ -338,6 +352,11 @@ The `FormDesigner` widget contains a `QScrollArea` with a `_Canvas`:
   form's `BorderStyle`, `ControlBox`, `MinButton` and `MaxButton`);
 * the design form's `_FormWidget` is re-parented onto the canvas, below the
   frame's title bar (`_layout_form`);
+* the canvas is at least as large as the scroll area's viewport, so the
+  workspace always fills the window. It's resized when the *viewport* is
+  resized (an event filter), not on the designer's own resize. The viewport
+  is laid out later, so a single jump such as maximizing would otherwise
+  leave the canvas at the old size;
 * an `_Overlay` widget covers the whole canvas above the form. It receives
   **all** mouse and keyboard input, so the real controls underneath never
   get clicks. It paints the selection handles, the rubber band and the
@@ -367,9 +386,12 @@ Undo and redo in the designer are stacks of `FormDef` snapshots, separate
 from the text document's own undo. Restoring a snapshot rebuilds the live
 form (`load_def`).
 
-**Hit testing.** The control list order is the z-order, with children always
-after their parent. `control_at` walks it in reverse, clipping by ancestor
-rectangles.
+**Stacking and hit testing.** Controls are stacked by their `ZIndex`
+property within each container. Equal values keep creation order, with later
+controls on top. Bring to Front and Send to Back set `ZIndex` (through the
+runtime `ZOrder` method). `control_at` asks Qt which widget is under the
+point (`childAt`) and maps it back to its control, so a click always picks
+what is visibly on top.
 
 **Signals** used by the main window:
 
@@ -509,8 +531,8 @@ Rules for the region (`formfile.parse_region_body`):
   only:
   * `self.<FormProperty> = <literal>`, or
   * `self.<Name> = <ControlType>(self | self.<Container>, <Prop>=<literal>, ...)`.
-* A container must be defined before its children. Statement order is the
-  z-order.
+* A container must be defined before its children. Statement order is
+  creation order, which decides stacking among controls with equal `ZIndex`.
 * Values are literals only, read with `ast.literal_eval`. Colors are written
   as hex, like `0x00FF00` (VB BGR order).
 * The generator (`generate_region`) writes form properties, then controls in
@@ -541,7 +563,7 @@ PROJECT = {
 if __name__ == "__main__":
     import sys
     try:
-        from vp6.run import run_project
+        from vp6.runner import run_project
     except ImportError:
         sys.exit("VP6 is not installed for ... Set VP6_PYTHON ...")
     sys.exit(run_project(__file__))

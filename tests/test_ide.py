@@ -36,7 +36,7 @@ def test_add_form_and_module(window, tmp_path):
     window.add_module()
     project = Project.load(os.path.join(tmp_path, "Demo", "Demo.vp6p"))
     assert project.forms == ["Form1.py", "Form2.py"]
-    assert project.modules == ["Module1.py"]
+    assert project.modules == ["Module1.py", "Module2.py"]
     assert isinstance(window._active_widget(), CodeWindow)
 
 
@@ -82,7 +82,7 @@ def test_run_console_project_with_input(window, tmp_path):
 
 def test_runtime_error_is_reported_with_location(window, tmp_path):
     window.open_project(create_project(str(tmp_path), "Crash", "console"))
-    doc = next(iter(window.documents.values()))
+    doc = next(d for d in window.documents.values() if d.name == "Module1")
     doc.text_document.setPlainText("def Main():\n    1 / 0\n")
     window.run_project()
     wait_for(lambda: window.process is None, 15000)
@@ -171,7 +171,7 @@ def test_run_passes_ide_scheme_to_program(window, tmp_path):
 
     theme_manager().select(DARK)
     window.open_project(create_project(str(tmp_path), "Env", "console"))
-    doc = next(iter(window.documents.values()))
+    doc = next(d for d in window.documents.values() if d.name == "Module1")
     doc.text_document.setPlainText(
         "import os\n\ndef Main():\n    print('scheme=' + os.environ['VP6_IDE_SCHEME'])\n")
     window.run_project()
@@ -183,8 +183,8 @@ def test_project_explorer_follows_active_window(window, tmp_path):
     window.open_project(create_project(str(tmp_path), "Demo", "exe"))
     form_path = os.path.join(tmp_path, "Demo", "Form1.py")
     assert window.explorer._current() == (form_path, "form")  # startup form selected
-    window.add_module()  # opens Module1's code window
-    module_path = os.path.join(tmp_path, "Demo", "Module1.py")
+    window.add_module()  # opens Module2's code window (Module1 comes with the project)
+    module_path = os.path.join(tmp_path, "Demo", "Module2.py")
     assert window.explorer._current() == (module_path, "module")
     window.view_object(form_path)
     assert window.explorer._current() == (form_path, "form")
@@ -235,3 +235,63 @@ def test_selecting_a_form_or_designer_shows_its_properties_again(window, tmp_pat
     designer.create_control("CommandButton", None, None, None)  # working in the designer
     assert window.properties.designer is designer
     assert not window.explorer.project_selected()
+
+
+@pytest.mark.parametrize("template", ["exe", "console"])
+def test_new_projects_have_form1_and_module1_with_main(tmp_path, template):
+    path = create_project(str(tmp_path), "Demo", template)
+    project = Project.load(path)
+    assert project.forms == ["Form1.py"] and project.modules == ["Module1.py"]
+    assert project.startup == "Sub Main"
+    assert project.type == template
+    module = (tmp_path / "Demo" / "Module1.py").read_text()
+    assert "def Main():" in module and 'if __name__ == "__main__":\n    Main()' in module
+    if template == "exe":
+        assert "from Form1 import Form1" in module and "run(Form1)" in module
+    else:
+        assert "input(" in module and "Form1" not in module  # console Main unchanged
+    compile(module, "Module1.py", "exec")
+
+
+def test_exe_project_main_shows_form1(tmp_path):
+    """Run the new windowed project for real: Main() must show Form1."""
+    import subprocess
+    import sys
+
+    path = create_project(str(tmp_path), "Demo", "exe")
+    form1 = tmp_path / "Demo" / "Form1.py"
+    form1.write_text(form1.read_text().replace(
+        "    def Form_Load(self):\n        pass",
+        "    def Form_Load(self):\n        print('Form1 loaded', flush=True)\n        End()"))
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
+               PYTHONPATH=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    result = subprocess.run([sys.executable, path], capture_output=True, text=True,
+                            timeout=60, env=env)
+    assert "Form1 loaded" in result.stdout
+
+
+def test_new_exe_project_opens_form_designer_even_with_sub_main(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    designer = window._active_widget()
+    assert isinstance(designer, FormDesigner) and designer.document.name == "Form1"
+
+
+@pytest.mark.parametrize("tabbed", [False, True])
+def test_closed_windows_reopen_with_their_contents(window, tmp_path, tabbed):
+    """Regression: closing a code window or designer and opening it again showed
+    an empty frame (Qt hides the widget inside a closed subwindow)."""
+    window.act_tabbed.setChecked(tabbed)
+    window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
+    form1 = os.path.join(tmp_path, "Sink", "Form1.py")
+    for open_window, windows in ((window.view_code, window.code_windows),
+                                 (window.view_object, window.designer_windows)):
+        open_window(form1)
+        for _ in range(2):  # close and reopen twice
+            windows[form1].close()
+            QTest.qWait(10)
+            content = open_window(form1)
+            QTest.qWait(10)
+            assert windows[form1].isVisible() and content.isVisible()
+    code = window.code_windows[form1].widget()
+    assert code.editor.isVisible() and "class Form1(Form):" in code.editor.toPlainText()
+    window.act_tabbed.setChecked(False)

@@ -118,18 +118,24 @@ class Form(PropertyHost):
               "Click", "DblClick", "MouseDown", "MouseMove", "MouseUp",
               "KeyDown", "KeyPress", "KeyUp")
     Properties = (
-        P("Caption", "str", "", always=True),
+        P("Caption", "str", "", always=True,
+          description="The window title; defaults to the form's class name"),
         P("Width", "int", 480, always=True, description="Client area width in pixels"),
         P("Height", "int", 360, always=True, description="Client area height in pixels"),
-        P("Left", "int", 0), P("Top", "int", 0),
+        P("Left", "int", 0, description="Screen position; used with StartUpPosition Manual"),
+        P("Top", "int", 0, description="Screen position; used with StartUpPosition Manual"),
         P("StartUpPosition", "enum", 2,
-          enum_choices("Manual", "CenterOwner", "CenterScreen", "Windows Default")),
+          enum_choices("Manual", "CenterOwner", "CenterScreen", "Windows Default"),
+          description="Where the window first appears"),
         P("BorderStyle", "enum", 2, enum_choices(
             "None", "Fixed Single", "Sizable", "Fixed Dialog", "Fixed ToolWindow",
-            "Sizable ToolWindow")),
-        P("WindowState", "enum", 0, enum_choices("Normal", "Minimized", "Maximized")),
-        P("ControlBox", "bool", True), P("MinButton", "bool", True),
-        P("MaxButton", "bool", True),
+            "Sizable ToolWindow"),
+          description="The kind of window frame; fixed styles can't be resized"),
+        P("WindowState", "enum", 0, enum_choices("Normal", "Minimized", "Maximized"),
+          description="Normal, minimized or maximized window"),
+        P("ControlBox", "bool", True, description="Show the window buttons"),
+        P("MinButton", "bool", True, description="Show a minimize button"),
+        P("MaxButton", "bool", True, description="Show a maximize button (sizable forms)"),
         P("KeyPreview", "bool", False,
           description="Form receives key events before its controls"),
         P("ColorScheme", "enum", 0,
@@ -137,9 +143,11 @@ class Form(PropertyHost):
           description="Light or dark appearance. Project Default uses the project's "
                       "color scheme; System follows the operating system; IDE follows "
                       "the VP6 IDE's light/dark setting (System when run on its own)."),
-        P("BackColor", "color", None), P("ForeColor", "color", None),
+        P("BackColor", "color", None, description="Background color; unset = the default"),
+        P("ForeColor", "color", None, description="Text color; unset = the default"),
         *_FONT,
-        P("Enabled", "bool", True), P("Tag", "str", ""),
+        P("Enabled", "bool", True, description="Whether the form responds to the user"),
+        P("Tag", "str", "", description="Free for your own use"),
     )
 
     # The IDE designer instantiates a subclass with this set to True.

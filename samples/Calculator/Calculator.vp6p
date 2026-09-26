@@ -20,7 +20,7 @@ if __name__ == "__main__":
     import sys
 
     try:
-        from vp6.run import run_project
+        from vp6.runner import run_project
     except ImportError:
         sys.exit(f"VP6 is not installed for {sys.executable}.\n"
                  "Set VP6_PYTHON to a Python that has VP6 installed, or install VP6 "

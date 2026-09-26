@@ -19,9 +19,14 @@ from .projectprops import COLOR_SCHEME_CHOICES, TYPE_CHOICES
 DEFAULT_LOCATION = os.path.join(os.path.expanduser("~"), "VP6 Projects")
 
 TEMPLATES = [
-    ("exe", "Standard EXE", "Form", "A windowed application with a startup form."),
+    ("exe", "Standard EXE", "Form",
+     "A windowed application: Sub Main in Module1 shows Form1."),
     ("console", "Console Application", "Console",
-     "A text-mode program that starts in Sub Main and uses print() / input()."),
+     "A text-mode program that starts in Sub Main (Module1) and uses print() / input(). "
+     "Form1 is included for when you need a window."),
+    ("kitchensink", "Kitchen Sink", "KitchenSink",
+     "A demo that shows every VP6 control and feature working. A good place to learn "
+     "from and to copy code out of."),
 ]
 
 
