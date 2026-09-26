@@ -99,3 +99,17 @@ def test_console_module_template_runs(capsys, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda prompt: "Ada")
     namespace["Main"]()
     assert "Hello, Ada!" in capsys.readouterr().out
+
+
+def test_rename_class_and_module_references():
+    source = ("from Form1 import Form1\nimport Module1\n\n\ndef Main():\n"
+              "    run(Form1)\n    Module1.helper(Form1)\n    x.Form1 = 1\n")
+    renamed = formfile.rename_class_references(source, "Form1", "frmMain")
+    assert "from Form1 import frmMain\n" in renamed  # the module (file) keeps its name
+    assert "run(frmMain)" in renamed and "Module1.helper(frmMain)" in renamed
+    assert "x.Form1 = 1" in renamed  # attributes of other objects are left alone
+    renamed = formfile.rename_module_references(source, "Module1", "Utils")
+    assert "import Utils\n" in renamed and "Utils.helper(Form1)" in renamed
+    assert "from Form1 import Form1" in renamed
+    assert formfile.rename_module_references("from Module1 import Main\n", "Module1", "U") \
+        == "from U import Main\n"

@@ -295,3 +295,137 @@ def test_closed_windows_reopen_with_their_contents(window, tmp_path, tabbed):
     code = window.code_windows[form1].widget()
     assert code.editor.isVisible() and "class Form1(Form):" in code.editor.toPlainText()
     window.act_tabbed.setChecked(False)
+
+
+# --- Properties panel follows the Project panel / active window --------------------------------
+
+def _props(window):
+    """(object combo text, property row labels) of the Properties panel."""
+    table = window.properties.table
+    rows = [table.item(r, 0).text() for r in range(table.rowCount())]
+    return window.properties.object_combo.currentText(), rows
+
+
+def _select_item(window, text):
+    from PySide6.QtWidgets import QTreeWidgetItemIterator
+
+    iterator = QTreeWidgetItemIterator(window.explorer.tree)
+    while iterator.value() is not None:
+        if iterator.value().text(0).startswith(text):
+            window.explorer.tree.setCurrentItem(iterator.value())
+            return
+        iterator += 1
+    raise AssertionError(f"no explorer item {text!r}")
+
+
+def test_properties_follow_project_panel_selection(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
+    _select_item(window, "Module1")
+    assert _props(window) == ("Module1  Module", ["(Name)"])  # modules have a Name
+    _select_item(window, "frmDialog")  # a form whose designer isn't open
+    assert _props(window) == ("frmDialog  Form", ["(Name)"])
+    _select_item(window, "Form1")  # designer open: all its properties
+    assert _props(window)[0] == "Form1  Form" and "Caption" in _props(window)[1]
+    _select_item(window, "Forms")  # a folder has no properties
+    assert _props(window) == ("", [])
+    window.explorer.tree.setCurrentItem(None)  # nothing selected
+    assert _props(window) == ("", [])
+    window.explorer.select_project()
+    assert _props(window)[0] == "Sink  Project"
+
+
+def test_properties_follow_active_window_when_project_panel_closed(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
+    folder = os.path.join(tmp_path, "Sink")
+    window.explorer_dock.hide()
+    window.view_code(os.path.join(folder, "Module1.py"))
+    assert _props(window) == ("Module1  Module", ["(Name)"])
+    window.view_code(os.path.join(folder, "frmDialog.py"))  # form code, no designer
+    assert _props(window) == ("frmDialog  Form", ["(Name)"])
+    window.view_code(os.path.join(folder, "Form1.py"))  # form code, designer open
+    assert _props(window)[0] == "Form1  Form" and "Caption" in _props(window)[1]
+    window.explorer_dock.show()  # back to following the Project panel
+    _select_item(window, "Module1")
+    assert _props(window) == ("Module1  Module", ["(Name)"])
+
+
+def test_rename_module_from_properties(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    folder = tmp_path / "Demo"
+    form1 = window.documents[str(folder / "Form1.py")]
+    form1.replace_text(form1.text.replace("from vp6 import *\n",
+                                          "from vp6 import *\nimport Module1\n", 1))
+    _select_item(window, "Module1")
+    target = window.properties.designer
+    assert target.set_property("Name", "not valid") is not None
+    assert target.set_property("Name", "Form1") is not None  # already used
+    assert target.set_property("Name", "Startup") is None
+    assert (folder / "Startup.py").exists() and not (folder / "Module1.py").exists()
+    assert Project.load(str(folder / "Demo.vp6p")).modules == ["Startup.py"]
+    assert "import Startup\n" in form1.text  # references in other files follow
+    assert _props(window) == ("Startup  Module", ["(Name)"])
+    window.view_code(str(folder / "Startup.py"))
+    assert "Startup" in window.code_windows[str(folder / "Startup.py")].windowTitle()
+
+
+def test_renaming_a_form_updates_references_and_still_runs(window, tmp_path):
+    """Regression: renaming Form1 left Module1's `from Form1 import Form1` /
+    `run(Form1)` behind, so a new Standard EXE failed on the next run."""
+    import subprocess
+    import sys
+
+    path = create_project(str(tmp_path), "Demo", "exe")
+    window.open_project(path)
+    designer = window._last_designer
+    designer.select([])
+    assert designer.set_property("Name", "frmMain") is None
+    module = next(d for d in window.documents.values() if d.name == "Module1")
+    assert "from Form1 import frmMain" in module.text and "run(frmMain)" in module.text
+    assert window.project.startup == "Sub Main"
+    form = designer.document
+    form.replace_text(form.text.replace(
+        "    def Form_Load(self):\n        pass",
+        "    def Form_Load(self):\n        print('frmMain loaded', flush=True)\n        End()"))
+    assert window.save_all()
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
+               PYTHONPATH=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    result = subprocess.run([sys.executable, path], capture_output=True, text=True,
+                            timeout=60, env=env)
+    assert "frmMain loaded" in result.stdout, result.stderr
+
+
+def test_rename_unopened_form_from_properties(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
+    _select_item(window, "frmDialog")
+    assert window.properties.designer.set_property("Name", "Form1") is not None  # taken
+    assert window.properties.designer.set_property("Name", "dlgAdd") is None
+    form1 = next(d for d in window.documents.values() if d.name == "Form1")
+    assert "from frmDialog import dlgAdd" in form1.text and "dialog = dlgAdd()" in form1.text
+    assert _props(window) == ("dlgAdd  Form", ["(Name)"])
+
+
+def test_ide_exits_without_errors(tmp_path):
+    """Regression: signals fired while the IDE shut down reached an already
+    destroyed MainWindow and printed a traceback on exit."""
+    import subprocess
+    import sys
+
+    script = f"""
+import sys
+from PySide6.QtCore import QSettings
+QSettings.setDefaultFormat(QSettings.IniFormat)
+QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, {str(tmp_path / 'settings')!r})
+from PySide6.QtWidgets import QApplication
+app = QApplication(sys.argv)
+from vp6.ide.mainwindow import MainWindow, create_project
+w = MainWindow()
+w.show()
+w.open_project(create_project({str(tmp_path)!r}, "Sink", "kitchensink"))
+w.explorer.select_project()
+app.processEvents()
+"""
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen",
+               PYTHONPATH=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
+                            timeout=60, env=env)
+    assert result.returncode == 0 and "Traceback" not in result.stderr, result.stderr

@@ -263,6 +263,11 @@ classes for their metadata.
   * `rename_form_class` renames the class line and `run(Old)`;
   * `rename_control_references` renames `def Old_Event(` and `self.Old`,
     outside the region only;
+  * `rename_class_references(source, old, new)` renames a class in another
+    file. In `from Form1 import Form1` only the imported name changes, since
+    the module (the file) keeps its name;
+  * `rename_module_references(source, old, new)` renames a module in another
+    file: `from old import`, `import old` and `old.x`;
   * `event_stub(obj, event, args)` makes a new handler stub.
 
 ### `vp6/project.py` (≈170 lines)
@@ -351,12 +356,24 @@ prepended to `PYTHONPATH` for programs started with F5.
     `_project_scheme`;
   * `add_form`, `add_module`, `add_file`, `remove_file`;
   * `recent_projects` and `_remember`.
-  * `project_target` (`ProjectTarget`) and `_show_project_properties`: the
-    project item in the explorer binds the Properties window to the project.
-  * `_on_file_selected` / `_on_designer_selection` bind it back to a form's
-    designer.
-  * `_project_changed()` is the one path after the project's properties
-    change, whether from the dialog or the Properties window.
+  * **What the Properties window shows:** `_properties_target()` follows the
+    Project panel's selection while that panel is open, or the active window
+    when it's closed. `_update_properties_target()` applies it; `_target_for_path`
+    gives a form's designer or a cached `FileTarget` (`_file_targets`). It is
+    re-run on explorer selection and visibility changes
+    (`_on_explorer_changed`), window activation, and designer selection
+    (`_on_designer_selection`).
+  * **Renames from the Properties window:** `_rename_file_object` renames a
+    form's class or a module; `_rename_module` renames the module's file, the
+    project entry and references in other files
+    (`formfile.rename_module_references`).
+  * **Form renames**, from the designer or the Properties window, go through
+    `_on_form_renamed`. It renames references in the other files
+    (`formfile.rename_class_references`, e.g. Module1's
+    `from Form1 import Form1` / `run(Form1)`) and the startup object.
+  * `project_target` (`ProjectTarget`). `_project_changed()` is the one path
+    after the project's properties change, whether from the dialog or the
+    Properties window.
 * **Windows:**
   * `view_object(path)` returns the path's `FormDesigner`, creating it if
     needed, and `view_code(path)` does the same for its `CodeWindow`;
@@ -517,7 +534,8 @@ Window frames painted around the designed form.
 
 ### `vp6/ide/projectprops.py` (≈120 lines)
 
-The project as a target of the Properties window.
+The project, and files without a designer, as targets of the Properties
+window.
 
 * `ProjectTarget(QObject)` offers the same interface as `FormDesigner`
   (`selected_objects`, `all_objects`, `object_name`, `select_by_name`,
@@ -531,6 +549,10 @@ The project as a target of the Properties window.
 * `_ProjectObject` is the "selected object" the grid reads values from.
 * `TYPE_CHOICES` and `COLOR_SCHEME_CHOICES` are shared with
   `ProjectPropertiesDialog`.
+* `FileTarget(QObject)` is the same interface for a module, or a form whose
+  designer isn't open. It shows just `(Name)` (through `_FileObject`, which
+  has no specs). `set_property("Name", …)` calls the main window's
+  `_rename_file_object`.
 
 ### `vp6/ide/panels.py` (≈330 lines)
 
@@ -568,12 +590,12 @@ The project as a target of the Properties window.
 * `Document(QObject)`:
   * `path`, `text_document` (`QTextDocument` with a plain-text layout),
     `filename`, `name`, `text`, `modified`, `save()`;
-  * signal `modifiedChanged`.
+  * signal `modifiedChanged`;
+  * `replace_text(text)` does a whole-text replacement as one undoable edit
+    (used for renames).
 * `FormDocument(Document)`:
   * `form_def`, `name` (the class name found in the text), `region_range()`;
   * `set_form_def(form_def)` regenerates the region;
-  * `replace_text(text)` does a whole-text replacement as one undoable edit
-    (used for renames);
   * `_on_text_changed` re-parses; signals `designReloaded` and `parseError`.
 * `open_document(path)` picks the class by content.
 
@@ -714,9 +736,9 @@ All tests run headless. `conftest.py`:
 | File | Covers |
 |---|---|
 | `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results. |
-| `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames, the console template. |
+| `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames (controls, form classes, class and module references in other files), the console template. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
-| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window. |
+| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module and unopened-form Names, renaming modules and forms from the Properties window, a renamed Form1 still running, the IDE exiting without errors. |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |

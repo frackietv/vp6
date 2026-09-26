@@ -47,6 +47,16 @@ class Document(QObject):
     def modified(self) -> bool:
         return self.text_document.isModified()
 
+    def replace_text(self, text: str) -> None:
+        """Replace the whole text as one undoable edit (used for renames)."""
+        if text == self.text:
+            return
+        cursor = QTextCursor(self.text_document)
+        cursor.beginEditBlock()
+        cursor.select(QTextCursor.Document)
+        cursor.insertText(text)
+        cursor.endEditBlock()
+
     def save(self) -> None:
         text = self.text
         if not text.endswith("\n"):
@@ -106,16 +116,6 @@ class FormDocument(Document):
             cursor.endEditBlock()
         finally:
             self._updating = False
-
-    def replace_text(self, text: str) -> None:
-        """Replace the whole text as one undoable edit (used for renames)."""
-        if text == self.text:
-            return
-        cursor = QTextCursor(self.text_document)
-        cursor.beginEditBlock()
-        cursor.select(QTextCursor.Document)
-        cursor.insertText(text)
-        cursor.endEditBlock()
 
     def _on_text_changed(self) -> None:
         if self._updating:

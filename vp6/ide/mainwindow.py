@@ -20,12 +20,12 @@ from ..appearance import IDE_SCHEME_ENV, SCHEME_NAMES, scheme_from_name
 from ..project import EXTENSION, SUB_MAIN, Project
 from . import icons, kitchensink
 from .codeeditor import CodeWindow
-from .designer import FormDesigner
+from .designer import FormDesigner, is_identifier
 from .dialogs import ABOUT_HTML, NewProjectDialog, ProjectPropertiesDialog
 from .documents import Document, FormDocument, open_document
 from .options import OptionsDialog
 from .panels import ImmediateWindow, ProjectExplorer, Toolbox, pump_process_output
-from .projectprops import ProjectTarget
+from .projectprops import FileTarget, ProjectTarget
 from .properties import PropertiesWindow
 from .theme import SYSTEM, ide_settings, theme_manager
 
@@ -69,6 +69,8 @@ class MainWindow(QMainWindow):
         self.immediate_dock = self._dock("Immediate", self.immediate, Qt.BottomDockWidgetArea,
                                          "immediate")
         self.toolbox_dock.setFixedWidth(84)
+        # Opening/closing the Project panel changes what Properties follows
+        self.explorer_dock.visibilityChanged.connect(self._on_explorer_changed)
 
         self.toolbox.toolSelected.connect(self._on_tool_selected)
         self.toolbox.toolActivated.connect(self._on_tool_activated)
@@ -78,8 +80,10 @@ class MainWindow(QMainWindow):
         self.explorer.setStartup.connect(self._set_startup)
         self.explorer.addForm.connect(self.add_form)
         self.explorer.addModule.connect(self.add_module)
-        self.explorer.projectSelected.connect(self._show_project_properties)
-        self.explorer.fileSelected.connect(self._on_file_selected)
+        # Bound methods, not lambdas: PySide disconnects those automatically
+        # when the window is destroyed (the signals still fire during shutdown)
+        self.explorer.tree.currentItemChanged.connect(self._on_explorer_changed)
+        self._file_targets: dict[str, FileTarget] = {}
         self.project_target = ProjectTarget(
             lambda: self.project, self._form_names, self._project_changed)
         self.immediate.openLocation.connect(self.open_location)
@@ -361,13 +365,17 @@ class MainWindow(QMainWindow):
     def _refresh_explorer(self):
         names = {path: self._doc_display_name(doc) for path, doc in self.documents.items()}
         project_was_selected = self.explorer.project_selected()
+        selected_path, _kind = self.explorer._current()
         self.explorer.populate(self.project, names)
         if project_was_selected:
             self.explorer.select_project()
-            return
-        active = self._active_widget()  # keep the active window's file selected
-        if active is not None:
-            self.explorer.select_path(self._path_of(active))
+        elif selected_path in self.documents:  # keep what was selected
+            self.explorer.select_path(selected_path)
+        else:
+            active = self._active_widget()  # keep the active window's file selected
+            if active is not None:
+                self.explorer.select_path(self._path_of(active))
+        self._update_properties_target()
 
     def _update_window_titles(self):
         if self.project is None:
@@ -501,6 +509,7 @@ class MainWindow(QMainWindow):
         self.designer_windows.clear()
         self.code_windows.clear()
         self.documents.clear()
+        self._file_targets.clear()
         self.project = None
         self._refresh_explorer()
         self._update_title()
@@ -543,24 +552,92 @@ class MainWindow(QMainWindow):
     def _form_names(self) -> list[str]:
         return [d.name for d in self.documents.values() if isinstance(d, FormDocument)]
 
-    def _show_project_properties(self):
-        if self.project is not None:
-            self.properties.set_designer(self.project_target)
-            self._show_dock(self.properties_dock)
+    # -- what the Properties panel shows ---------------------------------------------------
+    def _properties_target(self):
+        """With the Project panel open, Properties follows its selection: the
+        project, a form (its designer, or just its Name if the designer isn't
+        open) or a module (its Name); nothing for folders or no selection.
+        With the Project panel closed, it follows the active window."""
+        if self.project is None:
+            return None
+        if self.explorer_dock.isVisibleTo(self):
+            if self.explorer.project_selected():
+                return self.project_target
+            path, _kind = self.explorer._current()
+            return self._target_for_path(path) if path else None
+        widget = self._active_widget()
+        path = self._path_of(widget) if widget is not None else None
+        return self._target_for_path(path) if path else None
 
-    def _on_file_selected(self, path: str):
-        # A form selected in the explorer: show its properties (if it is open)
+    def _target_for_path(self, path: str):
         sub = self.designer_windows.get(path)
         if sub is not None:
-            self.properties.set_designer(sub.widget())
+            return sub.widget()
+        doc = self.documents.get(path)
+        if doc is None:
+            return None
+        if path not in self._file_targets:
+            self._file_targets[path] = FileTarget(doc, self._rename_file_object)
+        return self._file_targets[path]
+
+    def _update_properties_target(self):
+        self.properties.set_designer(self._properties_target())
+
+    def _on_explorer_changed(self, *_):
+        self._update_properties_target()
 
     def _on_designer_selection(self, designer: FormDesigner):
-        """Clicking in a designer shows its properties again (e.g. after the
-        project was selected in the explorer)."""
-        self.properties.set_designer(designer)
+        """Working in a designer selects its form in the explorer, so the
+        Properties panel shows the designer's selection."""
         path = self._path_of(designer)
-        if path is not None and self.explorer.project_selected():
+        if path is not None:
             self.explorer.select_path(path)
+        self._update_properties_target()
+
+    # -- renaming from the Properties panel ------------------------------------------------------
+    def _rename_file_object(self, doc: Document, new_name: str) -> str | None:
+        """(Name) of a FileTarget: a form's class, or a module's file."""
+        if not is_identifier(new_name):
+            return f"'{new_name}' is not a valid name"
+        if new_name == doc.name:
+            return None
+        if isinstance(doc, FormDocument):
+            if new_name in self._form_names():
+                return f"The name '{new_name}' is already used"
+            old = doc.name
+            doc.replace_text(formfile.rename_form_class(doc.text, old, new_name))
+            self._on_form_renamed(old, new_name)
+            return None
+        return self._rename_module(doc, new_name)
+
+    def _rename_module(self, doc: Document, new_name: str) -> str | None:
+        """A module's name is its file name (what `import` uses): rename the
+        file, the project entry and imports of it in the other files."""
+        old_name, old_path = doc.name, doc.path
+        new_path = os.path.join(os.path.dirname(old_path), new_name + ".py")
+        clash = any(d is not doc and d.name.lower() == new_name.lower()
+                    for d in self.documents.values())
+        if clash or (os.path.exists(new_path) and new_name.lower() != old_name.lower()):
+            return f"The name '{new_name}' is already used"
+        if os.path.exists(old_path):
+            os.rename(old_path, new_path)
+        doc.path = new_path
+        for table in (self.documents, self.code_windows, self.designer_windows,
+                      self._file_targets):
+            if old_path in table:
+                table[new_path] = table.pop(old_path)
+        old_rel = os.path.relpath(old_path, self.project.directory)
+        self.project.modules = [os.path.relpath(new_path, self.project.directory)
+                                if m == old_rel else m for m in self.project.modules]
+        for other in self.documents.values():
+            if other is not doc:
+                other.replace_text(
+                    formfile.rename_module_references(other.text, old_name, new_name))
+        self.project.save()
+        self._refresh_explorer()
+        self.explorer.select_path(new_path)
+        self._update_window_titles()
+        return None
 
     def _project_scheme(self) -> int:
         return scheme_from_name(self.project.color_scheme if self.project else None)
@@ -655,6 +732,7 @@ class MainWindow(QMainWindow):
             if relative in files:
                 files.remove(relative)
         del self.documents[path]
+        self._file_targets.pop(path, None)
         self.project.save()
         self._refresh_explorer()
 
@@ -755,15 +833,18 @@ class MainWindow(QMainWindow):
         self.explorer.select_path(self._path_of(widget))
         if isinstance(widget, FormDesigner):
             self._last_designer = widget
-            self.properties.set_designer(widget)
             widget.set_tool(self.current_tool)
-        elif isinstance(widget, CodeWindow):
-            # Show the properties of the form whose code this is, like VB
-            designer_sub = self.designer_windows.get(widget.doc.path)
-            if designer_sub is not None:
-                self.properties.set_designer(designer_sub.widget())
+        # A form's code window shows the form's properties, like VB
+        self._update_properties_target()
 
     def _on_form_renamed(self, old: str, new: str):
+        # Other files refer to the form class, e.g. Module1's
+        # `from Form1 import Form1` / `run(Form1)`: rename those references too
+        renamed = next((p for p, d in self.documents.items()
+                        if isinstance(d, FormDocument) and d.name == new), None)
+        for path, doc in self.documents.items():
+            if path != renamed:
+                doc.replace_text(formfile.rename_class_references(doc.text, old, new))
         if self.project and self.project.startup == old:
             self.project.startup = new
             self.project.save()

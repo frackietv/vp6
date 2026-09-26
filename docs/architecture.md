@@ -444,11 +444,25 @@ Each row gets an editor by `kind`:
 | `file` | browse button |
 | `int`, `str` | line edit |
 
-The window is bound to a *target*: normally the active `FormDesigner`. When
-the project is selected in the Project Explorer, it's bound to a
-`projectprops.ProjectTarget`, which offers the same interface and exposes the
-project's Name, Type, StartupObject and ColorScheme. Selecting a form or
-clicking in a designer switches back.
+The window is bound to a *target*. `MainWindow._properties_target()` picks it
+and `_update_properties_target()` applies it. That happens whenever the
+Project Explorer's selection changes, the Project panel is shown or hidden,
+a window is activated, or you work in a designer.
+
+**With the Project panel open**, the target follows its selection:
+
+| Selected | Target |
+|---|---|
+| the project | `projectprops.ProjectTarget` (Name, Type, StartupObject, ColorScheme) |
+| a form with an open designer | its `FormDesigner` |
+| a form without a designer, or a module | a `projectprops.FileTarget`, which shows just `(Name)` |
+| a folder, or nothing | none, so the panel is empty |
+
+**With the Project panel closed**, the target follows the active window: a
+designer, or the form or module of a code window.
+
+All targets offer the same interface (`selected_objects`, `set_property`,
+signals…), so the Properties window has no special cases.
 
 Committing calls `target.set_property(name, value)`. For a designer, that
 applies the value to every selected object, updates `form_def` and commits. `Name` is

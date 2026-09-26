@@ -1,4 +1,5 @@
-"""The project as a target of the Properties window.
+"""The project, and files without a designer, as targets of the Properties
+window.
 
 The Properties window edits whatever it is bound to through the interface
 ``FormDesigner`` offers: ``selected_objects()``, ``all_objects()``,
@@ -6,10 +7,13 @@ The Properties window edits whatever it is bound to through the interface
 ``base_dir`` and the ``selectionChanged`` / ``designChanged`` signals.
 ``ProjectTarget`` provides the same interface for the open project, so
 selecting the project in the Project Explorer shows and edits its properties.
+``FileTarget`` does the same for a module, or a form whose designer isn't
+open: just its (Name).
 """
 
 from __future__ import annotations
 
+import os
 from typing import Callable
 
 from PySide6.QtCore import QObject, Signal
@@ -118,3 +122,60 @@ class ProjectTarget(QObject):
         self._on_changed()
         self.designChanged.emit()
         return None
+
+
+class _FileObject:
+    """What the Properties window sees for a file: only the (Name) row."""
+
+    _specs: dict[str, PropSpec] = {}
+
+    def __init__(self, target: "FileTarget"):
+        self._target = target
+
+    @property
+    def TypeName(self) -> str:
+        return self._target.type_name
+
+
+class FileTarget(QObject):
+    """A module, or a form whose designer isn't open: shows its (Name).
+
+    ``rename(document, new_name)`` does the renaming and returns an error
+    message or None (modules rename their file, forms their class)."""
+
+    selectionChanged = Signal()
+    designChanged = Signal()
+
+    def __init__(self, document, rename: Callable[[object, str], str | None]):
+        super().__init__()
+        self.document = document
+        self._rename = rename
+        self._object = _FileObject(self)
+
+    @property
+    def type_name(self) -> str:
+        return "Form" if self.document.kind == "form" else "Module"
+
+    @property
+    def base_dir(self) -> str:
+        return os.path.dirname(self.document.path)
+
+    def selected_objects(self) -> list:
+        return [self._object]
+
+    def all_objects(self) -> list[tuple[str, str]]:
+        return [(self.document.name, self.type_name)]
+
+    def object_name(self, obj) -> str:
+        return self.document.name
+
+    def select_by_name(self, name: str) -> None:
+        pass
+
+    def set_property(self, prop: str, value) -> str | None:
+        if prop != "Name":
+            return f"Unknown property '{prop}'"
+        error = self._rename(self.document, str(value).strip())
+        if error is None:
+            self.designChanged.emit()
+        return error

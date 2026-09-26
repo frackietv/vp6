@@ -1,5 +1,22 @@
 # VP6 features
 
+**Version:** 0.3.0
+**Date:** 2026-09-29
+
+## IDE
+
+- Modules have a (Name) property in the Properties panel; renaming a module renames its file, its project entry and the `import`s of it in the other project files
+- Forms whose designer isn't open show their (Name) in the Properties panel and can be renamed there
+- With the Project panel open, the Properties panel shows what's selected in it (the project, a form, a module) and nothing when a folder or nothing is selected
+- With the Project panel closed, the Properties panel shows the form or module of the active designer or code window
+- Renaming a form (in the designer or the Properties panel) also renames references to it in the other project files, e.g. Module1's `from Form1 import Form1` and `run(Form1)`
+
+## Fixes
+
+- A renamed Form1 no longer breaks new Standard EXE projects, whose Module1 imports and runs Form1
+
+---
+
 **Version:** 0.2.1
 **Date:** 2026-09-29
 

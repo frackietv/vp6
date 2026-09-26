@@ -284,6 +284,58 @@ def rename_control_references(source: str, old: str, new: str) -> str:
     return "".join(lines)
 
 
+_FROM_IMPORT_RE = re.compile(r"^(\s*from\s+)([\w.]+)(\s+import\s+)(.*)$")
+_IMPORT_RE = re.compile(r"^(\s*import\s+)(.*)$")
+
+
+def _map_lines(source: str, fix_line) -> str:
+    """Apply fix_line(line_without_newline) to every line, keeping newlines."""
+    out = []
+    for line in source.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        out.append(fix_line(body) + line[len(body):])
+    return "".join(out)
+
+
+def rename_class_references(source: str, old: str, new: str) -> str:
+    """Rename references to a class (e.g. a renamed form) in another file.
+
+    In ``from Form1 import Form1`` only the imported name changes, since the
+    module is the file, which keeps its name; ``import X`` lines are left
+    alone. Elsewhere every ``old`` that isn't an attribute (``x.old``) is
+    renamed."""
+    word = re.compile(rf"(?<![\w.]){re.escape(old)}\b")
+
+    def fix(line: str) -> str:
+        m = _FROM_IMPORT_RE.match(line)
+        if m:
+            return m.group(1) + m.group(2) + m.group(3) + word.sub(new, m.group(4))
+        if _IMPORT_RE.match(line):
+            return line
+        return word.sub(new, line)
+
+    return _map_lines(source, fix)
+
+
+def rename_module_references(source: str, old: str, new: str) -> str:
+    """Rename references to a module (a renamed module file) in another file:
+    ``from old import ...``, ``import old`` and qualified uses ``old.name``."""
+    word = re.compile(rf"(?<![\w.]){re.escape(old)}\b")
+    qualified = re.compile(rf"(?<![\w.]){re.escape(old)}(?=\s*\.)")
+
+    def fix(line: str) -> str:
+        m = _FROM_IMPORT_RE.match(line)
+        if m:
+            module = new if m.group(2) == old else m.group(2)
+            return m.group(1) + module + m.group(3) + m.group(4)
+        m = _IMPORT_RE.match(line)
+        if m:
+            return m.group(1) + word.sub(new, m.group(2))
+        return qualified.sub(new, line)
+
+    return _map_lines(source, fix)
+
+
 def event_stub(obj: str, event: str, args: str) -> str:
     params = "self" + (f", {args}" if args else "")
     return f"    def {obj}_{event}({params}):\n        pass\n"

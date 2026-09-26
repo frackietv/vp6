@@ -1,5 +1,12 @@
 # VP6 backlog
 
+- **[IDE - Outline]** Add a new panel, hidden by default, that shows the outline of the code (not the designed generated code) selected in the project panel, or if project panel closed, code of the object in the active code editor or designer window.  The outline should show variables defined at the file scope, classes and their members, functions, etc.  Fo example, kitchen sink's Form1 would have outline that includes HELP, SWATCH_COLORS, class Form1, Form1::InitializeComponent, Form1::Form_Load. Form1::Form_Resize, Form1::Form_MouseMove, Form1::Form_KeyDown, Form1::Form_Unload, Form1::fraText_Click, Form1::txtName_Change, Form1::cmdGreet_Click, Form1::txtNotes_GotFocus, Form1::txtPassword_LostFocus, Form1::txtUpper_KeyPress, Form1::optSystem_Click, Form1::optLight_Click, Form1::optDark_Click, Form1::optIDE_Click, Form1::chkBold_Click, Form1::chkTimer_Click, Form1::chkPicture_Click, Form1::hsbSize_Change, Form1::hsbSize_Scroll, Form1::cboColors_Click, Form1::cboFree_Change, Form1::lstItems_Click, Form1::lstItems_DblClick, Form1::cmdAdd_Click, Form1::cmdRemove_Click, Form1::cmdCount_Click, Form1::vsbLevel_Change, Form1::picLogo_Click, Form1::picLogo_MouseDown, Form1::lblOnPicture_Click, Form1::tmrClock_Timer, Form1::cmdSwapZ_Click, Form1::lblZRed_Click, Form1::lblZBlue_Click, Form1::show_z_order, Form1::cmdDialog_Click, Form1::cmdClipboard_Click, Form1::cmdAbout_Click, Form1::cmdClose_Click, *global code*
+- **[IDE - Outline]** outline panel items should be preceeded with an icon indicating item type (constant, class, function, first line of top-level code)
+- **[IDE - Outline]** outline panel items should be sortable in ascending and descending order by order defined in file, name, or type, using small buttons at the top of the panel
+- **[IDE - Outline]** when initially opened using the menu, outline panel should be placed under the properties panel
+- **[IDE - Outline]** clicking on an item in the outline panel should take the user to the appropriate line in the code editor
+- **[IDE - Output]** vp6 should have a hidden by default output panel that displays current output from all vp6 stdout and stderr output, including any possible output from the libraries it's using
+- **[IDE - Output]** output panel must have select all, copy, and clear context menun items
 - **[Language and runtime]** Control arrays: several controls sharing a name and handlers with an `Index` argument. Today handlers can be attached in code instead, as the Calculator and Kitchen Sink do.
 - **[Language and runtime]** Menus on forms, and the Menu Editor to design them
 - **[Controls]** Shape
@@ -30,3 +37,28 @@
 - **[Appearance]** Per-window title bar color: a forced Light or Dark form still gets a title bar in the OS appearance, since Qt can't set it per window on macOS
 - **[Appearance]** Picking up a macOS light/dark change live for System forms in the designer while the IDE is forced to Light or Dark (they update on the next redraw)
 - **[Appearance]** Programs started from the IDE with the "IDE" color scheme follow the IDE's appearance at launch only, not later IDE theme changes
+
+
+- **[Language and runtime]** `Paint` event and `AutoRedraw` on forms and PictureBoxes, so programs can draw custom surfaces (self-hosting: the designer's window frame, grid dots and selection handles, the code editor's gutter)
+- **[Language and runtime]** Off-screen pictures: draw into an image in memory, use it as a `Picture`/icon, and save it (`SavePicture`) (self-hosting: the IDE's drawn icons and the Kitchen Sink image)
+- **[Language and runtime]** Text measurement: `TextWidth` / `TextHeight` on forms and PictureBoxes (self-hosting: gutter width, eliding captions)
+- **[Language and runtime]** Font enumeration: `Screen.Fonts` / `Screen.FontCount` (self-hosting: the Options font list, the FontName editor)
+- **[Language and runtime]** `SaveSetting` / `GetSetting` / `DeleteSetting` for per-user settings (self-hosting: recent projects, themes, window layout)
+- **[Language and runtime]** Starting a program asynchronously with output, exit and error events and a way to write to its stdin (a Process object beyond VB's `Shell`) (self-hosting: F5 and the Immediate window)
+- **[Language and runtime]** An event when the OS switches between light and dark, and a way to ask which one is active (self-hosting: repainting custom-drawn surfaces and icons)
+- **[Language and runtime]** Embedding a form inside a container control (e.g. showing a live form in a PictureBox) (self-hosting: the form designer's canvas)
+- **[Language and runtime]** Borderless popup forms that don't take the focus from the form that opened them (self-hosting: the code completion list)
+- **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)
+- **[Language and runtime]** Form `Icon` property and an application icon (self-hosting: window icons of the IDE and its MDI windows)
+- **[Controls]** `MousePointer` / `MouseIcon` properties for cursor shapes such as resize arrows and crosshair (self-hosting: the designer's handles and drawing tool)
+- **[Controls]** RichTextBox: text with colors, bold and italic, and appending formatted text (self-hosting: the code editor and the colored Immediate output)
+- **[Controls]** A code-editor capable text control: syntax-highlighting hook, line-number gutter, current-line highlight, hidden (folded) lines and read-only ranges (self-hosting: the code window and its protected designer region)
+- **[Controls]** TextBox/RichTextBox editing API: line/column ↔ position, caret screen position, scroll position, undo/redo, a `SelChange` event, and an option for Tab to insert a tab instead of moving focus (self-hosting: completion, combos following the cursor, go-to-line, indentation)
+- **[Controls]** Grid control with editable cells and per-cell editors (like MSFlexGrid) (self-hosting: the Properties window and the Options color table)
+- **[Controls]** Splitter control for resizable panes (self-hosting: the Properties window's grid/description split)
+- **[Controls]** Dockable tool windows (docking, floating, closing and restoring panels) (self-hosting: Toolbox, Project Explorer, Properties and Immediate panels)
+- **[Controls]** Scrollable container: a PictureBox/Frame that scrolls its contents with automatic scroll bars (self-hosting: the designer canvas)
+- **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)
+- **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)
+- **[Controls]** Label rich text: bold parts and links in a caption (self-hosting: the Properties description pane and the About box)
+- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: menus, graphics methods, MDI forms, Common Dialog, and TreeView / TabStrip / StatusBar / Toolbar / UpDown from the common controls
