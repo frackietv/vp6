@@ -322,8 +322,9 @@ def test_properties_follow_project_panel_selection(window, tmp_path):
     window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
     _select_item(window, "Module1")
     assert _props(window) == ("Module1  Module", ["(Name)"])  # modules have a Name
-    _select_item(window, "frmDialog")  # a form whose designer isn't open
-    assert _props(window) == ("frmDialog  Form", ["(Name)"])
+    _select_item(window, "frmDialog")  # a form whose designer isn't open: all its properties
+    assert _props(window)[0] == "frmDialog  Form" and "Caption" in _props(window)[1]
+    assert "frmDialog.py" not in " ".join(window.designer_windows)  # still not open
     _select_item(window, "Form1")  # designer open: all its properties
     assert _props(window)[0] == "Form1  Form" and "Caption" in _props(window)[1]
     _select_item(window, "Forms")  # a folder has no properties
@@ -341,7 +342,7 @@ def test_properties_follow_active_window_when_project_panel_closed(window, tmp_p
     window.view_code(os.path.join(folder, "Module1.py"))
     assert _props(window) == ("Module1  Module", ["(Name)"])
     window.view_code(os.path.join(folder, "frmDialog.py"))  # form code, no designer
-    assert _props(window) == ("frmDialog  Form", ["(Name)"])
+    assert _props(window)[0] == "frmDialog  Form" and "Caption" in _props(window)[1]
     window.view_code(os.path.join(folder, "Form1.py"))  # form code, designer open
     assert _props(window)[0] == "Form1  Form" and "Caption" in _props(window)[1]
     window.explorer_dock.show()  # back to following the Project panel
@@ -401,7 +402,7 @@ def test_rename_unopened_form_from_properties(window, tmp_path):
     assert window.properties.designer.set_property("Name", "dlgAdd") is None
     form1 = next(d for d in window.documents.values() if d.name == "Form1")
     assert "from frmDialog import dlgAdd" in form1.text and "dialog = dlgAdd()" in form1.text
-    assert _props(window) == ("dlgAdd  Form", ["(Name)"])
+    assert _props(window)[0] == "dlgAdd  Form"
 
 
 def test_ide_exits_without_errors(tmp_path):

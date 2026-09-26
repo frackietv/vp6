@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import keyword
+from typing import Callable
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (QAction, QBrush, QColor, QGuiApplication, QPainter, QPalette, QPen,
@@ -419,6 +420,8 @@ class FormDesigner(QWidget):
         self.tool: str | None = None
         self._undo: list[FormDef] = []
         self._redo: list[FormDef] = []
+        # Set by the IDE: whether another form of the project has this name
+        self.form_name_taken: Callable[[str], bool] = lambda name: False
 
         self.canvas = _Canvas(self)
         self.overlay = _Overlay(self, self.canvas)
@@ -708,14 +711,11 @@ class FormDesigner(QWidget):
         for text_prop in ("Caption", "Text"):
             if text_prop in cls._specs and cls._specs[text_prop].always:
                 props[text_prop] = name
-        if "TabIndex" in cls._specs:
-            props["TabIndex"] = sum(1 for c in self.form_def.controls
-                                    if "TabIndex" in CONTROL_TYPES[c.type]._specs)
-
         before = self._snapshot()
         control_def = ControlDef(type_name, name, container, props)
         self.form_def.controls.append(control_def)
         self._instantiate(control_def)
+        self._renumber_tab_order(last=[name])
         self.overlay.raise_()
         self.select([name])
         self._commit(before)
@@ -753,6 +753,7 @@ class FormDesigner(QWidget):
             control = self.controls.pop(name)
             if control in self.form._controls:
                 self.form._controls.remove(control)
+        self._renumber_tab_order()
         self.select([])
         self._commit(before)
 
@@ -807,9 +808,30 @@ class FormDesigner(QWidget):
             taken.add(new_name)
             self.form_def.controls.append(control_def)
             self._instantiate(control_def)
+        self._renumber_tab_order(last=list(renamed.values()))
         self.overlay.raise_()
         self.select(pasted_roots)
         self._commit(before)
+
+    def _renumber_tab_order(self, moved: str | None = None, last: list[str] = ()) -> None:
+        """Keep the TabIndex values 0, 1, 2, ... without gaps or duplicates, like
+        VB: after adding (``last``: new controls go to the end, in order),
+        deleting, or setting one control's TabIndex (``moved``: it takes that
+        place and the others make room)."""
+        defs = [c for c in self.form_def.controls if "TabIndex" in CONTROL_TYPES[c.type]._specs]
+
+        def current(control_def):
+            return int(control_def.props.get("TabIndex", 0))
+
+        order = sorted((c for c in defs if c.name != moved and c.name not in last), key=current)
+        order += [c for name in last for c in defs if c.name == name]
+        if moved is not None:
+            moved_def = self.form_def.control(moved)
+            order.insert(min(max(current(moved_def), 0), len(order)), moved_def)
+        for index, control_def in enumerate(order):
+            if current(control_def) != index:
+                control_def.props["TabIndex"] = index
+                self._safe_set(self.controls[control_def.name], "TabIndex", index)
 
     def select_all(self) -> None:
         self.select([c.name for c in self.form_def.controls if c.parent is None])
@@ -836,6 +858,10 @@ class FormDesigner(QWidget):
                     if prop in ("AutoSize", "Picture", "Caption") and obj._widget is not None:
                         # AutoSize may have changed the size
                         props.update(Width=obj._widget.width(), Height=obj._widget.height())
+            if prop == "TabIndex":
+                for obj in self.selected_objects():
+                    if obj is not self.form and prop in obj._specs:
+                        self._renumber_tab_order(moved=obj.Name)
         except Exception as exc:  # noqa: BLE001 - report invalid values to the user
             self.load_def(before)
             return f"Invalid property value: {exc}"
@@ -853,7 +879,8 @@ class FormDesigner(QWidget):
         old_name = self.selection[0] if self.selection else self.form_def.class_name
         if new_name == old_name:
             return None
-        if new_name in self.controls or new_name == self.form_def.class_name:
+        if new_name in self.controls or new_name == self.form_def.class_name or (
+                not self.selection and self.form_name_taken(new_name)):
             return f"The name '{new_name}' is already used"
         before = self._snapshot()
         if not self.selection:

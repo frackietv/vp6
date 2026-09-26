@@ -24,6 +24,7 @@ from .codeeditor import CodeWindow
 from .designer import FormDesigner, is_identifier
 from .dialogs import ABOUT_HTML, NewProjectDialog, ProjectPropertiesDialog
 from .documents import Document, FormDocument, open_document
+from .findreplace import FindReplaceDialog, ask_line
 from .options import OptionsDialog
 from .outline import OutlineWindow
 from .outputcapture import OutputCapture
@@ -43,10 +44,14 @@ class MainWindow(QMainWindow):
         self.project: Project | None = None
         self.documents: dict[str, Document] = {}
         self.designer_windows: dict[str, QMdiSubWindow] = {}
+        # Every form designer, also those not open in a window: a form selected
+        # in the Project panel shows all its properties through one
+        self._designers: dict[str, FormDesigner] = {}
         self.code_windows: dict[str, QMdiSubWindow] = {}
         self.process: QProcess | None = None
         self.current_tool: str | None = None
         self._last_designer: FormDesigner | None = None
+        self.find_dialog: FindReplaceDialog | None = None  # created when first needed
         self._icon_actions: list[tuple[QAction, str]] = []
 
         # The whole IDE follows the light/dark choice of the editor theme
@@ -205,6 +210,16 @@ class MainWindow(QMainWindow):
         self.act_delete = a("&Delete", lambda: self._edit("delete"), QKeySequence.Delete)
         self.act_select_all = a("Select &All", lambda: self._edit("select_all"),
                                 QKeySequence.SelectAll)
+        self.act_find = a("&Find…", self.show_find, QKeySequence.Find)
+        # F3 / Shift+F3 like VB6 on every platform: the standard keys include
+        # Ctrl+G (Cmd+G on macOS), which is the Immediate window's
+        self.act_find_next = a("Find &Next", self.find_next, "F3")
+        self.act_find_previous = a("Find Pre&vious", self.find_previous, "Shift+F3")
+        self.act_replace = a("R&eplace…", self.show_replace)
+        # Ctrl+H like VB6; on macOS Cmd+H hides the app, so Cmd+Option+F like Xcode
+        self.act_replace.setShortcut(QKeySequence(
+            "Ctrl+Alt+F" if sys.platform == "darwin" else "Ctrl+H"))
+        self.act_goto_line = a("&Go to Line…", self.goto_line, "Ctrl+L")
 
         self.act_view_code = a("&Code", lambda: self._view_current("code"), "F7")
         self.act_view_object = a("O&bject", lambda: self._view_current("object"), "Shift+F7")
@@ -241,7 +256,9 @@ class MainWindow(QMainWindow):
 
         edit = bar.addMenu("&Edit")
         for act in (self.act_undo, self.act_redo, None, self.act_cut, self.act_copy,
-                    self.act_paste, self.act_delete, None, self.act_select_all):
+                    self.act_paste, self.act_delete, None, self.act_select_all, None,
+                    self.act_find, self.act_find_next, self.act_find_previous,
+                    self.act_replace, None, self.act_goto_line):
             edit.addSeparator() if act is None else edit.addAction(act)
 
         view = bar.addMenu("&View")
@@ -560,6 +577,7 @@ class MainWindow(QMainWindow):
         for sub in self.mdi.subWindowList():
             sub.setAttribute(Qt.WA_DeleteOnClose, True)
             sub.close()
+        self._discard_designers(list(self._designers))
         self.designer_windows.clear()
         self.code_windows.clear()
         self.documents.clear()
@@ -597,8 +615,8 @@ class MainWindow(QMainWindow):
     def _project_changed(self):
         """The project's properties changed (dialog or Properties window)."""
         self.project.save()
-        for sub in self.designer_windows.values():
-            sub.widget().set_project_scheme(self._project_scheme())
+        for designer in self._designers.values():
+            designer.set_project_scheme(self._project_scheme())
         self._refresh_explorer()
         self._update_title()
         self._update_window_titles()
@@ -632,12 +650,11 @@ class MainWindow(QMainWindow):
         return self._target_for_path(path) if path else None
 
     def _target_for_path(self, path: str):
-        sub = self.designer_windows.get(path)
-        if sub is not None:
-            return sub.widget()
         doc = self.documents.get(path)
         if doc is None:
             return None
+        if isinstance(doc, FormDocument):
+            return self._designer_for(path)  # open or not: all the form's properties
         if path not in self._file_targets:
             self._file_targets[path] = FileTarget(doc, self._rename_file_object)
         return self._file_targets[path]
@@ -714,7 +731,7 @@ class MainWindow(QMainWindow):
             os.rename(old_path, new_path)
         doc.path = new_path
         for table in (self.documents, self.code_windows, self.designer_windows,
-                      self._file_targets):
+                      self._designers, self._file_targets):
             if old_path in table:
                 table[new_path] = table.pop(old_path)
         old_rel = os.path.relpath(old_path, self.project.directory)
@@ -809,13 +826,10 @@ class MainWindow(QMainWindow):
                 return
             if answer == QMessageBox.Save:
                 doc.save()
+        self._discard_designers([path])  # before its window is forgotten
         for windows in (self.designer_windows, self.code_windows):
             sub = windows.pop(path, None)
             if sub is not None:
-                if isinstance(sub.widget(), FormDesigner) and \
-                        self.properties.designer is sub.widget():
-                    self.properties.set_designer(None)
-                    self._last_designer = None
                 sub.setAttribute(Qt.WA_DeleteOnClose, True)
                 sub.close()
         relative = os.path.relpath(path, self.project.directory)
@@ -849,22 +863,48 @@ class MainWindow(QMainWindow):
         # the main window itself is inactive (e.g. at startup)
         self.explorer.select_path(self._path_of(sub.widget()))
 
+    def _designer_for(self, path: str) -> FormDesigner:
+        """The form's designer, created (not shown) if it doesn't exist yet."""
+        designer = self._designers.get(path)
+        if designer is None:
+            designer = FormDesigner(self.documents[path], self.project.directory, self,
+                                    project_scheme=self._project_scheme())
+            designer.hide()  # until View Object puts it in a window
+            designer.set_tool(self.current_tool)
+            designer.form_name_taken = lambda name, d=designer: any(
+                other is not d.document and other.name == name
+                for other in self.documents.values() if isinstance(other, FormDocument))
+            designer.viewCodeRequested.connect(
+                lambda obj, event, d=designer: self._open_handler(self._path_of(d), obj, event))
+            designer.toolConsumed.connect(self.toolbox.reset)
+            designer.selectionChanged.connect(
+                lambda d=designer: self._on_designer_selection(d))
+            designer.formRenamed.connect(self._on_form_renamed)
+            designer.statusMessage.connect(lambda m: self.statusBar().showMessage(m, 5000))
+            self._designers[path] = designer
+        return designer
+
+    def _discard_designers(self, paths: list[str]) -> None:
+        """Forget these forms' designers; delete those not in a window (a
+        closed window deletes its own)."""
+        for path in paths:
+            designer = self._designers.pop(path, None)
+            if designer is None:
+                continue
+            if self.properties.designer is designer:
+                self.properties.set_designer(None)
+            if self._last_designer is designer:
+                self._last_designer = None
+            if path not in self.designer_windows:
+                designer.deleteLater()
+
     def view_object(self, path: str) -> FormDesigner | None:
         doc = self.documents.get(path)
         if not isinstance(doc, FormDocument):
             return None
         sub = self.designer_windows.get(path)
         if sub is None:
-            designer = FormDesigner(doc, self.project.directory,
-                                    project_scheme=self._project_scheme())
-            designer.viewCodeRequested.connect(
-                lambda obj, event, p=path: self._open_handler(p, obj, event))
-            designer.toolConsumed.connect(self.toolbox.reset)
-            designer.selectionChanged.connect(
-                lambda d=designer: self._on_designer_selection(d))
-            designer.formRenamed.connect(self._on_form_renamed)
-            designer.statusMessage.connect(lambda m: self.statusBar().showMessage(m, 5000))
-            sub = self._add_subwindow(designer, "Form")
+            sub = self._add_subwindow(self._designer_for(path), "Form")
             self.designer_windows[path] = sub
             self._update_window_titles()
         self._activate(sub)
@@ -903,7 +943,7 @@ class MainWindow(QMainWindow):
             for path, sub in windows.items():
                 if sub.widget() is widget:
                     return path
-        return None
+        return next((p for p, d in self._designers.items() if d is widget), None)
 
     def _view_current(self, which: str):
         widget = self._active_widget()
@@ -945,8 +985,8 @@ class MainWindow(QMainWindow):
     # -- toolbox / designer routing -------------------------------------------------------------------
     def _on_tool_selected(self, tool):
         self.current_tool = tool
-        for sub in self.designer_windows.values():
-            sub.widget().set_tool(tool)
+        for designer in self._designers.values():
+            designer.set_tool(tool)
 
     def _on_tool_activated(self, tool: str):
         designer = self._last_designer
@@ -984,6 +1024,57 @@ class MainWindow(QMainWindow):
                     editor.textCursor().removeSelectedText()
             else:
                 getattr(editor, {"select_all": "selectAll"}.get(op, op))()
+
+    # -- Find / Replace / Go to Line --------------------------------------------------------------------
+    def _code_editor(self, open_code: bool = True):
+        """The editor of the current code window. With a form designer current,
+        its form's code window (opened if needed); None otherwise."""
+        sub = self.mdi.currentSubWindow()  # also while the Find dialog is active
+        widget = sub.widget() if sub is not None else None
+        if isinstance(widget, CodeWindow):
+            return widget.editor
+        path = self._path_of(widget) if widget is not None else None
+        if path is not None and open_code:
+            window = self.view_code(path)
+            return window.editor if window is not None else None
+        return None
+
+    def _find_dialog(self) -> FindReplaceDialog:
+        if self.find_dialog is None:
+            self.find_dialog = FindReplaceDialog(self._code_editor, self)
+        return self.find_dialog
+
+    def show_find(self):
+        self._code_editor()
+        self._find_dialog().show_find(replace=False)
+
+    def show_replace(self):
+        self._code_editor()
+        self._find_dialog().show_find(replace=True)
+
+    def _find_again(self, backward: bool):
+        dialog = self._find_dialog()
+        if not dialog.find_edit.text():
+            self.show_find()
+            return
+        result = dialog.find_previous() if backward else dialog.find_next()
+        if result.message:
+            self.statusBar().showMessage(result.message, 4000)
+
+    def find_next(self):
+        self._find_again(backward=False)
+
+    def find_previous(self):
+        self._find_again(backward=True)
+
+    def goto_line(self):
+        editor = self._code_editor()
+        if editor is None:
+            self.statusBar().showMessage("Open a code window to go to a line", 4000)
+            return
+        line = ask_line(editor, self)
+        if line is not None:
+            editor.goto_line(line)
 
     # -- running ----------------------------------------------------------------------------------------------
     def run_project(self):

@@ -373,6 +373,13 @@ prepended to `PYTHONPATH` for programs started with F5.
     and visibility changes (coalesced), and after `restoreState`;
   * `_default_layout` / `reset_layout`, `_set_tabbed`, `_show_dock`;
   * `_fill_theme_menu`, `_fill_recent_menu`, `show_options`.
+  * **Find, Replace and Go to Line** (Edit menu): `show_find`, `show_replace`,
+    `find_next` / `find_previous` (F3 / Shift+F3 everywhere: the standard
+    keys include Ctrl+G, the Immediate window's), `goto_line` (Ctrl+L / ⌘L).
+    Replace is Ctrl+H like VB6, or ⌥⌘F on macOS (where ⌘H hides the app). They work on `_code_editor()`: the current code
+    window's editor, or with a designer current, its form's code window
+    (opened if needed). `find_dialog` is one non-modal `FindReplaceDialog`,
+    created when first needed.
 * **Project lifecycle:**
   * `show_start_dialog`, `new_project`, `open_project_dialog`,
     `open_project(path)`, `close_project()`;
@@ -383,7 +390,13 @@ prepended to `PYTHONPATH` for programs started with F5.
   * **What the Properties window shows:** `_properties_target()` follows the
     Project panel's selection while that panel is open, or the active window
     when it's closed. `_update_properties_target()` applies it; `_target_for_path`
-    gives a form's designer or a cached `FileTarget` (`_file_targets`). It is
+    gives a form's designer, or a module's cached `FileTarget` (`_file_targets`).
+    A form always gets a designer, so all its properties and controls show:
+    `_designer_for(path)` creates one that isn't in a window yet (kept in
+    `_designers`, which holds every designer; `view_object` later puts that
+    same designer in a window), and `_discard_designers` deletes those when
+    the file or the project is closed. Designers get `form_name_taken`, so a
+    form can't be renamed to another form's name. It is
     re-run on explorer selection and visibility changes
     (`_on_explorer_changed`), window activation, and designer selection
     (`_on_designer_selection`).
@@ -485,6 +498,11 @@ The form designer (architecture §5.3).
     * `unique_name`, `create_control`, `add_control_centered`;
     * `delete_selection` (with descendants), `copy_selection`,
       `cut_selection`, `paste` (renames and offsets duplicates), `select_all`;
+    * `_renumber_tab_order(moved, last)` keeps `TabIndex` values 0, 1, 2, …
+      without gaps or duplicates, like VB: added and pasted controls go to
+      the end, deleting closes the gap, and setting a control's `TabIndex`
+      moves it to that place (clamped to the last one) while the others make
+      room. It runs inside the same commit, so one undo reverts it;
     * `set_property(prop, value)` returns an error message or `None`;
       `rename(new_name)` handles controls and the form class;
     * Format menu: `align`, `make_same_size`, `center_in_form`, `nudge`,
@@ -529,15 +547,16 @@ Window frames painted around the designed form.
   * **Gutter:** `paint_gutter` draws line numbers and the fold box;
     `gutter_clicked` toggles the fold.
   * **Region:** `apply_fold` (hidden blocks), `_region_span`,
-    `_edit_allowed(key)` and `_reject_edit`; `insertFromMimeData`, `cut` and
-    `paste` are guarded.
+    `_edit_allowed(key)`, `range_editable(start, end)` and `_reject_edit`;
+    `insertFromMimeData`, `cut` and `paste` are guarded.
   * **Editing keys:** `keyPressEvent` handles the completion popup, the
     region guard, Enter with auto-indent (`_newline_with_indent`, which also
     dedents after `return`/`pass`/…), Tab/Shift+Tab (`_indent`),
     `_smart_backspace`, Ctrl+/ (`toggle_comment`) and Ctrl+Space.
   * **Completion and navigation:** `_show_completions` / `_insert_completion`
-    (`QCompleter` with a `QStringListModel`); `goto_line(line)` unfolds the
-    region if needed.
+    (`QCompleter` with a `QStringListModel`); `goto_line(line)` and
+    `select_range(start, end)` unfold the region if needed (`_unfold_for`);
+    `current_line()`.
 * **`complete(context, document)`**, the completion provider (see
   architecture §5.4). `_members(cls)` lists a class's spec names plus its
   public capitalized members.
@@ -584,10 +603,43 @@ window.
 * `_ProjectObject` is the "selected object" the grid reads values from.
 * `TYPE_CHOICES` and `COLOR_SCHEME_CHOICES` are shared with
   `ProjectPropertiesDialog`.
-* `FileTarget(QObject)` is the same interface for a module, or a form whose
-  designer isn't open. It shows just `(Name)` (through `_FileObject`, which
-  has no specs). `set_property("Name", …)` calls the main window's
-  `_rename_file_object`.
+* `FileTarget(QObject)` is the same interface for a module (the IDE gives
+  forms a designer instead, even when it isn't open). It shows just `(Name)`
+  (through `_FileObject`, which has no specs). `set_property("Name", …)`
+  calls the main window's `_rename_file_object`, which also handles forms.
+
+### `vp6/ide/findreplace.py` (≈300 lines)
+
+Find and Replace in the code window, and Go to Line.
+
+* **The search, plain Python:** `SearchOptions` (`find`, `replace`,
+  `match_case`, `whole_word`, `regex`); `compile_pattern(options)` (the text
+  is escaped unless `regex`; whole word adds `(?<!\w)…(?!\w)`; always
+  `re.MULTILINE`, plus `re.IGNORECASE` without match case);
+  `replacement(match, options)` (`match.expand` for regular expressions, so
+  `\1`, `\g<name>`, `\n` and `\t` work; literal otherwise);
+  `find_in(text, pattern, start, backward, skip)` finds the next or previous
+  match, wrapping around, never the current selection (`skip`) again.
+* **`_Positions`** maps Python string indexes to Qt text positions, which
+  count characters outside the BMP (emoji) as two.
+* **On a `CodeEditor`:** `find_as_you_type(editor, options)` selects the
+  first match at or after the start of the selection (wrapping; nothing
+  selected without a match or text; an unfinished regex leaves it alone),
+  `find_next(editor, options, backward)`,
+  `replace_one` (replaces the selection if it is a match, then finds the
+  next one) and `replace_all` (one undo step, from the end backwards so
+  positions stay valid). Matches in a form's designer region are found (the
+  region unfolds) but never replaced (`CodeEditor.range_editable`). Each
+  returns a `Result(found, message)`.
+* **`FindReplaceDialog(get_editor)`**, non-modal: find and replace fields,
+  *Match case*, *Find whole word only*, *Use regular expressions*, a status
+  line, and Find Next / Find Previous / Replace / Replace All / Close.
+  `show_find(replace)` shows it as Find or Replace, taking the selected text
+  (one line) as the text to find. Typing in the find field, or changing an
+  option, runs `find_as_you_type`, so the first match is highlighted as you
+  type.
+* **`ask_line(editor, parent)`**, the Go to Line box (`QInputDialog.getInt`,
+  1 to the line count, the current line suggested).
 
 ### `vp6/ide/outline.py` (≈230 lines)
 
@@ -832,8 +884,9 @@ All tests run headless. `conftest.py`:
 |---|---|
 | `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results. |
 | `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames (controls, form classes, class and module references in other files), the console template. |
-| `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
-| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module and unopened-form Names, renaming modules and forms from the Properties window, a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`. |
+| `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
+| `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
+| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`. |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |

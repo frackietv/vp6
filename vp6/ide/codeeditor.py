@@ -341,6 +341,12 @@ class CodeEditor(QPlainTextEdit):
                 return True  # a new line before/after the region is harmless
         return b < start or a > end
 
+    def range_editable(self, start: int, end: int) -> bool:
+        """Whether text between these positions may be changed (it isn't in
+        the protected designer region)."""
+        span = self._region_span()
+        return span is None or end < span[0] or start > span[1]
+
     def _reject_edit(self):
         QApplication.beep()
         window = self.window()
@@ -532,17 +538,37 @@ class CodeEditor(QPlainTextEdit):
         cursor.insertText(word)
         self.setTextCursor(cursor)
 
-    def goto_line(self, line: int):
-        block = self.document().findBlockByNumber(max(line - 1, 0))
+    def _unfold_for(self, block_number: int) -> None:
+        """Unfold the designer region if the block is hidden in it."""
         region = self._region_blocks()
-        if region and region[0] < block.blockNumber() <= region[1] and self.region_folded:
+        if region and region[0] < block_number <= region[1] and self.region_folded:
             self.region_folded = False
             self.apply_fold()
+
+    def goto_line(self, line: int):
+        block = self.document().findBlockByNumber(max(line - 1, 0))
+        self._unfold_for(block.blockNumber())
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
         self.setTextCursor(cursor)
         self.centerCursor()
         self.setFocus()
+
+    def select_range(self, start: int, end: int) -> None:
+        """Select the text between two positions and scroll to it (unfolding
+        the designer region if it's in there)."""
+        document = self.document()
+        for position in (start, end):
+            self._unfold_for(document.findBlock(position).blockNumber())
+        cursor = QTextCursor(document)
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.KeepAnchor)
+        self.setTextCursor(cursor)
+        self.centerCursor()
+
+    def current_line(self) -> int:
+        """The 1-based line of the cursor."""
+        return self.textCursor().blockNumber() + 1
 
 
 # --- completion data --------------------------------------------------------------------------

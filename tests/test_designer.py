@@ -108,6 +108,42 @@ def test_copy_paste(designer):
     assert d.selection == ["Frame2"]
 
 
+def _tab_order(d) -> dict[str, int]:
+    return {c.name: c.props.get("TabIndex", 0) for c in d.form_def.controls
+            if c.type != "Timer"}
+
+
+def test_tab_index_is_renumbered(designer):
+    d = designer
+    for x in (16, 136, 256):
+        d.create_control("CommandButton", QRect(form_point(d, x, 16), form_point(d, x + 96, 48)),
+                         None)
+    d.create_control("Timer", None, None, form_point(d, 16, 200))  # no TabIndex
+    assert _tab_order(d) == {"Command1": 0, "Command2": 1, "Command3": 2}  # added at the end
+    assert d.controls["Command3"].TabIndex == 2
+
+    d.select(["Command1"])
+    d.delete_selection()  # the others close the gap
+    assert _tab_order(d) == {"Command2": 0, "Command3": 1}
+    assert formfile.parse(d.document.text).control("Command3").props["TabIndex"] == 1
+
+    d.select(["Command3"])
+    d.copy_selection()
+    d.select(["Command2"])
+    d.paste()  # Command1 again; pasted controls go to the end, instead of sharing Command3's number
+    assert _tab_order(d) == {"Command2": 0, "Command3": 1, "Command1": 2}
+
+    d.select(["Command1"])
+    assert d.set_property("TabIndex", 0) is None  # takes place 0, the others make room
+    assert _tab_order(d) == {"Command1": 0, "Command2": 1, "Command3": 2}
+    assert d.controls["Command2"].TabIndex == 1
+    d.select(["Command1"])
+    assert d.set_property("TabIndex", 99) is None  # past the end: the last place
+    assert _tab_order(d) == {"Command2": 0, "Command3": 1, "Command1": 2}
+    d.undo()  # one undo step, renumbering included
+    assert _tab_order(d) == {"Command1": 0, "Command2": 1, "Command3": 2}
+
+
 def test_z_order_and_format(designer):
     d = designer
     d.create_control("Label", QRect(form_point(d, 16, 16), form_point(d, 112, 40)), None)

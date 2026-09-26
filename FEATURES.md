@@ -1,5 +1,29 @@
 # VP6 features
 
+**Version:** 0.3.7
+**Date:** 2026-09-29
+
+## IDE
+
+- Find as you type: while you type the text to find (or change Match case, Whole word or Regular expressions), the code window highlights the first match from the cursor, wrapping around the file; the match grows as you type, nothing stays highlighted when there's no match, and an unfinished regular expression doesn't move the selection
+
+---
+
+**Version:** 0.3.6
+**Date:** 2026-09-29
+
+## IDE
+
+- Edit > Go to Line (Ctrl+L / ⌘L): jump to a line of the current code window; the current line is suggested, and a line in the folded designer region unfolds it
+- Edit > Find (Ctrl+F / ⌘F), Find Next (F3), Find Previous (Shift+F3) and Replace (Ctrl+H, or ⌥⌘F on macOS) in the code window: a non-modal Find/Replace window with Find Next, Find Previous, Replace and Replace All; searches wrap around the file; the selected text is the default text to find; with a form designer active, its form's code is searched
+- Find and Replace options: Match case, Find whole word only, and Use regular expressions (Python `re`: escape sequences such as `\n` and `\t`, matches across lines, `^`/`$` on every line, groups in the find text such as `(\w+) \1` and in the replace text such as `\1`, `\g<1>`, `\g<name>`)
+- Replace All is one undo step and reports how many occurrences it replaced; matches in a form's designer region are found (unfolding it) but never replaced
+- A form selected in the Project Explorer shows all its properties and controls in the Properties panel, editable, without opening its designer (also for a form's code window when the Project panel is closed)
+- `TabIndex` is renumbered automatically, like VB: new and pasted controls go to the end of the tab order, deleting controls closes the gap, and giving a control a `TabIndex` moves it to that place while the others make room (one undo step)
+- Fix: a form can no longer be renamed to the name of another form in the project
+
+---
+
 **Version:** 0.3.5
 **Date:** 2026-09-29
 

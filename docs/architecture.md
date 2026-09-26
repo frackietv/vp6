@@ -472,8 +472,8 @@ a window is activated, or you work in a designer.
 | Selected | Target |
 |---|---|
 | the project | `projectprops.ProjectTarget` (Name, Type, StartupObject, ColorScheme) |
-| a form with an open designer | its `FormDesigner` |
-| a form without a designer, or a module | a `projectprops.FileTarget`, which shows just `(Name)` |
+| a form | its `FormDesigner`, with all the form's properties and controls. A form that isn't open in the designer gets one that isn't shown yet; View Object then shows that same designer |
+| a module | a `projectprops.FileTarget`, which shows just `(Name)` |
 | a folder, or nothing | none, so the panel is empty |
 
 **With the Project panel closed**, the target follows the active window: a

@@ -1,10 +1,5 @@
 # VP6 backlog
 
-- **[IDE]** Go to line
-- **[IDE]** Find and Replace in the code window
-- **[IDE]** Find and Replace to have regex, case sensitivity, and whole word options; when using regexes, escape sequences like \n for new line, etc must be allowed, and regex groups must be supported in find and in replace
-- **[IDE]** Showing a form's properties when it's selected in the Project Explorer but its designer isn't open
-- **[IDE]** Automatic renumbering of `TabIndex` when controls are added or removed
 - **[Language and runtime]** Control arrays: several controls sharing a name and handlers with an `Index` argument. Today handlers can be attached in code instead, as the Calculator and Kitchen Sink do.
 - **[Language and runtime]** Menus on forms, and the Menu Editor to design them
 - **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)
