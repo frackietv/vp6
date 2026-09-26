@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vp6"
+version = "0.1.0"
+description = "A Visual Basic 6 style IDE and GUI framework for Python"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["PySide6>=6.6"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+vp6 = "vp6.ide.mainwindow:main"
+vp6-run = "vp6.run:main"
+
+[tool.setuptools.packages.find]
+include = ["vp6*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

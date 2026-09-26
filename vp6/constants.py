@@ -1,0 +1,110 @@
+"""Visual Basic 6 compatible constants (vpOK, vpYesNo, vpKeyReturn, ...)."""
+
+# --- MsgBox buttons ---------------------------------------------------------
+vpOKOnly = 0
+vpOKCancel = 1
+vpAbortRetryIgnore = 2
+vpYesNoCancel = 3
+vpYesNo = 4
+vpRetryCancel = 5
+
+# --- MsgBox icons -----------------------------------------------------------
+vpCritical = 16
+vpQuestion = 32
+vpExclamation = 48
+vpInformation = 64
+
+# --- MsgBox default button --------------------------------------------------
+vpDefaultButton1 = 0
+vpDefaultButton2 = 256
+vpDefaultButton3 = 512
+
+# --- MsgBox results ---------------------------------------------------------
+vpOK = 1
+vpCancel = 2
+vpAbort = 3
+vpRetry = 4
+vpIgnore = 5
+vpYes = 6
+vpNo = 7
+
+# --- Form.Show --------------------------------------------------------------
+vpModeless = 0
+vpModal = 1
+
+# --- CheckBox.Value ---------------------------------------------------------
+vpUnchecked = 0
+vpChecked = 1
+vpGrayed = 2
+
+# --- Mouse buttons / shift state -------------------------------------------
+vpLeftButton = 1
+vpRightButton = 2
+vpMiddleButton = 4
+vpShiftMask = 1
+vpCtrlMask = 2
+vpAltMask = 4
+
+# --- Alignment --------------------------------------------------------------
+vpLeftJustify = 0
+vpRightJustify = 1
+vpCenter = 2
+
+# --- Form.BorderStyle -------------------------------------------------------
+vpBSNone = 0
+vpFixedSingle = 1
+vpSizable = 2
+vpFixedDialog = 3
+vpFixedToolWindow = 4
+vpSizableToolWindow = 5
+
+# --- Form.WindowState -------------------------------------------------------
+vpNormal = 0
+vpMinimized = 1
+vpMaximized = 2
+
+# --- Form.StartUpPosition ---------------------------------------------------
+vpStartUpManual = 0
+vpStartUpOwner = 1
+vpStartUpScreen = 2
+vpStartUpWindowsDefault = 3
+
+# --- Strings ----------------------------------------------------------------
+vpCr = "\r"
+vpLf = "\n"
+vpCrLf = "\r\n"
+vpNewLine = "\n"
+vpTab = "\t"
+vpNullString = ""
+
+# --- Key codes (KeyDown / KeyUp) -------------------------------------------
+vpKeyBack = 8
+vpKeyTab = 9
+vpKeyReturn = 13
+vpKeyShift = 16
+vpKeyControl = 17
+vpKeyMenu = 18
+vpKeyPause = 19
+vpKeyCapital = 20
+vpKeyEscape = 27
+vpKeySpace = 32
+vpKeyPageUp = 33
+vpKeyPageDown = 34
+vpKeyEnd = 35
+vpKeyHome = 36
+vpKeyLeft = 37
+vpKeyUp = 38
+vpKeyRight = 39
+vpKeyDown = 40
+vpKeyInsert = 45
+vpKeyDelete = 46
+
+for _i in range(10):
+    globals()[f"vpKey{_i}"] = 48 + _i
+for _i in range(26):
+    globals()[f"vpKey{chr(65 + _i)}"] = 65 + _i
+for _i in range(1, 13):
+    globals()[f"vpKeyF{_i}"] = 111 + _i
+del _i
+
+__all__ = [name for name in globals() if name.startswith("vp")]
