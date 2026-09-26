@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QCompleter, QHBoxLayout,
 import vp6
 
 from .. import formfile
-from ..controls import CONTROL_TYPES, EVENT_ARGS
+from ..controls import CONTROL_TYPES, EVENT_ARGS, ControlArray
 from ..form import Form
 from .documents import Document, FormDocument
 from .theme import Theme, TextStyle, theme_manager
@@ -193,7 +193,7 @@ class CodeEditor(QPlainTextEdit):
 
         if isinstance(document, FormDocument):
             self.document().contentsChange.connect(self._on_contents_change)
-            QTimer.singleShot(0, self.apply_fold)
+            QTimer.singleShot(0, self, self.apply_fold)  # cancelled if deleted
 
     # -- theme -------------------------------------------------------------------------------
     def apply_theme(self, theme: Theme, font: QFont) -> None:
@@ -314,7 +314,7 @@ class CodeEditor(QPlainTextEdit):
 
     def _on_contents_change(self, *_):
         if self.region_folded:
-            QTimer.singleShot(0, self.apply_fold)
+            QTimer.singleShot(0, self, self.apply_fold)  # cancelled if deleted
 
     def _region_span(self) -> tuple[int, int] | None:
         region = self._region_blocks()
@@ -593,14 +593,17 @@ def complete(context: str, document: Document) -> list[str]:
     if context == "self.":
         names = _members(Form)
         if form_def:
-            names += [c.name for c in form_def.controls]
+            names += list(dict.fromkeys(c.name for c in form_def.controls))
         return names
-    match = re.fullmatch(r"self\.(\w+)\.", context)
+    # self.Command1. or, for a control array, self.cmdDigit. / self.cmdDigit[i]. / (i).
+    match = re.fullmatch(r"self\.(\w+)(\[[^\]]*\]|\([^)]*\))?\.", context)
     if match and form_def:
-        control = form_def.control(match.group(1))
-        if control is not None:
-            return _members(CONTROL_TYPES[control.type])
-        return []
+        elements = form_def.elements(match.group(1))
+        if not elements:
+            return []
+        if form_def.is_array(match.group(1)) and not match.group(2):
+            return _members(ControlArray)
+        return _members(CONTROL_TYPES[elements[0].type])
     if context.endswith("."):
         return []
     words = set(re.findall(r"\b[A-Za-z_]\w{2,}\b", document.text))
@@ -647,8 +650,9 @@ class CodeWindow(QWidget):
         result = []
         if isinstance(self.doc, FormDocument):
             result.append(("Form", Form.Events))
-            for control in sorted(self.doc.form_def.controls, key=lambda c: c.name.lower()):
-                result.append((control.name, CONTROL_TYPES[control.type].Events))
+            controls = {c.name: c for c in self.doc.form_def.controls}  # arrays: once
+            for name in sorted(controls, key=str.lower):
+                result.append((name, CONTROL_TYPES[controls[name].type].Events))
         return result
 
     def _events_of(self, obj: str) -> tuple[str, ...]:
@@ -706,7 +710,7 @@ class CodeWindow(QWidget):
             self.goto_event(obj, existing[0])
         else:
             default = Form.DefaultEvent if obj == "Form" else \
-                CONTROL_TYPES[self.doc.form_def.control(obj).type].DefaultEvent
+                CONTROL_TYPES[self.doc.form_def.elements(obj)[0].type].DefaultEvent
             self.goto_event(obj, default)
 
     def _on_proc_chosen(self, _index) -> None:
@@ -740,7 +744,8 @@ class CodeWindow(QWidget):
             return
         if not isinstance(self.doc, FormDocument):
             return
-        stub = formfile.event_stub(obj, event, EVENT_ARGS.get(event, ""))
+        stub = formfile.event_stub(obj, event, EVENT_ARGS.get(event, ""),
+                                   index=self.doc.form_def.is_array(obj))
         line = self._class_end_line()
         document = self.editor.document()
         block = document.findBlockByNumber(line)

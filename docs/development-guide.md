@@ -607,6 +607,20 @@ Set `QSettings.setDefaultFormat(QSettings.IniFormat)` and a temporary
 * **PySide object ownership.** A Qt object that outlives the widgets using it
   (the shared Fusion style, for example) must have a Qt parent. Otherwise
   PySide may delete it with the first widget that used it.
+* **Deferred calls and signals must not outlive their object.** Use
+  `QTimer.singleShot(0, self, self.method)`, with `self` as the context
+  object: Qt cancels the call if `self` is deleted first. Without it, a
+  code window closed right after an edit crashed the process later. Connect
+  long-lived signals (the theme manager, `QGuiApplication.styleHints()`) to
+  bound methods, not lambdas: PySide disconnects bound methods when their
+  object is deleted.
+* **No reference cycles through Qt objects.** Don't store a bound method or
+  a lambda that captures a widget on the widget itself (e.g.
+  `designer.callback = lambda: designer...`): capture what it needs instead,
+  or make it a method.
+* **Control arrays share a name.** In the designer, identify controls by
+  their key (`ControlDef.key`, `FormDesigner.key_of`), not their name:
+  `cmdDigit(0)` and `cmdDigit(1)` are both named `cmdDigit`.
 * **Styles don't propagate to children.** Use `appearance.style_tree`, and
   remember that controls created later need `Form._style_widget` (already
   called by `Control._build_widget`).

@@ -1,5 +1,32 @@
 # VP6 features
 
+**Version:** 0.3.8
+**Date:** 2026-09-29
+
+## Programming model (the `vp6` library)
+
+- Control arrays: controls of one type sharing a name, told apart by `Index` (0 - 32767, not necessarily contiguous), declared as `self.cmdDigit = ControlArray()` with elements `self.cmdDigit[0] = CommandButton(...)`
+- One event handler per control array, getting the element's `Index` first: `def cmdDigit_Click(self, Index)`, `def cmdDigit_MouseDown(self, Index, Button, Shift, X, Y)`
+- Elements as `self.cmdDigit[i]`, VB's `self.cmdDigit(i)` or `Item(i)`; iteration in Index order, `Count`, `len()`, `LBound`, `UBound`, `i in array`
+- `Load(self.cmdDigit, i)` / `self.cmdDigit.Load(i)` adds an element at run time (a hidden copy of the lowest element, last in the tab order); `Unload(self.cmdDigit, i)` removes elements added that way
+- Every control has a read-only `Index` (`None` outside control arrays); control array elements can be containers (`CheckBox(self.fraGroup[1], ...)`)
+
+## IDE
+
+- Creating control arrays in the designer like VB: pasting a copy of a control asks "You already have a control named ... Do you want to create a control array?"; further copies join the array without asking
+- Giving a control the name of another control of the same type asks the same question and makes it an element of that array; giving it a new name takes it out
+- Index property in the Properties window, right under (Name): makes a control a one-element array, moves an element to another Index, or (cleared) makes a lone element a plain control again
+- When a control becomes a control array (or stops being one), its event handlers get the `Index` parameter added (or removed); new handlers are created with it
+- The Properties window lists elements as `cmdDigit(0)`; the code window's Object list shows an array once; completion knows `ControlArray` members (`self.cmdDigit.`) and element members (`self.cmdDigit[i].`, `self.cmdDigit(i).`)
+- Fix: possible crashes when a code window or designer was closed or deleted while a deferred update was pending (deferred calls now have a context object; the designer follows OS light/dark changes through a bound method)
+
+## Kitchen Sink and samples
+
+- Kitchen Sink: the color-scheme option buttons are the control array `optScheme` with one handler, and the `cmdMore` "+" button loads and unloads control array elements at run time
+- The Calculator sample uses control arrays (`cmdDigit`, `cmdOperator`) instead of attaching handlers in code
+
+---
+
 **Version:** 0.3.7
 **Date:** 2026-09-29
 

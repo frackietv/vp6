@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** Control arrays: several controls sharing a name and handlers with an `Index` argument. Today handlers can be attached in code instead, as the Calculator and Kitchen Sink do.
 - **[Language and runtime]** Menus on forms, and the Menu Editor to design them
 - **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)
 - **[Language and runtime]** Default form instances: using `Form2.Show()` without creating an instance first

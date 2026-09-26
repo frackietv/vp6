@@ -29,19 +29,19 @@ def flatten(items, prefix=""):
 def test_kitchen_sink_form1_matches_the_backlog_example():
     source = (kitchensink.TEMPLATE_DIR / "Form1.py").read_text()
     expected = [
-        "HELP", "SWATCH_COLORS", "Form1", "Form1::InitializeComponent", "Form1::Form_Load",
+        "HELP", "SCHEMES", "SWATCH_COLORS", "Form1", "Form1::InitializeComponent", "Form1::Form_Load",
         "Form1::Form_Resize", "Form1::Form_MouseMove", "Form1::Form_KeyDown",
         "Form1::Form_Unload", "Form1::fraText_Click", "Form1::txtName_Change",
         "Form1::cmdGreet_Click", "Form1::txtNotes_GotFocus", "Form1::txtPassword_LostFocus",
-        "Form1::txtUpper_KeyPress", "Form1::optSystem_Click", "Form1::optLight_Click",
-        "Form1::optDark_Click", "Form1::optIDE_Click", "Form1::chkBold_Click",
+        "Form1::txtUpper_KeyPress", "Form1::optScheme_Click", "Form1::chkBold_Click",
         "Form1::chkTimer_Click", "Form1::chkPicture_Click", "Form1::hsbSize_Change",
         "Form1::hsbSize_Scroll", "Form1::cboColors_Click", "Form1::cboFree_Change",
         "Form1::lstItems_Click", "Form1::lstItems_DblClick", "Form1::cmdAdd_Click",
         "Form1::cmdRemove_Click", "Form1::cmdCount_Click", "Form1::vsbLevel_Change",
         "Form1::picLogo_Click", "Form1::picLogo_MouseDown", "Form1::lblOnPicture_Click",
         "Form1::tmrClock_Timer", "Form1::cmdSwapZ_Click", "Form1::lblZRed_Click",
-        "Form1::lblZBlue_Click", "Form1::show_z_order", "Form1::cmdDialog_Click",
+        "Form1::lblZBlue_Click", "Form1::show_z_order", "Form1::cmdMore_Click",
+        "Form1::cmdDialog_Click",
         "Form1::cmdClipboard_Click", "Form1::cmdAbout_Click", "Form1::cmdClose_Click",
         GLOBAL_CODE,
     ]

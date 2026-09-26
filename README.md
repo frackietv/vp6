@@ -35,7 +35,7 @@ The IDE opens with a VB-style **New Project** dialog. Every new project has
 |-----------------------------|--------------------------------------------------------------|
 | Toolbox                     | Pointer, PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton, ComboBox, ListBox, HScrollBar, VScrollBar, Timer |
 | Form designer               | Draw controls, move/resize with 8px grid snapping (hold Alt to skip it), rubber-band select, Ctrl+drag inside a Frame, arrows nudge, Shift+arrows resize, cut/copy/paste, undo/redo; `TabIndex` values are renumbered automatically when controls are added, deleted or given a new `TabIndex` |
-| Properties window (F4)      | Object combo, alphabetical grid, enum/color/list/font/file editors, multi-select editing, description pane; select a form in the Project Explorer to edit its properties and controls without opening it, or the project to edit its Name, Type, StartupObject and ColorScheme |
+| Properties window (F4)      | Object combo (control array elements as `cmdDigit(0)`), `(Name)` and `Index` first, then an alphabetical grid, enum/color/list/font/file editors, multi-select editing, description pane; select a form in the Project Explorer to edit its properties and controls without opening it, or the project to edit its Name, Type, StartupObject and ColorScheme |
 | Code window (F7)            | Object and Procedure dropdowns that create handler stubs, Python highlighting, auto-indent, `self.` / `self.Control.` completion, Ctrl+/ comments; Edit > Find (Ctrl+F; the first match is highlighted as you type), Find Next/Previous (F3 / Shift+F3), Replace (Ctrl+H, or ⌥⌘F on macOS), with match case, whole word and Python regular expressions (escapes such as `\n`, groups such as `\1` in find and replace); Edit > Go to Line (Ctrl+L) |
 | Project Explorer (Ctrl+R)   | Forms and modules, View Code / View Object, set startup form; follows the active window |
 | Immediate window (Ctrl+G)   | Program output and `Debug.Print`, stdin for console apps, double-click a traceback line to jump to it |
@@ -154,6 +154,13 @@ from vp6 import *
   `Picture1_MouseDown(self, Button, Shift, X, Y)`,
   `Text1_KeyPress(self, KeyAscii)`, ... Handlers may declare fewer
   parameters than VB passes.
+* **Control arrays**: controls sharing a name, told apart by `Index`, with
+  one handler that gets the `Index` first (`def cmdDigit_Click(self,
+  Index)`). Elements are `self.cmdDigit[i]` or VB's `self.cmdDigit(i)`;
+  `Load(self.cmdDigit, i)` / `Unload(self.cmdDigit, i)` add and remove
+  elements at run time. In the designer, paste a copy of a control (VB asks
+  whether to create a control array), give a control another control's
+  name, or set its `Index`.
 * **Return values replace ByRef arguments:** return `0` from `KeyPress` to
   swallow a key (or another char code to replace it); return `True` from
   `Form_Unload` to cancel closing.
@@ -177,8 +184,9 @@ from vp6 import *
 
 ## Samples
 
-* `samples/Calculator`: a calculator form with keyboard support. Its button
-  handlers are assigned in `Form_Load`, like a VB control array.
+* `samples/Calculator`: a calculator form with keyboard support. Its digit
+  and operator buttons are control arrays (`cmdDigit`, `cmdOperator`), each
+  with one handler.
 * `samples/GuessNumber`: a console application (`Sub Main`).
 
 ## Tests
@@ -196,7 +204,6 @@ running a console project through the Immediate window.
 [FEATURES.md](FEATURES.md) lists everything VP6 implements.
 [BACKLOG.md](BACKLOG.md) lists what isn't implemented yet. The biggest gaps are:
 
-* control arrays;
 * menus (the Menu Editor);
 * debugging (breakpoints, stepping, evaluating code in the Immediate window);
 * graphics methods (`Line`, `Circle`, `PSet`);

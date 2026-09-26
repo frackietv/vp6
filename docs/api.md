@@ -65,6 +65,8 @@ if __name__ == "__main__":
   names refer to.
 * You can also create controls in code at run time, e.g. in `Form_Load`, the
   same way.
+* Controls can share a name as a [control array](#control-arrays):
+  `self.cmdDigit = ControlArray()`, then `self.cmdDigit[0] = CommandButton(...)`.
 
 ### Modules and `Sub Main`
 
@@ -111,6 +113,10 @@ def Picture1_MouseMove(self, Button, Shift, X, Y): ...
   traceback goes to stderr, i.e. the IDE's Immediate window.
 
 ### Event arguments
+
+Handlers of a [control array](#control-arrays) get the element's `Index`
+first, before the arguments below: `def cmdDigit_Click(self, Index)`,
+`def cmdDigit_MouseDown(self, Index, Button, Shift, X, Y)`.
 
 <!-- BEGIN GENERATED: event-arguments -->
 | Event | Arguments |
@@ -226,7 +232,8 @@ Events: `Load`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Cli
 
 | Member | Description |
 |---|---|
-| `Name` | read-only; set by the attribute the control is assigned to |
+| `Name` | read-only; set by the attribute the control is assigned to (all elements of a control array share it) |
+| `Index` | read-only; the element's number in a [control array](#control-arrays), `None` for other controls |
 | `Parent`, `Container` | the form or container control the control is on |
 | `SetFocus()` | gives the control the keyboard focus |
 | `Move(Left, Top=None, Width=None, Height=None)` | moves / resizes |
@@ -280,6 +287,59 @@ control.
   ```
 
 The Timer, invisible at run time, has no `ZIndex`.
+
+### Control arrays
+
+Several controls of the same type can share a name, told apart by their
+`Index`, like VB's control arrays. One handler serves them all and gets the
+`Index` of the element that fired the event first. The designer writes
+them like this (see [below](#control-arrays-in-the-designer) for how to make
+one):
+
+```python
+self.cmdDigit = ControlArray()
+self.cmdDigit[0] = CommandButton(self, Caption='0', Left=8, Top=8)
+self.cmdDigit[1] = CommandButton(self, Caption='1', Left=56, Top=8)
+
+def cmdDigit_Click(self, Index):
+    self.txtDisplay.Text += self.cmdDigit[Index].Caption
+```
+
+`ControlArray` members:
+
+| Member | Description |
+|---|---|
+| `array[i]`, `array(i)`, `Item(i)` | the element with Index `i` (`array(i)` is VB's syntax); `IndexError` if there is none |
+| `for c in array` | the elements in Index order |
+| `Count`, `len(array)` | the number of elements |
+| `LBound`, `UBound` | the lowest and highest Index |
+| `i in array` | whether there is an element `i` |
+| `Load(i)` | adds element `i` at run time (VB's `Load cmdDigit(i)`, also `Load(self.cmdDigit, i)`) and returns it: a copy of the lowest element's properties, except that it's hidden (`Visible = False`, so position it and show it) and last in the tab order. It goes in the same container. |
+| `Unload(i)` | removes element `i` (also `Unload(self.cmdDigit, i)`); only elements added with `Load` can be removed, others can be hidden |
+
+* An `Index` is a whole number from 0 to 32767. Indexes needn't be
+  contiguous.
+* An element can be a container: `CheckBox(self.fraGroup[1], ...)`.
+* `Index` is set in the designer (or by assigning to `array[i]`), not at run
+  time.
+
+#### Control arrays in the designer
+
+* **Copy and paste** a control: VB's question *"You already have a control
+  named 'Command1'. Do you want to create a control array?"* appears. *Yes*
+  makes the original element 0 and the copy element 1; *No* gives the copy a
+  new name. Pasting more copies of an array's element adds elements without
+  asking.
+* **Give a control the name of another control of the same type** in the
+  Properties window: the same question, then it joins that control's array.
+* **Set `Index`** in the Properties window (the row under `(Name)`): the
+  control becomes a one-element array, or moves to another Index. Clearing
+  `Index` of an array's only element makes it a plain control again.
+* When a control becomes an array (or stops being one), its event handlers
+  get the `Index` parameter added (or removed), as in VB. New handlers are
+  created with it.
+* The Properties window lists elements as `cmdDigit(0)`; the code window's
+  Object list shows the array once.
 
 ### PictureBox
 
@@ -550,7 +610,9 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 |---|---|
 | `run(form)` | Shows a form (class or instance) and runs the event loop until all windows close; returns the exit code. Put it under `if __name__ == "__main__":` to make a form runnable on its own. |
 | `Load(form)` | `form.Load()` |
+| `Load(array, Index)` | adds a [control array](#control-arrays) element at run time and returns it (`array.Load(Index)`) |
 | `Unload(form)` | `form.Unload()`; returns `False` if cancelled |
+| `Unload(array, Index)` | removes a control array element added with `Load` (`array.Unload(Index)`) |
 | `Forms` | the loaded forms: `Forms.Count`, `len(Forms)`, `for f in Forms`, `Forms[0]` |
 
 ### Program control
@@ -575,7 +637,8 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 
 `Form`, `Control` (base class), `Label`, `TextBox`, `CommandButton`,
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
-`HScrollBar`, `VScrollBar`, `PictureBox`.
+`HScrollBar`, `VScrollBar`, `PictureBox`, and `ControlArray` for
+[control arrays](#control-arrays).
 
 ---
 
@@ -721,5 +784,7 @@ format.
 * **Constants use the `vp` prefix** instead of `vb`.
 * **Forms are classes.** Create instances explicitly (`frm = Form2();
   frm.Show()`); there are no implicit default instances.
-* **Not implemented yet:** see [BACKLOG.md](../BACKLOG.md), for example control
-  arrays (attach handlers in code instead, as the Calculator sample does).
+* **Control arrays are `ControlArray` objects.** Elements are `self.cmd[i]`
+  (or VB's `self.cmd(i)`); `Load` and `Unload` take the array and the Index
+  (`Load(self.cmd, 5)` for `Load cmd(5)`).
+* **Not implemented yet:** see [BACKLOG.md](../BACKLOG.md).

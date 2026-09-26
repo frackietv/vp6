@@ -12,6 +12,12 @@ A form is a single Python file. The IDE owns one block inside the form class:
         def Command1_Click(self):
             ...
 
+Control arrays are declared, then filled element by element::
+
+            self.cmdDigit = ControlArray()
+            self.cmdDigit[0] = CommandButton(self, Caption='0', ...)
+            self.chkOption = CheckBox(self.fraGroup[1], ...)   # inside an element
+
 The block is parsed with ``ast`` (the user's code is never executed) and
 regenerated whenever the design changes. Everything outside it is yours.
 """
@@ -40,12 +46,23 @@ class FormFileError(Exception):
     pass
 
 
+def control_key(name: str, index: int | None) -> str:
+    """How a control is identified: 'Command1', or 'cmdDigit(3)' for an
+    element of a control array (as VB shows it)."""
+    return name if index is None else f"{name}({index})"
+
+
 @dataclass
 class ControlDef:
     type: str
     name: str
-    parent: str | None = None  # None = directly on the form
+    parent: str | None = None  # the container's key; None = directly on the form
     props: dict = field(default_factory=dict)
+    index: int | None = None  # the Index in a control array; None = not in one
+
+    @property
+    def key(self) -> str:
+        return control_key(self.name, self.index)
 
 
 @dataclass
@@ -54,8 +71,18 @@ class FormDef:
     props: dict = field(default_factory=dict)
     controls: list[ControlDef] = field(default_factory=list)
 
-    def control(self, name: str) -> ControlDef | None:
-        return next((c for c in self.controls if c.name == name), None)
+    def control(self, key: str) -> ControlDef | None:
+        """The control with this key ('Command1' or 'cmdDigit(3)')."""
+        return next((c for c in self.controls if c.key == key), None)
+
+    def elements(self, name: str) -> list[ControlDef]:
+        """All controls with this name: one, or a control array's elements
+        in Index order."""
+        return sorted((c for c in self.controls if c.name == name),
+                      key=lambda c: -1 if c.index is None else c.index)
+
+    def is_array(self, name: str) -> bool:
+        return any(c.name == name and c.index is not None for c in self.controls)
 
 
 # --- locating the region ---------------------------------------------------------
@@ -111,19 +138,37 @@ def parse_region_body(body: str, class_name: str) -> FormDef:
         raise FormFileError("Designer region has no InitializeComponent method")
 
     form = FormDef(class_name)
+    arrays: set[str] = set()  # declared with ControlArray()
     for stmt in func.body:
         if isinstance(stmt, ast.Pass) or (isinstance(stmt, ast.Expr)
                                           and isinstance(stmt.value, ast.Constant)):
             continue
-        if not (isinstance(stmt, ast.Assign) and len(stmt.targets) == 1
-                and _is_self_attr(stmt.targets[0])):
+        if not (isinstance(stmt, ast.Assign) and len(stmt.targets) == 1):
             raise FormFileError(f"Unexpected statement in designer region, line {stmt.lineno}")
-        name = stmt.targets[0].attr
-        value = stmt.value
-        if isinstance(value, ast.Call) and value.args and (
-                _is_self_attr(value.args[0]) or
-                (isinstance(value.args[0], ast.Name) and value.args[0].id == "self")):
-            form.controls.append(_parse_control(name, value, form))
+        target, value = stmt.targets[0], stmt.value
+        element = _self_element(target)
+        if element is not None:  # self.cmdDigit[0] = CommandButton(...)
+            name, index = element
+            if name not in arrays:
+                raise FormFileError(f"'{name}' is not declared as a ControlArray() before "
+                                    f"line {stmt.lineno}")
+            if not _is_control_call(value):
+                raise FormFileError(f"'{name}[{index}]' must be a control (line {stmt.lineno})")
+            _add_control(form, _parse_control(name, value, form, index), stmt.lineno)
+            continue
+        if not _is_self_attr(target):
+            raise FormFileError(f"Unexpected statement in designer region, line {stmt.lineno}")
+        name = target.attr
+        if isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and \
+                value.func.id == "ControlArray":
+            if value.args or value.keywords or name in arrays or form.elements(name):
+                raise FormFileError(f"Invalid control array '{name}' (line {stmt.lineno})")
+            arrays.add(name)
+        elif _is_control_call(value):
+            if name in arrays:
+                raise FormFileError(f"'{name}' is a control array: its elements are "
+                                    f"'self.{name}[Index] = ...' (line {stmt.lineno})")
+            _add_control(form, _parse_control(name, value, form), stmt.lineno)
         else:
             form.props[name] = _literal(value, stmt.lineno)
     return form
@@ -134,22 +179,49 @@ def _is_self_attr(node) -> bool:
             and node.value.id == "self")
 
 
-def _parse_control(name: str, call: ast.Call, form: FormDef) -> ControlDef:
+def _self_element(node) -> tuple[str, int] | None:
+    """('cmdDigit', 3) for ``self.cmdDigit[3]``, else None."""
+    if isinstance(node, ast.Subscript) and _is_self_attr(node.value) and \
+            isinstance(node.slice, ast.Constant) and type(node.slice.value) is int:
+        return node.value.attr, node.slice.value
+    return None
+
+
+def _is_control_call(value) -> bool:
+    return isinstance(value, ast.Call) and bool(value.args) and (
+        _is_self_attr(value.args[0]) or _self_element(value.args[0]) is not None or
+        (isinstance(value.args[0], ast.Name) and value.args[0].id == "self"))
+
+
+def _add_control(form: FormDef, control: ControlDef, lineno: int) -> None:
+    if form.control(control.key) is not None:
+        raise FormFileError(f"'{control.key}' is defined twice (line {lineno})")
+    others = form.elements(control.name)
+    if others and others[0].type != control.type:
+        raise FormFileError(f"Control array '{control.name}' mixes {others[0].type} and "
+                            f"{control.type} (line {lineno})")
+    form.controls.append(control)
+
+
+def _parse_control(name: str, call: ast.Call, form: FormDef,
+                   index: int | None = None) -> ControlDef:
+    key = control_key(name, index)
     if not isinstance(call.func, ast.Name) or call.func.id not in CONTROL_TYPES:
-        raise FormFileError(f"Unknown control type for '{name}' (line {call.lineno})")
+        raise FormFileError(f"Unknown control type for '{key}' (line {call.lineno})")
     if len(call.args) != 1:
-        raise FormFileError(f"Control '{name}' must have exactly one parent argument")
+        raise FormFileError(f"Control '{key}' must have exactly one parent argument")
     parent_node = call.args[0]
+    element = _self_element(parent_node)
     if isinstance(parent_node, ast.Name) and parent_node.id == "self":
         parent = None
-    elif _is_self_attr(parent_node):
-        parent = parent_node.attr
+    elif _is_self_attr(parent_node) or element is not None:
+        parent = parent_node.attr if element is None else control_key(*element)
         if form.control(parent) is None:
-            raise FormFileError(f"Parent '{parent}' of '{name}' is not defined before it")
+            raise FormFileError(f"Parent '{parent}' of '{key}' is not defined before it")
     else:
-        raise FormFileError(f"Invalid parent for control '{name}'")
+        raise FormFileError(f"Invalid parent for control '{key}'")
     props = {kw.arg: _literal(kw.value, call.lineno) for kw in call.keywords}
-    return ControlDef(call.func.id, name, parent, props)
+    return ControlDef(call.func.id, name, parent, props, index)
 
 
 def _literal(node, lineno):
@@ -198,13 +270,24 @@ def generate_region(form: FormDef, indent: str = "    ") -> str:
     lines = [indent + REGION_START, indent + "def InitializeComponent(self):"]
     for name, value in _props_to_args(Form._specs, form.props):
         lines.append(f"{body}self.{name} = {value}")
+    declared = set()
     for control in form.controls:
         cls = CONTROL_TYPES[control.type]
-        parent = "self" if control.parent is None else f"self.{control.parent}"
+        parent = "self" if control.parent is None else _reference(form.control(control.parent))
         args = [parent] + [f"{k}={v}" for k, v in _props_to_args(cls._specs, control.props)]
-        lines.extend(_wrap_call(f"{body}self.{control.name} = {control.type}(", args))
+        if control.index is not None and control.name not in declared:
+            lines.append(f"{body}self.{control.name} = ControlArray()")
+            declared.add(control.name)
+        lines.extend(_wrap_call(f"{body}{_reference(control)} = {control.type}(", args))
     lines.append(indent + REGION_END)
     return "\n".join(lines)
+
+
+def _reference(control: ControlDef) -> str:
+    """How code refers to a control: self.Command1 or self.cmdDigit[3]."""
+    if control.index is None:
+        return f"self.{control.name}"
+    return f"self.{control.name}[{control.index}]"
 
 
 def replace_region(source: str, form: FormDef) -> str:
@@ -336,6 +419,26 @@ def rename_module_references(source: str, old: str, new: str) -> str:
     return _map_lines(source, fix)
 
 
-def event_stub(obj: str, event: str, args: str) -> str:
-    params = "self" + (f", {args}" if args else "")
-    return f"    def {obj}_{event}({params}):\n        pass\n"
+def set_index_parameter(source: str, name: str, events, present: bool) -> str:
+    """Add (``present``) or remove the ``Index`` parameter of the event
+    handlers of ``name`` (``def name_Click(self)`` <-> ``def name_Click(self,
+    Index)``): what VB does when a control becomes a control array or stops
+    being one."""
+    if not events:
+        return source
+    handler = re.compile(
+        rf"^(\s*def\s+{re.escape(name)}_(?:{'|'.join(map(re.escape, events))})\s*\(\s*self)"
+        r"(\s*,\s*Index\b(?:\s*:\s*[\w.]+)?)?(?=\s*[,)])", re.M)
+
+    def fix(match):
+        if present:
+            return match.group(0) if match.group(2) else match.group(1) + ", Index"
+        return match.group(1)
+
+    return handler.sub(fix, source)
+
+
+def event_stub(obj: str, event: str, args: str, index: bool = False) -> str:
+    """A new handler; ``index`` for a control array (Index comes first)."""
+    params = ["self"] + (["Index"] if index else []) + ([args] if args else [])
+    return f"    def {obj}_{event}({', '.join(params)}):\n        pass\n"

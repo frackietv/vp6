@@ -153,6 +153,8 @@ class Control(PropertyHost):
     def __init__(self, parent, Name: str = "", **props):
         self.__dict__.setdefault("_values", {})
         self.__dict__["_name"] = Name
+        self.__dict__["_index"] = None  # set when it becomes an element of a ControlArray
+        self.__dict__["_loaded_at_runtime"] = False  # created by ControlArray.Load
         self.__dict__["Parent"] = parent
         self._form = parent._owner_form()
         self._design_mode = getattr(self._form, "_design_mode", False)
@@ -171,11 +173,22 @@ class Control(PropertyHost):
         return self._name
 
     @property
+    def Index(self) -> int | None:
+        """The element's number in a control array; None for other controls."""
+        return self._index
+
+    @Index.setter
+    def Index(self, value):
+        raise AttributeError(f"{self.TypeName} '{self._name}': Index can only be set in the "
+                             "designer (or by assigning to an element of a ControlArray)")
+
+    @property
     def Container(self):
         return self.Parent
 
     def __repr__(self):
-        return f"<{self.TypeName} {self._name or '?'}>"
+        index = "" if self._index is None else f"({self._index})"
+        return f"<{self.TypeName} {self._name or '?'}{index}>"
 
     def __setattr__(self, name, value):
         # VB error 438 "Object doesn't support this property or method" for
@@ -256,6 +269,8 @@ class Control(PropertyHost):
         handler = self._handler(event)
         if handler is None:
             return None
+        if self._index is not None:  # control arrays: Command1_Click(self, Index)
+            args = (self._index, *args)
         return call_handler(handler, *args)
 
     def _on_qt_event(self, watched: QWidget, event: QEvent) -> bool:
@@ -1124,4 +1139,139 @@ CONTROL_TYPES: dict[str, type[Control]] = {
     )
 }
 
-__all__ = list(CONTROL_TYPES)
+
+class ControlArray:
+    """A VB control array: controls sharing one name, told apart by ``Index``.
+
+    The designer writes::
+
+        self.cmdDigit = ControlArray()
+        self.cmdDigit[0] = CommandButton(self, Caption='0', ...)
+        self.cmdDigit[1] = CommandButton(self, Caption='1', ...)
+
+    and the event handlers get the element's Index first::
+
+        def cmdDigit_Click(self, Index):
+            self.txtDisplay.Text += self.cmdDigit[Index].Caption
+
+    Elements are ``self.cmdDigit[i]`` or, like VB, ``self.cmdDigit(i)``.
+    Iterating gives the elements in Index order. Indexes needn't be
+    contiguous. ``Load(i)`` adds an element at run time, ``Unload(i)``
+    removes one that was added that way.
+    """
+
+    def __init__(self):
+        self._name = ""  # set when assigned to a form attribute
+        self._items: dict[int, Control] = {}
+
+    def __repr__(self):
+        return f"<ControlArray {self._name or '?'} {sorted(self._items)}>"
+
+    # -- elements --------------------------------------------------------------------------
+    def __setitem__(self, index: int, control: Control) -> None:
+        if not isinstance(control, Control):
+            raise TypeError(f"Control array '{self._name}': elements must be controls")
+        index = self._check_index(index)
+        if index in self._items:
+            raise ValueError(f"Control array '{self._name}' already has an element {index}")
+        others = next(iter(self._items.values()), None)
+        if others is not None and type(others) is not type(control):
+            raise TypeError(f"Control array '{self._name}' holds {others.TypeName} controls, "
+                            f"not {control.TypeName}")
+        control.__dict__["_name"] = self._name
+        control.__dict__["_index"] = index
+        self._items[index] = control
+
+    def __getitem__(self, index: int) -> Control:
+        try:
+            return self._items[index]
+        except (KeyError, TypeError):
+            raise IndexError(f"Control array element '{self._name}({index})' "
+                             "doesn't exist") from None
+
+    __call__ = __getitem__  # VB style: self.cmdDigit(3)
+
+    def Item(self, index: int) -> Control:
+        """The element with this Index (like ``array[index]``)."""
+        return self[index]
+
+    def __contains__(self, index) -> bool:
+        return index in self._items
+
+    def __iter__(self):
+        return iter([self._items[i] for i in sorted(self._items)])
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    @property
+    def Count(self) -> int:
+        """The number of elements."""
+        return len(self._items)
+
+    @property
+    def LBound(self) -> int:
+        """The lowest Index."""
+        return min(self._items, default=0)
+
+    @property
+    def UBound(self) -> int:
+        """The highest Index."""
+        return max(self._items, default=-1)
+
+    def _check_index(self, index) -> int:
+        if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index <= 32767:
+            raise ValueError(f"Control array '{self._name}': Index must be a whole number "
+                             f"from 0 to 32767, not {index!r}")
+        return index
+
+    # -- run-time elements -------------------------------------------------------------------
+    def Load(self, index: int) -> Control:
+        """Add element ``index`` at run time, like VB's ``Load cmdDigit(index)``.
+        It copies the properties of the lowest element except Visible (False,
+        so position it and set Visible = True) and TabIndex (the last one)."""
+        index = self._check_index(index)
+        if index in self._items:
+            raise ValueError(f"Control array element '{self._name}({index})' already exists")
+        if not self._items:
+            raise ValueError(f"Control array '{self._name}' has no element to copy")
+        template = self._items[self.LBound]
+        props = {}
+        for name in template._specs:
+            if name in ("Visible", "TabIndex"):
+                continue
+            try:
+                props[name] = getattr(template, name)
+            except Exception:  # noqa: BLE001 - a property that can't be read is left out
+                pass
+        form = template._form
+        if "TabIndex" in template._specs:
+            props["TabIndex"] = 1 + max((c.TabIndex for c in form._controls
+                                         if "TabIndex" in c._specs), default=-1)
+        if "Visible" in template._specs:
+            props["Visible"] = False
+        control = type(template)(template.Parent, **props)
+        control.__dict__["_loaded_at_runtime"] = True
+        self[index] = control
+        return control
+
+    def Unload(self, index: int) -> None:
+        """Remove element ``index``; only elements added with ``Load`` can be."""
+        control = self[index]
+        if not control._loaded_at_runtime:
+            raise ValueError(f"Can't unload '{self._name}({index})': it was created in the "
+                             "designer (hide it with Visible = False instead)")
+        del self._items[index]
+        form = control._form
+        if control in form._controls:
+            form._controls.remove(control)
+        timer = getattr(control, "_timer", None)
+        if timer is not None:
+            timer.stop()
+        if control._widget is not None:
+            control._widget.hide()
+            control._widget.setParent(None)
+            control._widget.deleteLater()
+
+
+__all__ = [*CONTROL_TYPES, "ControlArray"]

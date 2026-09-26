@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):
         # Coalesce: dragging a panel emits several signals in a row
         if not getattr(self, "_bottom_tabs_pending", False):
             self._bottom_tabs_pending = True
-            QTimer.singleShot(0, self._tab_bottom_docks)
+            QTimer.singleShot(0, self, self._tab_bottom_docks)
 
     def _tab_bottom_docks(self):
         """When more than one open panel is docked at the bottom edge, join them
@@ -871,8 +871,9 @@ class MainWindow(QMainWindow):
                                     project_scheme=self._project_scheme())
             designer.hide()  # until View Object puts it in a window
             designer.set_tool(self.current_tool)
-            designer.form_name_taken = lambda name, d=designer: any(
-                other is not d.document and other.name == name
+            # (captures the document, not the designer: no reference cycle)
+            designer.form_name_taken = lambda name, doc=designer.document: any(
+                other is not doc and other.name == name
                 for other in self.documents.values() if isinstance(other, FormDocument))
             designer.viewCodeRequested.connect(
                 lambda obj, event, d=designer: self._open_handler(self._path_of(d), obj, event))

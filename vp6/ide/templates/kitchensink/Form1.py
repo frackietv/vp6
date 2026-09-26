@@ -16,6 +16,9 @@ Enter\tGreet (the Default button)
 Esc\tClose (the Cancel button)
 Ctrl+Q\tEnd the program immediately (End)"""
 
+# The color scheme for each element of the optScheme control array, by Index
+SCHEMES = (vpSchemeSystem, vpSchemeLight, vpSchemeDark, vpSchemeIDE)
+
 SWATCH_COLORS = {
     "Default": None,
     "Red": vpRed,
@@ -57,14 +60,15 @@ class Form1(Form):
                                 ToolTipText='KeyPress turns what you type into upper case')
         self.fraOptions = Frame(self, Caption='Options', Left=380, Top=16, Width=364, Height=236,
                                 TabIndex=11)
-        self.optSystem = OptionButton(self.fraOptions, Caption='System colors', Left=16, Top=24,
-                                      Width=150, Height=25, Value=True, TabIndex=12)
-        self.optLight = OptionButton(self.fraOptions, Caption='Light', Left=16, Top=48, Width=150,
-                                     Height=25, TabIndex=13)
-        self.optDark = OptionButton(self.fraOptions, Caption='Dark', Left=16, Top=72, Width=150,
-                                    Height=25, TabIndex=14)
-        self.optIDE = OptionButton(self.fraOptions, Caption='Follow the IDE', Left=16, Top=96,
-                                   Width=150, Height=25, TabIndex=15)
+        self.optScheme = ControlArray()
+        self.optScheme[0] = OptionButton(self.fraOptions, Caption='System colors', Left=16, Top=24,
+                                         Width=150, Height=25, Value=True, TabIndex=12)
+        self.optScheme[1] = OptionButton(self.fraOptions, Caption='Light', Left=16, Top=48,
+                                         Width=150, Height=25, TabIndex=13)
+        self.optScheme[2] = OptionButton(self.fraOptions, Caption='Dark', Left=16, Top=72,
+                                         Width=150, Height=25, TabIndex=14)
+        self.optScheme[3] = OptionButton(self.fraOptions, Caption='Follow the IDE', Left=16,
+                                         Top=96, Width=150, Height=25, TabIndex=15)
         self.chkBold = CheckBox(self.fraOptions, Caption='Bold clock', Left=184, Top=24, Width=160,
                                 Height=25, TabIndex=16)
         self.chkTimer = CheckBox(self.fraOptions, Caption='Clock running', Left=184, Top=48,
@@ -125,6 +129,10 @@ class Form1(Form):
         self.cmdSwapZ = CommandButton(self, Caption='Swap &Z-order', Left=224, Top=448, Width=120,
                                       Height=33, TabIndex=42,
                                       ToolTipText="Swaps the two labels' ZIndex values")
+        self.cmdMore = ControlArray()
+        self.cmdMore[0] = CommandButton(self, Caption='+', Left=360, Top=448, Width=40, Height=33,
+                                        TabIndex=43,
+                                        ToolTipText='A control array: + loads a new element, clicking one unloads it')
         self.cmdClose = CommandButton(self, Caption='&Close', Left=647, Top=440, Width=97,
                                       Height=33, Cancel=True, TabIndex=38,
                                       ToolTipText='Cancel button: Esc clicks it')
@@ -187,17 +195,10 @@ class Form1(Form):
         return ord(chr(KeyAscii).upper())
 
     # --- options ---------------------------------------------------------------------------------
-    def optSystem_Click(self):
-        self.ColorScheme = vpSchemeSystem
-
-    def optLight_Click(self):
-        self.ColorScheme = vpSchemeLight
-
-    def optDark_Click(self):
-        self.ColorScheme = vpSchemeDark
-
-    def optIDE_Click(self):
-        self.ColorScheme = vpSchemeIDE
+    def optScheme_Click(self, Index):
+        # optScheme is a control array: one handler for its four option buttons,
+        # told apart by Index (also the element's place in SCHEMES)
+        self.ColorScheme = SCHEMES[Index]
 
     def chkBold_Click(self):
         self.lblClock.FontBold = self.chkBold.Value == vpChecked
@@ -287,6 +288,24 @@ class Form1(Form):
     def show_z_order(self):
         self.lblZRed.Caption = f"Red: ZIndex {self.lblZRed.ZIndex}"
         self.lblZBlue.Caption = f"Blue: ZIndex {self.lblZBlue.ZIndex}"
+
+    # --- control arrays at run time --------------------------------------------------------
+    def cmdMore_Click(self, Index):
+        more = self.cmdMore  # the ControlArray; its elements are more[i] or more(i)
+        if Index == 0:  # "+": add an element in the first free place
+            free = [i for i in range(1, 5) if i not in more]
+            if not free:
+                self.lblStatus.Caption = "That's enough buttons"
+                return
+            button = Load(more, free[0])  # VB: Load cmdMore(i) - a hidden copy of cmdMore(0)
+            button.Caption = str(button.Index)
+            button.Left = more(0).Left + 44 * button.Index
+            button.Visible = True
+        else:
+            Unload(more, Index)  # only elements added with Load can be unloaded
+        self.lblStatus.Caption = (f"cmdMore has {more.Count} elements, Index {more.LBound} "
+                                  f"to {more.UBound}: " +
+                                  ", ".join(element.Caption for element in more))
 
     # --- other forms, clipboard, about -----------------------------------------------------------
     def cmdDialog_Click(self):

@@ -99,7 +99,7 @@ def test_designer_opens_every_form(qapp, tmp_path):
         designer.statusMessage.connect(problems.append)
         designer.load_def(designer.document.form_def)
         assert not problems, problems
-        assert set(designer.controls) == {c.name for c in designer.form_def.controls}
+        assert set(designer.controls) == {c.key for c in designer.form_def.controls}
 
 
 @pytest.fixture
@@ -142,8 +142,10 @@ def test_kitchen_sink_runs(sink_forms, capsys):
     form.cboColors.ListIndex = form.cboColors.List.index("Red")
     assert form.lblSwatch.BackColor == vp6.vpRed
 
-    form.optDark.Value = True
+    form.optScheme[2].Value = True  # a control array: optScheme_Click(Index=2)
     assert form._effective_scheme() == vp6.vpSchemeDark
+    form.optScheme(0).Value = True
+    assert form._effective_scheme() == vp6.vpSchemeSystem
 
     form.chkPicture.Value = vp6.vpUnchecked
     assert not form.picLogo.Visible
@@ -166,6 +168,29 @@ def test_kitchen_sink_runs(sink_forms, capsys):
 
     assert form.Unload() is True
     assert "Traceback" not in capsys.readouterr().err
+
+
+def test_every_kind_of_control_array_use_is_shown():
+    code = "\n".join(template_sources().values())
+    assert any(form.is_array(c.name) for form in form_defs().values() for c in form.controls)
+    for used in ("Load(", "Unload(", ".Count", ".LBound", ".UBound", ", Index):"):
+        assert used in code, f"Control arrays: {used!r} not demonstrated - {UPDATE_HINT}"
+
+
+def test_kitchen_sink_control_array_demo(sink_forms):
+    form = sink_forms["Form1"].Form1()
+    form.Show()
+    more = form.cmdMore
+    more[0]._widget.click()  # "+" loads cmdMore(1)
+    more[0]._widget.click()
+    assert [b.Caption for b in more] == ["+", "1", "2"] and more[2].Visible
+    assert more[2].Left == more[0].Left + 88
+    more[1]._widget.click()  # clicking an added one unloads it
+    assert list(more) == [more[0], more[2]] and "Index 0 to 2" in form.lblStatus.Caption
+    for _ in range(4):
+        more[0]._widget.click()  # fills the free places 1, 3 and 4, then says enough
+    assert more.Count == 5 and form.lblStatus.Caption == "That's enough buttons"
+    form.Unload()
 
 
 def test_kitchen_sink_z_order_demo(sink_forms):

@@ -155,6 +155,14 @@ parent. A control registers itself with its form
 (`self.Command1 = CommandButton(self, ...)`) names it: `Form.__setattr__`
 sets the control's name from the attribute name.
 
+A **control array** is a `ControlArray` assigned to a form attribute
+(`self.cmdDigit = ControlArray()`, named the same way). Assigning a control to
+one of its elements (`self.cmdDigit[3] = CommandButton(self, ...)`) gives the
+control the array's name and that `Index`. The control is otherwise
+ordinary; only its `_fire` differs, passing `Index` before the event's
+arguments. `ControlArray.Load(i)` / `Unload(i)` add and remove elements at
+run time.
+
 `Control.__setattr__` rejects unknown attribute names that start with an
 upper-case letter (VB's error 438, "Object doesn't support this property or
 method"). A misspelled `Captoin` therefore raises instead of silently
@@ -209,8 +217,9 @@ sequenceDiagram
 
 * **Lookup by name at call time.** `Control._fire(event, *args)` looks up
   `f"{control.Name}_{event}"` on the form each time it fires. Handlers can
-  therefore be added at run time (the Calculator sample does this in
-  `Form_Load` to emulate a control array). Form events use `Form_<Event>`.
+  therefore be added at run time. Form events use `Form_<Event>`. The
+  elements of a control array all find the same handler, and get their
+  `Index` as its first argument.
 * **Two sources of events:**
   * Qt **signals** for semantic events (`clicked` → Click, `textChanged` →
     Change, `valueChanged` → Change, `timeout` → Timer), wired in
@@ -362,7 +371,11 @@ flowchart LR
 
 ### 5.3 The designer
 
-The `FormDesigner` widget contains a `QScrollArea` with a `_Canvas`:
+The `FormDesigner` widget contains a `QScrollArea` with a `_Canvas`.
+It identifies controls by their key (`formfile.control_key`): the name, or
+`name(index)` for a control array element, e.g. `cmdDigit(3)`. Its
+`controls` dict, the selection and each `ControlDef`'s container use keys.
+
 
 * the canvas paints the **workspace** background (following the IDE's
   light/dark mode) and the **window frame** around the form
@@ -562,8 +575,12 @@ Rules for the region (`formfile.parse_region_body`):
 * It contains exactly one `def InitializeComponent(self):` whose body has
   only:
   * `self.<FormProperty> = <literal>`, or
-  * `self.<Name> = <ControlType>(self | self.<Container>, <Prop>=<literal>, ...)`.
-* A container must be defined before its children. Statement order is
+  * `self.<Name> = <ControlType>(self | self.<Container>, <Prop>=<literal>, ...)`,
+  * `self.<Name> = ControlArray()`, then its elements
+    `self.<Name>[<int>] = <ControlType>(...)`, all of one type. A container
+    may be an element: `self.<Container>[<int>]`.
+* A container (and a control array's declaration) must come before the
+  controls in it. Statement order is
   creation order, which decides stacking among controls with equal `ZIndex`.
 * Values are literals only, read with `ast.literal_eval`. Colors are written
   as hex, like `0x00FF00` (VB BGR order).

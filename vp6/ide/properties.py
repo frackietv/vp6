@@ -18,6 +18,12 @@ from ..formfile import format_value
 
 _MIXED = object()
 
+INDEX_SPEC = PropSpec(
+    "Index", "index", None,
+    description="The control's number in a control array: controls sharing a (Name) are an "
+                "array, told apart by Index, and their event handlers get Index first. "
+                "Empty = not in an array.")
+
 
 class TextListDialog(QDialog):
     """Edit a list of strings (ListBox.List) or multi-line text, one per line."""
@@ -121,6 +127,9 @@ class PropertiesWindow(QWidget):
         specs = sorted((objects[0]._specs[n] for n in common or ()), key=lambda s: s.name)
         if len(objects) == 1:
             specs.insert(0, PropSpec("Name", "name", ""))
+            supports_index = getattr(designer, "supports_index", None)
+            if supports_index is not None and supports_index(objects[0]):
+                specs.insert(1, INDEX_SPEC)  # right after (Name), like VB
         self._specs = specs
         self.table.setRowCount(len(specs))
         for row, spec in enumerate(specs):
@@ -132,8 +141,9 @@ class PropertiesWindow(QWidget):
             self.table.setCurrentCell(current_row, 0)
 
     def _value(self, objects, spec: PropSpec):
-        if spec.name == "Name":
-            return self.designer.object_name(objects[0])
+        if spec.name == "Name":  # a control array's elements share their (Name)
+            name_value = getattr(self.designer, "name_value", self.designer.object_name)
+            return name_value(objects[0])
         values = [getattr(obj, spec.name) for obj in objects]
         return values[0] if all(v == values[0] for v in values) else _MIXED
 
@@ -205,6 +215,8 @@ class PropertiesWindow(QWidget):
             edit.setValidator(QIntValidator(-1_000_000, 1_000_000))
             if value is None and not mixed:
                 edit.setPlaceholderText("(Default)")
+        elif kind == "index":
+            edit.setValidator(QIntValidator(0, 32767))
 
         def commit(e=edit, n=spec.name, k=kind, original=value):
             text = e.text()
@@ -213,6 +225,8 @@ class PropertiesWindow(QWidget):
                     new = None if original is None else original
                 else:
                     new = int(text)
+            elif k == "index":
+                new = int(text) if text else None  # empty: not in a control array
             elif k == "text":
                 new = text.replace("¶", "\n")
             else:

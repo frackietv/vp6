@@ -26,8 +26,8 @@ from PySide6.QtWidgets import QApplication, QWidget
 from . import appearance, colors
 from ._props import P, PropertyHost, enum_choices
 from .app import call_handler, ensure_app, run_event_loop
-from .controls import (_FONT, CommandButton, Control, TextBox, Timer, vp_buttons,
-                       vp_key_code, vp_shift)
+from .controls import (_FONT, CommandButton, Control, ControlArray, TextBox, Timer,
+                       vp_buttons, vp_key_code, vp_shift)
 
 _loaded_forms: list["Form"] = []
 
@@ -172,8 +172,9 @@ class Form(PropertyHost):
         self._fire("Initialize")
 
     def __setattr__(self, name, value):
-        # `self.Command1 = CommandButton(self, ...)` names the control.
-        if isinstance(value, Control) and not value._name:
+        # `self.Command1 = CommandButton(self, ...)` names the control, and
+        # `self.cmdDigit = ControlArray()` the control array.
+        if isinstance(value, (Control, ControlArray)) and not value._name:
             value.__dict__["_name"] = name
         object.__setattr__(self, name, value)
 
@@ -508,12 +509,27 @@ class Form(PropertyHost):
         return run(cls)
 
 
-def Load(form: Form) -> None:
-    form.Load()
+def Load(obj, Index: int | None = None):
+    """``Load(form)`` loads a form (fires Form_Load); ``Load(self.cmdDigit, 5)``
+    adds element 5 to a control array and returns it (VB: Load cmdDigit(5))."""
+    if isinstance(obj, ControlArray):
+        if Index is None:
+            raise TypeError("Load(control_array, Index): which element to load?")
+        return obj.Load(Index)
+    obj.Load()
+    return None
 
 
-def Unload(form: Form) -> bool:
-    return form.Unload()
+def Unload(obj, Index: int | None = None):
+    """``Unload(form)`` closes a form (False if Form_Unload cancelled);
+    ``Unload(self.cmdDigit, 5)`` removes a control array element added with
+    Load."""
+    if isinstance(obj, ControlArray):
+        if Index is None:
+            raise TypeError("Unload(control_array, Index): which element to unload?")
+        obj.Unload(Index)
+        return None
+    return obj.Unload()
 
 
 def run(form) -> int:

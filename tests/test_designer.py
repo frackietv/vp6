@@ -14,6 +14,7 @@ def designer(qapp, tmp_path):
     path.write_text(formfile.new_form_source("Form1"))
     doc = FormDocument(str(path))
     d = FormDesigner(doc, str(tmp_path))
+    d.ask_create_array = lambda name: False  # "No" instead of a blocking message box
     d.resize(900, 700)
     d.show()
     yield d

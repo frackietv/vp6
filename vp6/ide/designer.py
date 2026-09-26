@@ -16,13 +16,14 @@ from typing import Callable
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (QAction, QBrush, QColor, QGuiApplication, QPainter, QPalette, QPen,
                            QPixmap)
-from PySide6.QtWidgets import QApplication, QMenu, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QApplication, QMenu, QMessageBox, QScrollArea, QVBoxLayout,
+                               QWidget)
 
 from .. import appearance, colors
 from .._props import normalize
 from ..controls import CONTROL_TYPES, Control
 from ..form import Form
-from ..formfile import ControlDef, FormDef
+from ..formfile import ControlDef, FormDef, control_key, set_index_parameter
 from . import chrome
 from .documents import FormDocument
 from .theme import theme_manager
@@ -354,8 +355,8 @@ class _Overlay(QWidget):
                              drag["start"])
         elif kind == "band" and drag["moved"]:
             band = QRect(drag["start"], event.position().toPoint()).normalized()
-            names = [c.name for c in d.form_def.controls
-                     if c.parent == drag["container"] and band.intersects(d.canvas_rect(c.name))]
+            names = [c.key for c in d.form_def.controls
+                     if c.parent == drag["container"] and band.intersects(d.canvas_rect(c.key))]
             d.select((d.selection if drag["additive"] else []) + names)
         elif kind in ("move", "resize") and drag["moved"]:
             d.commit_geometry(list(drag["orig"]) if kind == "move" else [drag["name"]])
@@ -370,7 +371,8 @@ class _Overlay(QWidget):
         pos = event.position().toPoint()
         name = d.control_at(pos)
         if name is not None:
-            d.viewCodeRequested.emit(name, d.controls[name].DefaultEvent)
+            d.viewCodeRequested.emit(d.form_def.control(name).name,
+                                     d.controls[name].DefaultEvent)
         elif d.form_canvas_rect().contains(pos):
             d.viewCodeRequested.emit("Form", Form.DefaultEvent)
 
@@ -437,13 +439,16 @@ class FormDesigner(QWidget):
         self.load_def(document.form_def)
         document.designReloaded.connect(self._on_document_reloaded)
         theme_manager().changed.connect(self._on_ide_theme_changed)  # light/dark, frame
-        QGuiApplication.styleHints().colorSchemeChanged.connect(
-            lambda *_: QTimer.singleShot(0, self.refresh_scheme))
+        # A bound method, not a lambda: disconnected when the designer is deleted
+        QGuiApplication.styleHints().colorSchemeChanged.connect(self._on_os_scheme_changed)
 
     # -- color schemes -------------------------------------------------------------------------
     def set_project_scheme(self, scheme: int) -> None:
         self.project_scheme = scheme
         self.refresh_scheme()
+
+    def _on_os_scheme_changed(self, *_) -> None:
+        QTimer.singleShot(0, self, self.refresh_scheme)  # cancelled if the designer is deleted
 
     def refresh_scheme(self) -> None:
         """Re-apply the form's scheme (project default or the OS appearance
@@ -457,7 +462,9 @@ class FormDesigner(QWidget):
         # resized. The designer's own resizeEvent comes before the layout
         # resizes the scroll area, so a single jump (maximize/restore) would
         # leave the canvas at the previous size.
-        if watched is self.scroll.viewport() and event.type() == QEvent.Resize:
+        scroll = self.__dict__.get("scroll")  # gone while the designer is being destroyed
+        if scroll is not None and watched is scroll.viewport() and \
+                event.type() == QEvent.Resize:
             self.update_canvas_size()
         return super().eventFilter(watched, event)
 
@@ -496,9 +503,10 @@ class FormDesigner(QWidget):
         try:
             control = cls(parent, Name=control_def.name, **valid)
         except Exception as exc:  # noqa: BLE001 - keep the designer usable
-            self.statusMessage.emit(f"{control_def.name}: {exc}")
+            self.statusMessage.emit(f"{control_def.key}: {exc}")
             control = cls(parent, Name=control_def.name)
-        self.controls[control_def.name] = control
+        control.__dict__["_index"] = control_def.index
+        self.controls[control_def.key] = control
         self._prepare_widget(control)
         control._widget.show()
         return control
@@ -582,8 +590,8 @@ class FormDesigner(QWidget):
         widget = form_widget.childAt(form_widget.mapFrom(self.canvas, pos))
         while widget is not None and widget is not form_widget:
             control = getattr(widget, "_vp_control", None)  # set on each control's widget
-            if control is not None and self.controls.get(control.Name) is control:
-                return control.Name
+            if control is not None and self.controls.get(self.key_of(control)) is control:
+                return self.key_of(control)
             widget = widget.parentWidget()
         return None
 
@@ -614,12 +622,26 @@ class FormDesigner(QWidget):
             return [self.form]
         return [self.controls[n] for n in self.selection]
 
+    @staticmethod
+    def key_of(control: Control) -> str:
+        """'Command1', or 'cmdDigit(3)' for an element of a control array."""
+        return control_key(control._name, control._index)
+
     def object_name(self, obj) -> str:
-        return self.form_def.class_name if obj is self.form else obj.Name
+        """What identifies an object in the Properties window's object list."""
+        return self.form_def.class_name if obj is self.form else self.key_of(obj)
+
+    def name_value(self, obj) -> str:
+        """Its (Name): the same for all elements of a control array."""
+        return self.form_def.class_name if obj is self.form else obj._name
+
+    def supports_index(self, obj) -> bool:
+        """Controls have an Index (control arrays); the form doesn't."""
+        return obj is not self.form
 
     def all_objects(self) -> list[tuple[str, str]]:
         return [(self.form_def.class_name, "Form")] + \
-            [(c.name, c.type) for c in self.form_def.controls]
+            [(c.key, c.type) for c in self.form_def.controls]
 
     def set_tool(self, tool: str | None) -> None:
         self.tool = tool
@@ -735,15 +757,15 @@ class FormDesigner(QWidget):
         result = set(names)
         for control_def in self.form_def.controls:
             if control_def.parent in result:
-                result.add(control_def.name)
-        return [c.name for c in self.form_def.controls if c.name in result]
+                result.add(control_def.key)
+        return [c.key for c in self.form_def.controls if c.key in result]
 
     def delete_selection(self) -> None:
         if not self.selection:
             return
         before = self._snapshot()
         doomed = set(self._descendants(self.selection))
-        self.form_def.controls = [c for c in self.form_def.controls if c.name not in doomed]
+        self.form_def.controls = [c for c in self.form_def.controls if c.key not in doomed]
         for name in self.selection:  # deleting a container deletes its children
             widget = self.controls[name]._widget
             if widget is not None:
@@ -781,31 +803,26 @@ class FormDesigner(QWidget):
         if len(self.selection) == 1 and self.controls[self.selection[0]].IsContainer:
             target = self.selection[0]
         before = self._snapshot()
-        taken = {c.name for c in self.form_def.controls}
-        renamed: dict[str, str] = {}
+        renamed: dict[str, str] = {}  # clipboard key -> pasted key
         pasted_roots = []
-        clipboard_names = {c.name for c in _clipboard}
+        clipboard_keys = {c.key for c in _clipboard}
         for original in _clipboard:
             control_def = copy.deepcopy(original)
-            new_name = control_def.name
-            if new_name in taken or not is_identifier(new_name):
-                new_name = self.unique_name(NAME_PREFIX.get(control_def.type, control_def.type),
-                                            taken)
-            renamed[control_def.name] = new_name
-            is_root = control_def.parent is None or control_def.parent not in clipboard_names
+            control_def.name, control_def.index = self._paste_identity(original)
+            renamed[original.key] = control_def.key
+            is_root = control_def.parent is None or control_def.parent not in clipboard_keys
             if is_root:
                 control_def.parent = target
-                pasted_roots.append(new_name)
-                if new_name != original.name:
+                pasted_roots.append(control_def.key)
+                if control_def.key != original.key:
                     control_def.props["Left"] = control_def.props.get("Left", 0) + GRID
                     control_def.props["Top"] = control_def.props.get("Top", 0) + GRID
             else:
                 control_def.parent = renamed[control_def.parent]
-            for text_prop in ("Caption", "Text"):
-                if control_def.props.get(text_prop) == original.name:
-                    control_def.props[text_prop] = new_name
-            control_def.name = new_name
-            taken.add(new_name)
+            if control_def.name != original.name:
+                for text_prop in ("Caption", "Text"):
+                    if control_def.props.get(text_prop) == original.name:
+                        control_def.props[text_prop] = control_def.name
             self.form_def.controls.append(control_def)
             self._instantiate(control_def)
         self._renumber_tab_order(last=list(renamed.values()))
@@ -823,18 +840,18 @@ class FormDesigner(QWidget):
         def current(control_def):
             return int(control_def.props.get("TabIndex", 0))
 
-        order = sorted((c for c in defs if c.name != moved and c.name not in last), key=current)
-        order += [c for name in last for c in defs if c.name == name]
+        order = sorted((c for c in defs if c.key != moved and c.key not in last), key=current)
+        order += [c for key in last for c in defs if c.key == key]
         if moved is not None:
             moved_def = self.form_def.control(moved)
             order.insert(min(max(current(moved_def), 0), len(order)), moved_def)
         for index, control_def in enumerate(order):
             if current(control_def) != index:
                 control_def.props["TabIndex"] = index
-                self._safe_set(self.controls[control_def.name], "TabIndex", index)
+                self._safe_set(self.controls[control_def.key], "TabIndex", index)
 
     def select_all(self) -> None:
-        self.select([c.name for c in self.form_def.controls if c.parent is None])
+        self.select([c.key for c in self.form_def.controls if c.parent is None])
 
     # -- properties ----------------------------------------------------------------------------------------
     def set_property(self, prop: str, value) -> str | None:
@@ -842,6 +859,8 @@ class FormDesigner(QWidget):
         or None."""
         if prop == "Name":
             return self.rename(value)
+        if prop == "Index":
+            return self.set_index(value)
         before = self._snapshot()
         try:
             for obj in self.selected_objects():
@@ -853,7 +872,7 @@ class FormDesigner(QWidget):
                 if obj is self.form:
                     self.form_def.props[prop] = stored
                 else:
-                    props = self.form_def.control(obj.Name).props
+                    props = self.form_def.control(self.key_of(obj)).props
                     props[prop] = stored
                     if prop in ("AutoSize", "Picture", "Caption") and obj._widget is not None:
                         # AutoSize may have changed the size
@@ -861,7 +880,7 @@ class FormDesigner(QWidget):
             if prop == "TabIndex":
                 for obj in self.selected_objects():
                     if obj is not self.form and prop in obj._specs:
-                        self._renumber_tab_order(moved=obj.Name)
+                        self._renumber_tab_order(moved=self.key_of(obj))
         except Exception as exc:  # noqa: BLE001 - report invalid values to the user
             self.load_def(before)
             return f"Invalid property value: {exc}"
@@ -876,37 +895,145 @@ class FormDesigner(QWidget):
             return "Can't rename multiple objects at once"
         if not is_identifier(new_name):
             return f"'{new_name}' is not a valid name"
-        old_name = self.selection[0] if self.selection else self.form_def.class_name
+        if not self.selection:
+            return self._rename_form(new_name)
+        key = self.selection[0]
+        control_def = self.form_def.control(key)
+        old_name = control_def.name
         if new_name == old_name:
             return None
-        if new_name in self.controls or new_name == self.form_def.class_name or (
-                not self.selection and self.form_name_taken(new_name)):
+        if new_name == self.form_def.class_name:
             return f"The name '{new_name}' is already used"
+        others = self.form_def.elements(new_name)
         before = self._snapshot()
-        if not self.selection:
-            self.form_def.class_name = new_name
-            self._rename_form_in_code(old_name, new_name)
-            self.document.set_form_def(self.form_def)
-            self._undo.append(before)
-            self.designChanged.emit()
-            self.selectionChanged.emit()
-            return None
-        from ..formfile import rename_control_references
+        if others:  # joining (or creating) a control array, like VB
+            if others[0].type != control_def.type:
+                return f"The name '{new_name}' is already used by a {others[0].type}"
+            if others[0].index is None:
+                if not self.ask_create_array(new_name):
+                    return f"The name '{new_name}' is already used"
+                self._make_array(new_name)
+            index = control_def.index
+            if index is None or any(o.index == index for o in self.form_def.elements(new_name)):
+                index = self._next_index(new_name)
+            self._rekey(key, new_name, index)
+        else:
+            alone = len(self.form_def.elements(old_name)) == 1
+            if alone:  # its event handlers and references go with it
+                from ..formfile import rename_control_references
 
-        self.document.replace_text(
-            rename_control_references(self.document.text, old_name, new_name))
-        for control_def in self.form_def.controls:
-            if control_def.name == old_name:
-                control_def.name = new_name
-            if control_def.parent == old_name:
-                control_def.parent = new_name
-        control = self.controls.pop(old_name)
-        control.__dict__["_name"] = new_name
-        self.controls[new_name] = control
-        self.selection = [new_name]
+                self.document.replace_text(
+                    rename_control_references(self.document.text, old_name, new_name))
+            self._rekey(key, new_name, control_def.index)
         self._commit(before)
         self.selectionChanged.emit()
         return None
+
+    def _rename_form(self, new_name: str) -> str | None:
+        old_name = self.form_def.class_name
+        if new_name == old_name:
+            return None
+        if self.form_def.elements(new_name) or self.form_name_taken(new_name):
+            return f"The name '{new_name}' is already used"
+        before = self._snapshot()
+        self.form_def.class_name = new_name
+        self._rename_form_in_code(old_name, new_name)
+        self.document.set_form_def(self.form_def)
+        self._undo.append(before)
+        self.designChanged.emit()
+        self.selectionChanged.emit()
+        return None
+
+    # -- control arrays --------------------------------------------------------------------------------
+    def ask_create_array(self, name: str) -> bool:
+        """Whether to make a control array (VB's question; tests replace it)."""
+        answer = QMessageBox.question(
+            self, "VP6", f"You already have a control named '{name}'. "
+                         "Do you want to create a control array?")
+        return answer == QMessageBox.Yes
+
+    def _next_index(self, name: str) -> int:
+        return 1 + max((c.index for c in self.form_def.elements(name) if c.index is not None),
+                       default=-1)
+
+    def _rekey(self, key: str, name: str, index: int | None) -> None:
+        """Give a control a new name and/or Index, updating everything that
+        refers to it by its key (the live control, containers, selection)."""
+        control_def = self.form_def.control(key)
+        control_def.name, control_def.index = name, index
+        new_key = control_def.key
+        for other in self.form_def.controls:
+            if other.parent == key:
+                other.parent = new_key
+        control = self.controls.pop(key)
+        control.__dict__["_name"], control.__dict__["_index"] = name, index
+        self.controls[new_key] = control
+        self.selection = [new_key if k == key else k for k in self.selection]
+
+    def _set_index_parameter(self, name: str, present: bool) -> None:
+        """Add or remove Index in the name's event handlers, as VB does."""
+        control_def = self.form_def.elements(name)[0]
+        events = CONTROL_TYPES[control_def.type].Events
+        self.document.replace_text(
+            set_index_parameter(self.document.text, name, events, present))
+
+    def _make_array(self, name: str) -> None:
+        """Turn the control ``name`` into element 0 of a control array."""
+        self._rekey(name, name, 0)
+        self._set_index_parameter(name, True)
+
+    def set_index(self, value) -> str | None:
+        """The Index property: makes a control an element of a control array
+        (any whole number 0 - 32767), changes its place in the array, or
+        (empty) makes a lone element a plain control again."""
+        if len(self.selection) != 1:
+            return "Set the Index of one control at a time"
+        key = self.selection[0]
+        control_def = self.form_def.control(key)
+        name = control_def.name
+        if value in (None, ""):
+            if control_def.index is None:
+                return None
+            if len(self.form_def.elements(name)) > 1:
+                return (f"Other controls are named '{name}': rename or delete them before "
+                        "removing this one's Index")
+            before = self._snapshot()
+            self._set_index_parameter(name, False)
+            self._rekey(key, name, None)
+        else:
+            try:
+                index = int(value)
+            except (TypeError, ValueError):
+                return f"Index must be a whole number, not '{value}'"
+            if not 0 <= index <= 32767:
+                return "Index must be from 0 to 32767"
+            if index == control_def.index:
+                return None
+            if self.form_def.control(control_key(name, index)) is not None:
+                return f"'{control_key(name, index)}' already exists"
+            before = self._snapshot()
+            if control_def.index is None:
+                self._set_index_parameter(name, True)
+            self._rekey(key, name, index)
+        self._commit(before)
+        self.selectionChanged.emit()
+        return None
+
+    def _paste_identity(self, original: ControlDef) -> tuple[str, int | None]:
+        """(name, index) for a pasted copy. A copy of a control whose name is
+        taken joins that name's control array (VB asks first when that makes
+        a new array); otherwise it gets a new name."""
+        name = original.name
+        others = self.form_def.elements(name)
+        if not others and is_identifier(name):
+            return name, original.index
+        if others and others[0].type == original.type and is_identifier(name):
+            if others[0].index is not None or self.ask_create_array(name):
+                if others[0].index is None:
+                    self._make_array(name)
+                return name, self._next_index(name)
+        prefix = NAME_PREFIX.get(original.type, original.type)
+        return self.unique_name(prefix), None
 
     def _rename_form_in_code(self, old: str, new: str) -> None:
         from ..formfile import rename_form_class
@@ -996,8 +1123,9 @@ class FormDesigner(QWidget):
     # -- context menu --------------------------------------------------------------------------------------------
     def show_context_menu(self, global_pos: QPoint) -> None:
         menu = QMenu(self)
-        target = self.selection[-1] if self.selection else "Form"
-        event = self.controls[target].DefaultEvent if self.selection else Form.DefaultEvent
+        target = self.form_def.control(self.selection[-1]).name if self.selection else "Form"
+        event = self.controls[self.selection[-1]].DefaultEvent if self.selection else \
+            Form.DefaultEvent
 
         def add(text, slot, enabled=True):
             action = QAction(text, menu)

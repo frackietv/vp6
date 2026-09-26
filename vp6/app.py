@@ -65,7 +65,7 @@ class InterruptHandler(QObject):
         # Back in Python: the pending SIGINT handler runs now
 
     def _on_interrupt(self, signum, frame):
-        QTimer.singleShot(0, self._run)
+        QTimer.singleShot(0, self, self._run)
 
     def _run(self):
         if self._busy:
@@ -74,7 +74,7 @@ class InterruptHandler(QObject):
         if modal is not None:
             # Close it, then continue once its event loop has returned
             modal.reject() if isinstance(modal, QDialog) else modal.close()
-            QTimer.singleShot(0, self._run)
+            QTimer.singleShot(0, self, self._run)
             return
         self._busy = True
         try:

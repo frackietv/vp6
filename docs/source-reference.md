@@ -162,11 +162,14 @@ The intrinsic controls.
 * **`_EventBridge`**: a `QObject` event filter forwarding widget events to
   `Control._on_qt_event`.
 * **`Control`**, the base class:
-  * **Identity:** `Name`, `Parent`, `Container`, `_form`, `_design_mode`.
+  * **Identity:** `Name`, `Index` (read-only: the element's number in a
+    control array, `_index`, else `None`), `Parent`, `Container`, `_form`,
+    `_design_mode`, `_loaded_at_runtime` (added with `ControlArray.Load`).
   * **Widget management:** `_create_widget(parent_widget)` (abstract),
     `_build_widget`, `_rebuild_widget`, `_event_targets` (which widgets get
     the filter), `_connect_signals`.
-  * **Dispatch:** `_handler(event)`, `_fire(event, *args)`, `_on_qt_event`,
+  * **Dispatch:** `_handler(event)`, `_fire(event, *args)` (an array
+    element passes its `Index` first), `_on_qt_event`,
     `_on_key_press` (KeyPreview, KeyDown, KeyPress transform or cancel,
     Default/Cancel buttons).
   * **Common property implementations:** geometry, Enabled, Visible (not
@@ -197,6 +200,18 @@ The intrinsic controls.
 | `HScrollBar`, `VScrollBar` | `QScrollBar` | `_ScrollBar` base; Change on value change, Scroll while dragging. |
 | `PictureBox` | `QLabel` | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle; `Cls()`. |
 
+* **`ControlArray`**, a VB control array (after `CONTROL_TYPES`, which it
+  isn't part of). The form's `__setattr__` gives it its name.
+  `__setitem__(index, control)` makes a control an element: it checks the
+  Index (0 - 32767, `_check_index`), that it's free and that all elements
+  have one type, then sets the control's `_name` and `_index`. Elements
+  are read with `[i]`, VB's `(i)` (`__call__`) or `Item(i)`; also
+  iteration in Index order, `len`, `in`, `Count`, `LBound`, `UBound`.
+  `Load(i)` creates a new element from the lowest one's property values
+  (hidden, last in the tab order, same container); `Unload(i)` removes
+  one created that way (widget deleted, taken out of the form's controls,
+  a Timer stopped).
+
 ### `vp6/dialogs.py` (≈70 lines)
 
 * `MsgBox(prompt, buttons=vpOKOnly, title=None)` builds a `QMessageBox`:
@@ -222,7 +237,8 @@ The intrinsic controls.
 * **`Form(PropertyHost)`**:
   * **Construction:**
     * `__init__` (see architecture §4.4);
-    * `__setattr__` names controls assigned to attributes;
+    * `__setattr__` names controls and `ControlArray`s assigned to
+      attributes;
     * `_register_control`;
     * `_owner_form` / `_container_widget` / `_base_dir`, the same interface
       a container control offers.
@@ -240,8 +256,9 @@ The intrinsic controls.
     `ScaleWidth`/`ScaleHeight`, `Visible`, `Load()`, `Show(Modal, OwnerForm)`,
     `Hide()`, `Unload()`, `Move()`, `Refresh()`, `SetFocus()`,
     `Form.Run()` (classmethod).
-* **Module functions:** `Load(form)`, `Unload(form)` and `run(form_or_class)`
-  (show the form and run the event loop).
+* **Module functions:** `Load(form)` / `Load(array, Index)`,
+  `Unload(form)` / `Unload(array, Index)` (forms, or control array elements)
+  and `run(form_or_class)` (show the form and run the event loop).
 
 ### `vp6/formfile.py` (≈280 lines)
 
@@ -250,8 +267,12 @@ architecture §6.1). It has no Qt dependency beyond importing the control
 classes for their metadata.
 
 * **Data:**
-  * `ControlDef(type, name, parent, props)`;
-  * `FormDef(class_name, props, controls)` with `control(name)`;
+  * `control_key(name, index)` is how the IDE identifies a control:
+    `"Command1"`, or `"cmdDigit(3)"` for a control array element;
+  * `ControlDef(type, name, parent, props, index)` with `key`; `parent` is
+    the container's key;
+  * `FormDef(class_name, props, controls)` with `control(key)`,
+    `elements(name)` (a name's controls in Index order) and `is_array(name)`;
   * `FormFileError`.
 * **Locating:** `find_region(source)` returns the (start, end) line indices,
   and raises if `# endregion` is missing. Also `find_form_class`,
@@ -259,7 +280,12 @@ classes for their metadata.
   code window).
 * **Parsing:** `parse(source)` → `FormDef`; `parse_region_body(body,
   class_name)`. It validates the allowed statement shapes, the control types,
-  that parents are defined first, and that values are literals.
+  that parents are defined first, and that values are literals. Control
+  arrays: `self.X = ControlArray()` declares one (`_self_element`,
+  `_is_control_call`, `_add_control` check that elements come after it, are
+  unique and of one type); containers can be elements (`self.fra[1]`).
+  Generation writes the declaration before the first element (`_reference`
+  gives `self.X` or `self.X[i]`).
 * **Generating:**
   * `generate_region(form_def, indent)` writes the whole region;
   * `replace_region(source, form_def)` swaps the region into a source text;
@@ -280,7 +306,11 @@ classes for their metadata.
     the module (the file) keeps its name;
   * `rename_module_references(source, old, new)` renames a module in another
     file: `from old import`, `import old` and `old.x`;
-  * `event_stub(obj, event, args)` makes a new handler stub.
+  * `set_index_parameter(source, name, events, present)` adds or removes the
+    `Index` parameter of the name's event handlers (a control becoming a
+    control array, or no longer one);
+  * `event_stub(obj, event, args, index)` makes a new handler stub (`index`:
+    `Index` first, for a control array).
 
 ### `vp6/project.py` (≈170 lines)
 
@@ -480,31 +510,46 @@ The form designer (architecture §5.3).
   * **Keyboard:** arrows move by the grid (Ctrl: 1 px), Shift+arrows resize,
     Esc cancels the tool or selects the parent, Delete/Backspace deletes.
 * **`FormDesigner(QWidget)`** (signals: see architecture §5.3):
+  * **Keys:** controls are identified by their key (`formfile.control_key`):
+    `Command1`, or `cmdDigit(3)` for a control array element. `controls`,
+    `selection`, `canvas_rect(key)` and the containers of `ControlDef`s all
+    use keys; `key_of(control)` gives a live control's key.
   * **Building:** `load_def(form_def)`, `_instantiate`, `_prepare_widget`
     (NoFocus), `_layout_form` (below the frame's title bar),
     `update_canvas_size`. `eventFilter` calls `update_canvas_size` on the
     scroll area viewport's resize, so the canvas fills the window after
     maximize and restore.
-  * **Scheme and frame:** `set_project_scheme`, `refresh_scheme`,
+  * **Scheme and frame:** `set_project_scheme`, `refresh_scheme` (also on
+    OS light/dark changes, via `_on_os_scheme_changed`),
     `frame_style()`, `frame_info()`, `_on_ide_theme_changed`.
   * **Geometry:** `form_widget`, `form_canvas_rect`, `canvas_rect(name)`,
     `parent_rect(name)`, `control_at(pos)`, `container_at(pos)`.
   * **Selection:** `select`, `select_by_name`, `selected_objects`,
-    `object_name`, `all_objects`, `set_tool`. An empty selection means the
-    form.
+    `object_name` (the key), `name_value` (the `(Name)`), `supports_index`,
+    `all_objects`, `set_tool`. An empty selection means the form.
   * **Commits and undo:** `_snapshot`, `_commit`, `commit_geometry`,
     `commit_form_size`, `undo`, `redo`, `_restore`.
   * **Editing:**
     * `unique_name`, `create_control`, `add_control_centered`;
     * `delete_selection` (with descendants), `copy_selection`,
-      `cut_selection`, `paste` (renames and offsets duplicates), `select_all`;
+      `cut_selection`, `paste` (offsets duplicates; `_paste_identity` gives a
+      copy a new name, or makes it an element of a control array),
+      `select_all`;
     * `_renumber_tab_order(moved, last)` keeps `TabIndex` values 0, 1, 2, …
       without gaps or duplicates, like VB: added and pasted controls go to
       the end, deleting closes the gap, and setting a control's `TabIndex`
       moves it to that place (clamped to the last one) while the others make
       room. It runs inside the same commit, so one undo reverts it;
     * `set_property(prop, value)` returns an error message or `None`;
-      `rename(new_name)` handles controls and the form class;
+      `rename(new_name)` handles controls (the name of another control of
+      the same type joins its control array) and the form class
+      (`_rename_form`, which `form_name_taken` checks against the project);
+    * **control arrays:** `set_index(value)` (the Index property),
+      `ask_create_array(name)` (VB's question; tests replace it),
+      `_make_array(name)`, `_next_index`, `_rekey(key, name, index)` (renames
+      or re-indexes a control everywhere it is referred to by key) and
+      `_set_index_parameter(name, present)` (adds or removes `Index` in the
+      handlers);
     * Format menu: `align`, `make_same_size`, `center_in_form`, `nudge`,
       `z_order`;
     * `show_context_menu`.
@@ -559,14 +604,19 @@ Window frames painted around the designed form.
     `current_line()`.
 * **`complete(context, document)`**, the completion provider (see
   architecture §5.4). `_members(cls)` lists a class's spec names plus its
-  public capitalized members.
+  public capitalized members. For a control array, `self.cmdDigit.` gives
+  the `ControlArray` members and `self.cmdDigit[i].` / `self.cmdDigit(i).`
+  the control's.
 * **`CodeWindow(QWidget)`**, the combos plus the editor:
   * `refresh_combos` (debounced 300 ms after text changes), `_fill_procs`
     (handlers that exist are shown bold);
   * `_on_object_chosen` jumps to an existing handler or the default event;
     `_on_proc_chosen`;
+  * `_objects()` lists the form and each control name once (a control
+    array is one object);
   * `goto_event(obj, event)` jumps to the handler, or inserts a stub after
-    `_class_end_line()` and selects `pass`;
+    `_class_end_line()` and selects `pass` (with `Index` for a control
+    array);
   * `_goto_def`, `_sync_combos_to_cursor`.
 
 ### `vp6/ide/properties.py` (≈290 lines)
@@ -576,7 +626,9 @@ Window frames painted around the designed form.
   * **Binding:** `set_designer(designer)` connects to `selectionChanged` and
     `designChanged`; `refresh()` rebuilds the object combo and the grid
     (common properties across the selection; `_MIXED` marks differing
-    values).
+    values). A single control also gets the `Index` row (`INDEX_SPEC`, kind
+    `index`, empty = not in a control array) under `(Name)`, when the target
+    has `supports_index`; `(Name)` shows the target's `name_value`.
   * **Editors:** `_editor(spec, value)` picks an editor by kind;
     `_color_editor`, `_choose_color`, `_edit_list`, `_edit_text` and
     `_browse_file` (stores paths relative to the form folder when possible).
@@ -884,6 +936,7 @@ All tests run headless. `conftest.py`:
 |---|---|
 | `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results. |
 | `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames (controls, form classes, class and module references in other files), the console template. |
+| `test_control_arrays.py` | Control arrays: elements, `[i]` / `(i)` / `Item`, iteration, bounds, read-only `Index`, handlers getting `Index` first, `Load`/`Unload` of run-time elements (copied properties, hidden, last in the tab order; designer elements can't be unloaded), one type per array; the form file round trip (elements as containers too) and invalid arrays; adding/removing the `Index` parameter and stubs; in the designer: paste asking to create an array, renaming into an array (and out, and into another type's name), the Index property (one-element arrays, moving, clearing, undo), containers that are elements; the Properties window's `(Name)`, `Index` row and object list; the code window's Object list, new handlers with `Index`, completion. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`. |
@@ -894,7 +947,7 @@ All tests run headless. `conftest.py`:
 | `test_outline.py` | The outline of the Kitchen Sink's Form1 matches the backlog example exactly; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: hidden by default, opened under Properties, following the Project panel or active window, clicking items goes to the line (unfolding the designer region). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme; its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload). |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme, and control arrays (an array, `Load`/`Unload`, `Count`, bounds, `Index` handlers); its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload), the option-button control array, and the `cmdMore` control array loading and unloading elements. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6. |
 
 ## Samples: `samples/`
