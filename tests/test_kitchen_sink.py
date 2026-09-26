@@ -59,7 +59,8 @@ def test_every_control_type_handles_its_default_event():
             event = CONTROL_TYPES[control.type].DefaultEvent
             if f"{control.name}_{event}" in methods:
                 handled.add(control.type)
-    missing = sorted(set(CONTROL_TYPES) - handled)
+    with_events = {name for name, cls in CONTROL_TYPES.items() if cls.Events}  # not Line
+    missing = sorted(with_events - handled)
     assert not missing, f"No default-event handler for: {missing} - {UPDATE_HINT}"
 
 
@@ -213,6 +214,17 @@ def test_kitchen_sink_menus(sink_forms):
     form.Unload()
 
 
+def test_kitchen_sink_lines(sink_forms):
+    form = sink_forms["Form1"].Form1()
+    form.Show()
+    form.Width, form.Height = 900, 600  # Form_Resize stretches the line above the status bar
+    QTest.qWait(20)
+    assert (form.linStatus.X2, form.linStatus.Y1) == (900 - 16, 600 - 39)
+    assert form.linStatus.Y1 == form.linStatus.Y2 < form.lblStatus.Top
+    assert form.linZ.ZIndex == 3 and form.linZ.BorderStyle == 2
+    form.Unload()
+
+
 def test_kitchen_sink_z_order_demo(sink_forms):
     form = sink_forms["Form1"].Form1()
     form.Show()
@@ -226,5 +238,5 @@ def test_kitchen_sink_z_order_demo(sink_forms):
     form.cmdSwapZ._widget.click()
     assert on_top() == "lblZBlue" and form.lblZBlue.Caption == "Blue: ZIndex 2"
     form.lblZRed_Click()  # ZOrder(0)
-    assert on_top() == "lblZRed" and form.lblZRed.ZIndex == 3
+    assert on_top() == "lblZRed" and form.lblZRed.ZIndex == 4  # above linZ (3) too
     form.Unload()

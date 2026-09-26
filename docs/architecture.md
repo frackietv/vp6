@@ -591,6 +591,8 @@ Rules for the region (`formfile.parse_region_body`):
     may be an element: `self.<Container>[<int>]`.
 * A container (and a control array's declaration) must come before the
   controls in it.
+* A `Line` is placed with `X1`, `Y1`, `X2`, `Y2` instead of `Left`, `Top`,
+  `Width`, `Height`.
 * Menus are `Menu` controls whose parent is the form (the menu bar) or
   another `Menu`; their order is the menu order. The Menu Editor writes them
   after the other controls. Statement order is

@@ -126,6 +126,8 @@ class Form1(Form):
                               Height=40, Alignment=2, BackColor=0xFF0000, ForeColor=0xFFFFFF,
                               TabIndex=41, ToolTipText='Click to bring to front (ZOrder 0)',
                               ZIndex=1)
+        self.linZ = Line(self, X1=16, Y1=440, X2=212, Y2=492, BorderColor=0xFFFFFF, BorderStyle=2,
+                         BorderWidth=2, ZIndex=3)
         self.cmdSwapZ = CommandButton(self, Caption='Swap &Z-order', Left=224, Top=448, Width=120,
                                       Height=33, TabIndex=42,
                                       ToolTipText="Swaps the two labels' ZIndex values")
@@ -137,6 +139,7 @@ class Form1(Form):
                                       Height=33, Cancel=True, TabIndex=38,
                                       ToolTipText='Cancel button: Esc clicks it')
         self.tmrClock = Timer(self, Left=600, Top=440, Interval=1000)
+        self.linStatus = Line(self, X1=16, Y1=493, X2=744, Y2=493, BorderColor=0x808080)
         self.lblStatus = Label(self, Caption='Ready', Left=16, Top=496, Width=728, Height=25,
                                BorderStyle=1, TabIndex=39)
         self.mnuFile = Menu(self, Caption='&File')
@@ -164,8 +167,10 @@ class Form1(Form):
         self.lblStatus.Caption = f"{controls} controls loaded. Press F1 for help."
 
     def Form_Resize(self):
-        # Keep the status bar along the bottom edge
+        # Keep the status bar along the bottom edge, with a Line just above it
         self.lblStatus.Move(16, self.ScaleHeight - 36, self.ScaleWidth - 32)
+        self.linStatus.Y1 = self.linStatus.Y2 = self.ScaleHeight - 39
+        self.linStatus.X2 = self.ScaleWidth - 16
 
     def Form_MouseMove(self, Button, Shift, X, Y):
         self.lblStatus.Caption = f"Mouse at {X}, {Y}"
@@ -291,7 +296,9 @@ class Form1(Form):
 
     # --- z-order -------------------------------------------------------------------------------
     def cmdSwapZ_Click(self):
-        # ZIndex: higher values are drawn on top, and changes apply at once
+        # ZIndex: higher values are drawn on top, and changes apply at once. The
+        # dashed Line linZ (ZIndex 3) is above both labels until ZOrder(0) brings
+        # one in front of it; clicks go through a Line to what is underneath.
         self.lblZRed.ZIndex, self.lblZBlue.ZIndex = self.lblZBlue.ZIndex, self.lblZRed.ZIndex
         self.show_z_order()
 

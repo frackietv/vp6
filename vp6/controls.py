@@ -1147,6 +1147,99 @@ class PictureBox(Control):
 
 
 # Controls in toolbox order.
+_PEN_STYLES = {1: Qt.SolidLine, 2: Qt.DashLine, 3: Qt.DotLine, 4: Qt.DashDotLine,
+               5: Qt.DashDotDotLine, 6: Qt.SolidLine}
+
+
+class _LineWidget(QWidget):
+    """Covers the line's bounding box and paints the line; clicks go through
+    to whatever is underneath (a VB Line has no events)."""
+
+    def __init__(self, line: "Line", parent: QWidget):
+        super().__init__(parent)
+        self._line = line
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setFocusPolicy(Qt.NoFocus)
+
+    def paintEvent(self, event):
+        line = self._line
+        style = line._values.get("BorderStyle", 1)
+        if style == 0:  # Transparent
+            return
+        color = line._values.get("BorderColor")
+        pen = QPen(colors.to_qcolor(color) if color is not None
+                   else self.palette().color(QPalette.WindowText))  # follows the scheme
+        pen.setWidth(max(1, line._values.get("BorderWidth", 1)))
+        pen.setStyle(_PEN_STYLES.get(style, Qt.SolidLine))
+        pen.setCapStyle(Qt.FlatCap if style == 1 and pen.width() == 1 else Qt.RoundCap)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, line.X1 != line.X2 and line.Y1 != line.Y2)
+        painter.setPen(pen)
+        origin = self.pos()
+        painter.drawLine(line.X1 - origin.x(), line.Y1 - origin.y(),
+                         line.X2 - origin.x(), line.Y2 - origin.y())
+
+
+class Line(Control):
+    """A straight line from (X1, Y1) to (X2, Y2), in its container's
+    coordinates. It has no events and never takes the focus; clicks go to
+    what is underneath."""
+
+    TypeName = "Line"
+    DefaultEvent = ""
+    Events: tuple[str, ...] = ()
+    DefaultSize = (100, 0)  # a new line: 100 pixels to the right
+    Properties = (
+        P("X1", "int", 0, always=True, description="Horizontal position of the start"),
+        P("Y1", "int", 0, always=True, description="Vertical position of the start"),
+        P("X2", "int", 100, always=True, description="Horizontal position of the end"),
+        P("Y2", "int", 0, always=True, description="Vertical position of the end"),
+        P("BorderColor", "color", None,
+          description="The line's color; unset = the text color of the color scheme"),
+        P("BorderStyle", "enum", 1, enum_choices(
+            "Transparent", "Solid", "Dash", "Dot", "Dash-Dot", "Dash-Dot-Dot", "Inside Solid"),
+          description="How the line is drawn; Transparent hides it"),
+        P("BorderWidth", "int", 1, description="Thickness in pixels"),
+        P("Visible", "bool", True, description="Whether the line is shown at run time"),
+        P("Tag", "str", "", description="Free for your own use"),
+        next(spec for spec in _COMMON if spec.name == "ZIndex"),
+    )
+
+    def _create_widget(self, parent):
+        return _LineWidget(self, parent)
+
+    def _event_targets(self):
+        return []  # no events
+
+    def _padding(self) -> int:
+        return max(1, self._values.get("BorderWidth", 1)) // 2 + 2
+
+    def _update_geometry(self, _=None) -> None:
+        """The widget covers the line plus room for its width."""
+        if self._widget is None or not all(k in self._values for k in ("X1", "Y1", "X2", "Y2")):
+            return
+        x1, y1, x2, y2 = (self._values[k] for k in ("X1", "Y1", "X2", "Y2"))
+        pad = self._padding()
+        self._widget.setGeometry(min(x1, x2) - pad, min(y1, y2) - pad,
+                                 abs(x2 - x1) + 2 * pad + 1, abs(y2 - y1) + 2 * pad + 1)
+        self._widget.update()
+
+    _apply_X1 = _apply_Y1 = _apply_X2 = _apply_Y2 = _apply_BorderWidth = _update_geometry
+
+    def _repaint(self, _=None) -> None:
+        if self._widget is not None:
+            self._widget.update()
+
+    _apply_BorderColor = _apply_BorderStyle = _repaint
+
+    def _moved_points(self) -> dict[str, int]:
+        """X1..Y2 after the widget was moved (the designer drags the widget)."""
+        pad = self._padding()
+        dx = self._widget.x() - (min(self.X1, self.X2) - pad)
+        dy = self._widget.y() - (min(self.Y1, self.Y2) - pad)
+        return {"X1": self.X1 + dx, "Y1": self.Y1 + dy, "X2": self.X2 + dx, "Y2": self.Y2 + dy}
+
+
 def _shortcut_choices() -> tuple[tuple[str, str], ...]:
     """VB's Shortcut list, in Qt's key names ("" = none)."""
     letters = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
@@ -1277,7 +1370,7 @@ class Menu(Control):
 CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
-        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Menu,
+        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Menu,
     )
 }
 

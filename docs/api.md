@@ -573,6 +573,42 @@ Default size 32 × 32.
 Events: `Timer`. Default event (double-click in the designer): `Timer`.
 <!-- END GENERATED -->
 
+### Line
+
+A straight line, like VB's: from (`X1`, `Y1`) to (`X2`, `Y2`) in its
+container's coordinates. It has no events and never takes the focus;
+clicks go through it to the form or control underneath. Its color is the
+color scheme's text color unless `BorderColor` is set. It stacks with the
+other controls by `ZIndex`.
+
+```python
+self.linDivider = Line(self, X1=16, Y1=200, X2=464, Y2=200, BorderColor=vpBlue)
+self.linDivider.X2 = self.ScaleWidth - 16     # changes apply at once
+```
+
+In the designer, draw a line from where you press to where you release the
+mouse. Click near the line to select it: the handles at its ends move one
+end; dragging the line moves it.
+
+<!-- BEGIN GENERATED: control Line -->
+Placed by its two ends, (X1, Y1) and (X2, Y2), instead of a position and size.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `BorderColor` | color | (default) | The line's color; unset = the text color of the color scheme |
+| `BorderStyle` | enum | 1 - Solid | 0 - Transparent, 1 - Solid, 2 - Dash, 3 - Dot, 4 - Dash-Dot, 5 - Dash-Dot-Dot, 6 - Inside Solid. How the line is drawn; Transparent hides it |
+| `BorderWidth` | int | `1` | Thickness in pixels |
+| `Tag` | str | `''` | Free for your own use |
+| `Visible` | bool | `True` | Whether the line is shown at run time |
+| `X1` | int | `0` | Horizontal position of the start |
+| `X2` | int | `100` | Horizontal position of the end |
+| `Y1` | int | `0` | Vertical position of the start |
+| `Y2` | int | `0` | Vertical position of the end |
+| `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top. Equal values keep creation order (later on top). |
+
+No events.
+<!-- END GENERATED -->
+
 ### Menu
 
 A form's menus: the menu bar, the menus on it, their items, submenus and
@@ -686,7 +722,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 
 `Form`, `Control` (base class), `Label`, `TextBox`, `CommandButton`,
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
-`HScrollBar`, `VScrollBar`, `PictureBox`, [`Menu`](#menu), and
+`HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Menu`](#menu), and
 `ControlArray` for [control arrays](#control-arrays).
 
 ---

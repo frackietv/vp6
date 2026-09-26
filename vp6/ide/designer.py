@@ -37,7 +37,7 @@ NAME_PREFIX = {
     "PictureBox": "Picture", "Label": "Label", "TextBox": "Text", "Frame": "Frame",
     "CommandButton": "Command", "CheckBox": "Check", "OptionButton": "Option",
     "ComboBox": "Combo", "ListBox": "List", "HScrollBar": "HScroll",
-    "VScrollBar": "VScroll", "Timer": "Timer",
+    "VScrollBar": "VScroll", "Timer": "Timer", "Line": "Line",
 }
 
 _clipboard: list[ControlDef] = []
@@ -45,6 +45,16 @@ _clipboard: list[ControlDef] = []
 
 def snap(value: int) -> int:
     return int(round(value / GRID)) * GRID
+
+
+def _distance(point: QPoint, a: QPoint, b: QPoint) -> float:
+    """From a point to the segment a-b."""
+    dx, dy = b.x() - a.x(), b.y() - a.y()
+    length = dx * dx + dy * dy
+    t = 0.0 if length == 0 else max(0.0, min(1.0, ((point.x() - a.x()) * dx +
+                                                    (point.y() - a.y()) * dy) / length))
+    x, y = a.x() + t * dx - point.x(), a.y() + t * dy - point.y()
+    return (x * x + y * y) ** 0.5
 
 
 def is_identifier(name: str) -> bool:
@@ -158,6 +168,10 @@ class _Overlay(QWidget):
                 if rect is None:
                     continue
                 primary = name == selection[-1]
+                if d.is_line(name):  # a Line: handles at its two ends only
+                    for handle_rect in self._line_handles(name).values():
+                        self._draw_handle(p, handle_rect, filled=single or primary)
+                    continue
                 if not single:
                     self._draw_outline(p, rect.adjusted(-1, -1, 0, 0), Qt.DotLine)
                 for handle_rect in self._handles(rect).values():
@@ -207,8 +221,18 @@ class _Overlay(QWidget):
             "br": QRect(rect.right() + 1, rect.bottom() + 1, h, h),
         }
 
+    def _line_handles(self, name: str) -> dict[str, QRect]:
+        h = HANDLE
+        return {key: QRect(point.x() - h // 2, point.y() - h // 2, h, h)
+                for key, point in zip(("p1", "p2"), self.d.line_points(name))}
+
     def _handle_at(self, pos: QPoint) -> tuple[str | None, str] | None:
         d = self.d
+        if len(d.selection) == 1 and d.is_line(d.selection[0]):
+            for key, handle_rect in self._line_handles(d.selection[0]).items():
+                if handle_rect.adjusted(-2, -2, 2, 2).contains(pos):
+                    return d.selection[0], key
+            return None
         if not d.selection:
             for key, rect in self._form_handles().items():
                 if rect.adjusted(-2, -2, 2, 2).contains(pos):
@@ -228,6 +252,8 @@ class _Overlay(QWidget):
             "tr": Qt.SizeBDiagCursor, "bl": Qt.SizeBDiagCursor,
             "tc": Qt.SizeVerCursor, "bc": Qt.SizeVerCursor,
             "ml": Qt.SizeHorCursor, "mr": Qt.SizeHorCursor,
+            # A Line's ends move in any direction
+            "p1": Qt.SizeAllCursor, "p2": Qt.SizeAllCursor,
         }[key]
 
     # -- mouse -------------------------------------------------------------------------
@@ -258,6 +284,11 @@ class _Overlay(QWidget):
             return
 
         handle = self._handle_at(pos)
+        if handle is not None and handle[1] in ("p1", "p2"):  # an end of a Line
+            name, key = handle
+            self._drag = {"kind": "endpoint", "name": name, "key": key, "start": pos,
+                          "moved": False, "orig": d.line_point(name, key)}
+            return
         if handle is not None:
             name, key = handle
             self._drag = {"kind": "resize" if name else "form_resize", "name": name,
@@ -293,7 +324,8 @@ class _Overlay(QWidget):
             # Clicking an already selected control makes it the primary one
             d.select([n for n in d.selection if n != name] + [name])
         self._drag = {"kind": "move", "start": pos, "moved": False, "primary": name,
-                      "orig": {n: d.parent_rect(n) for n in d.selection}}
+                      "orig": {n: d.parent_rect(n) for n in d.selection},
+                      "anchor": d.snap_anchor(name)}
 
     def mouseMoveEvent(self, event):
         d = self.d
@@ -314,14 +346,17 @@ class _Overlay(QWidget):
         delta = pos - drag["start"]
         kind = drag["kind"]
         if kind == "move":
-            primary = drag["orig"][drag["primary"]]
+            anchor = drag["anchor"]  # the point that snaps to the grid
             if event.modifiers() & Qt.AltModifier:
                 dx, dy = delta.x(), delta.y()
             else:
-                dx = snap(primary.x() + delta.x()) - primary.x()
-                dy = snap(primary.y() + delta.y()) - primary.y()
+                dx = snap(anchor.x() + delta.x()) - anchor.x()
+                dy = snap(anchor.y() + delta.y()) - anchor.y()
             for name, rect in drag["orig"].items():
                 d.controls[name]._widget.move(rect.x() + dx, rect.y() + dy)
+        elif kind == "endpoint":
+            d.move_line_point(drag["name"], drag["key"], drag["orig"] + delta,
+                              use_grid=not event.modifiers() & Qt.AltModifier)
         elif kind == "resize":
             d.controls[drag["name"]]._widget.setGeometry(
                 self._resized(drag["orig"], drag["key"], delta,
@@ -357,13 +392,15 @@ class _Overlay(QWidget):
         if kind == "draw":
             rect = QRect(drag["start"], event.position().toPoint()).normalized()
             d.create_control(d.tool, rect if drag["moved"] else None, drag["container"],
-                             drag["start"])
+                             drag["start"], event.position().toPoint() if drag["moved"] else None)
         elif kind == "band" and drag["moved"]:
             band = QRect(drag["start"], event.position().toPoint()).normalized()
             names = [c.key for c in d.form_def.controls
                      if c.parent == drag["container"] and d.canvas_rect(c.key) is not None
                      and band.intersects(d.canvas_rect(c.key))]
             d.select((d.selection if drag["additive"] else []) + names)
+        elif kind == "endpoint" and drag["moved"]:
+            d.commit_geometry([drag["name"]])
         elif kind in ("move", "resize") and drag["moved"]:
             d.commit_geometry(list(drag["orig"]) if kind == "move" else [drag["name"]])
         elif kind == "form_resize" and drag["moved"]:
@@ -376,7 +413,7 @@ class _Overlay(QWidget):
             return
         pos = event.position().toPoint()
         name = d.control_at(pos)
-        if name is not None:
+        if name is not None:  # a Line has no events: just its form's code
             d.viewCodeRequested.emit(d.form_def.control(name).name,
                                      d.controls[name].DefaultEvent)
         elif d.form_canvas_rect().contains(pos):
@@ -594,6 +631,9 @@ class FormDesigner(QWidget):
         containers."""
         if not self.form_canvas_rect().contains(pos):
             return None
+        line = self.line_at(pos)
+        if line is not None:
+            return line
         form_widget = self.form_widget()
         widget = form_widget.childAt(form_widget.mapFrom(self.canvas, pos))
         while widget is not None and widget is not form_widget:
@@ -675,6 +715,13 @@ class FormDesigner(QWidget):
     def commit_geometry(self, names: list[str]) -> None:
         before = self._snapshot()
         for name in [n for n in names if not self.is_menu(n)]:
+            if self.is_line(name):  # moved (or an end dragged): the new points
+                control = self.controls[name]
+                points = control._moved_points()
+                self.form_def.control(name).props.update(points)
+                control._values.update(points)
+                control._update_geometry()
+                continue
             geometry = self.controls[name]._widget.geometry()
             props = self.form_def.control(name).props
             props.update(Left=geometry.x(), Top=geometry.y())
@@ -721,7 +768,7 @@ class FormDesigner(QWidget):
         return f"{prefix}{i}"
 
     def create_control(self, type_name: str, rect: QRect | None, container: str | None,
-                       click_pos: QPoint | None = None) -> str:
+                       click_pos: QPoint | None = None, end_pos: QPoint | None = None) -> str:
         cls = CONTROL_TYPES[type_name]
         name = self.unique_name(NAME_PREFIX.get(type_name, type_name))
         origin = self._container_widget(container).mapTo(self.canvas, QPoint(0, 0))
@@ -738,7 +785,16 @@ class FormDesigner(QWidget):
             width, height = cls.DefaultSize
 
         props = {"Left": left, "Top": top}
-        if "Width" in cls._specs:
+        if type_name == "Line":  # from where the mouse was pressed to where it was released
+            if click_pos is not None and end_pos is not None:
+                start, end = click_pos - origin, end_pos - origin
+                props = {"X1": snap(start.x()), "Y1": snap(start.y()),
+                         "X2": snap(end.x()), "Y2": snap(end.y())}
+            else:
+                middle = top + (height // 2 if rect is not None else 0)
+                props = {"X1": left, "Y1": snap(middle), "X2": left + max(width, GRID),
+                         "Y2": snap(middle)}
+        elif "Width" in cls._specs:
             props.update(Width=width, Height=height)
         for text_prop in ("Caption", "Text"):
             if text_prop in cls._specs and cls._specs[text_prop].always:
@@ -825,8 +881,10 @@ class FormDesigner(QWidget):
                 control_def.parent = target
                 pasted_roots.append(control_def.key)
                 if control_def.key != original.key:
-                    control_def.props["Left"] = control_def.props.get("Left", 0) + GRID
-                    control_def.props["Top"] = control_def.props.get("Top", 0) + GRID
+                    moved = ("X1", "Y1", "X2", "Y2") if control_def.type == "Line" else \
+                        ("Left", "Top")
+                    for prop in moved:
+                        control_def.props[prop] = control_def.props.get(prop, 0) + GRID
             else:
                 control_def.parent = renamed[control_def.parent]
             if control_def.name != original.name:
@@ -1110,7 +1168,7 @@ class FormDesigner(QWidget):
             return
         for name, rect in self._selected_rects():
             if resize:
-                if self.controls[name].TypeName == "Timer":
+                if self.controls[name].TypeName in ("Timer", "Line"):
                     continue
                 rect.setWidth(max(rect.width() + dx, 4))
                 rect.setHeight(max(rect.height() + dy, 4))
@@ -1160,6 +1218,52 @@ class FormDesigner(QWidget):
         menu.addSeparator()
         add("Menu Editor…", self.show_menu_editor)
         menu.exec(global_pos)
+
+    # -- lines -------------------------------------------------------------------------------------------------
+    def snap_anchor(self, key: str) -> QPoint:
+        """The point of a control that snaps to the grid when it's moved: its
+        top-left corner, or a Line's start."""
+        if self.is_line(key):
+            control = self.controls[key]
+            return QPoint(control.X1, control.Y1)
+        return self.parent_rect(key).topLeft()
+
+    def is_line(self, key: str) -> bool:
+        control_def = self.form_def.control(key)
+        return control_def is not None and control_def.type == "Line"
+
+    def line_points(self, key: str) -> tuple[QPoint, QPoint]:
+        """A Line's two ends on the canvas."""
+        return self.line_point(key, "p1"), self.line_point(key, "p2")
+
+    def line_point(self, key: str, end: str) -> QPoint:
+        """One end of a Line ("p1" or "p2") on the canvas."""
+        control = self.controls[key]
+        x, y = (control.X1, control.Y1) if end == "p1" else (control.X2, control.Y2)
+        return control._widget.parentWidget().mapTo(self.canvas, QPoint(x, y))
+
+    def move_line_point(self, key: str, end: str, canvas_pos: QPoint,
+                        use_grid: bool = True) -> None:
+        """Drag one end of a Line (committed with commit_geometry)."""
+        control = self.controls[key]
+        point = control._widget.parentWidget().mapFrom(self.canvas, canvas_pos)
+        if use_grid:  # the grid of the line's container
+            point = QPoint(snap(point.x()), snap(point.y()))
+        names = ("X1", "Y1") if end == "p1" else ("X2", "Y2")
+        for name, value in zip(names, (point.x(), point.y())):
+            setattr(control, name, value)  # the widget follows
+        self.overlay.update()
+
+    def line_at(self, pos: QPoint) -> str | None:
+        """The Line drawn near a canvas position (the top one), if any."""
+        for control_def in reversed(self.form_def.controls):
+            if control_def.type != "Line" or control_def.key not in self.controls:
+                continue
+            p1, p2 = self.line_points(control_def.key)
+            width = self.controls[control_def.key].BorderWidth
+            if _distance(pos, p1, p2) <= max(4, width / 2 + 2):
+                return control_def.key
+        return None
 
     # -- menus -------------------------------------------------------------------------------------------------
     def is_menu(self, key: str) -> bool:

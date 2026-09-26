@@ -1,5 +1,19 @@
 # VP6 backlog
 
+- **[Controls]** Image (a lightweight picture control)
+- **[Controls]** Common controls: ProgressBar, Slider, TreeView, ListView, TabStrip, StatusBar, Toolbar, ImageList, and others
+- **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)
+- **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)
+- **[Controls]** Label rich text: bold parts and links in a caption (self-hosting: the Properties description pane and the About box)
+- **[Controls]** File system controls: DriveListBox, DirListBox, FileListBox
+- **[Controls]** RichTextBox: text with colors, bold and italic, and appending formatted text (self-hosting: the code editor and the colored Immediate output)
+- **[Controls]** TextBox/RichTextBox editing API: line/column ↔ position, caret screen position, scroll position, undo/redo, a `SelChange` event, and an option for Tab to insert a tab instead of moving focus (self-hosting: completion, combos following the cursor, go-to-line, indentation)
+- **[Controls]** A code-editor capable text control: syntax-highlighting hook, line-number gutter, current-line highlight, hidden (folded) lines and read-only ranges (self-hosting: the code window and its protected designer region)
+- **[Controls]** Grid control with editable cells and per-cell editors (like MSFlexGrid) (self-hosting: the Properties window and the Options color table)
+- **[Controls]** Splitter control for resizable panes (self-hosting: the Properties window's grid/description split)
+- **[Controls]** Scrollable container: a PictureBox/Frame that scrolls its contents with automatic scroll bars (self-hosting: the designer canvas)
+- **[Controls]** Dockable tool windows (docking, floating, closing and restoring panels) (self-hosting: Toolbox, Project Explorer, Properties and Immediate panels)
+- **[Kitchen Sink]** Redesign kitchen sink in an exlorer-style: rather than everything on one page, left edge should have navigation tree listing all features/widgets/etc and clicking on it displays the demo/sample of the item.  First item should be an introduction and should display introductory text.
 - **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)
 - **[Language and runtime]** Default form instances: using `Form2.Show()` without creating an instance first
 - **[Controls]** Common Dialog control (open, save, color, font, print dialogs)
@@ -11,8 +25,6 @@
 - **[Language and runtime]** Text measurement: `TextWidth` / `TextHeight` on forms and PictureBoxes (self-hosting: gutter width, eliding captions)
 - **[Language and runtime]** Off-screen pictures: draw into an image in memory, use it as a `Picture`/icon, and save it (`SavePicture`) (self-hosting: the IDE's drawn icons and the Kitchen Sink image)
 - **[Controls]** Shape
-- **[Controls]** Line
-- **[Controls]** Image (a lightweight picture control)
 - **[IDE]** Save Project As (copying a project to a new folder)
 - **[IDE]** Renaming and deleting files from the Project Explorer (today Remove only takes a file out of the project)
 - **[IDE]** Locking controls in the designer (Format > Lock Controls)
@@ -21,21 +33,9 @@
 - **[IDE - Debugging]** editing code while the program is paused
 - **[Distribution and tooling]** Packaging a program as a standalone executable
 - **[Distribution and tooling]** Publishing VP6 as an installable package (e.g. on PyPI)
-- **[Controls]** Common controls: ProgressBar, Slider, TreeView, ListView, TabStrip, StatusBar, Toolbar, ImageList, and others
-- **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)
-- **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)
-- **[Controls]** Label rich text: bold parts and links in a caption (self-hosting: the Properties description pane and the About box)
-- **[Controls]** File system controls: DriveListBox, DirListBox, FileListBox
 - **[Language and runtime]** Font enumeration: `Screen.Fonts` / `Screen.FontCount` (self-hosting: the Options font list, the FontName editor)
 - **[Language and runtime]** An event when the OS switches between light and dark, and a way to ask which one is active (self-hosting: repainting custom-drawn surfaces and icons)
 - **[Language and runtime]** MDI forms (MDI parent and child forms)
-- **[Controls]** RichTextBox: text with colors, bold and italic, and appending formatted text (self-hosting: the code editor and the colored Immediate output)
-- **[Controls]** TextBox/RichTextBox editing API: line/column ↔ position, caret screen position, scroll position, undo/redo, a `SelChange` event, and an option for Tab to insert a tab instead of moving focus (self-hosting: completion, combos following the cursor, go-to-line, indentation)
-- **[Controls]** A code-editor capable text control: syntax-highlighting hook, line-number gutter, current-line highlight, hidden (folded) lines and read-only ranges (self-hosting: the code window and its protected designer region)
-- **[Controls]** Grid control with editable cells and per-cell editors (like MSFlexGrid) (self-hosting: the Properties window and the Options color table)
-- **[Controls]** Splitter control for resizable panes (self-hosting: the Properties window's grid/description split)
-- **[Controls]** Scrollable container: a PictureBox/Frame that scrolls its contents with automatic scroll bars (self-hosting: the designer canvas)
-- **[Controls]** Dockable tool windows (docking, floating, closing and restoring panels) (self-hosting: Toolbox, Project Explorer, Properties and Immediate panels)
 - **[Language and runtime]** Borderless popup forms that don't take the focus from the form that opened them (self-hosting: the code completion list)
 - **[Language and runtime]** Embedding a form inside a container control (e.g. showing a live form in a PictureBox) (self-hosting: the form designer's canvas)
 - **[Language and runtime]** Starting a program asynchronously with output, exit and error events and a way to write to its stdin (a Process object beyond VB's `Shell`) (self-hosting: F5 and the Immediate window)

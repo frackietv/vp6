@@ -538,10 +538,15 @@ Everything outside the markers is hand-written and stays as it is.
 |---|---|
 | `qapp` | the shared `QApplication` (session scope) |
 | `_isolated_settings` (autouse) | redirects `QSettings` to an INI file in `tmp_path`, **asserts** that `ide_settings()` is isolated, and resets the theme manager before and after each test |
+| `_fail_on_errors_in_qt_callbacks` (autouse) | fails the test if Python code called by Qt raised: an event handler override (`mouseMoveEvent`...) or a slot run from the event loop. PySide only prints those ("Error calling Python override of ...") through `sys.excepthook`, so a test would otherwise pass |
 | `wait_for(predicate, timeout_ms)` | processes events until a condition holds (PySide lacks `QTest.qWaitFor`) |
 
 The environment is set to `QT_QPA_PLATFORM=offscreen` (no display) and
 `VP6_NO_ERROR_DIALOG=1` (run-time errors don't open a blocking box).
+
+Code that can open a modal box (`QMessageBox.question` and the like) blocks
+a test forever. Replace it in the test, e.g. `designer.ask_create_array =
+lambda name: False` before pasting a copy of an existing control.
 
 Typical patterns:
 

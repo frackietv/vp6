@@ -86,6 +86,8 @@ def _table(specs, default_column=True) -> str:
 
 
 def _events(cls) -> str:
+    if not cls.Events:
+        return "No events."
     items = []
     for event in cls.Events:
         args = EVENT_ARGS.get(event, "")
@@ -120,8 +122,13 @@ def control(type_name: str) -> str:
     cls = CONTROL_TYPES[type_name]
     groups, own = _groups_of(cls)
     width, height = cls.DefaultSize
-    summary = [f"Default size {width} × {height}." if cls.InToolbox else
-               "Not in the Toolbox: designed with the Menu Editor."]
+    if not cls.InToolbox:
+        summary = ["Not in the Toolbox: designed with the Menu Editor."]
+    elif "X1" in cls._specs:
+        summary = ["Placed by its two ends, (X1, Y1) and (X2, Y2), instead of a position "
+                   "and size."]
+    else:
+        summary = [f"Default size {width} × {height}."]
     if cls.IsContainer:
         summary.append("A container: other controls can be placed on it.")
     if groups:

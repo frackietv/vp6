@@ -142,6 +142,15 @@ def _timer(p):
     p.drawLine(QPointF(12, 13), QPointF(16, 13))
 
 
+def _line(p):
+    p.setPen(QPen(C.ink, 2))
+    p.drawLine(QPointF(5, 19), QPointF(19, 5))
+    p.setPen(QPen(C.ink, 1))
+    p.setBrush(C.paper)
+    for x, y in ((5, 19), (19, 5)):
+        p.drawRect(QRectF(x - 2, y - 2, 4, 4))
+
+
 # --- project / toolbar ---------------------------------------------------------------
 
 def _form(p):
@@ -267,7 +276,7 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

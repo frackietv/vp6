@@ -1,5 +1,38 @@
 # VP6 features
 
+**Version:** 0.3.11
+**Date:** 2026-09-29
+
+## IDE
+
+- Fix: hovering the mouse over an end of a selected Line in the designer raised an error (`KeyError: 'p2'`) instead of showing the move cursor
+
+## Tests
+
+- A test now fails when Python code called by Qt raises (an event handler such as `mouseMoveEvent`, or a slot run from the event loop); PySide only printed those errors, so such bugs could hide behind a passing run
+
+---
+
+**Version:** 0.3.10
+**Date:** 2026-09-29
+
+## Controls
+
+- Line control: a straight line from (`X1`, `Y1`) to (`X2`, `Y2`) in its container's coordinates, with `BorderColor` (unset: the color scheme's text color, so it follows light/dark), `BorderStyle` (Transparent, Solid, Dash, Dot, Dash-Dot, Dash-Dot-Dot, Inside Solid), `BorderWidth`, `Visible`, `Tag` and `ZIndex`; all changeable at run time with immediate effect
+- A Line has no events and never takes the focus; clicks go through it to what is underneath
+
+## IDE
+
+- Line in the Toolbox (with its own icon): draw it from where the mouse is pressed to where it's released (a click makes a 100-pixel horizontal line)
+- Selecting a Line by clicking near it (not anywhere in its bounding box, which may cover other controls); handles at its two ends drag one end, dragging the line moves it; the ends snap to the grid of its container (Alt: no snapping)
+- Arrow keys move a Line, Shift+arrows don't resize it; pasted Lines are offset like other controls
+
+## Kitchen Sink
+
+- A dashed white Line over the Z-order labels (ZIndex 3), and a gray divider above the status bar that `Form_Resize` stretches to the window width
+
+---
+
 **Version:** 0.3.9
 **Date:** 2026-09-29
 

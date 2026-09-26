@@ -1,4 +1,6 @@
 import os
+import sys
+import traceback
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ["VP6_NO_ERROR_DIALOG"] = "1"
@@ -27,6 +29,23 @@ def _isolated_settings(tmp_path, monkeypatch):
     reset_theme_manager()
     yield
     reset_theme_manager()  # undo any application-wide scheme a test forced
+
+
+@pytest.fixture(autouse=True)
+def _fail_on_errors_in_qt_callbacks(monkeypatch):
+    """An exception raised in Python code that Qt calls (an event handler
+    override like mouseMoveEvent, a slot) doesn't reach the test: PySide
+    prints it through sys.excepthook and carries on. Record those and fail
+    the test, so such bugs can't hide behind a passing run."""
+    errors = []
+
+    def record(kind, value, tb):
+        errors.append("".join(traceback.format_exception(kind, value, tb)))
+        sys.__excepthook__(kind, value, tb)
+
+    monkeypatch.setattr(sys, "excepthook", record)
+    yield
+    assert not errors, "Exception(s) in code called by Qt:\n" + "\n".join(errors)
 
 
 def wait_for(predicate, timeout_ms=5000):

@@ -739,6 +739,8 @@ class CodeWindow(QWidget):
 
     def goto_event(self, obj: str, event: str) -> None:
         """Jump to ``obj_event`` - creating the handler stub if needed."""
+        if not event:  # an object without events (a Line): nothing to jump to
+            return
         handler = f"{obj}_{event}"
         if self._goto_def(handler):
             return

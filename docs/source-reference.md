@@ -204,6 +204,7 @@ The intrinsic controls.
 | `Timer` | none at run time (`QTimer`) | Stopwatch icon in design mode (`_timer_design_widget`). |
 | `HScrollBar`, `VScrollBar` | `QScrollBar` | `_ScrollBar` base; Change on value change, Scroll while dragging. |
 | `PictureBox` | `QLabel` | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle; `Cls()`. |
+| `Line` | `_LineWidget` (transparent to the mouse, covering the line's box) | `X1`, `Y1`, `X2`, `Y2` instead of Left/Top/Width/Height (`_update_geometry` sizes the widget, with `_padding` for the width); `BorderColor` (unset: the palette's text color), `BorderStyle` (`_PEN_STYLES`; 0 = Transparent), `BorderWidth`, `Visible`, `Tag`, `ZIndex`; no events (`DefaultEvent` is empty); `_moved_points()` for the designer. |
 | `Menu` | a `QAction` (none in design mode) | Parent: the form (the menu bar, `Form._add_menu_item`) or a `Menu`, whose `QMenu` (`_submenu`, created for its first item by `_add_menu_item`) holds it. Caption `-` is a separator; `Checked` (Qt's own toggling is undone in `_on_triggered`), `Enabled`, `Visible`, `Shortcut` (also added to the form widget so it works in the window). Click on `triggered`, and for a menu with items on `aboutToShow`. `_menu_container`, `_place_after` (loaded array elements follow the last one), `_dispose`. |
 
 * **`ControlArray`**, a VB control array (after `CONTROL_TYPES`, which it
@@ -519,8 +520,11 @@ The form designer (architecture §5.3).
   `form_frame_rect()`.
 * **`_Overlay`** handles all input:
   * **Painting:** handles and outlines (two-tone, visible on any background),
-    the rubber band, and the rectangle of a control being drawn.
-  * **Mouse:** drag kinds `draw`, `move`, `resize`, `form_resize` and `band`.
+    a Line's two end handles (`_line_handles`), the rubber band, and the
+    rectangle of a control being drawn.
+  * **Mouse:** drag kinds `draw` (a Line goes from the press to the release),
+    `move` (snapping `snap_anchor`: the top-left corner, or a Line's start),
+    `resize`, `endpoint` (a Line's end), `form_resize` and `band`.
     Alt disables snapping; Shift/Ctrl add to the selection; Ctrl+drag inside
     a container draws a band inside it; double-click requests the default
     event's code; right-click opens the context menu.
@@ -561,6 +565,14 @@ The form designer (architecture §5.3).
       `rename(new_name)` handles controls (the name of another control of
       the same type joins its control array) and the form class
       (`_rename_form`, which `form_name_taken` checks against the project);
+    * **lines:** `is_line`, `line_points` / `line_point` (the ends on the
+      canvas), `line_at(pos)` (a Line near a point, within its width; checked
+      first by `control_at`, since a Line's widget ignores the mouse and its
+      box may cover other controls), `move_line_point` (dragging an end,
+      snapped in the Line's container) and `snap_anchor`. `create_control`
+      takes the release point (`end_pos`) for a Line; `commit_geometry` stores
+      a moved Line's points (`Line._moved_points`); pasted Lines are offset
+      by their points; Shift+arrows don't resize them;
     * **menus:** `is_menu`, `menu_selected`, `menu_bar_keys` (the visible
       top-level menus, drawn by `chrome`), `menu_rect`, `menu_at(pos)`,
       `menu_popup(key)` (the drop-down as it will look; choosing an item
@@ -931,7 +943,8 @@ Icons drawn with `QPainter`, in light and dark variants.
 * `_Colors` palettes `_LIGHT` / `_DARK`. The drawing functions read the
   module-level palette `C`, which `_render` switches.
 * One drawer per icon in `_DRAWERS`:
-  * one per control, keyed by `TypeName`, plus `Pointer`;
+  * one per Toolbox control, keyed by `TypeName` (`Line`: `_line`), plus
+    `Pointer`;
   * project icons `Form`, `Module`, `Project`, `Console`;
   * toolbar icons `New`, `Open`, `Save`, `Run`, `Stop`, `Sun`, `Moon`;
   * the `KitchenSink` template icon;
@@ -983,6 +996,9 @@ All tests run headless. `conftest.py`:
   that `ide_settings()` is really isolated;
 * resets the theme manager before and after each test (undoing any
   application-wide scheme a test forced);
+* fails a test when Python code called by Qt raised (an event handler
+  override or a slot run from the event loop), which PySide only prints
+  through `sys.excepthook` (`_fail_on_errors_in_qt_callbacks`);
 * provides `wait_for(predicate, timeout_ms)` (PySide has no
   `QTest.qWaitFor`).
 
@@ -992,6 +1008,7 @@ All tests run headless. `conftest.py`:
 | `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames (controls, form classes, class and module references in other files), the console template. |
 | `test_control_arrays.py` | Control arrays: elements, `[i]` / `(i)` / `Item`, iteration, bounds, read-only `Index`, handlers getting `Index` first, `Load`/`Unload` of run-time elements (copied properties, hidden, last in the tab order; designer elements can't be unloaded), one type per array; the form file round trip (elements as containers too) and invalid arrays; adding/removing the `Index` parameter and stubs; in the designer: paste asking to create an array, renaming into an array (and out, and into another type's name), the Index property (one-element arrays, moving, clearing, undo), containers that are elements; the Properties window's `(Name)`, `Index` row and object list; the code window's Object list, new handlers with `Index`, completion. |
 | `test_menus.py` | Menus at run time: the menu bar and items, separators, shortcuts; an in-window menu bar keeping `Height`, `ScaleHeight` and control positions for the area below it (the window grows), form mouse events there; Click on choosing an item and before a menu opens; `Checked` changing only in code; Enabled, Visible, Caption and Shortcut changes; menu control arrays loading after their last element and unloading; the parent check; the form file round trip; the Menu Editor's entries and ControlDefs, validation messages and dialog editing (Next, indent, shortcut, Insert, Delete, moving, outdent); the designer's menu bar (layout, hit testing, the drop-down opening Click code), menus kept off the canvas and edited in the Properties window, deleting a menu with its items, renames and arrays updating handlers, undo; the IDE's Tools > Menu Editor (Ctrl+E). |
+| `test_line.py` | The Line control: its widget following the points, drawing (color, Transparent, Visible, the scheme's text color by default), clicks going through it, ZIndex; the form file; in the designer: drawing from press to release and by a click, selecting near the line (not its box), dragging an end, the move cursor over an end, moving, arrow keys (no resizing), undo, pasting with an offset, the Properties rows, no event stub; the Toolbox button and icon. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`. |
@@ -1002,7 +1019,7 @@ All tests run headless. `conftest.py`:
 | `test_outline.py` | The outline of the Kitchen Sink's Form1 matches the backlog example exactly; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: hidden by default, opened under Properties, following the Project panel or active window, clicking items goes to the line (unfolding the designer region). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme, and control arrays (an array, `Load`/`Unload`, `Count`, bounds, `Index` handlers); its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload), the option-button control array, the `cmdMore` control array loading and unloading elements, and the menus (the View menu's control array and check marks kept in step with the option buttons and the clock, a menu's Click before it opens, a shortcut). |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme, and control arrays (an array, `Load`/`Unload`, `Count`, bounds, `Index` handlers); its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload), the option-button control array, the `cmdMore` control array loading and unloading elements, the menus (the View menu's control array and check marks kept in step with the option buttons and the clock, a menu's Click before it opens, a shortcut), and the Lines (the one above the status bar following the window size). Controls without events (Line) needn't have a handler. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6. |
 
 ## Samples: `samples/`
