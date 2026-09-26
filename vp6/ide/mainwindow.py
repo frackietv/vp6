@@ -27,6 +27,7 @@ from .designer import FormDesigner, is_identifier
 from .dialogs import ABOUT_HTML, NewProjectDialog, ProjectPropertiesDialog
 from .documents import Document, FormDocument, open_document
 from .options import OptionsDialog
+from .outline import OutlineWindow
 from .outputcapture import OutputCapture
 from .panels import (ImmediateWindow, OutputWindow, ProjectExplorer, Toolbox,
                      pump_process_output)
@@ -67,6 +68,7 @@ class MainWindow(QMainWindow):
         self.properties = PropertiesWindow()
         self.immediate = ImmediateWindow()
         self.output = OutputWindow()  # the IDE's own stdout/stderr (hidden by default)
+        self.outline = OutlineWindow()  # structure of the current file (hidden by default)
         self.toolbox_dock = self._dock("Toolbox", self.toolbox, Qt.LeftDockWidgetArea, "toolbox")
         self.explorer_dock = self._dock("Project", self.explorer, Qt.RightDockWidgetArea,
                                         "project")
@@ -75,6 +77,9 @@ class MainWindow(QMainWindow):
         self.immediate_dock = self._dock("Immediate", self.immediate, Qt.BottomDockWidgetArea,
                                          "immediate")
         self.output_dock = self._dock("Output", self.output, Qt.BottomDockWidgetArea, "output")
+        self.outline_dock = self._dock("Outline", self.outline, Qt.RightDockWidgetArea,
+                                       "outline")
+        self.outline.lineChosen.connect(self._goto_outline_line)
         self.toolbox_dock.setFixedWidth(84)
         # Opening/closing the Project panel changes what Properties follows
         self.explorer_dock.visibilityChanged.connect(self._on_explorer_changed)
@@ -213,6 +218,8 @@ class MainWindow(QMainWindow):
             self.immediate_dock), "Ctrl+G")
         self.act_view_output = a("O&utput Window", lambda: self._show_dock(self.output_dock),
                                  tip="The IDE's own output, including library messages")
+        self.act_view_outline = a("Outli&ne Window", self._show_outline,
+                                  tip="The structure of the current file")
 
         self.act_run = a("&Start", self.run_project, "F5", "Run", "Run the project")
         # Also Cmd+Enter on macOS / Ctrl+Enter elsewhere (Qt's "Ctrl" is Command on macOS),
@@ -242,7 +249,7 @@ class MainWindow(QMainWindow):
         view = bar.addMenu("&View")
         for act in (self.act_view_code, self.act_view_object, None, self.act_view_immediate,
                     self.act_view_output, self.act_view_project, self.act_view_props,
-                    self.act_view_toolbox):
+                    self.act_view_outline, self.act_view_toolbox):
             view.addSeparator() if act is None else view.addAction(act)
         view.addSeparator()
         toolbars = view.addMenu("Tool&bars")
@@ -345,6 +352,8 @@ class MainWindow(QMainWindow):
         self.tabifyDockWidget(self.immediate_dock, self.output_dock)
         self.output_dock.hide()
         self.immediate_dock.raise_()
+        self._place_outline()  # under Properties, hidden by default (View > Outline Window)
+        self.outline_dock.hide()
         self.resizeDocks([self.immediate_dock], [150], Qt.Vertical)
         self.resizeDocks([self.explorer_dock, self.properties_dock], [180, 420], Qt.Vertical)
         self.resizeDocks([self.properties_dock], [290], Qt.Horizontal)
@@ -600,6 +609,18 @@ class MainWindow(QMainWindow):
         return [d.name for d in self.documents.values() if isinstance(d, FormDocument)]
 
     # -- what the Properties panel shows ---------------------------------------------------
+    def _context_path(self) -> str | None:
+        """The file the Properties and Outline panels are about: the one
+        selected in the Project panel while it's open, else the file of the
+        active window. None for the project, a folder or no selection."""
+        if self.project is None:
+            return None
+        if self.explorer_dock.isVisibleTo(self):
+            path, _kind = self.explorer._current()
+            return path
+        widget = self._active_widget()
+        return self._path_of(widget) if widget is not None else None
+
     def _properties_target(self):
         """With the Project panel open, Properties follows its selection: the
         project, a form (its designer, or just its Name if the designer isn't
@@ -607,13 +628,9 @@ class MainWindow(QMainWindow):
         With the Project panel closed, it follows the active window."""
         if self.project is None:
             return None
-        if self.explorer_dock.isVisibleTo(self):
-            if self.explorer.project_selected():
-                return self.project_target
-            path, _kind = self.explorer._current()
-            return self._target_for_path(path) if path else None
-        widget = self._active_widget()
-        path = self._path_of(widget) if widget is not None else None
+        if self.explorer_dock.isVisibleTo(self) and self.explorer.project_selected():
+            return self.project_target
+        path = self._context_path()
         return self._target_for_path(path) if path else None
 
     def _target_for_path(self, path: str):
@@ -628,7 +645,36 @@ class MainWindow(QMainWindow):
         return self._file_targets[path]
 
     def _update_properties_target(self):
+        """Point the Properties and Outline panels at the current context."""
         self.properties.set_designer(self._properties_target())
+        path = self._context_path()
+        self.outline.set_document(self.documents.get(path) if path else None)
+
+    # -- Outline window ---------------------------------------------------------------------------
+    def _place_outline(self):
+        """Dock the Outline window right under the Properties panel."""
+        self.outline_dock.setFloating(False)
+        if self.properties_dock.isVisibleTo(self) and \
+                self.dockWidgetArea(self.properties_dock) != Qt.NoDockWidgetArea and \
+                not self.properties_dock.isFloating():
+            self.splitDockWidget(self.properties_dock, self.outline_dock, Qt.Vertical)
+        else:
+            self.addDockWidget(Qt.RightDockWidgetArea, self.outline_dock)
+
+    def _show_outline(self):
+        """View > Outline Window: opens under the Properties panel."""
+        if self.outline_dock.isHidden():
+            self._place_outline()
+        self._show_dock(self.outline_dock)
+
+    def _goto_outline_line(self, line: int):
+        """Clicking an outline item: that line in the file's code window."""
+        document = self.outline.document
+        if document is None:
+            return
+        window = self.view_code(document.path)
+        if window is not None:
+            window.editor.goto_line(line)
 
     def _on_explorer_changed(self, *_):
         self._update_properties_target()

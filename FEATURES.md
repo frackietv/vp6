@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.3.4
+**Date:** 2026-09-29
+
+## IDE
+
+- Outline window, hidden by default (View > Outline Window): the structure of the file selected in the Project panel, or of the active code or designer window when the Project panel is closed. It lists constants and variables at file scope, classes with their members (methods, attributes, nested classes), functions, and `*global code*` for top-level code; the designer-generated code isn't expanded
+- Outline items have icons for their type: constant, variable, class, function, method, attribute, top-level code
+- Outline sort buttons: file order, name or type; clicking the active one switches between ascending and descending
+- Opened from the menu, the Outline window is placed under the Properties panel
+- Clicking an Outline item opens the code window at that line (unfolding the designer region if needed)
+- The Outline follows edits as you type, and keeps the last outline while the code has a syntax error
+
+---
+
 **Version:** 0.3.3
 **Date:** 2026-09-29
 

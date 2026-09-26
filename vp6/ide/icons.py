@@ -236,6 +236,25 @@ def _kitchensink(p):
         p.restore()
 
 
+def _badge(p, color: str, letter: str, size: int = 13):
+    """Outline item icon: a colored rounded square with a white letter."""
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(color))
+    p.drawRoundedRect(QRectF(3, 3, 18, 18), 4, 4)
+    _text(p, QRectF(3, 2, 18, 19), letter, size, True, QColor("#ffffff"))
+
+
+_OUTLINE_BADGES = {
+    "OutlineConstant": ("#0f8f8c", "K"),
+    "OutlineVariable": ("#2f6fd6", "v"),
+    "OutlineClass": ("#d9800f", "C"),
+    "OutlineFunction": ("#8e44ad", "\u0192"),  # ƒ
+    "OutlineMethod": ("#a45ad8", "m"),
+    "OutlineAttribute": ("#50708f", "a"),
+    "OutlineCode": ("#6d6d6d", "\u25b6"),  # ▶
+}
+
+
 def _console(p):
     p.setBrush(QColor("#1e1e1e"))
     p.setPen(QPen(C.ink, 1))
@@ -252,6 +271,8 @@ _DRAWERS = {
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,
+    **{name: (lambda p, c=color, l=letter: _badge(p, c, l, 10 if l == "\u25b6" else 13))
+       for name, (color, letter) in _OUTLINE_BADGES.items()},
 }
 
 _dark = False

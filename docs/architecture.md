@@ -49,6 +49,7 @@ vp6/                    runtime library - "from vp6 import *"
     projectprops.py     the project as a Properties window target
     panels.py           Toolbox, Project Explorer, Immediate and Output windows
     outputcapture.py    captures the IDE's own stdout/stderr for the Output window
+    outline.py          the Outline window: structure of the current file
     documents.py        Document / FormDocument (open files)
     dialogs.py          New Project, Project Properties, About
     kitchensink.py      the Kitchen Sink project template
@@ -313,8 +314,12 @@ flowchart TD
   `outputcapture.OutputCapture` redirects file descriptors 1 and 2 through
   pipes, so library output such as Qt's warnings is included, and still
   copies everything to the terminal;
+* an **Outline** dock (`outline.OutlineWindow`), hidden by default and opened
+  under Properties. It shows the structure of the file the Properties panel
+  is about (`MainWindow._context_path`), and clicking an item goes to its
+  line;
 * **dock areas:** the Toolbox in the left dock area, Project over Properties
-  in the right one, Immediate (and Output) in the bottom one. Panels in the
+  (and Outline) in the right one, Immediate (and Output) in the bottom one. Panels in the
   **bottom** dock area are always tabs, with one title per panel and one
   body shown: `MainWindow._tab_bottom_docks` rejoins them whenever a panel is
   moved, docked, shown or hidden, and after restoring a saved layout. The
