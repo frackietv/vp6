@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Image (a lightweight picture control)
 - **[Controls]** Common controls: ProgressBar, Slider, TreeView, ListView, TabStrip, StatusBar, Toolbar, ImageList, and others
 - **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)
 - **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)

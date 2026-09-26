@@ -110,6 +110,9 @@ class Form1(Form):
         self.lblOnPicture = Label(self.picLogo, Caption='Click to set a Tag', Left=8, Top=88,
                                   Width=144, Height=25, Alignment=2, BackColor=0xFFFFFF,
                                   ForeColor=0x000000, TabIndex=33)
+        self.imgThumb = Image(self, Left=416, Top=396, Width=40, Height=30, Stretch=True,
+                              BorderStyle=1, Picture='vp6.png',
+                              ToolTipText='An Image (a lightweight PictureBox): click it')
         self.lblClock = Label(self, Caption='00:00:00', Left=592, Top=268, Width=152, Height=25,
                               Alignment=2, FontSize=14, TabIndex=34)
         self.cmdDialog = CommandButton(self, Caption='&Dialog...', Left=592, Top=308, Width=152,
@@ -283,6 +286,11 @@ class Form1(Form):
     def picLogo_MouseDown(self, Button, Shift, X, Y):
         if Button == vpRightButton:
             self.lblStatus.Caption = f"Right button at {X}, {Y} on the picture"
+
+    def imgThumb_Click(self):
+        # An Image: the same picture scaled down (Stretch = True), clickable, but
+        # no container and never focused. It shows or hides the big picture.
+        self.chkPicture.Value = vpUnchecked if self.picLogo.Visible else vpChecked
 
     def lblOnPicture_Click(self):
         # A Label inside the PictureBox container

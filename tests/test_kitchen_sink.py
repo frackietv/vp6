@@ -10,7 +10,7 @@ import re
 import sys
 
 import pytest
-from PySide6.QtCore import QPoint, QTimer
+from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtTest import QTest
 
@@ -211,6 +211,19 @@ def test_kitchen_sink_menus(sink_forms):
     form.mnuView._submenu.aboutToShow.emit()  # a menu's Click before it opens
     assert "View menu" in form.lblStatus.Caption
     assert form.mnuFileDialog._action.shortcut().toString() == "Ctrl+D"
+    form.Unload()
+
+
+def test_kitchen_sink_image(sink_forms):
+    form = sink_forms["Form1"].Form1()
+    form.Show()
+    thumb = form.imgThumb
+    assert (thumb.Width, thumb.Height) == (40, 30) and thumb.Stretch  # scaled, not resized
+    assert not thumb._widget.pixmap().isNull()
+    QTest.mouseClick(thumb._widget, Qt.LeftButton)
+    assert not form.picLogo.Visible and form.chkPicture.Value == vp6.vpUnchecked
+    QTest.mouseClick(thumb._widget, Qt.LeftButton)
+    assert form.picLogo.Visible
     form.Unload()
 
 

@@ -603,7 +603,8 @@ Set `QSettings.setDefaultFormat(QSettings.IniFormat)` and a temporary
 
 * **Spec order is application order.** A property whose `_apply_` relies on
   another must come after it in `Properties`. For example `TextBox.MultiLine`
-  is before `Text`, and `ComboBox.Style` is before `Text`.
+  is before `Text`, `ComboBox.Style` is before `Text`, and `Image.Stretch` is
+  before `Picture`.
 * **Timer has no widget at run time.** Code in `Control` that touches
   `self._widget` must allow `None`.
 * **Design mode.** Runtime behavior that shouldn't happen in the designer

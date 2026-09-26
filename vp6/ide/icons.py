@@ -142,6 +142,19 @@ def _timer(p):
     p.drawLine(QPointF(12, 13), QPointF(16, 13))
 
 
+def _image(p):
+    p.setPen(QPen(C.ink, 1, Qt.DashLine))  # no frame of its own, like VB's Image icon
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(QRectF(3, 4, 18, 16))
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor("#7fc36b"))
+    p.drawPolygon([QPointF(5, 18), QPointF(10, 11), QPointF(14, 16), QPointF(16, 14),
+                   QPointF(19, 18)])
+    p.setBrush(QColor("#f5c542"))
+    p.drawEllipse(QRectF(14, 7, 4, 4))
+    p.setPen(QPen(C.ink, 1))
+
+
 def _line(p):
     p.setPen(QPen(C.ink, 2))
     p.drawLine(QPointF(5, 19), QPointF(19, 5))
@@ -276,7 +289,7 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

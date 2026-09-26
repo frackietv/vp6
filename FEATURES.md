@@ -1,5 +1,24 @@
 # VP6 features
 
+**Version:** 0.3.12
+**Date:** 2026-09-29
+
+## Controls
+
+- Image control, a lightweight picture like VB's: `Picture`, `Stretch`, `BorderStyle` (None or Fixed Single), `Enabled`, `Visible`, `ToolTipText`, `Tag`, `ZIndex` and position/size; events `Click`, `DblClick`, `MouseDown`, `MouseMove`, `MouseUp`
+- Unlike a PictureBox, an Image isn't a container, never takes the focus (no `TabIndex`) and has a transparent background; a disabled Image isn't grayed, it just gets no events
+- With `Stretch = False` an Image takes the size of its picture (plus its border), also when the picture or the border changes at run time; with `Stretch = True` the picture is scaled to fill it
+
+## IDE
+
+- Image in the Toolbox, with its own icon; in the designer, choosing a picture for an Image without Stretch resizes it to the picture
+
+## Kitchen Sink
+
+- A stretched Image thumbnail of the logo under the big picture; clicking it shows or hides the big picture
+
+---
+
 **Version:** 0.3.11
 **Date:** 2026-09-29
 

@@ -1146,6 +1146,68 @@ class PictureBox(Control):
         self._widget.clear()
 
 
+class Image(Control):
+    """A lightweight picture: no container, no focus, no Tab stop, and a
+    transparent background, like VB's Image. With Stretch = False it takes
+    the size of its picture; with Stretch = True the picture fills it."""
+
+    TypeName = "Image"
+    DefaultSize = (97, 97)
+    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp")
+    _synthesize_click = True
+    _qss_type = "QLabel"
+    Properties = (
+        *_geometry(*DefaultSize),
+        # Stretch and BorderStyle before Picture: loading the picture sizes the control
+        P("Stretch", "bool", False,
+          description="True: the picture is scaled to fill the control. False: the control "
+                      "takes the size of the picture"),
+        P("BorderStyle", "enum", 0, enum_choices("None", "Fixed Single"),
+          description="A thin border around the image"),
+        P("Picture", "file", "", description="Image file (relative to the form's folder)"),
+        *(spec for spec in _COMMON if spec.name != "TabIndex"),
+    )
+
+    def _create_widget(self, parent):
+        label = QLabel(parent)
+        label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        label.setFocusPolicy(Qt.NoFocus)
+        return label
+
+    def _pixmap(self) -> QPixmap:
+        pixmap = self._widget.pixmap()
+        return pixmap if pixmap is not None else QPixmap()
+
+    def _fit_to_picture(self) -> None:
+        """Stretch = False: the control takes the picture's size (plus a border)."""
+        pixmap = self._pixmap()
+        if self._values.get("Stretch") or pixmap.isNull():
+            return
+        border = 2 * self._widget.frameWidth()
+        self._widget.resize(pixmap.width() + border, pixmap.height() + border)
+
+    def _apply_Picture(self, v):
+        path = resolve_path(self, v)
+        self._widget.setPixmap(QPixmap(path) if path else QPixmap())
+        self._fit_to_picture()
+
+    def _apply_Stretch(self, v):
+        self._widget.setScaledContents(bool(v))
+        self._fit_to_picture()
+
+    def _apply_BorderStyle(self, v):
+        self._widget.setFrameStyle(QFrame.Box | QFrame.Plain if v else QFrame.NoFrame)
+        self._fit_to_picture()
+
+    def _apply_Enabled(self, v):
+        pass  # a disabled Image isn't grayed, it just gets no events (see _on_qt_event)
+
+    def _on_qt_event(self, watched, event):
+        if not self._values.get("Enabled", True):
+            return False
+        return super()._on_qt_event(watched, event)
+
+
 # Controls in toolbox order.
 _PEN_STYLES = {1: Qt.SolidLine, 2: Qt.DashLine, 3: Qt.DotLine, 4: Qt.DashDotLine,
                5: Qt.DashDotDotLine, 6: Qt.SolidLine}
@@ -1370,7 +1432,7 @@ class Menu(Control):
 CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
-        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Menu,
+        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, Menu,
     )
 }
 

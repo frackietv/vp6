@@ -37,7 +37,7 @@ NAME_PREFIX = {
     "PictureBox": "Picture", "Label": "Label", "TextBox": "Text", "Frame": "Frame",
     "CommandButton": "Command", "CheckBox": "Check", "OptionButton": "Option",
     "ComboBox": "Combo", "ListBox": "List", "HScrollBar": "HScroll",
-    "VScrollBar": "VScroll", "Timer": "Timer", "Line": "Line",
+    "VScrollBar": "VScroll", "Timer": "Timer", "Line": "Line", "Image": "Image",
 }
 
 _clipboard: list[ControlDef] = []
@@ -943,8 +943,9 @@ class FormDesigner(QWidget):
                 else:
                     props = self.form_def.control(self.key_of(obj)).props
                     props[prop] = stored
-                    if prop in ("AutoSize", "Picture", "Caption") and obj._widget is not None:
-                        # AutoSize may have changed the size
+                    if prop in ("AutoSize", "Picture", "Caption", "Stretch", "BorderStyle") \
+                            and obj._widget is not None:
+                        # AutoSize (or an Image without Stretch) may have changed the size
                         props.update(Width=obj._widget.width(), Height=obj._widget.height())
             if prop == "TabIndex":
                 for obj in self.selected_objects():

@@ -609,6 +609,36 @@ Placed by its two ends, (X1, Y1) and (X2, Y2), instead of a position and size.
 No events.
 <!-- END GENERATED -->
 
+### Image
+
+A lightweight picture, like VB's Image. Unlike a [PictureBox](#picturebox)
+it isn't a container, never takes the focus (no `TabIndex`) and has no
+background of its own. With `Stretch = False` (the default) it takes the
+size of its picture, plus a border; with `Stretch = True` the picture is
+scaled to fill it. A disabled Image isn't grayed; it just gets no events.
+
+```python
+self.imgPhoto = Image(self, Picture='photo.png', Left=8, Top=8)            # picture size
+self.imgThumb = Image(self, Picture='photo.png', Stretch=True, Width=64, Height=48)
+```
+
+<!-- BEGIN GENERATED: control Image -->
+Default size 97 × 97. Property groups: Position.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the image |
+| `Enabled` | bool | `True` | Whether the control responds to the user |
+| `Picture` | file path | `''` | Image file (relative to the form's folder) |
+| `Stretch` | bool | `False` | True: the picture is scaled to fill the control. False: the control takes the size of the picture |
+| `Tag` | str | `''` | Free for your own use |
+| `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
+| `Visible` | bool | `True` | Whether the control is shown at run time |
+| `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top. Equal values keep creation order (later on top). |
+
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
 ### Menu
 
 A form's menus: the menu bar, the menus on it, their items, submenus and
@@ -722,7 +752,8 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 
 `Form`, `Control` (base class), `Label`, `TextBox`, `CommandButton`,
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
-`HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Menu`](#menu), and
+`HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Image`](#image),
+[`Menu`](#menu), and
 `ControlArray` for [control arrays](#control-arrays).
 
 ---
