@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 import sys
 
-from PySide6.QtCore import QEvent, QEventLoop, Qt
+from PySide6.QtCore import QEvent, QEventLoop, QObject, Qt
 from PySide6.QtGui import QFont, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 
@@ -74,6 +74,7 @@ class _FormWidget(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._vp_form._layout_menu_bar()
+        self._vp_form._layout_aligned()  # before Form_Resize, so it sees the panes' sizes
         self._vp_form._fire("Resize")
 
     def changeEvent(self, event):
@@ -110,6 +111,20 @@ class _FormWidget(QWidget):
 
     def keyReleaseEvent(self, event):
         self._vp_form._fire("KeyUp", vp_key_code(event.key()), vp_shift(event.modifiers()))
+
+
+class _ContainerWatcher(QObject):
+    """Keeps a form shown in a container (Form.ShowIn) as large as the
+    container, whenever the container is resized."""
+
+    def __init__(self, form: "Form", container_widget: QWidget):
+        super().__init__(container_widget)
+        self._form = form
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Resize:
+            self._form._fit_to_container()
+        return False
 
 
 class _FormClient(QWidget):
@@ -187,12 +202,17 @@ class Form(PropertyHost):
         d["_menubar"] = None  # created with the first Menu
         d["_client"] = None  # the controls' area when the menu bar is in the window
         d["_menu_height"] = 0  # height of a menu bar in the window
+        d["_container"] = None  # the control (or form) it is shown in, see ShowIn
+        d["_fill"] = True  # shown in a container: fill it
+        d["_watcher"] = None
+        d["_embedded"] = []  # the forms shown in this form (or its containers)
         d["_widget"] = _FormWidget(self)
         self._widget.resize(480, 360)
         self._init_values({"Caption": type(self).__name__})
         initialize = getattr(self, "InitializeComponent", None)
         if initialize is not None:
             initialize()
+        self._layout_aligned()
         self._apply_tab_order()
         self._fire("Initialize")
 
@@ -262,6 +282,39 @@ class Form(PropertyHost):
                 self._apply_fixed_size()
         self._menubar.setGeometry(0, 0, widget.width(), height)
         self._client.setGeometry(0, height, widget.width(), widget.height() - height)
+        self._layout_aligned()
+
+    def _layout_aligned(self) -> None:
+        """Dock the PictureBoxes whose Align is set to the edges of the form's
+        client area, in the order they were created: each takes its edge of
+        the space the earlier ones left, keeping its height (Top, Bottom) or
+        width (Left, Right). Hidden ones take no space (at run time)."""
+        area = self._container_widget().rect()
+        left, top, right, bottom = 0, 0, area.width(), area.height()
+        for control in self._controls:
+            align = control._values.get("Align", 0) if "Align" in control._specs else 0
+            widget = control._widget
+            if not align or widget is None or control.Parent is not self:
+                continue
+            if not self._design_mode and not control._values.get("Visible", True):
+                continue
+            width, height = max(right - left, 0), max(bottom - top, 0)
+            if align == 1:  # Top
+                size = min(widget.height(), height)
+                widget.setGeometry(left, top, width, size)
+                top += size
+            elif align == 2:  # Bottom
+                size = min(widget.height(), height)
+                widget.setGeometry(left, bottom - size, width, size)
+                bottom -= size
+            elif align == 3:  # Left
+                size = min(widget.width(), width)
+                widget.setGeometry(left, top, size, height)
+                left += size
+            elif align == 4:  # Right
+                size = min(widget.width(), width)
+                widget.setGeometry(right - size, top, size, height)
+                right -= size
 
     def _base_dir(self) -> str:
         module = sys.modules.get(type(self).__module__)
@@ -295,6 +348,8 @@ class Form(PropertyHost):
 
     def _register_control(self, control: Control) -> None:
         self._controls.append(control)
+        if control._values.get("Align"):  # e.g. an aligned PictureBox created in code
+            self._layout_aligned()
 
     def _fire(self, event: str, *args):
         if self._design_mode:
@@ -341,6 +396,8 @@ class Form(PropertyHost):
             QWidget.setTabOrder(first, second)
 
     def _apply_window_flags(self) -> None:
+        if self._container is not None:  # shown in a container: not a window
+            return
         style = self.BorderStyle
         if style in (4, 5):
             flags = Qt.Tool
@@ -361,7 +418,7 @@ class Form(PropertyHost):
         self._apply_fixed_size()
 
     def _apply_fixed_size(self) -> None:
-        if self._design_mode:
+        if self._design_mode or self._container is not None:
             return
         if self.BorderStyle in (1, 3, 4):
             self._widget.setFixedSize(self._widget.size())
@@ -427,7 +484,7 @@ class Form(PropertyHost):
             self._widget.move(self._widget.x(), v)
 
     def _apply_WindowState(self, v):
-        if not self._shown_once or self._design_mode:
+        if not self._shown_once or self._design_mode or self._container is not None:
             return
         state = {1: Qt.WindowMinimized, 2: Qt.WindowMaximized}.get(v, Qt.WindowNoState)
         self._widget.setWindowState(state)
@@ -518,6 +575,11 @@ class Form(PropertyHost):
         if not self._loaded:  # Form_Load unloaded the form
             return
         widget = self._widget
+        if self._container is not None:  # shown in a container (ShowIn)
+            self._fit_to_container()
+            widget.show()
+            widget.raise_()
+            return
         if not self._shown_once:
             self._apply_window_flags()
             self._position_on_first_show(OwnerForm)
@@ -551,10 +613,12 @@ class Form(PropertyHost):
             return self._widget.close()
         return self._query_unload()
 
-    def _query_unload(self) -> bool:
+    def _query_unload(self, force: bool = False) -> bool:
+        """Fire Form_Unload (which can cancel, unless ``force``), then unload
+        the forms shown in this one."""
         if self._loaded:
             result = self._fire("Unload")
-            if result:  # Form_Unload returned True -> Cancel
+            if result and not force:  # Form_Unload returned True -> Cancel
                 return False
             self.__dict__["_loaded"] = False
             if self in _loaded_forms:
@@ -562,7 +626,82 @@ class Form(PropertyHost):
         for control in self._controls:
             if isinstance(control, Timer) and control._timer is not None:
                 control._timer.stop()
+        for form in list(self._embedded):  # they go with their host, and can't cancel
+            form._query_unload(force=True)
+            form._widget.hide()
+            form._leave_container()
         return True
+
+    # -- showing a form inside another ------------------------------------------------------
+    @property
+    def Container(self):
+        """The control (or form) this form is shown in with ShowIn, or None
+        for a form in its own window."""
+        return self._container
+
+    def ShowIn(self, Container, Fill: bool = True) -> None:
+        """Show this form inside a container of another form: a PictureBox or
+        Frame, or the form itself. With ``Fill`` it fills the container and
+        follows its size (Form_Resize fires); otherwise it keeps its size at
+        its Left/Top. Form_Load fires as for Show. ``ShowIn(None)`` makes it a
+        window again. Its Caption and BorderStyle apply only as a window."""
+        if Container is None:
+            if self._container is not None:
+                self._leave_container()
+            self.Show()
+            return
+        is_form = isinstance(Container, Form)
+        if not is_form and not getattr(Container, "IsContainer", False):
+            raise TypeError(f"Can't show {self.Name} in {Container!r}: use a container "
+                            "(PictureBox, Frame) or a form")
+        host = Container if is_form else Container._owner_form()
+        if host is self or self._hosts(host):
+            raise ValueError(f"Can't show {self.Name} inside itself")
+        if self._container is not Container:
+            if self._container is not None:
+                self._leave_container()
+            self._enter_container(Container, host)
+        self.__dict__["_fill"] = bool(Fill)
+        self.Show()
+
+    def _hosts(self, form: "Form") -> bool:
+        """Whether ``form`` is shown in this one, directly or not."""
+        return any(child is form or child._hosts(form) for child in self._embedded)
+
+    def _enter_container(self, container, host: "Form") -> None:
+        widget, parent = self._widget, container._container_widget()
+        visible = widget.isVisible()
+        widget.setParent(parent, Qt.Widget)  # a child widget, no longer a window
+        if visible:
+            widget.show()
+        watcher = _ContainerWatcher(self, parent)
+        parent.installEventFilter(watcher)
+        self.__dict__.update(_container=container, _watcher=watcher)
+        host._embedded.append(self)
+
+    def _leave_container(self) -> None:
+        """Back to a window of its own (hidden until shown)."""
+        container = self._container
+        if container is None:
+            return
+        host = container if isinstance(container, Form) else container._owner_form()
+        if self in host._embedded:
+            host._embedded.remove(self)
+        watcher = self._watcher
+        if watcher is not None:
+            watcher.parent().removeEventFilter(watcher)
+            watcher.deleteLater()
+        self.__dict__.update(_container=None, _watcher=None, _shown_once=False)
+        self._widget.hide()
+        self._widget.setParent(None, Qt.Window)
+
+    def _fit_to_container(self) -> None:
+        if self._container is None:
+            return
+        if self._fill:
+            self._widget.setGeometry(self._container._container_widget().contentsRect())
+        else:
+            self._widget.move(self._values.get("Left", 0), self._values.get("Top", 0))
 
     def Move(self, Left, Top=None, Width=None, Height=None) -> None:
         self.__dict__["_shown_once"] = self._shown_once or self._widget.isVisible()

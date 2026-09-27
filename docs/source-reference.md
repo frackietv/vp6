@@ -205,7 +205,7 @@ The intrinsic controls.
 | `ComboBox` | `QComboBox` | `Style` 0 (editable) / 2 (list only); Click on selection change, Change on edit. |
 | `Timer` | none at run time (`QTimer`) | Stopwatch icon in design mode (`_timer_design_widget`). |
 | `HScrollBar`, `VScrollBar` | `QScrollBar` | `_ScrollBar` base; Change on value change, Scroll while dragging. |
-| `PictureBox` | `QLabel` | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle; `Cls()`. |
+| `PictureBox` | `QLabel` | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle; `Cls()`. `Align` docks it (`Form._layout_aligned`); changing Align, its size, place or Visible calls `_relayout`. |
 | `Line` | `_LineWidget` (transparent to the mouse, covering the line's box) | `X1`, `Y1`, `X2`, `Y2` instead of Left/Top/Width/Height (`_update_geometry` sizes the widget, with `_padding` for the width); `BorderColor` (unset: the palette's text color), `BorderStyle` (`_PEN_STYLES`; 0 = Transparent), `BorderWidth`, `Visible`, `Tag`, `ZIndex`; no events (`DefaultEvent` is empty); `_moved_points()` for the designer. |
 | `Image` | `QLabel` | Not a container, `NoFocus`, no `TabIndex`, no colors (transparent). `Stretch` and `BorderStyle` come before `Picture` in `Properties`, because loading a picture sizes the control: without Stretch `_fit_to_picture` gives it the picture's size (plus the border). `Enabled` doesn't gray it: `_on_qt_event` drops events instead. |
 | `TreeView` | `QTreeWidget` (header hidden, one column) | `Nodes` is a `_Nodes` collection (`_list` in the order added, `_by_key`; `_resolve` takes a key, an Index from 1 or a Node; `Add` places a `QTreeWidgetItem` by relationship, `Remove` with descendants, `Clear`). Each `Node` wraps its item (stored in the item's `Qt.UserRole` data; `UserRole + 1` holds its `Sorted`) with Text, Key, Tag, Index, FullPath, Expanded, Selected, Checked, Bold, ForeColor, Image, the relatives and `EnsureVisible`. `Items` (kind `outline`) rebuilds the tree from `parse_outline` (expanded in design mode). Events: NodeClick on `currentItemChanged`, or `itemClicked` on the node that was current at the press (`_current_at_press`); Expand/Collapse; NodeCheck when the check state changes (`Node._check_state`). Code changes run under `_quietly()` (`_Quiet`), so only the user's actions fire events. `SelectedItem`, `HitTest`, `LineStyle`, `Indentation`, `Checkboxes`, `Sorted` (`_keep_sorted`), `PathSeparator`. |
@@ -253,11 +253,25 @@ The intrinsic controls.
     * `_register_control`;
     * `_owner_form` / `_container_widget` / `_base_dir`, the same interface
       a container control offers.
+  * **Shown in a container** (`ShowIn`, `Container`): `_enter_container`
+    makes the form's widget a child of the container's widget (no longer a
+    window) and installs a `_ContainerWatcher`, which calls
+    `_fit_to_container` when the container is resized; `_leave_container`
+    makes it a window again. The host form lists these forms in
+    `_embedded`, and `_query_unload` unloads them after itself (`force`:
+    they can't cancel). `_apply_window_flags`, `_apply_fixed_size`,
+    `_apply_WindowState` and `Show`'s positioning are skipped while it is in
+    a container. `_hosts(form)` prevents showing a form inside itself.
   * **Color scheme:** `_project_scheme`, `_effective_scheme`, `_is_dark`,
     `_render_scheme` (the designer overrides it), `_apply_ColorScheme`,
     `_style_widget` (called for every new control widget).
   * **Keyboard:** `_preview_key`, `_handle_default_cancel`,
     `_apply_tab_order`.
+  * **Docked panes:** `_layout_aligned()` places the PictureBoxes with an
+    `Align` at the edges of the client area, in creation order, each taking
+    its edge of what the earlier ones left. It runs after
+    `InitializeComponent`, on every resize (before `Form_Resize`), after the
+    menu bar's layout, and when an aligned control is registered or changed.
   * **Menus:** `_add_menu_item(menu)` puts a top-level `Menu` on the menu
     bar (`_menubar`, a `QMenuBar` created with the first one). When Qt draws
     it in the window (not the macOS menu bar), `_make_client` moves the
@@ -506,7 +520,8 @@ Module functions:
   template gets `Form1.py`, `Module1.py` and the `.vp6p`, and starts in Sub
   Main. The console template's `Main` uses `print()`/`input()`; the Standard
   EXE template's `Main` shows Form1. `"kitchensink"` delegates to
-  `kitchensink.create`, which also adds `frmDialog.py` and `vp6.png`.
+  `kitchensink.create`, which also adds `frmDialog.py`, `frmEmbedded.py` and
+  `vp6.png`.
 * `main(argv)` is the application entry point.
 
 `open_project` opens a windowed project's startup form designer, or its first
@@ -561,7 +576,9 @@ The form designer (architecture §5.3).
   * **Selection:** `select`, `select_by_name`, `selected_objects`,
     `object_name` (the key), `name_value` (the `(Name)`), `supports_index`,
     `all_objects`, `set_tool`. An empty selection means the form.
-  * **Commits and undo:** `_snapshot`, `_commit`, `commit_geometry`,
+  * **Commits and undo:** `_snapshot`, `_commit` (which first calls
+    `_sync_aligned`, storing where the form docks its aligned PictureBoxes,
+    also after they were dragged or the form resized), `commit_geometry`,
     `commit_form_size`, `undo`, `redo`, `_restore`.
   * **Editing:**
     * `unique_name`, `create_control`, `add_control_centered`;
@@ -877,24 +894,38 @@ Captures the IDE process's stdout and stderr for the Output window.
 
 The Kitchen Sink project template: a demo of every control and feature.
 
-* `create(directory, name)` copies `FORMS` (`Form1.py`, `frmDialog.py`) and
+* `create(directory, name)` copies `FORMS` (`Form1.py`, `frmDialog.py`,
+  `frmEmbedded.py`) and
   `MODULES` (`Module1.py`) from `TEMPLATE_DIR`, draws the PictureBox image
   `PICTURE` (`vp6.png`, via `draw_picture`, so the package ships no binary),
   and returns a Standard EXE `Project` that starts in Sub Main.
   `mainwindow.create_project(..., "kitchensink")` calls it.
-* **`templates/kitchensink/Form1.py`** contains all 12 control types:
+* **`templates/kitchensink/Form1.py`** contains every control type:
   * Frames and a PictureBox as containers (a Label inside the picture);
   * text boxes (multi-line, password, upper-casing KeyPress);
   * Default and Cancel buttons;
-  * option buttons switching the form's `ColorScheme` at run time;
+  * option buttons as the control array `optScheme`, switching the form's
+    `ColorScheme` at run time, and the `cmdMore` control array that loads
+    and unloads elements;
   * check boxes, scroll bars, combo boxes, a sorted list with Add/Remove;
+  * Lines (a dashed one over the Z-order labels, one stretched by
+    `Form_Resize`), an Image thumbnail, and ZIndex / ZOrder labels;
+  * a TreeView index of the form's sections (nodes from the designer's
+    `Items` outline and from code);
+  * File, View and Help menus, with the menu control array `mnuScheme`;
   * a `DoEvents` loop, a Timer clock, and MsgBox/InputBox;
   * Clipboard, App, Screen and Forms;
   * a `KeyPreview` F1 help and Ctrl+Q `End()`;
   * a `Form_Unload` confirmation, and a status bar kept at the bottom by
-    `Form_Resize`.
+    `Form_Resize`;
+  * the PictureBox `picEmbed`, in which `Form_Load` shows `frmEmbedded`
+    with `ShowIn`.
 * **`frmDialog.py`** is a modal dialog (`Show(vpModal)`) with its own Dark
   color scheme, using `Load`/`Unload` and a `Result` attribute.
+* **`frmEmbedded.py`** is a small form shown inside Form1's `picEmbed`. It
+  follows the pane's size in `Form_Resize`, its button sits on a PictureBox
+  docked to the bottom (`Align = 2 - Bottom`), and the button pops it out into
+  a window of its own (`ShowIn(None)`) and puts it back.
 * **`Module1.py`** is `Main()` with `run(Form1)`.
 * The files are package data (`pyproject.toml`). `tests/test_kitchen_sink.py`
   keeps them covering every control and API name (development guide §5.11).
@@ -1024,6 +1055,8 @@ All tests run headless. `conftest.py`:
 | `test_control_arrays.py` | Control arrays: elements, `[i]` / `(i)` / `Item`, iteration, bounds, read-only `Index`, handlers getting `Index` first, `Load`/`Unload` of run-time elements (copied properties, hidden, last in the tab order; designer elements can't be unloaded), one type per array; the form file round trip (elements as containers too) and invalid arrays; adding/removing the `Index` parameter and stubs; in the designer: paste asking to create an array, renaming into an array (and out, and into another type's name), the Index property (one-element arrays, moving, clearing, undo), containers that are elements; the Properties window's `(Name)`, `Index` row and object list; the code window's Object list, new handlers with `Index`, completion. |
 | `test_menus.py` | Menus at run time: the menu bar and items, separators, shortcuts; an in-window menu bar keeping `Height`, `ScaleHeight` and control positions for the area below it (the window grows), form mouse events there; Click on choosing an item and before a menu opens; `Checked` changing only in code; Enabled, Visible, Caption and Shortcut changes; menu control arrays loading after their last element and unloading; the parent check; the form file round trip; the Menu Editor's entries and ControlDefs, validation messages and dialog editing (Next, indent, shortcut, Insert, Delete, moving, outdent); the designer's menu bar (layout, hit testing, the drop-down opening Click code), menus kept off the canvas and edited in the Properties window, deleting a menu with its items, renames and arrays updating handlers, undo; the IDE's Tools > Menu Editor (Ctrl+E). |
 | `test_image.py` | The Image control: taking the picture's size without Stretch (and with a border), filling the control with Stretch, switching back, clearing the picture; mouse events, no focus or Tab stop, not grayed but silent when disabled, transparent; its properties in order and the form file; in the designer: sized by a new picture, resized with Stretch, the Properties rows; the Toolbox button and icon. |
+| `test_embedded_forms.py` | `Form.ShowIn`: filling a PictureBox and following its size (Load before the first Resize), controls working, window-only properties not popping it out; a Frame's inside, a form as the container, `Fill=False` at Left/Top; popping out, moving between containers, Hide/Show; unloading only itself, going with its host (unable to cancel), a host that cancels keeping it; invalid containers and cycles; nested forms and Default buttons. |
+| `test_align.py` | PictureBox `Align`: docking in creation order, following the form (before Form_Resize), changing a pane's thickness, place, visibility and Align; only on the form; panes created in code; under an in-window menu bar; in a form shown in a container; in the designer (Align stored with the docked geometry, the form resized, a pane dragged back, undo); the constants. |
 | `test_treeview.py` | The TreeView: reading outlines; the Nodes collection (key, Index from 1, errors for unknown or duplicate keys); every relationship of `Add`; relatives, FullPath and PathSeparator; removing with children and clearing; node Text/Key/Tag/Bold/ForeColor/Image, EnsureVisible, sorting the tree and a node's children; code changes firing no events; NodeClick on clicks (also on the selected node) and keyboard moves, Expand/Collapse from the keyboard, HitTest; check boxes and NodeCheck; LineStyle, Indentation, Items; the form file; in the designer (Items building an expanded tree, the Properties button, a `Node` handler stub); the Toolbox button, icon and constants. |
 | `test_line.py` | The Line control: its widget following the points, drawing (color, Transparent, Visible, the scheme's text color by default), clicks going through it, ZIndex; the form file; in the designer: drawing from press to release and by a click, selecting near the line (not its box), dragging an end, the move cursor over an end, moving, arrow keys (no resizing), undo, pasting with an offset, the Properties rows, no event stub; the Toolbox button and icon. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
@@ -1036,7 +1069,7 @@ All tests run headless. `conftest.py`:
 | `test_outline.py` | The outline of the Kitchen Sink's Form1 matches the backlog example exactly; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: hidden by default, opened under Properties, following the Project panel or active window, clicking items goes to the line (unfolding the designer region). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme, and control arrays (an array, `Load`/`Unload`, `Count`, bounds, `Index` handlers); its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload), the option-button control array, the `cmdMore` control array loading and unloading elements, the menus (the View menu's control array and check marks kept in step with the option buttons and the clock, a menu's Click before it opens, a shortcut), the Lines (the one above the status bar following the window size), the Image thumbnail showing and hiding the big picture, and the TreeView index (nodes from the designer and from code, NodeClick naming the control a node points at, Expand). Controls without events (Line) needn't have a handler. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme, and control arrays (an array, `Load`/`Unload`, `Count`, bounds, `Index` handlers); its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload), the option-button control array, the `cmdMore` control array loading and unloading elements, the menus (the View menu's control array and check marks kept in step with the option buttons and the clock, a menu's Click before it opens, a shortcut), the Lines (the one above the status bar following the window size), the Image thumbnail showing and hiding the big picture, the TreeView index (nodes from the designer and from code, NodeClick naming the control a node points at, Expand), and frmEmbedded shown in picEmbed (filling it, popping out and back, unloaded with Form1). Controls without events (Line) needn't have a handler. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6. |
 
 ## Samples: `samples/`

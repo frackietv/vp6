@@ -8,6 +8,7 @@ import time
 
 from vp6 import *
 from frmDialog import frmDialog
+from frmEmbedded import frmEmbedded
 
 HELP = """Kitchen Sink keys:
 
@@ -143,10 +144,12 @@ class Form1(Form):
                                       ToolTipText='Cancel button: Esc clicks it')
         self.tmrClock = Timer(self, Left=600, Top=440, Interval=1000)
         self.linStatus = Line(self, X1=16, Y1=493, X2=744, Y2=493, BorderColor=0x808080)
-        self.tvwIndex = TreeView(self, Left=760, Top=16, Width=144, Height=416,
+        self.tvwIndex = TreeView(self, Left=760, Top=16, Width=144, Height=250,
                                  Items=['Text and buttons|fraText', '    Name|txtName', '    Notes|txtNotes', '    Greet|cmdGreet', 'Options|fraOptions', '    Color schemes|optScheme', '    Font size|hsbSize', '    Colors|cboColors', 'Lists|lstItems', 'Pictures|picLogo', '    Thumbnail|imgThumb', 'Z-order|lblZRed', 'Menus|mnuFile'],
                                  TabIndex=44,
                                  ToolTipText='A TreeView: its nodes were typed in the designer (the Items outline)')
+        self.picEmbed = PictureBox(self, Left=760, Top=276, Width=144, Height=156, TabIndex=45,
+                                   ToolTipText='A PictureBox holding another form (frmEmbedded)')
         self.lblStatus = Label(self, Caption='Ready', Left=16, Top=496, Width=728, Height=25,
                                BorderStyle=1, TabIndex=39)
         self.mnuFile = Menu(self, Caption='&File')
@@ -174,6 +177,9 @@ class Form1(Form):
         # Nodes can also be added in code: here a child of "Menus", placed with
         # a relationship (vpTvwChild) to its parent's key
         self.tvwIndex.Nodes.Add("mnuFile", vpTvwChild, "mnuView", "View menu")
+        # A whole form (designed on its own) shown inside the PictureBox picEmbed
+        self.embedded = frmEmbedded()
+        self.embedded.ShowIn(self.picEmbed)
         self.lblStatus.Caption = f"{controls} controls loaded. Press F1 for help."
 
     def Form_Resize(self):
@@ -195,7 +201,11 @@ class Form1(Form):
 
     def Form_Unload(self):
         # Returning True cancels closing (VB's Cancel = 1)
-        return MsgBox("Close the Kitchen Sink?", vpYesNo + vpQuestion) == vpNo
+        if MsgBox("Close the Kitchen Sink?", vpYesNo + vpQuestion) == vpNo:
+            return True
+        # Forms shown in this one are unloaded with it; this also closes
+        # frmEmbedded when it was popped out into a window of its own
+        self.embedded.Unload()
 
     # --- text and buttons --------------------------------------------------------------------
     def fraText_Click(self):

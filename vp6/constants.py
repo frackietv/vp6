@@ -77,6 +77,13 @@ vpNewLine = "\n"
 vpTab = "\t"
 vpNullString = ""
 
+# --- PictureBox.Align ----------------------------------------------------------
+vpAlignNone = 0
+vpAlignTop = 1
+vpAlignBottom = 2
+vpAlignLeft = 3
+vpAlignRight = 4
+
 # --- TreeView: Nodes.Add relationship ----------------------------------------
 vpTvwFirst = 0
 vpTvwLast = 1

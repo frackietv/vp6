@@ -3,7 +3,8 @@
 A ready-made project that demonstrates every VP6 control and most of the
 API: all intrinsic controls (with Frames and a PictureBox as containers),
 the common events, MsgBox/InputBox, colors, fonts, color schemes, a modal
-dialog, Clipboard, Debug, App, Screen, Forms, DoEvents and End.
+dialog, a form shown inside another (frmEmbedded), Clipboard, Debug, App,
+Screen, Forms, DoEvents and End.
 
 The sources live in ``templates/kitchensink/`` next to this file. **When VP6
 gains a control, event or API function, demonstrate it there**:
@@ -24,7 +25,7 @@ from ..app import ensure_app
 from ..project import SUB_MAIN, Project
 
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "kitchensink"
-FORMS = ("Form1.py", "frmDialog.py")
+FORMS = ("Form1.py", "frmDialog.py", "frmEmbedded.py")
 MODULES = ("Module1.py",)
 PICTURE = "vp6.png"  # shown by Form1's PictureBox
 

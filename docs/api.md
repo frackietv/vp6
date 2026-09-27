@@ -26,7 +26,7 @@ Contents:
 7. [Color schemes (light/dark)](#7-color-schemes-lightdark)
 8. [Constants](#constants)
 9. [Projects and running programs](#9-projects-and-running-programs)
-10. [Differences from VB66](#10-differences-from-visual-basic-6)
+10. [Differences from VB6](#10-differences-from-vb6)
 
 ---
 
@@ -218,7 +218,33 @@ Run-time only properties:
 | `Move(Left, Top=None, Width=None, Height=None)` | Moves or resizes the window. |
 | `Refresh()` | Repaints. |
 | `SetFocus()` | Activates the window. |
+| `ShowIn(Container, Fill=True)` | Shows the form inside a container of another form (a PictureBox or Frame) or inside another form; see [Forms inside forms](#forms-inside-forms). `ShowIn(None)` makes it a window again. |
+| `Container` | Read-only: where `ShowIn` put the form, or `None` for a form in its own window. |
 | `Form1.Run()` | Classmethod: `run(Form1)`. |
+
+### Forms inside forms
+
+A form designed on its own can be shown inside a container of another form,
+e.g. one page of a larger window:
+
+```python
+self.page = frmOptions()
+self.page.ShowIn(self.picContent)     # Form_Load, then Form_Resize with the pane's size
+...
+self.page.ShowIn(None)                # a window of its own
+self.page.ShowIn(self.picContent)     # back into the pane
+```
+
+* The form fills the container (inside a Frame: below its caption) and
+  follows its size, firing `Form_Resize`. With `Fill=False` it keeps its
+  size, at its `Left` and `Top`.
+* It is part of the host window: it has no title bar, and its `Caption`,
+  `BorderStyle`, `WindowState` and `StartUpPosition` apply only when it is a
+  window. It hides and shows with its container.
+* `Unload()` unloads just that form. When the host form unloads, the forms
+  shown in it get `Form_Unload` after the host's own and can't cancel it;
+  they become (hidden) windows again, so they can be shown elsewhere.
+* A form can't be shown inside itself, or inside a form it holds.
 
 ### Form events
 
@@ -350,11 +376,31 @@ def cmdDigit_Click(self, Index):
 
 A container that shows an image.
 
+**Docked panes (`Align`).** A PictureBox directly on the form with `Align`
+set to `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft` or `vpAlignRight` sticks
+to that edge of the form's client area (below an in-window menu bar) and
+follows its size: Top and Bottom panes span the width and keep their
+`Height`; Left and Right panes span the height and keep their `Width`.
+
+```python
+self.picNav = PictureBox(self, Align=vpAlignLeft, Width=200)     # a sidebar
+self.picStatus = PictureBox(self, Align=vpAlignBottom, Height=24) # a status bar
+```
+
+* Several panes dock in the order they were created: each takes its edge
+  of the space the earlier ones left.
+* The form places them before `Form_Resize` fires, so the handler can lay
+  out the rest around them. Setting their `Left` or `Top` has no effect;
+  hidden panes take no space. Other controls keep their positions.
+* It works in a form shown in a container (`ShowIn`) too, and in the
+  designer, where the file stores where the form docks them.
+
 <!-- BEGIN GENERATED: control PictureBox -->
 Default size 121 × 97. A container: other controls can be placed on it. Property groups: Position, Colors, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `Align` | enum | 0 - None | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right. Dock to that edge of the form and follow its size, keeping the height (Top, Bottom) or width (Left, Right); only on the form itself |
 | `AutoSize` | bool | `False` | Resize to fit the picture |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A sunken border around the picture |
 | `Picture` | file path | `''` | Image file (relative to the form's folder) |
@@ -898,6 +944,7 @@ All constants are plain ints or strings.
 | Form.WindowState | `vpNormal`, `vpMinimized`, `vpMaximized` | 0, 1, 2 |
 | Form.StartUpPosition | `vpStartUpManual`, `vpStartUpOwner`, `vpStartUpScreen`, `vpStartUpWindowsDefault` | 0, 1, 2, 3 |
 | Strings | `vpCr`, `vpLf`, `vpCrLf`, `vpNewLine`, `vpTab`, `vpNullString` | `'\r'`, `'\n'`, `'\r\n'`, `'\n'`, `'\t'`, `''` |
+| PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight` | 0, 1, 2, 3, 4 |
 | TreeView: Nodes.Add relationship | `vpTvwFirst`, `vpTvwLast`, `vpTvwNext`, `vpTvwPrevious`, `vpTvwChild` | 0, 1, 2, 3, 4 |
 | TreeView.LineStyle | `vpTvwTreeLines`, `vpTvwRootLines` | 0, 1 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |

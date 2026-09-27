@@ -1114,6 +1114,9 @@ class PictureBox(Control):
         P("AutoSize", "bool", False, description="Resize to fit the picture"),
         P("BorderStyle", "enum", 1, enum_choices("None", "Fixed Single"),
           description="A sunken border around the picture"),
+        P("Align", "enum", 0, enum_choices("None", "Top", "Bottom", "Left", "Right"),
+          description="Dock to that edge of the form and follow its size, keeping the height "
+                      "(Top, Bottom) or width (Left, Right); only on the form itself"),
         *_COLORS, *_COMMON,
     )
 
@@ -1121,6 +1124,39 @@ class PictureBox(Control):
         label = QLabel(parent)
         label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         return label
+
+    def _relayout(self) -> None:
+        """Docked (or just undocked): let the form place its aligned panes."""
+        if self in self._form._controls:
+            self._form._layout_aligned()
+
+    def _apply_Align(self, v):
+        self._relayout()
+
+    def _apply_Width(self, v):
+        super()._apply_Width(v)
+        if self._values.get("Align"):
+            self._relayout()
+
+    def _apply_Height(self, v):
+        super()._apply_Height(v)
+        if self._values.get("Align"):
+            self._relayout()
+
+    def _apply_Left(self, v):
+        super()._apply_Left(v)
+        if self._values.get("Align"):
+            self._relayout()  # an aligned pane stays where the form puts it
+
+    def _apply_Top(self, v):
+        super()._apply_Top(v)
+        if self._values.get("Align"):
+            self._relayout()
+
+    def _apply_Visible(self, v):
+        super()._apply_Visible(v)
+        if self._values.get("Align"):
+            self._relayout()  # a hidden pane gives its space to the others
 
     def _apply_Picture(self, v):
         path = resolve_path(self, v)

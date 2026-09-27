@@ -707,7 +707,24 @@ class FormDesigner(QWidget):
     def _snapshot(self) -> FormDef:
         return copy.deepcopy(self.form_def)
 
+    def _sync_aligned(self) -> None:
+        """Aligned PictureBoxes go where the form docks them (also after being
+        dragged, or the form resized): store their geometry."""
+        if self.form is None:
+            return
+        self.form._layout_aligned()
+        for key, control in self.controls.items():
+            control_def = self.form_def.control(key)
+            if control_def is None or not control._values.get("Align"):
+                continue
+            geometry = control._widget.geometry()
+            place = {"Left": geometry.x(), "Top": geometry.y(), "Width": geometry.width(),
+                     "Height": geometry.height()}
+            control_def.props.update(place)
+            control._values.update(place)
+
     def _commit(self, before: FormDef) -> None:
+        self._sync_aligned()
         if before == self.form_def:
             return
         self._undo.append(before)

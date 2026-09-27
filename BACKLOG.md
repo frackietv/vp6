@@ -1,7 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** Embedding a form inside a container control (e.g. showing a live form in a PictureBox), with its Load/Unload and Resize events as the container shows, hides and resizes it (Kitchen Sink redesign: each demo is its own form shown in the content pane; self-hosting: the form designer's canvas)
-- **[Controls]** PictureBox `Align` (None, Top, Bottom, Left, Right) like VB: the control docks to that edge of the form and follows its size (Kitchen Sink redesign: the navigation pane on the left and the content pane beside it; self-hosting: toolbars and panels)
 - **[Controls]** Splitter control for resizable panes (Kitchen Sink redesign: between the navigation tree and the demo; self-hosting: the Properties window's grid/description split)
 - **[Controls]** Scrollable container: a PictureBox/Frame that scrolls its contents with automatic scroll bars (Kitchen Sink redesign: demos taller than the content pane; self-hosting: the designer canvas)
 - **[Controls]** Label rich text: bold parts, headings and links in a caption (Kitchen Sink redesign: the introduction page; self-hosting: the Properties description pane and the About box)

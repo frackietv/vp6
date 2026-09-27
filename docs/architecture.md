@@ -155,6 +155,11 @@ parent. A control registers itself with its form
 (`self.Command1 = CommandButton(self, ...)`) names it: `Form.__setattr__`
 sets the control's name from the attribute name.
 
+A form can also be **shown inside a container** of another form
+(`Form.ShowIn`): its `_FormWidget` becomes a child widget of the
+container's widget instead of a window, an event filter on the container
+keeps it at the container's size, and the host form unloads it with itself.
+
 A **`Menu`** has no widget: it is a `QAction` on the form's `QMenuBar` or in
 its parent menu's `QMenu`. Where Qt draws the menu bar inside the window
 (Windows, Linux), the form moves its controls onto a client widget below

@@ -1,5 +1,41 @@
 # VP6 features
 
+**Version:** 0.3.16
+**Date:** 2026-09-30
+
+## Controls
+
+- PictureBox `Align` like VB (`vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight`): a PictureBox directly on the form docks to that edge of its client area and follows the form's size; Top and Bottom panes span the width and keep their Height, Left and Right panes span the height and keep their Width
+- Several docked panes stack in the order they were created, each taking its edge of the space the earlier ones left; hidden panes take no space; setting a pane's Left or Top has no effect, its thickness can be changed at run time
+- Panes are placed before `Form_Resize` fires, below an in-window menu bar, and also in a form shown in a container (`ShowIn`)
+
+## IDE
+
+- The designer docks aligned PictureBoxes live, also while the form is resized, and stores where they are docked; a docked pane dragged away goes back to its edge
+
+## Kitchen Sink
+
+- frmEmbedded's button sits on a PictureBox docked to the bottom (`Align = 2 - Bottom`) instead of being moved in `Form_Resize`
+
+---
+
+**Version:** 0.3.15
+**Date:** 2026-09-29
+
+## Programming model (the `vp6` library)
+
+- Forms inside forms: `form.ShowIn(Container)` shows a form designed on its own inside a PictureBox or Frame of another form, or inside another form; `Form_Load` fires as for `Show`
+- A form shown in a container fills it (inside a Frame: below the caption) and follows its size, firing `Form_Resize`; with `ShowIn(Container, Fill=False)` it keeps its size at its `Left` and `Top`
+- `ShowIn(None)` makes it a window again, and `ShowIn` another container moves it there; `Form.Container` tells where it is (None for a window)
+- While in a container, the form has no title bar and its `Caption`, `BorderStyle`, `WindowState` and `StartUpPosition` apply only as a window; it hides and shows with its container; its Default and Cancel buttons work inside it
+- `Unload()` unloads just that form; when the host form unloads, the forms shown in it get `Form_Unload` after the host's own and can't cancel it, then become (hidden) windows again; a form can't be shown inside itself or a form it holds
+
+## Kitchen Sink
+
+- A new form, `frmEmbedded`, shown in Form1's PictureBox `picEmbed` below the TreeView index; its button pops it out into a window of its own and puts it back; closing the Kitchen Sink also closes it when popped out
+
+---
+
 **Version:** 0.3.14
 **Date:** 2026-09-29
 

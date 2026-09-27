@@ -82,7 +82,7 @@ def test_designer_regions_are_canonical():
 def test_create_kitchen_sink_project(qapp, tmp_path):
     path = create_project(str(tmp_path), "Sink", "kitchensink")
     project = Project.load(path)
-    assert project.forms == ["Form1.py", "frmDialog.py"]
+    assert project.forms == ["Form1.py", "frmDialog.py", "frmEmbedded.py"]
     assert project.modules == ["Module1.py"]  # like every new project: Form1 and Module1
     assert project.startup == SUB_MAIN and project.type == "exe"
     folder = tmp_path / "Sink"
@@ -109,13 +109,14 @@ def sink_forms(qapp, tmp_path, monkeypatch):
     create_project(str(tmp_path), "Sink", "kitchensink")
     folder = str(tmp_path / "Sink")
     sys.path.insert(0, folder)
-    modules = {name: importlib.import_module(name) for name in ("frmDialog", "Form1")}
+    modules = {name: importlib.import_module(name)
+               for name in ("frmDialog", "frmEmbedded", "Form1")}
     # Answer the Form_Unload confirmation and silence message boxes
     monkeypatch.setattr(modules["Form1"], "MsgBox", lambda *args, **kwargs: vp6.vpYes)
     monkeypatch.setattr(modules["Form1"].time, "sleep", lambda seconds: None)
     yield modules
     sys.path.remove(folder)
-    for name in ("Form1", "frmDialog", "Module1"):
+    for name in ("Form1", "frmDialog", "frmEmbedded", "Module1"):
         sys.modules.pop(name, None)
 
 
@@ -225,6 +226,28 @@ def test_kitchen_sink_image(sink_forms):
     QTest.mouseClick(thumb._widget, Qt.LeftButton)
     assert form.picLogo.Visible
     form.Unload()
+
+
+def test_kitchen_sink_embedded_form(sink_forms):
+    form = sink_forms["Form1"].Form1()
+    form.Show()
+    embedded = form.embedded
+    assert embedded.Container is form.picEmbed
+    assert not embedded._widget.isWindow() and embedded._widget.isVisible()
+    assert (embedded.ScaleWidth, embedded.ScaleHeight) == \
+        (form.picEmbed._widget.contentsRect().width(), form.picEmbed._widget.contentsRect().height())
+    buttons = embedded.picButtons  # Align = Bottom: docked, following the form's size
+    assert (buttons.Left, buttons.Top, buttons.Width) == (0, embedded.ScaleHeight - 40,
+                                                          embedded.ScaleWidth)
+    assert embedded.cmdPop.Width == buttons.Width - 16  # its Form_Resize ran
+    embedded.cmdPop._widget.click()  # pop out
+    assert embedded.Container is None and embedded._widget.isWindow()
+    assert embedded._widget.isVisible() and embedded.cmdPop.Caption == "Put &back"
+    embedded.cmdPop._widget.click()  # put back
+    assert embedded.Container is form.picEmbed and not embedded._widget.isWindow()
+    embedded.cmdPop._widget.click()  # out again: closing Form1 still unloads it
+    assert form.Unload() is True
+    assert not embedded._loaded and not embedded._widget.isVisible()
 
 
 def test_kitchen_sink_tree_view(sink_forms):
