@@ -142,6 +142,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `Deactivate` | none |
 | `Resize` | none |
 | `Moved` | none |
+| `LinkClick` | URL |
 | `NodeClick` | Node |
 | `Expand` | Node |
 | `Collapse` | Node |
@@ -438,7 +439,30 @@ Methods: `Cls()` clears the picture.
 
 ### Label
 
-Read-only text.
+Read-only text. In plain text, `&` in the Caption is hidden (`&&` shows a
+literal `&`).
+
+**Formatted captions (`TextFormat`).** VB's Labels were plain text only; a
+VP6 Label can also show rich text:
+
+| `TextFormat` | Caption |
+|---|---|
+| `vpPlainText` (0, the default) | shown as it is (without the `&` marks) |
+| `vpRichText` (1) | HTML: `<b>bold</b>`, `<i>`, `<h2>heading</h2>`, `<br>`, `<a href="...">links</a>`, colors with `<span style="color:red">` |
+| `vpMarkdown` (2) | Markdown: `**bold**`, `*italic*`, `# heading`, lists, `` `code` ``, `[text](link)` |
+
+```python
+self.lblIntro = Label(self, TextFormat=vpMarkdown, WordWrap=True,
+                      Caption="# Welcome\n\nChoose a **topic** on the left, or [read the guide](guide).")
+
+def lblIntro_LinkClick(self, URL):
+    if URL == "guide":
+        self.show_guide()
+```
+
+Clicking a link fires `LinkClick(URL)`; without a handler, the link opens
+in the default browser (or mail program). The Caption can have several
+lines: edit it with the "…" button in the Properties window.
 
 <!-- BEGIN GENERATED: control Label -->
 Default size 97 × 25. Property groups: Position, Colors, Font, Common.
@@ -448,10 +472,11 @@ Default size 97 × 25. Property groups: Position, Colors, Font, Common.
 | `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment |
 | `AutoSize` | bool | `False` | Resize to fit the text |
 | `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the label |
-| `Caption` | str | `''` | The text; & marks are hidden (&& shows a literal &) |
+| `Caption` | str (multi-line) | `''` | The text; in plain text & marks are hidden (&& shows a literal &) |
+| `TextFormat` | enum | 0 - Plain | 0 - Plain, 1 - Rich Text, 2 - Markdown. Plain: the Caption as it is. Rich Text: HTML (bold, headings, links, colors). Markdown: bold, headings, lists and links written the Markdown way |
 | `WordWrap` | bool | `False` | Wrap long text onto several lines |
 
-Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `LinkClick(URL)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### TextBox
@@ -1007,6 +1032,7 @@ All constants are plain ints or strings.
 | Form.WindowState | `vpNormal`, `vpMinimized`, `vpMaximized` | 0, 1, 2 |
 | Form.StartUpPosition | `vpStartUpManual`, `vpStartUpOwner`, `vpStartUpScreen`, `vpStartUpWindowsDefault` | 0, 1, 2, 3 |
 | Strings | `vpCr`, `vpLf`, `vpCrLf`, `vpNewLine`, `vpTab`, `vpNullString` | `'\r'`, `'\n'`, `'\r\n'`, `'\n'`, `'\t'`, `''` |
+| Label.TextFormat | `vpPlainText`, `vpRichText`, `vpMarkdown` | 0, 1, 2 |
 | ScrollBars (TextBox, PictureBox) | `vpSBNone`, `vpHorizontal`, `vpVertical`, `vpBoth` | 0, 1, 2, 3 |
 | PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight` | 0, 1, 2, 3, 4 |
 | TreeView: Nodes.Add relationship | `vpTvwFirst`, `vpTvwLast`, `vpTvwNext`, `vpTvwPrevious`, `vpTvwChild` | 0, 1, 2, 3, 4 |

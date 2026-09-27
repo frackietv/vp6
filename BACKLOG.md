@@ -1,7 +1,9 @@
 # VP6 backlog
 
-- **[Controls]** Label rich text: bold parts, headings and links in a caption (Kitchen Sink redesign: the introduction page; self-hosting: the Properties description pane and the About box)
+- **[Controls]** PictureBox `Align = Fill`: the PictureBox takes all the space the other docked panes leave and follows it (Kitchen Sink redesign: the content pane beside the navigation pane and its Splitter, without Form_Resize and pane Resize code placing it)
+- **[Language and runtime]** Events for a form shown in a container (`ShowIn`): `Form_Activate` when it is shown in its container and `Form_Deactivate` when it is hidden or another form replaces it, like a window being activated (Kitchen Sink redesign: a demo page starts and stops its Timer as the user comes and goes)
 - **[Kitchen Sink]** Redesign the Kitchen Sink explorer-style: instead of everything on one form, a navigation tree on the left lists all the features, controls and APIs, and choosing an item shows its demo in the main pane. The first item is an introduction with introductory text. Depends on the items above; tests/test_kitchen_sink.py must keep checking that everything is demonstrated.
+- **[Language and runtime]** Menus on a form shown in a container (`ShowIn`): the menu bar is drawn inside the container, and on macOS it would be a system menu bar tied to a child widget; decide whether an embedded form's menus merge into the host window's menu bar, or aren't shown
 - **[Controls]** Common controls: ProgressBar, Slider, ListView, TabStrip, StatusBar, Toolbar, ImageList, UpDown, and others
 - **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)
 - **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)

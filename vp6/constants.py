@@ -77,6 +77,11 @@ vpNewLine = "\n"
 vpTab = "\t"
 vpNullString = ""
 
+# --- Label.TextFormat -----------------------------------------------------------
+vpPlainText = 0
+vpRichText = 1
+vpMarkdown = 2
+
 # --- ScrollBars (TextBox, PictureBox) -------------------------------------------
 vpSBNone = 0
 vpHorizontal = 1

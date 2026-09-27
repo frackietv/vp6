@@ -1,5 +1,20 @@
 # VP6 features
 
+**Version:** 0.3.19
+**Date:** 2026-09-30
+
+## Controls
+
+- Label `TextFormat`: Plain (the default, as before), Rich Text (HTML: bold, italic, headings, colors, links) or Markdown (`**bold**`, `# heading`, lists, `[text](link)`); constants `vpPlainText`, `vpRichText`, `vpMarkdown`
+- Label `LinkClick(URL)` event when a link in a formatted caption is clicked (also with the keyboard); without a handler, the link opens in the default browser; links aren't clickable in the designer
+- A Label's Caption can have several lines, edited with the "…" button in the Properties window; in plain text `&` access-key marks are still hidden, formatted captions are shown as written
+
+## Kitchen Sink
+
+- frmEmbedded's description is a Markdown Label with bold text, code and a link that pops the form out
+
+---
+
 **Version:** 0.3.18
 **Date:** 2026-09-30
 

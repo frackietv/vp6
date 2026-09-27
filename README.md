@@ -158,6 +158,8 @@ from vp6 import *
 * **Menus**: `Menu` controls on the menu bar or in other menus, with `Click`
   events, `Checked`, `Enabled`, `Visible` and `Shortcut`; menus can be control
   arrays (e.g. a recent files list). On macOS they are in the macOS menu bar.
+* **Formatted labels**: a Label's `TextFormat` can be Rich Text (HTML) or
+  Markdown, with headings, bold text and links (`LinkClick` event).
 * **Docked panes**: a PictureBox with `Align` (Top, Bottom, Left, Right) sticks
   to that edge of the form and follows its size, e.g. a sidebar or a status bar.
   A `Splitter` docked beside it lets the user drag its size, and `ScrollBars`

@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer
-from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeyEvent, QKeySequence, QPainter,
-                           QPalette, QPen, QPixmap)
+from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import (QAction, QColor, QDesktopServices, QFont, QIcon, QKeyEvent,
+                           QKeySequence, QPainter, QPalette, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QFrame, QGroupBox, QLabel, QMenu,
     QScrollArea, QTreeWidget, QTreeWidgetItem,
@@ -31,7 +31,7 @@ EVENT_ARGS = {
     "MouseMove": "Button, Shift, X, Y",
     "KeyDown": "KeyCode, Shift", "KeyUp": "KeyCode, Shift", "KeyPress": "KeyAscii",
     "Initialize": "", "Load": "", "Unload": "", "Activate": "", "Deactivate": "",
-    "Resize": "", "Moved": "",
+    "Resize": "", "Moved": "", "LinkClick": "URL",
     "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
 }
 
@@ -512,15 +512,23 @@ def _container_palette(control: Control) -> None:
 
 # --- Label -----------------------------------------------------------------------
 
+_TEXT_FORMATS = {0: Qt.PlainText, 1: Qt.RichText, 2: Qt.MarkdownText}
+
+
 class Label(Control):
     TypeName = "Label"
     DefaultSize = (97, 25)
-    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp")
+    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp", "LinkClick")
     _synthesize_click = True
     _qss_type = "QLabel"
     Properties = (
-        P("Caption", "str", "", always=True,
-          description="The text; & marks are hidden (&& shows a literal &)"),
+        # TextFormat before Caption: it decides how the Caption is shown
+        P("TextFormat", "enum", 0, enum_choices("Plain", "Rich Text", "Markdown"),
+          description="Plain: the Caption as it is. Rich Text: HTML (bold, headings, links, "
+                      "colors). Markdown: bold, headings, lists and links written the "
+                      "Markdown way"),
+        P("Caption", "text", "", always=True,
+          description="The text; in plain text & marks are hidden (&& shows a literal &)"),
         *_geometry(*DefaultSize),
         P("Alignment", "enum", 0, _ALIGNMENT, description="Horizontal text alignment"),
         P("AutoSize", "bool", False, description="Resize to fit the text"),
@@ -534,12 +542,36 @@ class Label(Control):
         label = QLabel(parent)
         label.setTextFormat(Qt.PlainText)
         label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        label.setOpenExternalLinks(False)  # links go through LinkClick
         return label
 
+    def _connect_signals(self):
+        self._widget.linkActivated.connect(self._on_link)
+
+    def _formatted(self) -> bool:
+        return self._values.get("TextFormat", 0) in (1, 2)
+
+    def _apply_TextFormat(self, v):
+        self._widget.setTextFormat(_TEXT_FORMATS.get(v, Qt.PlainText))
+        links = self._formatted() and not self._design_mode
+        self._widget.setTextInteractionFlags(
+            Qt.LinksAccessibleByMouse | Qt.LinksAccessibleByKeyboard if links
+            else Qt.NoTextInteraction)
+        if "Caption" in self._values:
+            self._apply_Caption(self._values["Caption"])
+
     def _apply_Caption(self, v):
-        self._widget.setText(strip_mnemonic(v))
+        self._widget.setText(v if self._formatted() else strip_mnemonic(v))
         if self._values.get("AutoSize"):
             self._widget.adjustSize()
+
+    def _on_link(self, url: str) -> None:
+        """A link was clicked: LinkClick(URL), or without a handler, the
+        default browser (or mail program) opens it."""
+        if self._handler("LinkClick") is not None:
+            self._fire("LinkClick", url)
+        else:
+            QDesktopServices.openUrl(QUrl(url))
 
     def _apply_Alignment(self, v):
         self._widget.setAlignment(_QT_ALIGN.get(v, Qt.AlignLeft) | Qt.AlignTop)

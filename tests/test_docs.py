@@ -118,6 +118,8 @@ def _anchors(path: Path) -> set[str]:
 @pytest.mark.parametrize("path", MARKDOWN, ids=lambda p: p.name)
 def test_links_resolve(path):
     text = re.sub(r"```.*?```", "", read(path), flags=re.S)
+    # Neither is text in inline code a link, e.g. `[text](link)` showing the syntax
+    text = re.sub(r"``.*?``|`[^`\n]*`", "", text)
     broken = []
     for target in re.findall(r"\]\(([^)\s]+)\)", text):
         if re.match(r"[a-z]+:", target):  # http:, mailto: ...
