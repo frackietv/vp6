@@ -42,6 +42,7 @@ def test_kitchen_sink_form1_matches_the_backlog_example():
         "Form1::lblOnPicture_Click",
         "Form1::tmrClock_Timer", "Form1::cmdSwapZ_Click", "Form1::lblZRed_Click",
         "Form1::lblZBlue_Click", "Form1::show_z_order", "Form1::cmdMore_Click",
+        "Form1::tvwIndex_NodeClick", "Form1::tvwIndex_Expand",
         "Form1::cmdDialog_Click",
         "Form1::cmdClipboard_Click", "Form1::cmdAbout_Click", "Form1::cmdClose_Click",
         "Form1::mnuFileDialog_Click", "Form1::mnuFileClose_Click", "Form1::mnuView_Click",

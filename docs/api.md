@@ -141,6 +141,10 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `Activate` | none |
 | `Deactivate` | none |
 | `Resize` | none |
+| `NodeClick` | Node |
+| `Expand` | Node |
+| `Collapse` | Node |
+| `NodeCheck` | Node |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -639,6 +643,73 @@ Default size 97 × 97. Property groups: Position.
 Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
+### TreeView
+
+A hierarchical list of nodes, like VB's TreeView. Fill it in the designer
+with the **`Items`** outline (one node per line, indented under its parent,
+`|key` at the end to give it a key), or in code with `Nodes.Add`:
+
+```python
+self.tvwZoo = TreeView(self, Left=8, Top=8, Width=161, Height=193,
+                       Items=['Animals|animals', '    Cats|cats', '    Dogs|dogs'])
+
+self.tvwZoo.Nodes.Add("cats", vpTvwChild, "lion", "Lion")      # a child of Cats
+self.tvwZoo.Nodes.Add(None, vpTvwLast, "plants", "Plants")     # the end of the top level
+
+def tvwZoo_NodeClick(self, Node):
+    self.lblPath.Caption = Node.FullPath                       # Animals\Cats\Lion
+```
+
+**`Nodes`**, the collection: `Nodes(key)`, `Nodes[key]` or by Index from 1
+like VB (`Nodes(1)`), `Item(...)`, `Count`, `len()`, `for node in Nodes`
+(in the order they were added), `key in Nodes`, `Clear()`, `Remove(key,
+Index or Node)` (with its children) and `Add(Relative=None,
+Relationship=None, Key="", Text="", Image="")`:
+
+| `Relationship` | Where the new node goes |
+|---|---|
+| none, without `Relative` | the end of the top level (`vpTvwFirst`: the start) |
+| `vpTvwNext` (the default with a `Relative`) / `vpTvwPrevious` | right after / before the relative node |
+| `vpTvwFirst` / `vpTvwLast` | the first / last of the relative's siblings |
+| `vpTvwChild` | the relative's last child |
+
+Keys are text and must be unique; numbers choose nodes by Index.
+
+**`Node`** members:
+
+| Member | Description |
+|---|---|
+| `Text`, `Key`, `Tag` | its text, key, and a value for your own use |
+| `Index` | its number in `Nodes`, from 1 |
+| `FullPath` | the texts from its root node, joined by the tree's `PathSeparator` |
+| `Expanded`, `Selected`, `Checked` | read and set |
+| `Bold`, `ForeColor`, `Image` | how it looks (`Image`: a picture file, relative to the form's folder) |
+| `Parent`, `Child` (first child), `Children` (how many), `Next`, `Previous`, `FirstSibling`, `LastSibling`, `Root` | its relatives (`None` when there is none) |
+| `Sorted` | keep its children in alphabetical order |
+| `EnsureVisible()` | expand its parents and scroll to it |
+
+The TreeView itself also has `SelectedItem` (the current Node, or `None`;
+assign a Node or key to select one) and `HitTest(X, Y)` (the node at a
+position the mouse events give). `NodeClick`, `Expand`, `Collapse` and
+`NodeCheck` get the Node, and fire for the user's actions only, not when
+code changes the tree. `NodeClick` also fires when the user moves the
+selection with the keyboard, or clicks the selected node again.
+
+<!-- BEGIN GENERATED: control TreeView -->
+Default size 161 × 193. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Checkboxes` | bool | `False` | A check box in front of every node |
+| `Indentation` | int | `20` | How far each level is indented, in pixels |
+| `Items` | list[str] (an indented outline) | `[]` | The nodes, set in the designer: one per line, indented under its parent; a vertical bar and a key at the end give the node that key |
+| `LineStyle` | enum | 1 - Root Lines | 0 - Tree Lines, 1 - Root Lines. Root Lines: the top-level nodes have expand/collapse buttons too |
+| `PathSeparator` | str | `'\\'` | Separates the texts in a node's FullPath |
+| `Sorted` | bool | `False` | Keep the top-level nodes in alphabetical order |
+
+Events: `NodeClick(Node)`, `Expand(Node)`, `Collapse(Node)`, `NodeCheck(Node)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `NodeClick`.
+<!-- END GENERATED -->
+
 ### Menu
 
 A form's menus: the menu bar, the menus on it, their items, submenus and
@@ -753,7 +824,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 `Form`, `Control` (base class), `Label`, `TextBox`, `CommandButton`,
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
 `HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Image`](#image),
-[`Menu`](#menu), and
+[`TreeView`](#treeview) (and its `Node`), [`Menu`](#menu), and
 `ControlArray` for [control arrays](#control-arrays).
 
 ---
@@ -827,6 +898,8 @@ All constants are plain ints or strings.
 | Form.WindowState | `vpNormal`, `vpMinimized`, `vpMaximized` | 0, 1, 2 |
 | Form.StartUpPosition | `vpStartUpManual`, `vpStartUpOwner`, `vpStartUpScreen`, `vpStartUpWindowsDefault` | 0, 1, 2, 3 |
 | Strings | `vpCr`, `vpLf`, `vpCrLf`, `vpNewLine`, `vpTab`, `vpNullString` | `'\r'`, `'\n'`, `'\r\n'`, `'\n'`, `'\t'`, `''` |
+| TreeView: Nodes.Add relationship | `vpTvwFirst`, `vpTvwLast`, `vpTvwNext`, `vpTvwPrevious`, `vpTvwChild` | 0, 1, 2, 3, 4 |
+| TreeView.LineStyle | `vpTvwTreeLines`, `vpTvwRootLines` | 0, 1 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 

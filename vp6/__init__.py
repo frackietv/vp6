@@ -11,19 +11,19 @@ from .colors import (RGB, QBColor, vpBlack, vpBlue, vpCyan, vpGreen, vpMagenta, 
 from .constants import *  # noqa: F403
 from .constants import __all__ as _constants_all
 from .controls import (CheckBox, ComboBox, CommandButton, Control, ControlArray, Frame,
-                       HScrollBar, Image, Label, Line, ListBox, Menu, OptionButton,
-                       PictureBox, TextBox, Timer, VScrollBar)
+                       HScrollBar, Image, Label, Line, ListBox, Menu, Node, OptionButton,
+                       PictureBox, TextBox, Timer, TreeView, VScrollBar)
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
 
-__version__ = "0.3.12"
+__version__ = "0.3.13"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen",
     "RGB", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",
     "CheckBox", "ComboBox", "CommandButton", "Control", "ControlArray", "Frame", "HScrollBar",
-    "Image", "Label", "Line", "ListBox", "Menu", "OptionButton", "PictureBox", "TextBox", "Timer", "VScrollBar",
+    "Image", "Label", "Line", "ListBox", "Menu", "Node", "TreeView", "OptionButton", "PictureBox", "TextBox", "Timer", "VScrollBar",
     "InputBox", "MsgBox",
     "Form", "Forms", "Load", "Unload", "run",
     "vpSchemeProjectDefault", "vpSchemeSystem", "vpSchemeLight", "vpSchemeDark", "vpSchemeIDE",

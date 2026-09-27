@@ -155,6 +155,20 @@ def _image(p):
     p.setPen(QPen(C.ink, 1))
 
 
+def _treeview(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(3, 3, 18, 18))
+    p.setPen(QPen(C.ink, 1))
+    p.drawLine(QPointF(7, 8), QPointF(7, 17))  # the tree's lines
+    p.drawLine(QPointF(7, 12), QPointF(10, 12))
+    p.drawLine(QPointF(7, 17), QPointF(10, 17))
+    p.setBrush(C.blue)
+    p.setPen(Qt.NoPen)
+    for x, y, w in ((5, 5, 11), (11, 10.5, 8), (11, 15.5, 8)):
+        p.drawRect(QRectF(x, y, w, 3))
+    p.setPen(QPen(C.ink, 1))
+
+
 def _line(p):
     p.setPen(QPen(C.ink, 2))
     p.drawLine(QPointF(5, 19), QPointF(19, 5))
@@ -289,7 +303,7 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image, "TreeView": _treeview,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

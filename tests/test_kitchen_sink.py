@@ -227,6 +227,23 @@ def test_kitchen_sink_image(sink_forms):
     form.Unload()
 
 
+def test_kitchen_sink_tree_view(sink_forms):
+    form = sink_forms["Form1"].Form1()
+    form.Show()
+    tree = form.tvwIndex
+    assert tree.Nodes("fraText").Children == 3  # from the designer's Items outline
+    assert tree.Nodes("mnuView").Parent is tree.Nodes("mnuFile")  # added in Form_Load
+    tree.Nodes("fraOptions").Expanded = True
+    item = tree.Nodes("hsbSize")._item
+    rect = tree._widget.visualItemRect(item)
+    QTest.mouseClick(tree._widget.viewport(), Qt.LeftButton, Qt.NoModifier, rect.center())
+    assert tree.SelectedItem is tree.Nodes("hsbSize")
+    assert form.lblStatus.Caption == "Options\\Font size - the HScrollBar hsbSize"
+    tree._widget.expandItem(tree.Nodes("fraText")._item)  # the user expanding a node
+    assert form.lblStatus.Caption == "Text and buttons has 3 items"
+    form.Unload()
+
+
 def test_kitchen_sink_lines(sink_forms):
     form = sink_forms["Form1"].Form1()
     form.Show()

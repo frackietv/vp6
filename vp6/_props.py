@@ -51,7 +51,7 @@ def normalize(kind: str, value):
         return bool(value)
     if kind == "color":
         return colors.normalize(value)
-    if kind == "list":
+    if kind in ("list", "outline"):
         if isinstance(value, str):
             value = value.splitlines()
         return [str(v) for v in value]

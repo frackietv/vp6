@@ -45,7 +45,7 @@ BLOCK_RE = re.compile(r"(<!-- BEGIN GENERATED: (?P<key>[^>]+?) -->\n)(?P<body>.*
 
 KIND = {"str": "str", "text": "str (multi-line)", "int": "int", "bool": "bool", "enum": "enum",
         "color": "color", "list": "list[str]", "font": "font name", "file": "file path",
-        "shortcut": "shortcut key"}
+        "shortcut": "shortcut key", "outline": "list[str] (an indented outline)"}
 
 # The property groups shared by controls, in the order they're documented
 GROUPS = [

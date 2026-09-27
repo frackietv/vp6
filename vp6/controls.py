@@ -11,10 +11,11 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer
-from PySide6.QtGui import (QAction, QColor, QFont, QKeyEvent, QKeySequence, QPainter, QPalette,
-                           QPen, QPixmap)
+from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeyEvent, QKeySequence, QPainter,
+                           QPalette, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QFrame, QGroupBox, QLabel, QMenu,
+    QTreeWidget, QTreeWidgetItem,
     QLineEdit, QListWidget, QPlainTextEdit, QPushButton, QRadioButton, QScrollBar, QWidget,
 )
 
@@ -31,6 +32,7 @@ EVENT_ARGS = {
     "KeyDown": "KeyCode, Shift", "KeyUp": "KeyCode, Shift", "KeyPress": "KeyAscii",
     "Initialize": "", "Load": "", "Unload": "", "Activate": "", "Deactivate": "",
     "Resize": "",
+    "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -1302,6 +1304,481 @@ class Line(Control):
         return {"X1": self.X1 + dx, "Y1": self.Y1 + dy, "X2": self.X2 + dx, "Y2": self.Y2 + dy}
 
 
+# --- TreeView ------------------------------------------------------------------
+
+_TVW_FIRST, _TVW_LAST, _TVW_NEXT, _TVW_PREVIOUS, _TVW_CHILD = range(5)  # vpTvw* constants
+
+
+def parse_outline(lines) -> list[tuple[int, str, str]]:
+    """(level, text, key) for each node of an outline: one node per line,
+    indented under its parent (a tab counts as 4 spaces), with ``|key`` at the
+    end to give it a key. Blank lines are skipped."""
+    nodes, indents = [], []  # indents of the current line's ancestors
+    for raw in lines:
+        line = str(raw).replace("\t", "    ").rstrip()
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        while indents and indents[-1] >= indent:
+            indents.pop()
+        text, bar, key = line.strip().rpartition("|")
+        if not bar:
+            text, key = key, ""
+        nodes.append((len(indents), text.strip(), key.strip()))
+        indents.append(indent)
+    return nodes
+
+
+class Node:
+    """One node of a TreeView (VB's Node object)."""
+
+    def __init__(self, tree: "TreeView", item: QTreeWidgetItem, key: str):
+        self._tree, self._item, self._key = tree, item, key
+        self._image = ""
+        self._check_state = None
+        self.Tag = ""  # free for your own use
+        item.setData(0, Qt.UserRole, self)
+
+    def __repr__(self):
+        return f"<Node {self.Text!r}{f' key={self._key!r}' if self._key else ''}>"
+
+    # -- text and identity ------------------------------------------------------------
+    @property
+    def Text(self) -> str:
+        return self._item.text(0)
+
+    @Text.setter
+    def Text(self, value):
+        self._item.setText(0, str(value))
+        self._tree._keep_sorted(self._item.parent())
+
+    @property
+    def Key(self) -> str:
+        return self._key
+
+    @Key.setter
+    def Key(self, value):
+        value = str(value or "")
+        nodes = self._tree._nodes
+        if value and value != self._key and value in nodes._by_key:
+            raise ValueError(f"TreeView '{self._tree.Name}': the key {value!r} is not unique")
+        nodes._by_key.pop(self._key, None)
+        if value:
+            nodes._by_key[value] = self
+        self._key = value
+
+    @property
+    def Index(self) -> int:
+        """The node's number in the Nodes collection, from 1 (VB)."""
+        return self._tree._nodes._list.index(self) + 1
+
+    @property
+    def FullPath(self) -> str:
+        """The texts from the root node to this one, joined by PathSeparator."""
+        parts, node = [], self
+        while node is not None:
+            parts.append(node.Text)
+            node = node.Parent
+        return self._tree.PathSeparator.join(reversed(parts))
+
+    # -- state ---------------------------------------------------------------------------
+    @property
+    def Expanded(self) -> bool:
+        return self._item.isExpanded()
+
+    @Expanded.setter
+    def Expanded(self, value):
+        with self._tree._quietly():
+            self._item.setExpanded(bool(value))
+
+    @property
+    def Selected(self) -> bool:
+        return self._tree._widget.currentItem() is self._item
+
+    @Selected.setter
+    def Selected(self, value):
+        if value:
+            self._tree.SelectedItem = self
+        elif self.Selected:
+            self._tree.SelectedItem = None
+
+    @property
+    def Checked(self) -> bool:
+        return self._item.checkState(0) == Qt.Checked
+
+    @Checked.setter
+    def Checked(self, value):
+        with self._tree._quietly():
+            self._item.setCheckState(0, Qt.Checked if value else Qt.Unchecked)
+        self._check_state = self._item.checkState(0)
+
+    @property
+    def Bold(self) -> bool:
+        return self._item.font(0).bold()
+
+    @Bold.setter
+    def Bold(self, value):
+        font = self._item.font(0)
+        font.setBold(bool(value))
+        self._item.setFont(0, font)
+
+    @property
+    def ForeColor(self):
+        value = self._item.data(0, Qt.ForegroundRole)  # a QColor, or a QBrush
+        if value is None:
+            return None
+        return colors.from_qcolor(value if isinstance(value, QColor) else value.color())
+
+    @ForeColor.setter
+    def ForeColor(self, value):
+        self._item.setData(0, Qt.ForegroundRole,
+                           None if value is None else colors.to_qcolor(value))
+
+    @property
+    def Image(self) -> str:
+        """A picture file shown before the text (relative to the form's folder)."""
+        return self._image
+
+    @Image.setter
+    def Image(self, value):
+        self._image = str(value or "")
+        path = resolve_path(self._tree, self._image)
+        self._item.setIcon(0, QIcon(QPixmap(path)) if path else QIcon())
+
+    @property
+    def Sorted(self) -> bool:
+        return bool(self._item.data(0, Qt.UserRole + 1))
+
+    @Sorted.setter
+    def Sorted(self, value):
+        """Keep this node's children in alphabetical order."""
+        self._item.setData(0, Qt.UserRole + 1, bool(value))
+        self._tree._keep_sorted(self._item)
+
+    def EnsureVisible(self) -> None:
+        """Expand its parents and scroll so the node can be seen."""
+        with self._tree._quietly():
+            parent = self._item.parent()
+            while parent is not None:
+                parent.setExpanded(True)
+                parent = parent.parent()
+        self._tree._widget.scrollToItem(self._item)
+
+    # -- relatives -----------------------------------------------------------------------
+    def _node_of(self, item):
+        return None if item is None else item.data(0, Qt.UserRole)
+
+    def _siblings(self) -> QTreeWidgetItem:
+        return self._item.parent() or self._tree._widget.invisibleRootItem()
+
+    @property
+    def Parent(self) -> "Node | None":
+        return self._node_of(self._item.parent())
+
+    @property
+    def Children(self) -> int:
+        """How many children it has (VB: a number)."""
+        return self._item.childCount()
+
+    @property
+    def Child(self) -> "Node | None":
+        """The first child."""
+        return self._node_of(self._item.child(0)) if self._item.childCount() else None
+
+    @property
+    def Next(self) -> "Node | None":
+        parent = self._siblings()
+        return self._node_of(parent.child(parent.indexOfChild(self._item) + 1))
+
+    @property
+    def Previous(self) -> "Node | None":
+        parent = self._siblings()
+        index = parent.indexOfChild(self._item)
+        return self._node_of(parent.child(index - 1)) if index > 0 else None
+
+    @property
+    def FirstSibling(self) -> "Node":
+        return self._node_of(self._siblings().child(0))
+
+    @property
+    def LastSibling(self) -> "Node":
+        parent = self._siblings()
+        return self._node_of(parent.child(parent.childCount() - 1))
+
+    @property
+    def Root(self) -> "Node":
+        node = self
+        while node.Parent is not None:
+            node = node.Parent
+        return node
+
+
+class _Nodes:
+    """A TreeView's Nodes collection: ``tree.Nodes(key)``, ``tree.Nodes[key]``
+    or by Index from 1 like VB, ``Add``, ``Remove``, ``Clear``, ``Count``;
+    iterating gives the nodes in the order they were added."""
+
+    def __init__(self, tree: "TreeView"):
+        self._tree = tree
+        self._list: list[Node] = []
+        self._by_key: dict[str, Node] = {}
+
+    def _resolve(self, ref) -> Node:
+        if isinstance(ref, Node):
+            if ref._tree is not self._tree or ref not in self._list:
+                raise ValueError(f"{ref!r} is not in TreeView '{self._tree.Name}'")
+            return ref
+        if isinstance(ref, str):
+            if ref not in self._by_key:
+                raise KeyError(f"TreeView '{self._tree.Name}' has no node with key {ref!r}")
+            return self._by_key[ref]
+        if isinstance(ref, int) and not isinstance(ref, bool):
+            if not 1 <= ref <= len(self._list):
+                raise IndexError(f"TreeView '{self._tree.Name}' has no node {ref} "
+                                 f"(1 to {len(self._list)})")
+            return self._list[ref - 1]
+        raise TypeError(f"A node is chosen by key, Index or Node, not {ref!r}")
+
+    def Item(self, ref) -> Node:
+        return self._resolve(ref)
+
+    __getitem__ = __call__ = Item
+
+    def __iter__(self):
+        return iter(list(self._list))
+
+    def __len__(self) -> int:
+        return len(self._list)
+
+    def __contains__(self, ref) -> bool:
+        return ref in self._by_key if isinstance(ref, str) else ref in self._list
+
+    @property
+    def Count(self) -> int:
+        return len(self._list)
+
+    def Add(self, Relative=None, Relationship=None, Key: str = "", Text: str = "",
+            Image: str = "") -> Node:
+        """Add a node, like VB: at the end of the top level; or placed by
+        ``Relationship`` to the ``Relative`` node (its key, Index or Node):
+        vpTvwFirst, vpTvwLast, vpTvwNext (the default) or vpTvwPrevious among
+        its siblings, or vpTvwChild (its last child)."""
+        if not isinstance(Key, str):
+            raise TypeError("A node's Key must be text (numbers choose nodes by Index)")
+        if Key and Key in self._by_key:
+            raise ValueError(f"TreeView '{self._tree.Name}': the key {Key!r} is not unique")
+        tree = self._tree
+        item = QTreeWidgetItem([str(Text)])
+        if Relative is None:
+            parent = tree._widget.invisibleRootItem()
+            position = 0 if Relationship == _TVW_FIRST else parent.childCount()
+        else:
+            relative = self._resolve(Relative)
+            relationship = _TVW_NEXT if Relationship is None else Relationship
+            if relationship == _TVW_CHILD:
+                parent = relative._item
+                position = parent.childCount()
+            else:
+                parent = relative._siblings()
+                index = parent.indexOfChild(relative._item)
+                position = {_TVW_FIRST: 0, _TVW_LAST: parent.childCount(), _TVW_NEXT: index + 1,
+                            _TVW_PREVIOUS: index}.get(relationship)
+                if position is None:
+                    raise ValueError(f"Unknown relationship {Relationship!r}")
+        node = Node(tree, item, Key)
+        with tree._quietly():
+            parent.insertChild(position, item)
+            if tree._values.get("Checkboxes"):
+                item.setCheckState(0, Qt.Unchecked)
+                node._check_state = Qt.Unchecked
+        if Image:
+            node.Image = Image
+        self._list.append(node)
+        if Key:
+            self._by_key[Key] = node
+        tree._keep_sorted(item.parent())
+        return node
+
+    def Remove(self, ref) -> None:
+        """Remove a node and its children."""
+        node = self._resolve(ref)
+        gone, stack = [], [node._item]
+        while stack:
+            item = stack.pop()
+            gone.append(item.data(0, Qt.UserRole))
+            stack.extend(item.child(i) for i in range(item.childCount()))
+        with self._tree._quietly():
+            node._siblings().removeChild(node._item)
+        for doomed in gone:
+            self._list.remove(doomed)
+            self._by_key.pop(doomed._key, None)
+
+    def Clear(self) -> None:
+        with self._tree._quietly():
+            self._tree._widget.clear()
+        self._list.clear()
+        self._by_key.clear()
+
+
+class _Quiet:
+    def __init__(self, tree):
+        self._tree = tree
+
+    def __enter__(self):
+        self._tree.__dict__["_quiet"] += 1
+
+    def __exit__(self, *_):
+        self._tree.__dict__["_quiet"] -= 1
+
+
+class TreeView(Control):
+    """A hierarchical list of nodes, like VB's TreeView (Windows Common
+    Controls). Fill it in code with ``Nodes.Add``, or in the designer with
+    the ``Items`` outline. NodeClick, Expand, Collapse and NodeCheck get the
+    Node."""
+
+    TypeName = "TreeView"
+    DefaultEvent = "NodeClick"
+    DefaultSize = (161, 193)
+    Events = ("NodeClick", "Expand", "Collapse", "NodeCheck", "Click", "DblClick", "GotFocus",
+              "LostFocus", "KeyDown", "KeyPress", "KeyUp", "MouseDown", "MouseMove", "MouseUp")
+    _synthesize_click = True
+    _qss_type = "QTreeWidget"
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("LineStyle", "enum", 1, enum_choices("Tree Lines", "Root Lines"),
+          description="Root Lines: the top-level nodes have expand/collapse buttons too"),
+        P("Indentation", "int", 20, description="How far each level is indented, in pixels"),
+        P("Checkboxes", "bool", False, description="A check box in front of every node"),
+        P("Sorted", "bool", False, description="Keep the top-level nodes in alphabetical order"),
+        P("PathSeparator", "str", "\\", description="Separates the texts in a node's FullPath"),
+        P("Items", "outline", [],
+          description="The nodes, set in the designer: one per line, indented under its "
+                      "parent; a vertical bar and a key at the end give the node that key"),
+        *_COLORS, *_FONT, *_COMMON,
+    )
+
+    def _create_widget(self, parent):
+        self.__dict__["_nodes"] = _Nodes(self)
+        self.__dict__["_quiet"] = 0
+        self.__dict__["_current_at_press"] = None
+        widget = QTreeWidget(parent)
+        widget.setHeaderHidden(True)
+        widget.setColumnCount(1)
+        return widget
+
+    def _event_targets(self):
+        return [self._widget, self._widget.viewport()]
+
+    def _connect_signals(self):
+        widget = self._widget
+        widget.currentItemChanged.connect(self._on_current_changed)
+        widget.itemClicked.connect(self._on_item_clicked)
+        widget.itemExpanded.connect(self._on_expanded)
+        widget.itemCollapsed.connect(self._on_collapsed)
+        widget.itemChanged.connect(self._on_item_changed)
+
+    def _quietly(self) -> _Quiet:
+        """Changes made by code don't fire events, only the user's do."""
+        return _Quiet(self)
+
+    def _keep_sorted(self, parent_item) -> None:
+        parent_item = parent_item or self._widget.invisibleRootItem()
+        top = parent_item is self._widget.invisibleRootItem()
+        if (top and self._values.get("Sorted")) or (not top and parent_item.data(0, Qt.UserRole + 1)):
+            parent_item.sortChildren(0, Qt.AscendingOrder)
+
+    @staticmethod
+    def _node(item) -> "Node | None":
+        return None if item is None else item.data(0, Qt.UserRole)
+
+    # -- events ------------------------------------------------------------------------------
+    def _on_qt_event(self, watched, event):
+        if event.type() == QEvent.MouseButtonPress:
+            self.__dict__["_current_at_press"] = self._widget.currentItem()
+        return super()._on_qt_event(watched, event)
+
+    def _on_current_changed(self, current, _previous):
+        if not self._quiet and current is not None:
+            self._fire("NodeClick", self._node(current))
+
+    def _on_item_clicked(self, item, _column):
+        # Clicking the node that was already selected: no current-item change
+        if not self._quiet and item is self._current_at_press:
+            self._fire("NodeClick", self._node(item))
+
+    def _on_expanded(self, item):
+        if not self._quiet:
+            self._fire("Expand", self._node(item))
+
+    def _on_collapsed(self, item):
+        if not self._quiet:
+            self._fire("Collapse", self._node(item))
+
+    def _on_item_changed(self, item, _column):
+        node = self._node(item)
+        if node is None or self._quiet:
+            return
+        state = item.checkState(0)
+        if node._check_state is not None and state != node._check_state:
+            node._check_state = state
+            self._fire("NodeCheck", node)
+
+    # -- API -----------------------------------------------------------------------------------
+    @property
+    def Nodes(self) -> _Nodes:
+        return self._nodes
+
+    @property
+    def SelectedItem(self) -> "Node | None":
+        return self._node(self._widget.currentItem())
+
+    @SelectedItem.setter
+    def SelectedItem(self, node):
+        with self._quietly():
+            if node is None:
+                self._widget.setCurrentItem(None)
+                self._widget.clearSelection()
+            else:
+                self._widget.setCurrentItem(self._nodes._resolve(node)._item)
+
+    def HitTest(self, X: int, Y: int) -> "Node | None":
+        """The node at a position (as the mouse events give it), or None."""
+        return self._node(self._widget.itemAt(int(X), int(Y)))
+
+    # -- properties ----------------------------------------------------------------------------
+    def _apply_LineStyle(self, v):
+        self._widget.setRootIsDecorated(v == 1)
+
+    def _apply_Indentation(self, v):
+        self._widget.setIndentation(max(0, int(v)))
+
+    def _apply_Checkboxes(self, v):
+        with self._quietly():
+            for node in self._nodes:
+                if v:
+                    node._item.setCheckState(0, Qt.Unchecked)
+                    node._check_state = Qt.Unchecked
+                else:
+                    node._item.setData(0, Qt.CheckStateRole, None)
+                    node._check_state = None
+
+    def _apply_Sorted(self, v):
+        self._keep_sorted(None)
+
+    def _apply_Items(self, lines):
+        """Rebuild the tree from an outline (the designer's Items)."""
+        self._nodes.Clear()
+        parents: list[Node] = []
+        for level, text, key in parse_outline(lines):
+            del parents[level:]
+            parent = parents[-1] if parents else None
+            node = self._nodes.Add(parent, _TVW_CHILD if parent else None, key, text)
+            parents.append(node)
+        if self._design_mode:
+            self._widget.expandAll()  # show the whole outline while designing
+
+
 def _shortcut_choices() -> tuple[tuple[str, str], ...]:
     """VB's Shortcut list, in Qt's key names ("" = none)."""
     letters = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
@@ -1432,7 +1909,7 @@ class Menu(Control):
 CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
-        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, Menu,
+        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Menu,
     )
 }
 
@@ -1566,4 +2043,4 @@ class ControlArray:
         control._dispose()
 
 
-__all__ = [*CONTROL_TYPES, "ControlArray"]
+__all__ = [*CONTROL_TYPES, "ControlArray", "Node"]

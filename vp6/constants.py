@@ -77,6 +77,17 @@ vpNewLine = "\n"
 vpTab = "\t"
 vpNullString = ""
 
+# --- TreeView: Nodes.Add relationship ----------------------------------------
+vpTvwFirst = 0
+vpTvwLast = 1
+vpTvwNext = 2
+vpTvwPrevious = 3
+vpTvwChild = 4
+
+# --- TreeView.LineStyle -------------------------------------------------------
+vpTvwTreeLines = 0
+vpTvwRootLines = 1
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

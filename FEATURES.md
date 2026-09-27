@@ -1,5 +1,28 @@
 # VP6 features
 
+**Version:** 0.3.13
+**Date:** 2026-09-29
+
+## Controls
+
+- TreeView control, like VB's: a hierarchical list of nodes with `LineStyle` (tree lines or root lines), `Indentation`, `Checkboxes`, `Sorted`, `PathSeparator`, colors, font and the common properties
+- The `Nodes` collection: `Nodes(key)`, `Nodes[key]` or by Index from 1, `Count`, iteration, `in`, `Add(Relative, Relationship, Key, Text, Image)` with VB's relationships (`vpTvwFirst`, `vpTvwLast`, `vpTvwNext`, `vpTvwPrevious`, `vpTvwChild`), `Remove` (with the node's children) and `Clear`
+- `Node` objects: `Text`, `Key`, `Tag`, `Index`, `FullPath`, `Expanded`, `Selected`, `Checked`, `Bold`, `ForeColor`, `Image` (a picture file), `Sorted` (its children), `EnsureVisible()`, and the relatives `Parent`, `Child`, `Children`, `Next`, `Previous`, `FirstSibling`, `LastSibling`, `Root`
+- `SelectedItem` (read, or select a node by Node or key) and `HitTest(X, Y)`
+- Events `NodeClick`, `Expand`, `Collapse` and `NodeCheck` get the Node; they fire for the user's actions (clicks, also on the selected node, and keyboard moves), not when code changes the tree; also Click, DblClick, the mouse, key and focus events
+- Filling a TreeView in the designer, which VB couldn't: the `Items` property is an outline, one node per line, indented under its parent, with `|key` at the end to give a node a key; in code, assigning `Items` rebuilds the tree
+- Constants `vpTvwFirst`, `vpTvwLast`, `vpTvwNext`, `vpTvwPrevious`, `vpTvwChild`, `vpTvwTreeLines`, `vpTvwRootLines`
+
+## IDE
+
+- TreeView in the Toolbox, with its own icon; the designer shows the whole outline expanded; the Properties window edits `Items` in a dialog ("(Tree: N nodes)")
+
+## Kitchen Sink
+
+- A TreeView index of the Kitchen Sink's sections on the right (the form is wider): nodes typed in the designer, one added in code with `vpTvwChild`, `NodeClick` naming the control a node's key points at, and `Expand` counting a node's children
+
+---
+
 **Version:** 0.3.12
 **Date:** 2026-09-29
 

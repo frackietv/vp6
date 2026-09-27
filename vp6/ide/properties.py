@@ -28,7 +28,7 @@ INDEX_SPEC = PropSpec(
 class TextListDialog(QDialog):
     """Edit a list of strings (ListBox.List) or multi-line text, one per line."""
 
-    def __init__(self, title: str, text: str, parent=None):
+    def __init__(self, title: str, text: str, parent=None, hint: str | None = None):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.edit = QPlainTextEdit(text)
@@ -36,7 +36,11 @@ class TextListDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("One item per line:" if "List" in title else "Text:"))
+        if hint is None:
+            hint = "One item per line:" if "List" in title else "Text:"
+        label = QLabel(hint)
+        label.setWordWrap(True)
+        layout.addWidget(label)
         layout.addWidget(self.edit)
         layout.addWidget(buttons)
         self.resize(320, 280)
@@ -194,10 +198,15 @@ class PropertiesWindow(QWidget):
             return combo
         if kind == "color":
             return self._color_editor(spec, None if mixed else value, mixed)
-        if kind == "list":
-            button = QPushButton("" if mixed else f"(List: {len(value)} items)")
+        if kind in ("list", "outline"):
+            if kind == "list":
+                text = f"(List: {len(value)} items)"
+            else:
+                text = f"(Tree: {sum(1 for line in value if str(line).strip())} nodes)"
+            button = QPushButton("" if mixed else text)
             button.setStyleSheet("text-align: left; padding-left: 4px;")
-            button.clicked.connect(lambda _=False, n=spec.name, v=value: self._edit_list(n, v))
+            button.clicked.connect(
+                lambda _=False, n=spec.name, v=value, k=kind: self._edit_list(n, v, k))
             return button
         if kind == "font":
             combo = QComboBox()
@@ -277,8 +286,12 @@ class PropertiesWindow(QWidget):
         if color.isValid():
             self._commit(prop, colors.from_qcolor(color))
 
-    def _edit_list(self, prop: str, value) -> None:
-        dialog = TextListDialog(f"{prop} (List)", "\n".join(value or []), self)
+    def _edit_list(self, prop: str, value, kind: str = "list") -> None:
+        hint = None if kind == "list" else (
+            "One node per line. Indent a node (spaces or a tab) to make it a child of the "
+            "node above; add |key at the end to give it a key, e.g. \"Cats|cats\".")
+        dialog = TextListDialog(f"{prop} (List)" if kind == "list" else f"{prop} (Tree)",
+                                "\n".join(value or []), self, hint)
         if dialog.exec():
             items = dialog.edit.toPlainText().split("\n")
             while items and items[-1] == "":
