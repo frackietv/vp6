@@ -665,7 +665,11 @@ Module functions:
   (`Project.add_default_icon`: the `icons` folder).
 * `main(argv)` is the application entry point. It gives the application the
   VP6 icon (`app.vp6_icon`: the Dock or taskbar); `MainWindow` sets it on
-  itself too.
+  itself too. Unless `--no-splash` is given, it shows the splash screen
+  (`splash.SplashScreen`) first, builds the window meanwhile, and shows the
+  window once the splash screen has finished (`wait`).
+  `parse_arguments(argv)` gives `(project, splash)` from `vp6 [--no-splash]
+  [Project.vp6p]` (options may come before or after the project).
 
 `open_project` opens a windowed project's startup form designer, or its first
 form's when it starts in Sub Main, and a console project's Main module.
@@ -1276,6 +1280,20 @@ The Tools > Options dialog. It edits a copy of the theme manager's
 * **Preview:** a read-only `CodeEditor` on a sample form, with
   `follow_theme=False`, showing the theme being edited.
 
+### `vp6/ide/splash.py` (≈90 lines)
+
+The splash screen shown while the IDE starts.
+
+* `SplashScreen(duration=None)`: a frameless `Qt.SplashScreen` window (it
+  can't be moved) of a fixed size (it can't be resized), with the logo
+  (`dialogs.logo_pixmap`) and "VP6 <version>" centered under it, in a thin
+  border. `duration` defaults to `DURATION` (2000 ms), read when it is made.
+* `start()` shows it in the middle of the primary screen and starts its
+  timer; `finish()` (the timer) sets `done`, closes it and emits `finished`;
+  `wait()` runs an event loop until then (at once if already finished).
+* Only the timer closes it: `closeEvent` ignores close requests until
+  `done`, and mouse presses and keys (Esc) are swallowed.
+
 ### `vp6/ide/theme.py` (≈330 lines)
 
 * **Constants:** `SYSTEM`, `LIGHT`, `DARK`. `UI_ROLES` and `SYNTAX_ROLES` are
@@ -1380,6 +1398,7 @@ All tests run headless. `conftest.py`:
 | `test_embedded_forms.py` | Activate/Deactivate in a container (Load then Activate; hidden and shown, the container hidden and shown, popped out, unloaded), a filling form replacing another (no second Load; Fill=False forms staying), window activation not applying; `Form.ShowIn`: filling a PictureBox and following its size (Load before the first Resize), controls working, window-only properties not popping it out; a Frame's inside, a form as the container, `Fill=False` at Left/Top; popping out, moving between containers, Hide/Show; unloading only itself, going with its host (unable to cancel), a host that cancels keeping it; invalid containers and cycles; nested forms and Default buttons. |
 | `test_align.py` | PictureBox `Align`: docking in creation order, Fill panes taking the space left (after the others, several sharing it), following the form (before Form_Resize), changing a pane's thickness, place, visibility and Align; only on the form; panes created in code; under an in-window menu bar; in a form shown in a container; in the designer (Align stored with the docked geometry, the form resized, a pane dragged back, undo); the constants. |
 | `test_splitter.py` | The Splitter: docking beside its pane, cursors, dragging (live Resize with everything in place, Moved on release), Bottom/Top/Right panes growing the right way, MinSize on both sides, disabled, no pane; the PictureBox Resize event; the file, the designer (docked after the pane) and the Toolbox. |
+| `test_splash.py` | The command line (`parse_arguments`: a project, `--no-splash` before or after it, a missing file); the splash screen (2 seconds by default, frameless and of a fixed size, the logo with the version centered under it, not closed by `close()`, a click or Esc, closing itself when its time is up); `main()` showing the window after the splash screen, and no splash screen with `--no-splash`. |
 | `test_statusbar.py` | The StatusBar: the designer's panel lines (`parse_panel`); docking at the bottom beside other docked controls, following the window (Spring panels growing), Top, hidden taking no space; the Panels collection (Index and Key, Add at an Index, unique keys, errors, Contents and fixed widths, Alignment, ToolTipText, hidden panels, Remove, Clear, changing a Key); time and date panels kept up to date, lock keys dimmed when off; Simple style; PanelClick, Click and PanelDblClick from the mouse; the form file round trip; creating it in the designer (docked, one panel to start, no clock running, the Properties window's Panels); Toolbox, icon and constants. |
 | `test_tabstrip.py` | The TabStrip: the designer's tab lines (`parse_tab`); tabs, captions and tooltips; the selection (the first to begin with, no Click while loading, SelectedItem by Key, Index or Tab, `Selected`, Click from code); the user's clicks, BeforeClick cancelling, no BeforeClick for the selected tab; Add before the others keeping the selection without Click, Caption and ToolTipText, errors, Remove, Key changes, Clear; the client area for every Placement (equal to Qt's layout, and already right in Form_Load), a Frame over it on top; the form file round trip; the designer (one tab to start, the Properties window's Tabs); Toolbox, icon and constants. |
 | `test_toolbar.py` | The Toolbar: its designer lines (`parse_button`); docking at the top as tall as its buttons, following the window, vertical when Left; the Buttons collection (Index and Key, separators, hidden and disabled buttons, tooltips, Add at an Index, errors, Remove, read-only placement); clicks on default, Check and ButtonGroup buttons (one pressed, a pressed one staying pressed), code setting Values (no ButtonClick, none pressed allowed); ImageList pictures by key and Index at its size, TextAlignment, an unknown Image; the form file round trip; the designer (docked at the top, the Properties window's Buttons); Toolbox, icon and constants. |

@@ -116,7 +116,8 @@ def exercise():
     QTimer.singleShot(500, dump)
 
 QTimer.singleShot(1500, exercise)
-sys.exit(mainwindow.main([sys.argv[0], {str(tmp_path / 'Demo' / 'Demo.vp6p')!r}]))
+sys.exit(mainwindow.main([sys.argv[0], "--no-splash",  # (its timers are for the window)
+                          {str(tmp_path / 'Demo' / 'Demo.vp6p')!r}]))
 """
     from vp6.ide.mainwindow import create_project
     create_project(str(tmp_path), "Demo", "exe")

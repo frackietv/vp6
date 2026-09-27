@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.3.33
+**Date:** 2026-09-30
+
+## IDE
+
+- A splash screen when the IDE starts: the VP6 logo with the version centered under it, for two seconds, while the IDE window is built; it can't be moved, resized or closed, and closes itself. `vp6 --no-splash` starts without it (options may come before or after a project file)
+
+---
+
 **Version:** 0.3.32
 **Date:** 2026-09-30
 

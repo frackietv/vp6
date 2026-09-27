@@ -23,6 +23,7 @@ from . import icons, kitchensink
 from .codeeditor import CodeWindow
 from .designer import FormDesigner, is_identifier
 from .dialogs import AboutDialog, NewProjectDialog, ProjectPropertiesDialog
+from .splash import SplashScreen
 from .documents import Document, FormDocument, open_document
 from .findreplace import FindReplaceDialog, ask_line
 from .options import OptionsDialog
@@ -1619,8 +1620,17 @@ def create_project(location: str, name: str, template: str) -> str:
     return path
 
 
+def parse_arguments(argv: list[str]) -> tuple[str | None, bool]:
+    """(the project to open or None, whether to show the splash screen) from
+    the command line: ``vp6 [--no-splash] [Project.vp6p]``."""
+    splash = "--no-splash" not in argv[1:]
+    paths = [arg for arg in argv[1:] if not arg.startswith("-")]
+    return (paths[0] if paths and os.path.exists(paths[0]) else None), splash
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv if argv is None else argv
+    project, show_splash = parse_arguments(argv)
     # Capture the IDE's stdout/stderr (for the Output window) before Qt starts,
     # so its startup messages are included. VP6_NO_OUTPUT_CAPTURE turns it
     # off, e.g. to see the last messages of a hard crash directly.
@@ -1629,6 +1639,11 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName("VP6")
     app.setOrganizationName("VP6")
     app.setWindowIcon(vp6_icon())  # its windows, and the Dock or taskbar
+    splash = None
+    if show_splash:  # two seconds of logo and version, while the window is built
+        splash = SplashScreen()
+        splash.start()
+        app.processEvents()
     window = MainWindow()
     # Ctrl+C in the terminal works like File > Exit (Quit VP6): unsaved
     # changes are still offered for saving
@@ -1636,9 +1651,11 @@ def main(argv: list[str] | None = None) -> int:
     if capture is not None:
         capture.attach(window.output.append)
         app.aboutToQuit.connect(capture.stop)
+    if splash is not None:
+        splash.wait()
     window.show()
-    if len(argv) > 1 and os.path.exists(argv[1]):
-        window.open_project(argv[1])
+    if project is not None:
+        window.open_project(project)
     else:
         window.show_start_dialog()
     return app.exec()

@@ -18,6 +18,7 @@ python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/vp6                       # start the IDE (or: python -m vp6.ide)
 .venv/bin/vp6 samples/Calculator/Calculator.vp6p
+.venv/bin/vp6 --no-splash           # without the two-second splash screen
 ```
 
 The IDE opens with a VB-style **New Project** dialog. Every new project has

@@ -52,6 +52,7 @@ vp6/                    runtime library - "from vp6 import *"
     outline.py          the Outline window: structure of the current file
     documents.py        Document / FormDocument (open files)
     dialogs.py          New Project, Project Properties, About
+    splash.py           the splash screen shown while the IDE starts
     kitchensink.py      the Kitchen Sink project template
     templates/kitchensink/   its sources: Form1.py, frmDialog.py, Module1.py
     options.py          Tools > Options dialog
