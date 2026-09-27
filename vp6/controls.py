@@ -10,15 +10,15 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QDate, QEvent, QLocale, QObject, QRect, QSize, Qt, QTime, QTimer, QUrl
+from PySide6.QtCore import (QDate, QEvent, QLocale, QObject, QRect, QSize, Qt, QTime,
+                            QTimer, QUrl)
 from PySide6.QtGui import (QAction, QColor, QDesktopServices, QFont, QIcon, QKeyEvent,
                            QKeySequence, QPainter, QPalette, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox, QFrame, QGroupBox,
-    QHBoxLayout,
-    QLabel, QMenu, QProgressBar, QScrollArea, QSlider, QToolButton, QTreeWidget,
-    QTreeWidgetItem, QLineEdit, QListWidget, QPlainTextEdit, QPushButton, QRadioButton,
-    QScrollBar, QWidget,
+    QHBoxLayout, QLabel, QLineEdit, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
+    QPushButton, QRadioButton, QScrollArea, QScrollBar, QSlider, QStyle,
+    QStyleOptionTabWidgetFrame, QTabWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QWidget,
 )
 
 from . import colors
@@ -36,6 +36,7 @@ EVENT_ARGS = {
     "Resize": "", "Moved": "", "LinkClick": "URL",
     "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
     "UpClick": "", "DownClick": "", "PanelClick": "Panel", "PanelDblClick": "Panel",
+    "BeforeClick": "",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -1945,7 +1946,106 @@ def _lock_key_on(style: int) -> bool:
     return False
 
 
-class Panel:
+class _KeyedItem:
+    """An item of a _KeyedCollection (a StatusBar's Panel, a TabStrip's Tab):
+    its Index from 1 and a Key unique in the collection."""
+
+    _collection: "_KeyedCollection"
+    _key = ""
+
+    def _changed(self):
+        self._collection._changed()
+
+    @property
+    def Index(self) -> int:
+        """Its position, from 1."""
+        return self._collection._list.index(self) + 1
+
+    @property
+    def Key(self) -> str:
+        return self._key
+
+    @Key.setter
+    def Key(self, value):
+        value = str(value)
+        by_key = self._collection._by_key
+        if value and value != self._key and value in by_key:
+            raise KeyError(f"Key '{value}' is not unique in the collection")
+        by_key.pop(self._key, None)
+        self._key = value
+        if value:
+            by_key[value] = self
+
+
+class _KeyedCollection:
+    """A control's collection of items (Panels, Tabs), in order: by Index
+    (from 1) or Key, ``Count``, ``Remove``, ``Clear`` and iteration. The
+    subclass adds ``Add``; ``changed`` updates the control."""
+
+    _noun = "item"
+
+    def __init__(self, owner, changed):
+        self._owner = owner  # the control
+        self._changed = changed
+        self._list: list = []
+        self._by_key: dict = {}
+
+    def __len__(self):
+        return len(self._list)
+
+    def __iter__(self):
+        return iter(list(self._list))
+
+    @property
+    def Count(self) -> int:
+        return len(self._list)
+
+    def _resolve(self, index):
+        if isinstance(index, _KeyedItem):
+            return index
+        if isinstance(index, str):
+            if index not in self._by_key:
+                raise KeyError(f"No {self._noun} with the key '{index}'")
+            return self._by_key[index]
+        index = int(index)
+        if not 1 <= index <= len(self._list):
+            raise IndexError(f"No {self._noun} {index} (there are {len(self._list)})")
+        return self._list[index - 1]
+
+    def __call__(self, index):
+        return self._resolve(index)
+
+    Item = __call__
+
+    def _insert(self, item, Index=None):
+        """Add an item (at the end, or at Index from 1) without updating."""
+        if item._key and item._key in self._by_key:
+            raise KeyError(f"Key '{item._key}' is not unique in the collection")
+        item._collection = self
+        if Index is None:
+            self._list.append(item)
+        else:
+            self._list.insert(max(0, int(Index) - 1), item)
+        if item._key:
+            self._by_key[item._key] = item
+        return item
+
+    def _reset(self) -> None:
+        self._list.clear()
+        self._by_key.clear()
+
+    def Remove(self, index) -> None:
+        item = self._resolve(index)
+        self._list.remove(item)
+        self._by_key.pop(item._key, None)
+        self._changed()
+
+    def Clear(self) -> None:
+        self._reset()
+        self._changed()
+
+
+class Panel(_KeyedItem):
     """One panel of a StatusBar (``StatusBar1.Panels(1)`` or by Key). Setting
     a property updates the bar at once."""
 
@@ -1965,28 +2065,6 @@ class Panel:
 
     def __repr__(self):
         return f"<Panel {self.Index} {self._key or self._text!r}>"
-
-    def _changed(self):
-        self._bar._update_panels()
-
-    @property
-    def Index(self) -> int:
-        """Its position, from 1."""
-        return self._bar._panels._list.index(self) + 1
-
-    @property
-    def Key(self) -> str:
-        return self._key
-
-    @Key.setter
-    def Key(self, value):
-        value = str(value)
-        if value and value != self._key and value in self._bar._panels._by_key:
-            raise KeyError(f"Key '{value}' is not unique in the collection")
-        self._bar._panels._by_key.pop(self._key, None)
-        self._key = value
-        if value:
-            self._bar._panels._by_key[value] = self
 
     @property
     def Text(self) -> str:
@@ -2079,66 +2157,16 @@ class Panel:
         return _SBR_KEY_TEXTS.get(self._style, self._text)
 
 
-class _Panels:
+class _Panels(_KeyedCollection):
     """StatusBar.Panels: its panels in order, by Index (from 1) or Key."""
 
-    def __init__(self, bar: "StatusBar"):
-        self._bar = bar
-        self._list: list[Panel] = []
-        self._by_key: dict[str, Panel] = {}
-
-    def __len__(self):
-        return len(self._list)
-
-    def __iter__(self):
-        return iter(list(self._list))
-
-    @property
-    def Count(self) -> int:
-        return len(self._list)
-
-    def _resolve(self, index) -> Panel:
-        if isinstance(index, Panel):
-            return index
-        if isinstance(index, str):
-            if index not in self._by_key:
-                raise KeyError(f"No panel with the key '{index}'")
-            return self._by_key[index]
-        index = int(index)
-        if not 1 <= index <= len(self._list):
-            raise IndexError(f"No panel {index} (there are {len(self._list)})")
-        return self._list[index - 1]
-
-    def __call__(self, index) -> Panel:
-        return self._resolve(index)
-
-    Item = __call__
+    _noun = "panel"
 
     def Add(self, Index=None, Key: str = "", Text: str = "", Style: int = 0) -> Panel:
         """A new panel, at the end or at Index (from 1)."""
-        Key = str(Key or "")
-        if Key and Key in self._by_key:
-            raise KeyError(f"Key '{Key}' is not unique in the collection")
-        panel = Panel(self._bar, Key, str(Text), Style)
-        if Index is None:
-            self._list.append(panel)
-        else:
-            self._list.insert(max(0, int(Index) - 1), panel)
-        if Key:
-            self._by_key[Key] = panel
-        self._bar._update_panels()
+        panel = self._insert(Panel(self._owner, str(Key or ""), str(Text), Style), Index)
+        self._changed()
         return panel
-
-    def Remove(self, index) -> None:
-        panel = self._resolve(index)
-        self._list.remove(panel)
-        self._by_key.pop(panel._key, None)
-        self._bar._update_panels()
-
-    def Clear(self) -> None:
-        self._list.clear()
-        self._by_key.clear()
-        self._bar._update_panels()
 
 
 class StatusBar(_Docked, Control):
@@ -2176,7 +2204,7 @@ class StatusBar(_Docked, Control):
     )
 
     def _create_widget(self, parent):
-        self.__dict__["_panels"] = _Panels(self)
+        self.__dict__["_panels"] = _Panels(self, self._update_panels)
         self.__dict__["_panel_labels"] = []
         widget = QFrame(parent)
         layout = QHBoxLayout(widget)
@@ -2204,19 +2232,14 @@ class StatusBar(_Docked, Control):
         self._set_prop("Panels", lines)
 
     def _apply_Panels(self, lines):
-        self._panels._list.clear()
-        self._panels._by_key.clear()
+        self._panels._reset()
         for line in lines or []:
             spec = parse_panel(line)
             panel = Panel(self, spec["Key"], spec["Text"], spec.get("Style", 0))
             panel._width = spec.get("Width", panel._width)
             panel._auto_size = spec.get("AutoSize", 0)
             panel._alignment = spec.get("Alignment", 0)
-            if panel._key in self._panels._by_key:
-                raise KeyError(f"Key '{panel._key}' is not unique in the collection")
-            self._panels._list.append(panel)
-            if panel._key:
-                self._panels._by_key[panel._key] = panel
+            self._panels._insert(panel)
         self._update_panels()
 
     # -- showing the panels ------------------------------------------------------------------
@@ -2310,6 +2333,214 @@ class StatusBar(_Docked, Control):
             elif panel is not None and self._widget.rect().contains(pos):
                 self._fire("PanelClick", panel)
         return super()._on_qt_event(watched, event)
+
+
+# --- TabStrip ----------------------------------------------------------------------------------
+
+def parse_tab(line: str) -> dict:
+    """A tab as the designer writes it (TabStrip.Tabs): ``Caption|Key|ToolTipText``,
+    e.g. ``&General|general|Name and size``."""
+    caption, _, rest = str(line).partition("|")
+    key, _, tip = rest.partition("|")
+    return {"Caption": caption.strip(), "Key": key.strip(), "ToolTipText": tip.strip()}
+
+
+class Tab(_KeyedItem):
+    """One tab of a TabStrip (``TabStrip1.Tabs(1)`` or by Key)."""
+
+    def __init__(self, strip: "TabStrip", key: str = "", caption: str = ""):
+        self._strip = strip
+        self._key = key
+        self._caption = caption
+        self._tooltip = ""
+        self.Tag = ""
+
+    def __repr__(self):
+        return f"<Tab {self.Index} {self._key or self._caption!r}>"
+
+    @property
+    def Caption(self) -> str:
+        return self._caption
+
+    @Caption.setter
+    def Caption(self, value):
+        self._caption = str(value)
+        self._changed()
+
+    @property
+    def ToolTipText(self) -> str:
+        return self._tooltip
+
+    @ToolTipText.setter
+    def ToolTipText(self, value):
+        self._tooltip = str(value)
+        self._changed()
+
+    @property
+    def Selected(self) -> bool:
+        return self._strip.SelectedItem is self
+
+    @Selected.setter
+    def Selected(self, value):
+        if value:
+            self._strip.SelectedItem = self
+
+
+class _Tabs(_KeyedCollection):
+    """TabStrip.Tabs: its tabs in order, by Index (from 1) or Key."""
+
+    _noun = "tab"
+
+    def Add(self, Index=None, Key: str = "", Caption: str = "") -> Tab:
+        """A new tab, at the end or at Index (from 1)."""
+        tab = self._insert(Tab(self._owner, str(Key or ""), str(Caption)), Index)
+        self._changed()
+        return tab
+
+
+class _TabWidget(QTabWidget):
+    """A QTabWidget that can say where its pages go before it's shown (Qt
+    lays them out only once it is visible)."""
+
+    def contents_rect(self) -> QRect:
+        """The pages' area, in the widget's coordinates: what Qt's own layout
+        computes, from the style."""
+        option = QStyleOptionTabWidgetFrame()
+        self.initStyleOption(option)
+        return self.style().subElementRect(QStyle.SE_TabWidgetTabContents, option, self)
+
+
+class TabStrip(Control):
+    """A row of tabs, like VB's TabStrip (Windows Common Controls). It isn't
+    a container: put a Frame (or PictureBox) for each tab over its client
+    area (ClientLeft, ClientTop, ClientWidth, ClientHeight) and show the one
+    of the SelectedItem in Click. Returning True from BeforeClick keeps the
+    current tab."""
+
+    TypeName = "TabStrip"
+    DefaultSize = (257, 177)
+    Events = ("Click", "BeforeClick", "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp",
+              "MouseDown", "MouseMove", "MouseUp")
+    _qss_type = "QTabWidget"
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Tabs", "tabs", ["Tab1|tab1"],
+          description="The tabs, set in the designer: one per line, Caption|Key|ToolTipText "
+                      "(an & in the Caption underlines its access key)"),
+        P("Placement", "enum", 0, enum_choices("Top", "Bottom", "Left", "Right"),
+          description="Which side the tabs are on"),
+        *_FONT, *_COMMON,
+    )
+    _QT_PLACEMENT = {0: QTabWidget.North, 1: QTabWidget.South, 2: QTabWidget.West,
+                     3: QTabWidget.East}
+
+    def _create_widget(self, parent):
+        self.__dict__["_tabs"] = _Tabs(self, self._update_tabs)
+        self.__dict__["_quiet"] = 0  # tabs being rebuilt: no Click
+        self.__dict__["_current_tab"] = None  # the selected Tab (kept when tabs move)
+        widget = _TabWidget(parent)
+        widget.setUsesScrollButtons(True)
+        return widget
+
+    def _event_targets(self):
+        return [self._widget, self._widget.tabBar()]
+
+    def _connect_signals(self):
+        self._widget.currentChanged.connect(self._on_current_changed)
+
+    # -- the collection ----------------------------------------------------------------------
+    @property
+    def Tabs(self) -> _Tabs:
+        return self._tabs
+
+    @Tabs.setter
+    def Tabs(self, lines):
+        """In the designer (and InitializeComponent): the tabs as lines of
+        text, see parse_tab."""
+        self._set_prop("Tabs", lines)
+
+    def _apply_Tabs(self, lines):
+        self._tabs._reset()
+        for line in lines or []:
+            spec = parse_tab(line)
+            tab = Tab(self, spec["Key"], spec["Caption"])
+            tab._tooltip = spec["ToolTipText"]
+            self._tabs._insert(tab)
+        self._update_tabs()
+
+    def _update_tabs(self) -> None:
+        """Show the collection's tabs, keeping the selected one if it's still
+        there (else the first)."""
+        widget = self._widget
+        selected = self._current_tab
+        self.__dict__["_quiet"] = self._quiet + 1
+        try:
+            while widget.count() > len(self._tabs):
+                page = widget.widget(widget.count() - 1)
+                widget.removeTab(widget.count() - 1)
+                page.deleteLater()
+            while widget.count() < len(self._tabs):
+                widget.addTab(QWidget(), "")
+            for index, tab in enumerate(self._tabs._list):
+                widget.setTabText(index, tab._caption)
+                widget.setTabToolTip(index, tab._tooltip)
+            if selected in self._tabs._list:
+                widget.setCurrentIndex(self._tabs._list.index(selected))
+        finally:
+            self.__dict__["_quiet"] = self._quiet - 1
+        self.__dict__["_current_tab"] = self.SelectedItem
+
+    # -- the selected tab --------------------------------------------------------------------
+    @property
+    def SelectedItem(self) -> "Tab | None":
+        index = self._widget.currentIndex()
+        return self._tabs._list[index] if 0 <= index < len(self._tabs) else None
+
+    @SelectedItem.setter
+    def SelectedItem(self, tab):
+        """Select a tab (a Tab, its Index or its Key): Click fires, as in VB."""
+        self._widget.setCurrentIndex(self._tabs._resolve(tab).Index - 1)
+
+    def _on_current_changed(self, _index):
+        if not self._quiet:
+            self.__dict__["_current_tab"] = self.SelectedItem
+            self._fire("Click")
+
+    def _on_qt_event(self, watched, event):
+        # BeforeClick: the user clicks another tab; True keeps the current one
+        if not self._design_mode and watched is self._widget.tabBar() and \
+                event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            index = watched.tabAt(event.position().toPoint())
+            if index >= 0 and index != self._widget.currentIndex():
+                if self._fire("BeforeClick") is True:
+                    return True
+        return super()._on_qt_event(watched, event)
+
+    # -- the client area ---------------------------------------------------------------------
+    def _client_rect(self) -> QRect:
+        """The area inside the tabs' frame, in the container's coordinates
+        (also before the form is shown, e.g. in Form_Load)."""
+        return self._widget.contents_rect().translated(self._widget.pos())
+
+    @property
+    def ClientLeft(self) -> int:
+        """Where the area inside the tabs starts (for the tabs' Frames), read-only."""
+        return self._client_rect().x()
+
+    @property
+    def ClientTop(self) -> int:
+        return self._client_rect().y()
+
+    @property
+    def ClientWidth(self) -> int:
+        return self._client_rect().width()
+
+    @property
+    def ClientHeight(self) -> int:
+        return self._client_rect().height()
+
+    def _apply_Placement(self, v):
+        self._widget.setTabPosition(self._QT_PLACEMENT.get(v, QTabWidget.North))
 
 
 # Controls in toolbox order.
@@ -3024,7 +3255,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Splitter,
-        ProgressBar, Slider, UpDown, StatusBar, Menu,
+        ProgressBar, Slider, UpDown, StatusBar, TabStrip, Menu,
     )
 }
 

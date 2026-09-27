@@ -1,5 +1,18 @@
 # VP6 features
 
+**Version:** 0.3.31
+**Date:** 2026-09-30
+
+## Controls
+
+- TabStrip: a row of tabs, on any side (`Placement`). Like VB's it isn't a container: each tab's Frame goes over its client area (`ClientLeft`, `ClientTop`, `ClientWidth`, `ClientHeight`, right already in `Form_Load`) and `Click` shows the selected one. `Click` fires when another tab is selected, by the user or by code; returning `True` from `BeforeClick` keeps the current tab
+- The Tabs collection: `Tabs(Index)` or `Tabs(Key)`, `Count`, `Add`, `Remove`, `Clear`; a Tab's `Caption`, `Key`, `Index`, `ToolTipText`, `Tag`, `Selected`; `SelectedItem` (a Tab, Index or Key), kept when tabs are added or removed
+- In the designer, `Tabs` is a list: one tab per line, `Caption|Key|ToolTipText`
+- Constants `vpTabPlacementTop`, `vpTabPlacementBottom`, `vpTabPlacementLeft`, `vpTabPlacementRight`
+- A new Kitchen Sink page, "TabStrip"
+
+---
+
 **Version:** 0.3.30
 **Date:** 2026-09-30
 

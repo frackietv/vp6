@@ -22,6 +22,7 @@ from pgPictures import pgPictures
 from pgSchemes import SCHEMES, pgSchemes
 from pgScrollBars import pgScrollBars
 from pgScrolling import pgScrolling
+from pgTabs import pgTabs
 from pgText import pgText
 from pgTimer import pgTimer
 from pgTree import pgTree
@@ -32,8 +33,8 @@ from pgZOrder import pgZOrder
 PAGES = {
     "intro": pgIntro, "text": pgText, "buttons": pgButtons, "lists": pgLists,
     "scrollbars": pgScrollBars, "values": pgValues, "pictures": pgPictures,
-    "zorder": pgZOrder, "tree": pgTree, "timer": pgTimer, "layout": pgLayout,
-    "scrolling": pgScrolling, "embedded": pgEmbedded,
+    "zorder": pgZOrder, "tree": pgTree, "tabs": pgTabs, "timer": pgTimer,
+    "layout": pgLayout, "scrolling": pgScrolling, "embedded": pgEmbedded,
     "dialogs": pgDialogs, "schemes": pgSchemes, "keyboard": pgKeyboard, "mouse": pgMouse,
     "arrays": pgArrays, "menus": pgMenus, "globals": pgGlobals,
 }
@@ -58,7 +59,7 @@ class Form1(Form):
         self.picNav = PictureBox(self, Left=0, Top=0, Width=220, Height=572, BorderStyle=0,
                                  Align=3, TabIndex=3)
         self.tvwIndex = TreeView(self.picNav, Left=0, Top=0, Width=220, Height=572,
-                                 Items=['Introduction|intro', 'Controls|controls', '    Text and labels|text', '    Buttons and options|buttons', '    Lists|lists', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    Pictures|pictures', '    Lines and z-order|zorder', '    TreeView|tree', '    Timer|timer', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Scrolling|scrolling', '    Forms inside forms|embedded', 'Forms and dialogs|forms_section', '    Dialogs|dialogs', '    Color schemes|schemes', '    Keyboard|keyboard', '    Mouse|mouse', 'Programming|programming', '    Control arrays|arrays', '    Menus|menus', '    App, Screen, Clipboard...|globals'],
+                                 Items=['Introduction|intro', 'Controls|controls', '    Text and labels|text', '    Buttons and options|buttons', '    Lists|lists', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    Pictures|pictures', '    Lines and z-order|zorder', '    TreeView|tree', '    TabStrip|tabs', '    Timer|timer', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Scrolling|scrolling', '    Forms inside forms|embedded', 'Forms and dialogs|forms_section', '    Dialogs|dialogs', '    Color schemes|schemes', '    Keyboard|keyboard', '    Mouse|mouse', 'Programming|programming', '    Control arrays|arrays', '    Menus|menus', '    App, Screen, Clipboard...|globals'],
                                  TabIndex=4,
                                  ToolTipText='The topics: its nodes were typed in the designer (Items)')
         self.splNav = Splitter(self, Left=220, Top=0, Width=6, Height=572, MinSize=150,

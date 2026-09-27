@@ -317,6 +317,29 @@ def test_tree_page(sink):
     assert "cats" not in tree.Nodes and tree.Nodes.Count == 2
 
 
+def test_tabs_page(sink):
+    page = _page(sink, "tabs")
+    strip = page.tbsOptions
+    frames = (page.fraGeneral, page.fraColors, page.fraAbout)
+    assert [f.Visible for f in frames] == [True, False, False]  # the selected tab's Frame
+    assert (page.fraGeneral.Left, page.fraGeneral.Top) == (strip.ClientLeft + 4,
+                                                           strip.ClientTop + 4)
+    strip.SelectedItem = "colors"
+    assert [f.Visible for f in frames] == [False, True, False]
+    assert "Colors" in page.lblEvent.Caption
+    page.chkLock.Value = vp6.vpChecked  # BeforeClick keeps the tab
+    bar = strip._widget.tabBar()
+    QTest.mouseClick(bar, Qt.LeftButton, Qt.NoModifier, bar.tabRect(2).center())
+    assert strip.SelectedItem.Key == "colors" and "locked" in page.lblEvent.Caption
+    page.cboPlacement.ListIndex = 3  # the tabs on the right: the Frames follow
+    assert strip.Placement == vp6.vpTabPlacementRight
+    assert page.fraColors.Width == strip.ClientWidth - 8
+    page.txtName.Text = "Ada"
+    assert page.lblGreeting.Caption == "Hello, Ada!"
+    page.optColor[1].Value = True
+    assert page.lblSwatch.BackColor == 0x00C000
+
+
 def test_timer_page(sink):
     page = _page(sink, "timer")
     assert page.tmrClock.Enabled  # Form_Activate: visible

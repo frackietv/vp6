@@ -148,7 +148,7 @@ class PropertiesWindow(QWidget):
         if spec.name == "Name":  # a control array's elements share their (Name)
             name_value = getattr(self.designer, "name_value", self.designer.object_name)
             return name_value(objects[0])
-        if spec.kind == "panels":  # (at run time StatusBar.Panels is the collection)
+        if spec.kind in ("panels", "tabs"):  # (at run time these are the collections)
             values = [obj._values.get(spec.name, spec.default) for obj in objects]
         else:
             values = [getattr(obj, spec.name) for obj in objects]
@@ -202,11 +202,11 @@ class PropertiesWindow(QWidget):
             return combo
         if kind == "color":
             return self._color_editor(spec, None if mixed else value, mixed)
-        if kind in ("list", "outline", "panels"):
+        if kind in ("list", "outline", "panels", "tabs"):
             if kind == "list":
                 text = f"(List: {len(value)} items)"
-            elif kind == "panels":
-                text = f"(Panels: {len(value)})"
+            elif kind in ("panels", "tabs"):
+                text = f"({kind.title()}: {len(value)})"
             else:
                 text = f"(Tree: {sum(1 for line in value if str(line).strip())} nodes)"
             button = QPushButton("" if mixed else text)
@@ -301,8 +301,10 @@ class PropertiesWindow(QWidget):
                       "in pixels, spring (shares the space left) or contents (as wide as its "
                       "text), caps, num, ins, scrl, time or date (what it shows), center or "
                       "right. E.g. \"Ready|status|spring\" or \"|clock|time 80 right\".",
+            "tabs": "One tab per line: Caption|Key|ToolTipText, e.g. \"&General|general|Name "
+                    "and size\". An & in the Caption underlines the letter of its access key.",
         }.get(kind)
-        title = {"list": "List", "outline": "Tree", "panels": "Panels"}[kind]
+        title = {"list": "List", "outline": "Tree", "panels": "Panels", "tabs": "Tabs"}[kind]
         dialog = TextListDialog(f"{prop} ({title})",
                                 "\n".join(value or []), self, hint)
         if dialog.exec():

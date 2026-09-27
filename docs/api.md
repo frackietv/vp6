@@ -151,6 +151,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `DownClick` | none |
 | `PanelClick` | Panel |
 | `PanelDblClick` | Panel |
+| `BeforeClick` | none |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -1064,6 +1065,59 @@ Default size 400 × 25. Property groups: Position, Colors, Font.
 Events: `PanelClick(Panel)`, `PanelDblClick(Panel)`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `PanelClick`.
 <!-- END GENERATED -->
 
+### TabStrip
+
+A row of tabs (VB's TabStrip, from the Windows Common Controls). Like VB's,
+it isn't a container: give each tab a Frame (or PictureBox) of its own over
+the strip's client area, and show the one of the selected tab in `Click`.
+
+```python
+TABS = ("fraGeneral", "fraColors", "fraAbout")   # in the tabs' order
+
+def Form_Load(self):
+    strip = self.tbsOptions
+    for name in TABS:
+        getattr(self, name).Move(strip.ClientLeft, strip.ClientTop,
+                                 strip.ClientWidth, strip.ClientHeight)
+    self.tbsOptions_Click()
+
+def tbsOptions_Click(self):
+    selected = self.tbsOptions.SelectedItem.Index        # from 1
+    for number, name in enumerate(TABS, 1):
+        getattr(self, name).Visible = number == selected
+```
+
+* **Tabs in the designer.** `Tabs` lists them, one per line:
+  `Caption|Key|ToolTipText`; an `&` in the Caption underlines its access key.
+* **Tabs in code.** At run time `Tabs` is the collection: `Tabs(Index)` (from
+  1) or `Tabs(Key)`, `Tabs.Count`, `Tabs.Add(Index, Key, Caption)` (at the
+  end, or before Index), `Tabs.Remove(index)` and `Tabs.Clear()`; `for tab in
+  Tabs`. A **Tab** has `Caption`, `Key`, `Index`, `ToolTipText`, `Tag` and
+  `Selected`.
+* `SelectedItem` is the selected Tab; set it to a Tab, an Index or a Key to
+  select one. Adding or removing tabs keeps the selected one.
+* `Click` fires when another tab is selected, by the user or by code (as in
+  VB). `BeforeClick` fires first when the user clicks another tab: return
+  `True` to stay on the current one (VB's `Cancel = True`).
+* `ClientLeft`, `ClientTop`, `ClientWidth` and `ClientHeight` (read-only)
+  are the area inside the tabs' frame, in the container's coordinates: where
+  the tabs' Frames go. They are right already in `Form_Load`, and change
+  with `Placement` (`vpTabPlacementTop`, `vpTabPlacementBottom`,
+  `vpTabPlacementLeft`, `vpTabPlacementRight`).
+* Put the Frames after the TabStrip (or use `ZOrder`) so they are drawn on
+  top of it.
+
+<!-- BEGIN GENERATED: control TabStrip -->
+Default size 257 × 177. Property groups: Position, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Placement` | enum | 0 - Top | 0 - Top, 1 - Bottom, 2 - Left, 3 - Right. Which side the tabs are on |
+| `Tabs` | tabs | `['Tab1|tab1']` | The tabs, set in the designer: one per line, Caption|Key|ToolTipText (an & in the Caption underlines its access key) |
+
+Events: `Click`, `BeforeClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
 ### Menu
 
 A form's menus: the menu bar, the menus on it, their items, submenus and
@@ -1196,7 +1250,8 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 `HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Image`](#image),
 [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
-[`StatusBar`](#statusbar) (and its `Panel`), [`Menu`](#menu), and
+[`StatusBar`](#statusbar) (and its `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
+[`Menu`](#menu), and
 `ControlArray` for [control arrays](#control-arrays).
 
 ---
@@ -1282,6 +1337,7 @@ All constants are plain ints or strings.
 | Panel.Style (StatusBar) | `vpSbrText`, `vpSbrCaps`, `vpSbrNum`, `vpSbrIns`, `vpSbrScrl`, `vpSbrTime`, `vpSbrDate` | 0, 1, 2, 3, 4, 5, 6 |
 | Panel.AutoSize (StatusBar) | `vpSbrNoAutoSize`, `vpSbrSpring`, `vpSbrContents` | 0, 1, 2 |
 | Panel.Alignment (StatusBar) | `vpSbrLeft`, `vpSbrCenter`, `vpSbrRight` | 0, 1, 2 |
+| TabStrip.Placement | `vpTabPlacementTop`, `vpTabPlacementBottom`, `vpTabPlacementLeft`, `vpTabPlacementRight` | 0, 1, 2, 3 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -1367,6 +1423,8 @@ format.
   in VB the UpDown's values were the other way round. A ProgressBar keeps an
   out-of-range `Value` at the nearer end instead of raising an error, and
   UpDown has no `AutoBuddy` (put it beside its buddy yourself).
+* **TabStrip** has no `Style` (buttons), `MultiRow` (too many tabs scroll
+  instead) or tab images.
 * **StatusBar** panels have no `Picture` or `Bevel`, and the lock-key
   panels read the key state from the system on Windows (all four keys) and
   macOS (Caps Lock only); elsewhere they show the key as off.

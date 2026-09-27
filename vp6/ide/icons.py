@@ -217,6 +217,27 @@ def _statusbar(p):
     p.drawRect(QRectF(4, 16.5, 5, 1))
 
 
+def _tabstrip(p):
+    p.setBrush(C.face)
+    p.drawRect(QRectF(9, 4, 7, 5))  # a tab behind
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 8, 20, 13))  # the page
+    p.save()
+    p.setPen(Qt.NoPen)
+    p.drawRect(QRectF(2.5, 3.5, 6, 5))  # the selected tab, open into its page
+    p.restore()
+    path = QPainterPath()
+    path.moveTo(2, 8)
+    path.lineTo(2, 3)
+    path.lineTo(9, 3)
+    path.lineTo(9, 8)
+    p.setBrush(Qt.NoBrush)
+    p.drawPath(path)
+    p.setBrush(C.blue)
+    p.drawRect(QRectF(5, 12, 12, 1.5))
+    p.drawRect(QRectF(5, 16, 8, 1.5))
+
+
 def _line(p):
     p.setPen(QPen(C.ink, 2))
     p.drawLine(QPointF(5, 19), QPointF(19, 5))
@@ -353,6 +374,7 @@ _DRAWERS = {
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
     "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image, "TreeView": _treeview, "Splitter": _splitter,
     "ProgressBar": _progressbar, "Slider": _slider, "UpDown": _updown, "StatusBar": _statusbar,
+    "TabStrip": _tabstrip,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

@@ -146,6 +146,12 @@ vpSbrLeft = 0
 vpSbrCenter = 1
 vpSbrRight = 2
 
+# --- TabStrip.Placement ----------------------------------------------------------
+vpTabPlacementTop = 0
+vpTabPlacementBottom = 1
+vpTabPlacementLeft = 2
+vpTabPlacementRight = 3
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

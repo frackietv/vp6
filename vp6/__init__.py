@@ -12,12 +12,12 @@ from .constants import *  # noqa: F403
 from .constants import __all__ as _constants_all
 from .controls import (CheckBox, ComboBox, CommandButton, Control, ControlArray, Frame,
                        HScrollBar, Image, Label, Line, ListBox, Menu, Node, OptionButton,
-                       Panel, PictureBox, ProgressBar, Slider, Splitter, StatusBar, TextBox,
-                       Timer, TreeView, UpDown, VScrollBar)
+                       Panel, PictureBox, ProgressBar, Slider, Splitter, StatusBar, Tab,
+                       TabStrip, TextBox, Timer, TreeView, UpDown, VScrollBar)
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
 
-__version__ = "0.3.30"
+__version__ = "0.3.31"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen",
@@ -25,8 +25,8 @@ __all__ = [
     "vpWhite", "vpYellow",
     "CheckBox", "ComboBox", "CommandButton", "Control", "ControlArray", "Frame", "HScrollBar",
     "Image", "Label", "Line", "ListBox", "Menu", "Node", "OptionButton", "PictureBox",
-    "Panel", "ProgressBar", "Slider", "Splitter", "StatusBar", "TextBox", "Timer", "TreeView",
-    "UpDown", "VScrollBar",
+    "Panel", "ProgressBar", "Slider", "Splitter", "StatusBar", "Tab", "TabStrip", "TextBox",
+    "Timer", "TreeView", "UpDown", "VScrollBar",
     "InputBox", "MsgBox",
     "Form", "Forms", "Load", "Unload", "run",
     "vpSchemeProjectDefault", "vpSchemeSystem", "vpSchemeLight", "vpSchemeDark", "vpSchemeIDE",
