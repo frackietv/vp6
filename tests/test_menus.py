@@ -7,7 +7,9 @@ import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
 
-from vp6 import ControlArray, Form, Label, Load, Menu, Unload, formfile
+from vp6 import (ControlArray, Form, Label, Load, Menu, PictureBox, Unload, formfile,
+                 vpAlignFill, vpNegotiateLeft, vpNegotiateMiddle, vpNegotiateNone,
+                 vpNegotiateRight)
 from vp6.ide import menueditor
 from vp6.ide.designer import FormDesigner
 from vp6.ide.documents import FormDocument
@@ -269,8 +271,8 @@ def test_designer_canvas_ignores_menus(designer):
     window = PropertiesWindow()
     window.set_designer(d)
     rows = [window.table.item(r, 0).text() for r in range(window.table.rowCount())]
-    assert rows == ["(Name)", "Index", "Caption", "Checked", "Enabled", "Shortcut", "Tag",
-                    "Visible"]
+    assert rows == ["(Name)", "Index", "Caption", "Checked", "Enabled", "NegotiatePosition",
+                    "Shortcut", "Tag", "Visible"]
     assert d.set_property("Caption", "&Open File...") is None
     assert "Caption='&Open File...'" in d.document.text
     d.select(["mnuFile"])
@@ -313,3 +315,112 @@ def test_ide_menu_editor_command(qapp, tmp_path, monkeypatch):
         doc.text_document.setModified(False)
     window.close_project()
     window.close()
+
+
+# --- menu negotiation: forms shown in other forms ---------------------------------------------
+
+class Page(Form):
+    def InitializeComponent(self):
+        self.mnuLeft = Menu(self, Caption="&Left", NegotiatePosition=vpNegotiateLeft)
+        self.mnuPage = Menu(self, Caption="&Page", NegotiatePosition=vpNegotiateRight)
+        self.mnuPageHello = Menu(self.mnuPage, Caption="&Hello", Shortcut="Ctrl+H")
+        self.mnuMiddle = Menu(self, Caption="&Middle", NegotiatePosition=vpNegotiateMiddle)
+        self.mnuPrivate = Menu(self, Caption="&Private")  # None (the default): not shown
+
+    def Form_Load(self):
+        self.said = []
+
+    def mnuPageHello_Click(self):
+        self.said.append("hello")
+
+
+class Window(Form):
+    def InitializeComponent(self):
+        self.mnuFile = Menu(self, Caption="&File")
+        self.mnuView = Menu(self, Caption="&View")
+        self.mnuHelp = Menu(self, Caption="&Help", NegotiatePosition=vpNegotiateRight)
+        self.picPane = PictureBox(self, Align=vpAlignFill, BorderStyle=0)
+
+
+def _bar(form):
+    return [action.text() for action in form._menubar.actions()]
+
+
+@pytest.fixture
+def window(qapp):
+    form = Window()
+    form.Show()
+    yield form
+    form.Unload()
+
+
+def test_menus_of_a_form_inside_join_the_window(window):
+    page = Page()
+    page.ShowIn(window.picPane)
+    # Left before the window's menus, Middle after its first, Right before its Right ones
+    assert _bar(window) == ["&Left", "&File", "&Middle", "&View", "&Page", "&Help"]
+    assert not page._menubar.isVisible()  # no second menu bar inside the pane
+    assert page.ScaleHeight == window.picPane.Height  # and no room kept for one
+    page.mnuPageHello._action.trigger()  # the page's own handler
+    assert page.said == ["hello"]
+    assert vpNegotiateNone == 0
+
+
+def test_they_leave_with_the_form(window):
+    page, other = Page(), Page()
+    page.ShowIn(window.picPane)
+    page.Hide()
+    assert _bar(window) == ["&File", "&View", "&Help"]
+    page.Show()
+    other.ShowIn(window.picPane)  # replaces the page: only the new one's menus
+    assert _bar(window).count("&Page") == 1
+    other.Unload()
+    assert _bar(window) == ["&File", "&View", "&Help"]
+
+
+def test_popped_out_it_has_its_own_menu_bar(window):
+    page = Page()
+    page.ShowIn(window.picPane)
+    page.ShowIn(None)
+    assert _bar(window) == ["&File", "&View", "&Help"]
+    assert _bar(page) == ["&Left", "&Page", "&Middle", "&Private"]
+    if not page._menubar.isNativeMenuBar():
+        assert page._menubar.isVisible() and page._menu_height > 0
+    page.ShowIn(window.picPane)  # and back
+    assert "&Page" in _bar(window)
+    page.Unload()
+
+
+def test_negotiate_menus_and_positions_change(window):
+    page = Page()
+    page.ShowIn(window.picPane)
+    window.NegotiateMenus = False  # the window doesn't take them
+    assert _bar(window) == ["&File", "&View", "&Help"]
+    window.NegotiateMenus = True
+    page.mnuPage.NegotiatePosition = vpNegotiateLeft  # moves at once
+    assert _bar(window)[:2] == ["&Left", "&Page"]
+    page.mnuAdded = Menu(page, Caption="&Added", NegotiatePosition=vpNegotiateRight)
+    assert _bar(window)[-2:] == ["&Added", "&Help"]  # a menu added while merged
+
+
+def test_a_window_without_menus_gets_a_bar(qapp):
+    class Plain(Form):
+        def InitializeComponent(self):
+            self.picPane = PictureBox(self, Align=vpAlignFill)
+
+    plain, page = Plain(), Page()
+    plain.Show()
+    page.ShowIn(plain.picPane)
+    assert _bar(plain) == ["&Left", "&Middle", "&Page"]
+    plain.Unload()
+
+
+def test_menu_editor_negotiate_position(qapp):
+    entries = [MenuEntry(0, "&Page", "mnuPage", props={"NegotiatePosition": 3})]
+    dialog = MenuEditorDialog(entries, set())
+    assert dialog.negotiate.currentData() == 3
+    dialog.negotiate.setCurrentIndex(1)
+    dialog.negotiate.activated.emit(1)
+    assert dialog.result_entries()[0].props["NegotiatePosition"] == 1
+    defs = menueditor.menu_defs(dialog.result_entries())
+    assert defs[0].props["NegotiatePosition"] == 1

@@ -1,5 +1,25 @@
 # VP6 features
 
+**Version:** 0.3.24
+**Date:** 2026-09-30
+
+## Programming model (the `vp6` library)
+
+- Menu negotiation, like VB's: a form shown in another form (`ShowIn`) has no menu bar of its own; while it is visible, its menu bar menus join the window's menu bar, placed by their `NegotiatePosition`: None (the default, not shown), Left (before the window's menus), Middle (after its first menu), Right (after its menus, before its own Right ones, e.g. Help); constants `vpNegotiateNone`, `vpNegotiateLeft`, `vpNegotiateMiddle`, `vpNegotiateRight`
+- The merged menus leave when the form is hidden, replaced or unloaded; popped out with `ShowIn(None)` it has its own menu bar again; choosing a merged item or its Shortcut fires the inner form's handler; menus added in code and changed positions apply at once
+- `Form.NegotiateMenus` (default True) on the window turns this on or off; a window without menus gets a menu bar for the merged ones
+- Also on macOS: the merged menus are on the window's system menu bar, instead of an embedded form's bar attached to a child widget
+
+## IDE
+
+- The Menu Editor has VB's NegotiatePosition box
+
+## Kitchen Sink
+
+- The Menus page has a Page menu of its own that joins the window's menu bar while the page is visible; the window's Help menu has NegotiatePosition = Right, so it stays last
+
+---
+
 **Version:** 0.3.23
 **Date:** 2026-09-30
 

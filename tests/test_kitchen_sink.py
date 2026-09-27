@@ -408,6 +408,17 @@ def test_menus_page_and_bookmarks(sink):
     sink.mnuHelpAbout._action.trigger()  # MsgBox (answered by the test)
 
 
+def test_page_menus_join_the_window(sink):
+    bar = lambda: [a.text() for a in sink._menubar.actions()]  # noqa: E731
+    assert bar() == ["&File", "&View", "&Bookmarks", "&Help"]
+    page = _page(sink, "menus")  # its own Page menu joins, before Help (both Right)
+    assert bar() == ["&File", "&View", "&Bookmarks", "&Page", "&Help"]
+    page.mnuPageHello._action.trigger()
+    assert page.lblPage.Caption.startswith("Hello from the Menus page")
+    _page(sink, "intro")  # another page: its menu leaves
+    assert bar() == ["&File", "&View", "&Bookmarks", "&Help"]
+
+
 def test_globals_page(sink, capsys):
     page = _page(sink, "globals")
     assert "App.Title" in page.lblInfo.Caption and "Screen:" in page.lblInfo.Caption

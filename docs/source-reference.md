@@ -214,7 +214,7 @@ The intrinsic controls.
 | `Image` | `QLabel` | Not a container, `NoFocus`, no `TabIndex`, no colors (transparent). `Stretch` and `BorderStyle` come before `Picture` in `Properties`, because loading a picture sizes the control: without Stretch `_fit_to_picture` gives it the picture's size (plus the border). `Enabled` doesn't gray it: `_on_qt_event` drops events instead. |
 | `TreeView` | `QTreeWidget` (header hidden, one column) | `Nodes` is a `_Nodes` collection (`_list` in the order added, `_by_key`; `_resolve` takes a key, an Index from 1 or a Node; `Add` places a `QTreeWidgetItem` by relationship, `Remove` with descendants, `Clear`). Each `Node` wraps its item (stored in the item's `Qt.UserRole` data; `UserRole + 1` holds its `Sorted`) with Text, Key, Tag, Index, FullPath, Expanded, Selected, Checked, Bold, ForeColor, Image, the relatives and `EnsureVisible`. `Items` (kind `outline`) rebuilds the tree from `parse_outline` (expanded in design mode). Events: NodeClick on `currentItemChanged`, or `itemClicked` on the node that was current at the press (`_current_at_press`); Expand/Collapse; NodeCheck when the check state changes (`Node._check_state`). Code changes run under `_quietly()` (`_Quiet`), so only the user's actions fire events. `SelectedItem`, `HitTest`, `LineStyle`, `Indentation`, `Checkboxes`, `Sorted` (`_keep_sorted`), `PathSeparator`. |
 | `Splitter` | `_SplitterBar` (paints the bar and a grip, handles the mouse) | Docks by `Align` (Left by default) like an aligned PictureBox; `_pane()` is the nearest earlier visible control docked to the same edge; dragging calls `_resize_pane`, which clamps the pane between `MinSize` and what leaves `MinSize` of the form's `_free_area`, and `Moved` fires on release. `_vertical()`: Left/Right. Thickness changes relayout. |
-| `Menu` | a `QAction` (none in design mode) | Parent: the form (the menu bar, `Form._add_menu_item`) or a `Menu`, whose `QMenu` (`_submenu`, created for its first item by `_add_menu_item`) holds it. Caption `-` is a separator; `Checked` (Qt's own toggling is undone in `_on_triggered`), `Enabled`, `Visible`, `Shortcut` (also added to the form widget so it works in the window). Click on `triggered`, and for a menu with items on `aboutToShow`. `_menu_container`, `_place_after` (loaded array elements follow the last one), `_dispose`. |
+| `Menu` | a `QAction` (none in design mode) | Parent: the form (the menu bar, `Form._add_menu_item`) or a `Menu`, whose `QMenu` (`_submenu`, created for its first item by `_add_menu_item`) holds it. Caption `-` is a separator; `Checked` (Qt's own toggling is undone in `_on_triggered`), `Enabled`, `Visible`, `NegotiatePosition` (rebuilds the window's bar when merged), `Shortcut` (also added to the form widget so it works in the window). Click on `triggered`, and for a menu with items on `aboutToShow`. `_menu_container`, `_place_after` (loaded array elements follow the last one), `_dispose`. |
 
 * **`ControlArray`**, a VB control array (after `CONTROL_TYPES`, which it
   isn't part of). The form's `__setattr__` gives it its name.
@@ -287,6 +287,17 @@ The intrinsic controls.
     after
     `InitializeComponent`, on every resize (before `Form_Resize`), after the
     menu bar's layout, and when an aligned control is registered or changed.
+  * **Menu negotiation:** a form in a container has no menu bar of its own
+    (`_layout_menu_bar` hides it, never the system's). `_negotiate(visible)`,
+    called from `_embedded_visibility` and `_leave_container`, adds it to or
+    removes it from its window's `_merged_forms` (`_menu_window()` walks up
+    the containers); the window's `_update_menu_bar()` rebuilds its bar from
+    its own menus (`_top_menus`) and the merged forms' ones by
+    `NegotiatePosition` (Left, Middle after the first, Right before its own
+    Right menus), unless `NegotiateMenus` is off. `_ensure_menu_bar` creates
+    a bar for a window without menus; menus added in code are merged too
+    (`_register_control`). Popped out, a form gets its own bar back
+    (`_native_menu_bar` remembers whether it was the system's).
   * **Menus:** `_add_menu_item(menu)` puts a top-level `Menu` on the menu
     bar (`_menubar`, a `QMenuBar` created with the first one). When Qt draws
     it in the window (not the macOS menu bar), `_make_client` moves the
@@ -799,7 +810,8 @@ The Menu Editor.
   each), levels (at most one deeper than the item above, `MAX_LEVEL`) and
   separators (not on the menu bar, no items of their own).
 * `MenuEditorDialog(entries, taken)`, like VB's: Caption, Name, Index,
-  Shortcut and Checked / Enabled / Visible for the current item, the arrow
+  Shortcut, NegotiatePosition (kept in the entry's `props`) and Checked /
+  Enabled / Visible for the current item, the arrow
   buttons (`outdent`, `indent`, `move_up`, `move_down`), `next` (a new item
   at the end), `insert`, `delete`, and the indented list (`····` per
   level). `result_entries()` drops blank items; OK refuses invalid menus
@@ -967,8 +979,10 @@ explorer-style.
   * `pgMouse.py`: MouseDown/MouseMove/MouseUp with buttons, Click, DblClick;
   * `pgArrays.py`: the `cmdMore` control array loading and unloading
     elements;
-  * `pgMenus.py`: the menus, and adding bookmarks (a menu control array
-    grown at run time);
+  * `pgMenus.py`: the menus, adding bookmarks (a menu control array grown
+    at run time), and a Page menu of its own that joins the window's menu
+    bar while the page is visible (NegotiatePosition; the window's Help is
+    Right too, so it stays last);
   * `pgGlobals.py`: App, Screen, Forms, Clipboard, DoEvents, Debug.Print and
     End.
   Pages that talk to the window use their `shell` attribute (None when a
@@ -1103,7 +1117,7 @@ All tests run headless. `conftest.py`:
 | `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results, `End()` ending a program (in a process of its own) without Form_Unload. |
 | `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames (controls, form classes, class and module references in other files), the console template. |
 | `test_control_arrays.py` | Control arrays: elements, `[i]` / `(i)` / `Item`, iteration, bounds, read-only `Index`, handlers getting `Index` first, `Load`/`Unload` of run-time elements (copied properties, hidden, last in the tab order; designer elements can't be unloaded), one type per array; the form file round trip (elements as containers too) and invalid arrays; adding/removing the `Index` parameter and stubs; in the designer: paste asking to create an array, renaming into an array (and out, and into another type's name), the Index property (one-element arrays, moving, clearing, undo), containers that are elements; the Properties window's `(Name)`, `Index` row and object list; the code window's Object list, new handlers with `Index`, completion. |
-| `test_menus.py` | Menus at run time: the menu bar and items, separators, shortcuts; an in-window menu bar keeping `Height`, `ScaleHeight` and control positions for the area below it (the window grows), form mouse events there; Click on choosing an item and before a menu opens; `Checked` changing only in code; Enabled, Visible, Caption and Shortcut changes; menu control arrays loading after their last element and unloading; the parent check; the form file round trip; the Menu Editor's entries and ControlDefs, validation messages and dialog editing (Next, indent, shortcut, Insert, Delete, moving, outdent); the designer's menu bar (layout, hit testing, the drop-down opening Click code), menus kept off the canvas and edited in the Properties window, deleting a menu with its items, renames and arrays updating handlers, undo; the IDE's Tools > Menu Editor (Ctrl+E). |
+| `test_menus.py` | Menus at run time: the menu bar and items, separators, shortcuts; an in-window menu bar keeping `Height`, `ScaleHeight` and control positions for the area below it (the window grows), form mouse events there; Click on choosing an item and before a menu opens; `Checked` changing only in code; Enabled, Visible, Caption and Shortcut changes; menu control arrays loading after their last element and unloading; the parent check; the form file round trip; the Menu Editor's entries and ControlDefs, validation messages and dialog editing (Next, indent, shortcut, Insert, Delete, moving, outdent); menu negotiation (merged by NegotiatePosition, left out for None, the inner handlers, leaving when hidden or replaced, popped out with its own bar, NegotiateMenus off, a position changed and a menu added while merged, a window without menus, the Menu Editor's NegotiatePosition); the designer's menu bar (layout, hit testing, the drop-down opening Click code), menus kept off the canvas and edited in the Properties window, deleting a menu with its items, renames and arrays updating handlers, undo; the IDE's Tools > Menu Editor (Ctrl+E). |
 | `test_image.py` | The Image control: taking the picture's size without Stretch (and with a border), filling the control with Stretch, switching back, clearing the picture; mouse events, no focus or Tab stop, not grayed but silent when disabled, transparent; its properties in order and the form file; in the designer: sized by a new picture, resized with Stretch, the Properties rows; the Toolbox button and icon. |
 | `test_embedded_forms.py` | Activate/Deactivate in a container (Load then Activate; hidden and shown, the container hidden and shown, popped out, unloaded), a filling form replacing another (no second Load; Fill=False forms staying), window activation not applying; `Form.ShowIn`: filling a PictureBox and following its size (Load before the first Resize), controls working, window-only properties not popping it out; a Frame's inside, a form as the container, `Fill=False` at Left/Top; popping out, moving between containers, Hide/Show; unloading only itself, going with its host (unable to cancel), a host that cancels keeping it; invalid containers and cycles; nested forms and Default buttons. |
 | `test_align.py` | PictureBox `Align`: docking in creation order, Fill panes taking the space left (after the others, several sharing it), following the form (before Form_Resize), changing a pane's thickness, place, visibility and Align; only on the form; panes created in code; under an in-window menu bar; in a form shown in a container; in the designer (Align stored with the docked geometry, the form resized, a pane dragged back, undo); the constants. |

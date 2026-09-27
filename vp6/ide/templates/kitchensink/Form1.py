@@ -85,7 +85,7 @@ class Form1(Form):
         self.mnuBookmarks = Menu(self, Caption='&Bookmarks')
         self.mnuBookmark = ControlArray()
         self.mnuBookmark[0] = Menu(self.mnuBookmarks, Caption='&Introduction', Tag='intro')
-        self.mnuHelp = Menu(self, Caption='&Help')
+        self.mnuHelp = Menu(self, Caption='&Help', NegotiatePosition=3)
         self.mnuHelpKeys = Menu(self.mnuHelp, Caption='&Keys', Shortcut='F1')
         self.mnuHelpAbout = Menu(self.mnuHelp, Caption='&About')
     # endregion

@@ -189,6 +189,7 @@ What the arguments mean:
 | `Left` | int | `0` | Screen position; used with StartUpPosition Manual |
 | `MaxButton` | bool | `True` | Show a maximize button (sizable forms) |
 | `MinButton` | bool | `True` | Show a minimize button |
+| `NegotiateMenus` | bool | `True` | The menus of forms shown in this one (ShowIn) join its menu bar while they are visible, placed by their NegotiatePosition |
 | `StartUpPosition` | enum | 2 - CenterScreen | 0 - Manual, 1 - CenterOwner, 2 - CenterScreen, 3 - Windows Default. Where the window first appears |
 | `Tag` | str | `''` | Free for your own use |
 | `Top` | int | `0` | Screen position; used with StartUpPosition Manual |
@@ -254,6 +255,10 @@ self.page.ShowIn(self.picContent)     # back into the pane
   the same container: they are hidden (and deactivated), not unloaded, so
   showing one again doesn't fire `Form_Load` again. Forms shown with
   `Fill=False` don't replace or get replaced.
+* **Menus:** a form in a container has no menu bar of its own. While it is
+  visible, its menus with a `NegotiatePosition` join the window's menu bar,
+  like VB's menu negotiation (see [Menu](#menu)); popped out, it has its
+  own menu bar again.
 * `Unload()` unloads just that form. When the host form unloads, the forms
   shown in it get `Form_Unload` after the host's own and can't cancel it;
   they become (hidden) windows again, so they can be shown elsewhere.
@@ -893,6 +898,21 @@ def mnuFileOpen_Click(self):
 * Menus can be [control arrays](#control-arrays), e.g. a list of recent
   files: `Load(self.mnuRecent, i)` adds an item right after the array's
   last one.
+* **Menu negotiation.** When the form is shown in another form (`ShowIn`),
+  it has no menu bar of its own: while it is visible, its menu bar menus
+  join the window's menu bar, placed by their `NegotiatePosition`:
+
+  | `NegotiatePosition` | Where, on the window's menu bar |
+  |---|---|
+  | `vpNegotiateNone` (0, the default, as in VB) | not shown |
+  | `vpNegotiateLeft` (1) | before the window's menus |
+  | `vpNegotiateMiddle` (2) | after the window's first menu (e.g. File) |
+  | `vpNegotiateRight` (3) | after the window's menus, but before its own Right menus |
+
+  Give the window's Help menu `NegotiatePosition = Right` to keep it last.
+  The window's `NegotiateMenus = False` turns this off. Choosing a merged
+  item (or its Shortcut) fires the inner form's handler. The Menu Editor
+  sets NegotiatePosition too.
 * On Windows and Linux the menu bar is inside the window, above the form's
   area: the window grows by its height, and `Height`, `ScaleHeight` and
   control positions stay those of the area below it. On macOS the menus are
@@ -906,6 +926,7 @@ Not in the Toolbox: designed with the Menu Editor.
 | `Caption` | str | `''` | The text shown; & marks the access key (&File), and '-' makes a separator line |
 | `Checked` | bool | `False` | Shows a check mark next to the item |
 | `Enabled` | bool | `True` | Whether the item can be chosen |
+| `NegotiatePosition` | enum | 0 - None | 0 - None, 1 - Left, 2 - Middle, 3 - Right. For a menu on the menu bar, when its form is shown in another form: None = not shown; Left = before that window's menus, Middle = after its first menu, Right = after its menus (before its Right ones) |
 | `Shortcut` | shortcut key | `''` | A key that chooses the item without opening the menu, from VB's list: Ctrl+A..Z, F1..F12, Ctrl+, Shift+ and Ctrl+Shift+F1..F12, Ctrl+Shift+A..Z, Ctrl+Ins, Shift+Ins, Del, Shift+Del, Alt+Backspace |
 | `Tag` | str | `''` | Free for your own use |
 | `Visible` | bool | `True` | Whether the item is shown |
@@ -1053,6 +1074,7 @@ All constants are plain ints or strings.
 | Form.WindowState | `vpNormal`, `vpMinimized`, `vpMaximized` | 0, 1, 2 |
 | Form.StartUpPosition | `vpStartUpManual`, `vpStartUpOwner`, `vpStartUpScreen`, `vpStartUpWindowsDefault` | 0, 1, 2, 3 |
 | Strings | `vpCr`, `vpLf`, `vpCrLf`, `vpNewLine`, `vpTab`, `vpNullString` | `'\r'`, `'\n'`, `'\r\n'`, `'\n'`, `'\t'`, `''` |
+| Menu.NegotiatePosition | `vpNegotiateNone`, `vpNegotiateLeft`, `vpNegotiateMiddle`, `vpNegotiateRight` | 0, 1, 2, 3 |
 | Label.TextFormat | `vpPlainText`, `vpRichText`, `vpMarkdown` | 0, 1, 2 |
 | ScrollBars (TextBox, PictureBox) | `vpSBNone`, `vpHorizontal`, `vpVertical`, `vpBoth` | 0, 1, 2, 3 |
 | PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight`, `vpAlignFill` | 0, 1, 2, 3, 4, 5 |

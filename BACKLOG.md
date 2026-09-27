@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** Menus on a form shown in a container (`ShowIn`): the menu bar is drawn inside the container, and on macOS it would be a system menu bar tied to a child widget; decide whether an embedded form's menus merge into the host window's menu bar, or aren't shown
 - **[Controls]** Common controls: ProgressBar, Slider, ListView, TabStrip, StatusBar, Toolbar, ImageList, UpDown, and others
 - **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)
 - **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)

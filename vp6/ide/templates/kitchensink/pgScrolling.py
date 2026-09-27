@@ -10,7 +10,7 @@ class pgScrolling(Form):
         self.Width = 640
         self.Height = 1000
         self.lblTop = Label(self, TextFormat=2,
-                            Caption="# Scrolling\n\nThis page is **1000 pixels tall**. The content pane is a PictureBox with `ScrollBars = 3 - Both`: a scroll bar appears when what is in it doesn't fit. Scroll down (the status bar shows the pane's Scroll event).",
+                            Caption="This page is **1000 pixels tall**. The content pane is a PictureBox with `ScrollBars = 3 - Both`: a scroll bar appears when what is in it doesn't fit. Scroll down (the status bar shows the pane's Scroll event).",
                             Left=16, Top=16, Width=600, Height=140, WordWrap=True, TabIndex=1)
         self.lblMiddle = Label(self, Caption='Halfway down', Left=16, Top=500, Width=300,
                                Height=25, TabIndex=2)

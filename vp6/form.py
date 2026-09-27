@@ -182,6 +182,9 @@ class Form(PropertyHost):
         P("MaxButton", "bool", True, description="Show a maximize button (sizable forms)"),
         P("KeyPreview", "bool", False,
           description="Form receives key events before its controls"),
+        P("NegotiateMenus", "bool", True,
+          description="The menus of forms shown in this one (ShowIn) join its menu bar while "
+                      "they are visible, placed by their NegotiatePosition"),
         P("ColorScheme", "enum", 0,
           enum_choices("Project Default", "System", "Light", "Dark", "IDE"),
           description="Light or dark appearance. Project Default uses the project's "
@@ -214,6 +217,8 @@ class Form(PropertyHost):
         d["_watcher"] = None
         d["_embedded"] = []  # the forms shown in this form (or its containers)
         d["_active_in_container"] = False  # shown in its container: Activate fired
+        d["_merged_forms"] = []  # forms in it whose menus are on its menu bar (in order)
+        d["_native_menu_bar"] = False  # a menu bar of the system's (macOS) as a window
         d["_free_area"] = (0, 0, 480, 360)  # the client area the docked panes leave
         d["_widget"] = _FormWidget(self)
         self._widget.resize(480, 360)
@@ -252,17 +257,90 @@ class Form(PropertyHost):
     def _menu_container(self):
         return self._menubar
 
-    def _add_menu_item(self, menu) -> None:
-        """A top-level Menu: on the menu bar (created with the first one)."""
+    def _ensure_menu_bar(self) -> QMenuBar:
+        """The form's menu bar, created with its first menu (or the first menus
+        another form negotiates into it)."""
         if self._menubar is None:
             bar = QMenuBar(self._widget)
-            self.__dict__["_menubar"] = bar
+            self.__dict__.update(_menubar=bar, _native_menu_bar=bar.isNativeMenuBar())
             self._style_widget(bar)
-            if not bar.isNativeMenuBar():  # macOS: the system menu bar, no room needed
+            if self._container is not None:
+                bar.setNativeMenuBar(False)  # in a container: never the system's
+            elif not bar.isNativeMenuBar():  # macOS: the system menu bar, no room needed
                 self._make_client()
-        self._menubar.addAction(menu._action)
-        self._widget.addAction(menu._action)
+        return self._menubar
+
+    def _add_menu_item(self, menu) -> None:
+        """A top-level Menu: on the menu bar (created with the first one)."""
+        self._ensure_menu_bar()
+        self._widget.addAction(menu._action)  # its shortcuts work in the window
+        window = self._menu_window()
+        if window is not self:
+            self._menubar.addAction(menu._action)
+            if self in window._merged_forms:
+                window._update_menu_bar()
+        elif self._merged_forms:
+            self._update_menu_bar()  # keeps the merged menus in place
+        else:
+            self._menubar.addAction(menu._action)
         self._layout_menu_bar()
+
+    # -- menu negotiation: the menus of forms shown in this one -------------------------------------
+    def _top_menus(self) -> list:
+        return [c for c in self._controls
+                if c.TypeName == "Menu" and c.Parent is self and c._action is not None]
+
+    def _menu_window(self) -> "Form":
+        """The form whose window this one is in (itself, unless in a container)."""
+        form = self
+        while form._container is not None:
+            container = form._container
+            form = container if isinstance(container, Form) else container._owner_form()
+        return form
+
+    def _negotiate(self, visible: bool) -> None:
+        """A form in a container became visible or hidden there: its menus join
+        or leave its window's menu bar."""
+        window = self._menu_window()
+        if window is self:
+            return
+        merged = window._merged_forms
+        if visible and self not in merged:
+            merged.append(self)
+        elif not visible and self in merged:
+            merged.remove(self)
+        else:
+            return
+        window._update_menu_bar()
+
+    def _update_menu_bar(self) -> None:
+        """This window's menu bar: its own menus, and the menus of the forms
+        shown in it, placed by their NegotiatePosition: Left before its menus,
+        Middle after its first menu, Right after its menus but before those
+        of its own menus whose NegotiatePosition is Right (e.g. Help)."""
+        own = self._top_menus()
+        guests = {1: [], 2: [], 3: []}
+        if self.NegotiateMenus:
+            for form in self._merged_forms:
+                for menu in form._top_menus():
+                    position = menu._values.get("NegotiatePosition", 0)
+                    if position in guests:
+                        guests[position].append(menu)
+        if self._menubar is None and not any(guests.values()):
+            return
+        main = [m for m in own if m._values.get("NegotiatePosition", 0) != 3]
+        last = [m for m in own if m._values.get("NegotiatePosition", 0) == 3]
+        order = guests[1] + main[:1] + guests[2] + main[1:] + guests[3] + last
+        bar = self._ensure_menu_bar()
+        for action in bar.actions():
+            bar.removeAction(action)
+        for menu in order:
+            bar.addAction(menu._action)
+        self._layout_menu_bar()
+
+    def _apply_NegotiateMenus(self, v):
+        if self._merged_forms:
+            self._update_menu_bar()
 
     def _make_client(self) -> None:
         """Move the controls onto a client widget, so the menu bar can go above
@@ -281,11 +359,15 @@ class Form(PropertyHost):
     def _layout_menu_bar(self) -> None:
         """Keep an in-window menu bar at the top and the client area below it.
         The form's Height stays the client area's, so the window grows."""
+        if self._menubar is not None and self._container is not None:
+            self._menubar.hide()  # in a container: its menus are on its window's bar
         if self._client is None:
             return
         widget = self._widget
-        height = self._menubar.heightForWidth(widget.width())
-        if height <= 0:
+        embedded = self._container is not None  # its menus are on its window's bar
+        self._menubar.setVisible(not embedded)
+        height = 0 if embedded else self._menubar.heightForWidth(widget.width())
+        if height <= 0 and not embedded:
             height = self._menubar.sizeHint().height()
         if height != self._menu_height:
             client_height = widget.height() - self._menu_height
@@ -382,6 +464,10 @@ class Form(PropertyHost):
         self._controls.append(control)
         if control._values.get("Align"):  # e.g. an aligned PictureBox created in code
             self._layout_aligned()
+        if control.TypeName == "Menu" and control.Parent is self and self._container is not None:
+            window = self._menu_window()  # a menu added in code to a form shown in another
+            if self in window._merged_forms:
+                window._update_menu_bar()
 
     def _fire(self, event: str, *args):
         if self._design_mode:
@@ -712,6 +798,7 @@ class Form(PropertyHost):
         shown = shown and self._widget.isVisible()
         if shown == self._active_in_container or (shown and not self._loaded):
             return
+        self._negotiate(shown)  # its menus join or leave the window's menu bar
         self.__dict__["_active_in_container"] = shown
         if self._loaded:
             self._fire("Activate" if shown else "Deactivate")
@@ -729,6 +816,9 @@ class Form(PropertyHost):
         # In its container before being shown there, so that counts as Activate
         self.__dict__.update(_container=container, _watcher=watcher)
         host._embedded.append(self)
+        if self._menubar is not None:  # its menus go on its window's menu bar
+            self._menubar.setNativeMenuBar(False)
+            self._layout_menu_bar()
         widget.setParent(parent, Qt.Widget)  # a child widget, no longer a window
         if visible:
             widget.show()
@@ -742,6 +832,7 @@ class Form(PropertyHost):
         if self in host._embedded:
             host._embedded.remove(self)
         if self._active_in_container:  # leaving: deactivated there first
+            self._negotiate(False)
             self.__dict__["_active_in_container"] = False
             if self._loaded:
                 self._fire("Deactivate")
@@ -752,6 +843,13 @@ class Form(PropertyHost):
         self.__dict__.update(_container=None, _watcher=None, _shown_once=False)
         self._widget.hide()
         self._widget.setParent(None, Qt.Window)
+        bar = self._menubar
+        if bar is not None:  # a window again: its own menu bar is back
+            bar.setNativeMenuBar(self._native_menu_bar)
+            bar.show()
+            if not self._native_menu_bar and self._client is None:
+                self._make_client()
+            self._layout_menu_bar()
 
     def _fit_to_container(self) -> None:
         if self._container is None:

@@ -2234,6 +2234,10 @@ class Menu(Control):
         P("Checked", "bool", False, description="Shows a check mark next to the item"),
         P("Enabled", "bool", True, description="Whether the item can be chosen"),
         P("Visible", "bool", True, description="Whether the item is shown"),
+        P("NegotiatePosition", "enum", 0, enum_choices("None", "Left", "Middle", "Right"),
+          description="For a menu on the menu bar, when its form is shown in another form: "
+                      "None = not shown; Left = before that window's menus, Middle = after "
+                      "its first menu, Right = after its menus (before its Right ones)"),
         P("Shortcut", "shortcut", "", SHORTCUT_CHOICES,
           description="A key that chooses the item without opening the menu, from VB's list: "
                       "Ctrl+A..Z, F1..F12, Ctrl+, Shift+ and Ctrl+Shift+F1..F12, "
@@ -2315,6 +2319,13 @@ class Menu(Control):
     def _apply_Visible(self, v):
         if self._action is not None:
             self._action.setVisible(bool(v))
+
+    def _apply_NegotiatePosition(self, v):
+        form = self._form
+        if self.Parent is form and form._container is not None and self in form._controls:
+            window = form._menu_window()
+            if form in window._merged_forms:
+                window._update_menu_bar()
 
     def _apply_Shortcut(self, v):
         if self._action is not None:

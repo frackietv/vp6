@@ -10,11 +10,14 @@ class pgMenus(Form):
         self.Width = 640
         self.Height = 440
         self.lblMenus = Label(self, TextFormat=2,
-                              Caption="# Menus\n\nThe window's menus are **Menu** controls, designed with the **Menu Editor** (Tools > Menu Editor, Ctrl+E):\n\n- *File*: **End** has a Shortcut (Ctrl+Q)\n- *View*: a checked item, and the color schemes as a **menu control array**\n- *Bookmarks*: a menu control array too: add a page to it below (`Load` at run time)\n- *Help*: **Keys** has the Shortcut F1",
-                              Left=16, Top=16, Width=600, Height=180, WordWrap=True, TabIndex=1)
-        self.cboPages = ComboBox(self, Style=2, Left=16, Top=210, Width=240, Height=25, TabIndex=2)
-        self.cmdBookmark = CommandButton(self, Caption='Add a &bookmark', Left=270, Top=208,
+                              Caption="The window's menus are **Menu** controls, designed with the **Menu Editor** (Tools > Menu Editor, Ctrl+E):\n\n- *File*: **End** has a Shortcut (Ctrl+Q)\n- *View*: a checked item, and the color schemes as a **menu control array**\n- *Bookmarks*: a menu control array too: add a page to it below (`Load` at run time)\n- *Help*: **Keys** has the Shortcut F1\n- *Page*: this page's own menu. A form shown in another form has no menu bar of its own: its menus join the window's while it is visible (**NegotiatePosition** = Right; Help is Right too, so it stays last)",
+                              Left=16, Top=16, Width=600, Height=230, WordWrap=True, TabIndex=1)
+        self.cboPages = ComboBox(self, Style=2, Left=16, Top=260, Width=240, Height=25, TabIndex=2)
+        self.cmdBookmark = CommandButton(self, Caption='Add a &bookmark', Left=270, Top=258,
                                          Width=170, Height=30, TabIndex=3)
+        self.lblPage = Label(self, Caption='', Left=16, Top=300, Width=600, Height=25, TabIndex=4)
+        self.mnuPage = Menu(self, Caption='&Page', NegotiatePosition=3)
+        self.mnuPageHello = Menu(self.mnuPage, Caption='&Say hello', Shortcut='Ctrl+H')
     # endregion
 
     shell = None  # the Kitchen Sink window showing this page (None when run on its own)
@@ -26,6 +29,10 @@ class pgMenus(Form):
         if self.pages:
             self.cboPages.ListIndex = 0
         self.cmdBookmark.Enabled = bool(self.pages)
+
+    def mnuPageHello_Click(self):
+        # This page's own menu, on the window's menu bar while the page is visible
+        self.lblPage.Caption = "Hello from the Menus page's own menu!"
 
     def cmdBookmark_Click(self):
         key, title = self.pages[self.cboPages.ListIndex]

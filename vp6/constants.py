@@ -77,6 +77,12 @@ vpNewLine = "\n"
 vpTab = "\t"
 vpNullString = ""
 
+# --- Menu.NegotiatePosition ------------------------------------------------------
+vpNegotiateNone = 0
+vpNegotiateLeft = 1
+vpNegotiateMiddle = 2
+vpNegotiateRight = 3
+
 # --- Label.TextFormat -----------------------------------------------------------
 vpPlainText = 0
 vpRichText = 1

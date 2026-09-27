@@ -145,6 +145,11 @@ class MenuEditorDialog(QDialog):
         self.shortcut = QComboBox()
         for value, label in SHORTCUT_CHOICES:
             self.shortcut.addItem(label, value)
+        self.negotiate = QComboBox()  # NegotiatePosition
+        for value, label in enumerate(("None", "Left", "Middle", "Right")):
+            self.negotiate.addItem(f"{value} - {label}", value)
+        self.negotiate.setToolTip("Where a menu bar menu goes when the form is shown in "
+                                  "another form (ShowIn); None: not shown there")
         self.checked = QCheckBox("&Checked")
         self.enabled = QCheckBox("&Enabled")
         self.visible = QCheckBox("&Visible")
@@ -163,6 +168,10 @@ class MenuEditorDialog(QDialog):
         fields.addWidget(self.index, 2, 1)
         fields.addWidget(shortcut_label, 2, 2, Qt.AlignRight)
         fields.addWidget(self.shortcut, 2, 3)
+        negotiate_label = QLabel("Ne&gotiatePosition:")
+        negotiate_label.setBuddy(self.negotiate)
+        fields.addWidget(negotiate_label, 3, 2, Qt.AlignRight)
+        fields.addWidget(self.negotiate, 3, 3)
         flags = QHBoxLayout()
         for box in (self.checked, self.enabled, self.visible):
             flags.addWidget(box)
@@ -204,6 +213,7 @@ class MenuEditorDialog(QDialog):
         self.name.textEdited.connect(self._store)
         self.index.textEdited.connect(self._store)
         self.shortcut.activated.connect(self._store)
+        self.negotiate.activated.connect(self._store)
         for box_ in (self.checked, self.enabled, self.visible):
             box_.toggled.connect(self._store)
         if not self.entries:
@@ -242,6 +252,7 @@ class MenuEditorDialog(QDialog):
         self.name.setText(entry.name)
         self.index.setText("" if entry.index is None else str(entry.index))
         self.shortcut.setCurrentIndex(max(self.shortcut.findData(entry.shortcut), 0))
+        self.negotiate.setCurrentIndex(entry.props.get("NegotiatePosition", 0))
         self.checked.setChecked(entry.checked)
         self.enabled.setChecked(entry.enabled)
         self.visible.setChecked(entry.visible)
@@ -269,6 +280,10 @@ class MenuEditorDialog(QDialog):
         entry.name = self.name.text().strip()
         entry.index = int(self.index.text()) if self.index.text() else None
         entry.shortcut = self.shortcut.currentData() or ""
+        if self.negotiate.currentData():
+            entry.props["NegotiatePosition"] = self.negotiate.currentData()
+        else:
+            entry.props.pop("NegotiatePosition", None)  # the default
         entry.checked = self.checked.isChecked()
         entry.enabled = self.enabled.isChecked()
         entry.visible = self.visible.isChecked()
