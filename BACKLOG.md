@@ -1,6 +1,10 @@
 # VP6 backlog
 
-- **[Controls]** Common controls: ProgressBar, Slider, ListView, TabStrip, StatusBar, Toolbar, ImageList, UpDown, and others
+- **[Controls]** StatusBar: panels (`Panels` collection with Text, Width, AutoSize, Style such as time/date/Caps Lock), docked to the bottom like an aligned PictureBox, `PanelClick` event (self-hosting: the IDE's status bar)
+- **[Controls]** TabStrip: tabs (`Tabs` collection with Caption, Key, ToolTipText), `SelectedItem`, `Click` when the tab changes; the program shows each tab's controls (self-hosting: the New Project dialog's tabs)
+- **[Controls]** ImageList: a collection of pictures (`ListImages` with Key) set in the designer, used by other controls by key or index
+- **[Controls]** Toolbar: buttons (`Buttons` collection with Caption, Key, Image from an ImageList, Style: button, check, button group, separator), docked to the top, `ButtonClick` event (self-hosting: the IDE's toolbar)
+- **[Controls]** ListView: items in Icon, SmallIcon, List and Report views (`ListItems`, `ColumnHeaders`, SubItems, sorting by column, images from ImageLists, `ItemClick` / `ColumnClick` events)
 - **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)
 - **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)
 - **[Controls]** ListBox/ComboBox completeness: `NewIndex`, `TopIndex`, `SelCount`, ListBox `Style = Checkbox` with the `ItemCheck` event, ComboBox `Style = 1` (simple combo) and the `DropDown` event

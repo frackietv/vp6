@@ -14,9 +14,10 @@ from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import (QAction, QColor, QDesktopServices, QFont, QIcon, QKeyEvent,
                            QKeySequence, QPainter, QPalette, QPen, QPixmap)
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QCheckBox, QComboBox, QFrame, QGroupBox, QLabel, QMenu,
-    QScrollArea, QTreeWidget, QTreeWidgetItem,
-    QLineEdit, QListWidget, QPlainTextEdit, QPushButton, QRadioButton, QScrollBar, QWidget,
+    QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox, QFrame, QGroupBox,
+    QLabel, QMenu, QProgressBar, QScrollArea, QSlider, QToolButton, QTreeWidget,
+    QTreeWidgetItem, QLineEdit, QListWidget, QPlainTextEdit, QPushButton, QRadioButton,
+    QScrollBar, QWidget,
 )
 
 from . import colors
@@ -33,6 +34,7 @@ EVENT_ARGS = {
     "Initialize": "", "Load": "", "Unload": "", "Activate": "", "Deactivate": "",
     "Resize": "", "Moved": "", "LinkClick": "URL",
     "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
+    "UpClick": "", "DownClick": "",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -1137,6 +1139,295 @@ class VScrollBar(_ScrollBar):
     DefaultSize = (17, 121)
     _orientation = Qt.Vertical
     Properties = _scroll_props(*DefaultSize)
+
+
+# --- ProgressBar, Slider and UpDown (VB's Windows Common Controls) --------------------------------
+
+_ORIENTATION = enum_choices("Horizontal", "Vertical")
+_QT_ORIENTATION = {0: Qt.Horizontal, 1: Qt.Vertical}
+
+
+def _clamp(value, low, high) -> int:
+    return max(low, min(high, int(value))) if low <= high else low
+
+
+class ProgressBar(Control):
+    """Shows how far an operation has got: a bar filled from Min to Max as
+    Value grows. A Value outside Min..Max is kept at the nearer end."""
+
+    TypeName = "ProgressBar"
+    DefaultSize = (161, 25)
+    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp")
+    _synthesize_click = True
+    _qss_type = "QProgressBar"
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Min", "int", 0, description="Value when the bar is empty"),
+        P("Max", "int", 100, description="Value when the bar is full"),
+        P("Value", "int", 0, description="How far along: from Min (empty) to Max (full)"),
+        P("Orientation", "enum", 0, _ORIENTATION,
+          description="Horizontal (filling to the right) or Vertical (filling upwards)"),
+        P("Enabled", "bool", True, description="Whether the control responds to the user"),
+        P("Visible", "bool", True, description="Whether the control is shown at run time"),
+        P("ToolTipText", "str", "", description="Text shown when the mouse rests on it"),
+        P("Tag", "str", "", description="Free for your own use"),
+        P("ZIndex", "int", 0, description=_COMMON[-1].description),
+    )
+
+    def _create_widget(self, parent):
+        widget = QProgressBar(parent)
+        widget.setTextVisible(False)  # like VB's: just the bar
+        widget.setFocusPolicy(Qt.NoFocus)
+        return widget
+
+    def _apply_Min(self, v):
+        self._widget.setMinimum(int(v))
+        self._apply_Value(self._values.get("Value", 0))
+
+    def _apply_Max(self, v):
+        self._widget.setMaximum(int(v))
+        self._apply_Value(self._values.get("Value", 0))
+
+    def _read_Value(self):
+        return self._widget.value()
+
+    def _apply_Value(self, v):
+        value = _clamp(v, self._widget.minimum(), self._widget.maximum())
+        self._values["Value"] = value
+        self._widget.setValue(value)
+
+    def _apply_Orientation(self, v):
+        self._widget.setOrientation(_QT_ORIENTATION.get(v, Qt.Horizontal))
+
+
+class Slider(Control):
+    """A thumb dragged along a scale with tick marks, like VB's Slider.
+    Scroll fires while the thumb is dragged, Change once the Value has
+    changed (when the drag ends, or at once for keys, clicks and code)."""
+
+    TypeName = "Slider"
+    DefaultEvent = "Scroll"
+    DefaultSize = (161, 41)
+    Events = ("Scroll", "Change", "Click", "GotFocus", "LostFocus", "KeyDown", "KeyPress",
+              "KeyUp", "MouseDown", "MouseMove", "MouseUp")
+    _synthesize_click = True
+    _qss_type = "QSlider"
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Min", "int", 0, description="Smallest Value"),
+        P("Max", "int", 10, description="Largest Value"),
+        P("Value", "int", 0, description="The thumb's position; changing it fires Change"),
+        P("SmallChange", "int", 1, description="Step for the arrow keys"),
+        P("LargeChange", "int", 5,
+          description="Step for Page Up / Page Down and clicks beside the thumb"),
+        P("Orientation", "enum", 0, _ORIENTATION, description="Horizontal or Vertical"),
+        P("TickStyle", "enum", 0,
+          enum_choices("Bottom/Right", "Top/Left", "Both", "No Ticks"),
+          description="Where the tick marks are: below (right of) the scale, above (left of) "
+                      "it, on both sides, or none"),
+        P("TickFrequency", "int", 1, description="A tick mark every this many values"),
+        *_COMMON,
+    )
+    _TICKS = {0: QSlider.TicksBelow, 1: QSlider.TicksAbove, 2: QSlider.TicksBothSides,
+              3: QSlider.NoTicks}
+
+    def _create_widget(self, parent):
+        self.__dict__["_changed_while_dragging"] = False
+        widget = QSlider(Qt.Horizontal, parent)
+        widget.setTickPosition(QSlider.TicksBelow)
+        return widget
+
+    def _connect_signals(self):
+        self._widget.valueChanged.connect(self._on_value_changed)
+        self._widget.sliderReleased.connect(self._on_released)
+
+    def _on_value_changed(self, _value):
+        if self._widget.isSliderDown():  # being dragged: Change when it's let go
+            self.__dict__["_changed_while_dragging"] = True
+            self._fire("Scroll")
+        else:
+            self._fire("Change")
+
+    def _on_released(self):
+        if self._changed_while_dragging:
+            self.__dict__["_changed_while_dragging"] = False
+            self._fire("Change")
+
+    def _apply_Min(self, v):
+        self._widget.setMinimum(int(v))
+
+    def _apply_Max(self, v):
+        self._widget.setMaximum(int(v))
+
+    def _read_Value(self):
+        return self._widget.value()
+
+    def _apply_Value(self, v):
+        self._widget.setValue(int(v))
+
+    def _apply_SmallChange(self, v):
+        self._widget.setSingleStep(int(v))
+
+    def _apply_LargeChange(self, v):
+        self._widget.setPageStep(int(v))
+
+    def _apply_Orientation(self, v):
+        self._widget.setOrientation(_QT_ORIENTATION.get(v, Qt.Horizontal))
+
+    def _apply_TickStyle(self, v):
+        self._widget.setTickPosition(self._TICKS.get(v, QSlider.TicksBelow))
+
+    def _apply_TickFrequency(self, v):
+        self._widget.setTickInterval(max(0, int(v)))
+
+
+class _UpDownWidget(QWidget):
+    """Two arrow buttons, stacked (vertical) or side by side (horizontal)."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.layout_ = QBoxLayout(QBoxLayout.TopToBottom, self)
+        self.layout_.setContentsMargins(0, 0, 0, 0)
+        self.layout_.setSpacing(0)
+        self.up, self.down = QToolButton(self), QToolButton(self)
+        for button in (self.up, self.down):
+            button.setAutoRepeat(True)  # held down: steps on
+            button.setFocusPolicy(Qt.NoFocus)
+            button.setSizePolicy(button.sizePolicy().Policy.Expanding,
+                                 button.sizePolicy().Policy.Expanding)
+        self.set_vertical(True)
+
+    def set_vertical(self, vertical: bool) -> None:
+        for button in (self.up, self.down):
+            self.layout_.removeWidget(button)
+        if vertical:  # up above down
+            self.layout_.setDirection(QBoxLayout.TopToBottom)
+            self.up.setArrowType(Qt.UpArrow)
+            self.down.setArrowType(Qt.DownArrow)
+            self.layout_.addWidget(self.up)
+            self.layout_.addWidget(self.down)
+        else:  # down (left) beside up (right)
+            self.layout_.setDirection(QBoxLayout.LeftToRight)
+            self.up.setArrowType(Qt.RightArrow)
+            self.down.setArrowType(Qt.LeftArrow)
+            self.layout_.addWidget(self.down)
+            self.layout_.addWidget(self.up)
+
+
+class UpDown(Control):
+    """A pair of arrow buttons that step a Value up or down, like VB's UpDown.
+    With a BuddyControl and SyncBuddy, the buddy (e.g. a TextBox) shows the
+    Value, and a number typed into it is where the next click starts."""
+
+    TypeName = "UpDown"
+    DefaultEvent = "Change"
+    DefaultSize = (17, 33)
+    Events = ("Change", "UpClick", "DownClick", "MouseDown", "MouseMove", "MouseUp")
+    _qss_type = "QToolButton"
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Min", "int", 0, description="Smallest Value"),
+        P("Max", "int", 10, description="Largest Value"),
+        P("Value", "int", 0,
+          description="The current value, kept between Min and Max; changing it fires Change"),
+        P("Increment", "int", 1, description="How much a click on an arrow changes Value"),
+        P("Wrap", "bool", False,
+          description="Past Max go on from Min (and below Min from Max) instead of stopping"),
+        P("Orientation", "enum", 1, _ORIENTATION,
+          description="Vertical (up and down arrows) or Horizontal (left and right arrows)"),
+        P("BuddyControl", "str", "",
+          description="The name of the control that shows the Value (e.g. a TextBox), on "
+                      "the same form"),
+        P("BuddyProperty", "str", "",
+          description="The buddy's property that shows the Value; empty = its Text, or its "
+                      "Caption"),
+        P("SyncBuddy", "bool", False,
+          description="Keep the buddy's property and the Value in step"),
+        P("Enabled", "bool", True, description="Whether the control responds to the user"),
+        P("Visible", "bool", True, description="Whether the control is shown at run time"),
+        P("ToolTipText", "str", "", description="Text shown when the mouse rests on it"),
+        P("Tag", "str", "", description="Free for your own use"),
+        P("ZIndex", "int", 0, description=_COMMON[-1].description),
+    )
+
+    def _create_widget(self, parent):
+        return _UpDownWidget(parent)
+
+    def _event_targets(self):
+        return [self._widget, self._widget.up, self._widget.down]
+
+    def _connect_signals(self):
+        self._widget.up.clicked.connect(lambda: self._step(+1))
+        self._widget.down.clicked.connect(lambda: self._step(-1))
+
+    # -- the buddy -------------------------------------------------------------------------
+    @property
+    def Buddy(self):
+        """The BuddyControl, or None (no name, or no such control)."""
+        name = self._values.get("BuddyControl", "")
+        return getattr(self._form, name, None) if name else None
+
+    def _buddy_property(self, buddy) -> str | None:
+        name = self._values.get("BuddyProperty", "")
+        if name:
+            return name
+        for candidate in ("Text", "Caption"):
+            if candidate in getattr(buddy, "_specs", {}):
+                return candidate
+        return None
+
+    def _sync_to_buddy(self) -> None:
+        buddy = self.Buddy
+        if not self._values.get("SyncBuddy") or buddy is None or self._design_mode:
+            return
+        prop = self._buddy_property(buddy)
+        if prop is not None:
+            setattr(buddy, prop, str(self.Value))
+
+    def _value_from_buddy(self) -> None:
+        """A number typed into the buddy is where a click starts from."""
+        buddy = self.Buddy
+        if not self._values.get("SyncBuddy") or buddy is None:
+            return
+        prop = self._buddy_property(buddy)
+        try:
+            typed = int(str(getattr(buddy, prop)).strip())
+        except (TypeError, ValueError, AttributeError):
+            return
+        value = _clamp(typed, self.Min, self.Max)
+        self._values["Value"] = self.__dict__["_shown_value"] = value  # (no Change: not yet)
+
+    # -- stepping ----------------------------------------------------------------------------
+    def _step(self, direction: int) -> None:
+        if self._design_mode:
+            return
+        self._value_from_buddy()
+        low, high = self.Min, self.Max
+        value = self.Value + direction * self.Increment
+        if self.Wrap and value > high:
+            value = low
+        elif self.Wrap and value < low:
+            value = high
+        self.Value = value
+        self._sync_to_buddy()  # (also when the Value stays, e.g. a typed 99 over Max)
+        self._fire("UpClick" if direction > 0 else "DownClick")
+
+    def _apply_Value(self, v):
+        value = _clamp(v, self._values.get("Min", 0), self._values.get("Max", 10))
+        old = self.__dict__.get("_shown_value")
+        self._values["Value"] = value
+        self.__dict__["_shown_value"] = value
+        if old is not None and old != value:
+            self._sync_to_buddy()
+            self._fire("Change")
+
+    def _apply_Min(self, v):
+        self._apply_Value(self._values.get("Value", 0))
+
+    _apply_Max = _apply_Min
+
+    def _apply_Orientation(self, v):
+        self._widget.set_vertical(v != 0)
 
 
 # --- PictureBox ---------------------------------------------------------------------------------
@@ -2336,7 +2627,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Splitter,
-        Menu,
+        ProgressBar, Slider, UpDown, Menu,
     )
 }
 

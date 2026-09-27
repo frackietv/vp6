@@ -181,6 +181,31 @@ def _splitter(p):
         p.drawLine(QPointF(x, 12), QPointF(x + dx, 14))
 
 
+def _progressbar(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 8, 20, 8))
+    p.setBrush(QColor("#3fb950") if C is _LIGHT else QColor("#2ea043"))
+    p.drawRect(QRectF(2, 8, 12, 8))  # filled part way
+
+
+def _slider(p):
+    p.drawLine(QPointF(3, 10), QPointF(21, 10))  # the scale
+    for x in (3, 7.5, 12, 16.5, 21):  # tick marks below it
+        p.drawLine(QPointF(x, 17), QPointF(x, 20))
+    p.setBrush(C.face)
+    p.drawPolygon([QPointF(12, 4), QPointF(15, 4), QPointF(15, 12), QPointF(13.5, 15),
+                   QPointF(12, 12)])  # the thumb, pointing at the ticks
+
+
+def _updown(p):
+    p.setBrush(C.face)
+    p.drawRect(QRectF(7, 2, 10, 10))
+    p.drawRect(QRectF(7, 12, 10, 10))
+    p.setBrush(C.ink)
+    p.drawPolygon([QPointF(12, 4.5), QPointF(9.5, 9), QPointF(14.5, 9)])
+    p.drawPolygon([QPointF(12, 19.5), QPointF(9.5, 15), QPointF(14.5, 15)])
+
+
 def _line(p):
     p.setPen(QPen(C.ink, 2))
     p.drawLine(QPointF(5, 19), QPointF(19, 5))
@@ -316,6 +341,7 @@ _DRAWERS = {
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
     "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image, "TreeView": _treeview, "Splitter": _splitter,
+    "ProgressBar": _progressbar, "Slider": _slider, "UpDown": _updown,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

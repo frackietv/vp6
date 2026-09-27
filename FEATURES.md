@@ -1,5 +1,18 @@
 # VP6 features
 
+**Version:** 0.3.28
+**Date:** 2026-09-30
+
+## Controls
+
+- ProgressBar: a bar filled from `Min` to `Max` as `Value` grows (a Value outside them is kept at the nearer end), horizontal or vertical
+- Slider: a thumb on a scale with tick marks (`TickStyle`, `TickFrequency`), `SmallChange` / `LargeChange`, horizontal or vertical; `Scroll` while the thumb is dragged, `Change` once the value has changed
+- UpDown: arrow buttons stepping a `Value` by `Increment` between `Min` and `Max` (`Wrap` to go round), vertical or horizontal, repeating while held; `Change`, `UpClick`, `DownClick`. A buddy control (`BuddyControl`, `BuddyProperty`, `SyncBuddy`) shows the value, and a number typed into it is where the next click starts
+- Constants `vpOrientationHorizontal` / `vpOrientationVertical` and `vpTickBottomRight`, `vpTickTopLeft`, `vpTickBoth`, `vpTickNone`
+- All three in the Toolbox (with icons), the designer, the API reference, and a new Kitchen Sink page, "Sliders, progress and spinners"
+
+---
+
 **Version:** 0.3.27
 **Date:** 2026-09-30
 

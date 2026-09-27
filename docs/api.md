@@ -147,6 +147,8 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `Expand` | Node |
 | `Collapse` | Node |
 | `NodeCheck` | Node |
+| `UpClick` | none |
+| `DownClick` | none |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -870,6 +872,136 @@ Default size 6 × 97. Property groups: Position.
 Events: `Moved`. Default event (double-click in the designer): `Moved`.
 <!-- END GENERATED -->
 
+### ProgressBar
+
+Shows how far an operation has got: the bar fills from `Min` to `Max` as
+`Value` grows (VB's ProgressBar, from the Windows Common Controls).
+
+```python
+def cmdCopy_Click(self):
+    self.prgCopy.Max = len(files)
+    for number, name in enumerate(files, 1):
+        copy(name)
+        self.prgCopy.Value = number
+        DoEvents()   # let the bar repaint
+```
+
+* A `Value` outside `Min`..`Max` is kept at the nearer end (VB raises an
+  error), and changing `Min` or `Max` keeps `Value` inside them.
+* `Orientation`: `vpOrientationHorizontal` fills to the right,
+  `vpOrientationVertical` upwards.
+* The user can't change it, so it takes no focus and has no keyboard events.
+
+<!-- BEGIN GENERATED: control ProgressBar -->
+Default size 161 × 25. Property groups: Position.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Enabled` | bool | `True` | Whether the control responds to the user |
+| `Max` | int | `100` | Value when the bar is full |
+| `Min` | int | `0` | Value when the bar is empty |
+| `Orientation` | enum | 0 - Horizontal | 0 - Horizontal, 1 - Vertical. Horizontal (filling to the right) or Vertical (filling upwards) |
+| `Tag` | str | `''` | Free for your own use |
+| `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
+| `Value` | int | `0` | How far along: from Min (empty) to Max (full) |
+| `Visible` | bool | `True` | Whether the control is shown at run time |
+| `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top. Equal values keep creation order (later on top). |
+
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
+### Slider
+
+A thumb the user drags along a scale with tick marks (VB's Slider).
+
+```python
+self.sldVolume = Slider(self, Max=100, Value=50, TickFrequency=10, LargeChange=10)
+
+def sldVolume_Scroll(self):   # while the thumb is dragged
+    self.lblVolume.Caption = str(self.sldVolume.Value)
+
+def sldVolume_Change(self):   # once the value has changed
+    player.volume = self.sldVolume.Value
+```
+
+* `Scroll` fires while the thumb is dragged; `Change` fires once the value
+  has changed: when the drag ends, or at once for the arrow keys, Page Up /
+  Page Down, a click beside the thumb or code setting `Value`.
+* `SmallChange` is the step for the arrow keys, `LargeChange` for Page Up /
+  Page Down and clicks beside the thumb.
+* `TickStyle` puts the ticks below (right of) the scale, above (left of) it,
+  on both sides or nowhere (`vpTickBottomRight`, `vpTickTopLeft`,
+  `vpTickBoth`, `vpTickNone`); `TickFrequency` is a tick every so many
+  values.
+
+<!-- BEGIN GENERATED: control Slider -->
+Default size 161 × 41. Property groups: Position, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `LargeChange` | int | `5` | Step for Page Up / Page Down and clicks beside the thumb |
+| `Max` | int | `10` | Largest Value |
+| `Min` | int | `0` | Smallest Value |
+| `Orientation` | enum | 0 - Horizontal | 0 - Horizontal, 1 - Vertical. Horizontal or Vertical |
+| `SmallChange` | int | `1` | Step for the arrow keys |
+| `TickFrequency` | int | `1` | A tick mark every this many values |
+| `TickStyle` | enum | 0 - Bottom/Right | 0 - Bottom/Right, 1 - Top/Left, 2 - Both, 3 - No Ticks. Where the tick marks are: below (right of) the scale, above (left of) it, on both sides, or none |
+| `Value` | int | `0` | The thumb's position; changing it fires Change |
+
+Events: `Scroll`, `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Scroll`.
+<!-- END GENERATED -->
+
+### UpDown
+
+A pair of arrow buttons that step a `Value` up or down (VB's UpDown, a
+"spinner"). Usually it has a buddy: the control beside it that shows the
+value.
+
+```python
+self.txtCopies = TextBox(self, Text="1", Left=16, Top=16, Width=48, Height=25)
+self.udCopies = UpDown(self, Left=64, Top=16, Width=17, Height=25, Min=1, Max=99,
+                       Value=1, BuddyControl="txtCopies", SyncBuddy=True)
+
+def udCopies_Change(self):
+    self.lblTotal.Caption = f"{self.udCopies.Value * PRICE} EUR"
+```
+
+* A click changes `Value` by `Increment`, between `Min` and `Max`; with
+  `Wrap` it goes on from `Min` past `Max` (and from `Max` below `Min`).
+  Holding a button down repeats it.
+* `Change` fires whenever `Value` changes, by a click or by code; `UpClick` and
+  `DownClick` after a click on an arrow.
+* **The buddy.** `BuddyControl` is the name of a control on the same form
+  (the `Buddy` property returns it). With `SyncBuddy`, the buddy's
+  `BuddyProperty` (by default its `Text`, or its `Caption`) shows the value
+  after every change, and a number typed into it is where the next click
+  starts from.
+* `Orientation`: vertical (up and down arrows, the default) or horizontal
+  (left and right arrows).
+
+<!-- BEGIN GENERATED: control UpDown -->
+Default size 17 × 33. Property groups: Position.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `BuddyControl` | str | `''` | The name of the control that shows the Value (e.g. a TextBox), on the same form |
+| `BuddyProperty` | str | `''` | The buddy's property that shows the Value; empty = its Text, or its Caption |
+| `Enabled` | bool | `True` | Whether the control responds to the user |
+| `Increment` | int | `1` | How much a click on an arrow changes Value |
+| `Max` | int | `10` | Largest Value |
+| `Min` | int | `0` | Smallest Value |
+| `Orientation` | enum | 1 - Vertical | 0 - Horizontal, 1 - Vertical. Vertical (up and down arrows) or Horizontal (left and right arrows) |
+| `SyncBuddy` | bool | `False` | Keep the buddy's property and the Value in step |
+| `Tag` | str | `''` | Free for your own use |
+| `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
+| `Value` | int | `0` | The current value, kept between Min and Max; changing it fires Change |
+| `Visible` | bool | `True` | Whether the control is shown at run time |
+| `Wrap` | bool | `False` | Past Max go on from Min (and below Min from Max) instead of stopping |
+| `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top. Equal values keep creation order (later on top). |
+
+Events: `Change`, `UpClick`, `DownClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+<!-- END GENERATED -->
+
 ### Menu
 
 A form's menus: the menu bar, the menus on it, their items, submenus and
@@ -1000,7 +1132,8 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 `Form`, `Control` (base class), `Label`, `TextBox`, `CommandButton`,
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
 `HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Image`](#image),
-[`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`Menu`](#menu), and
+[`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
+[`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown), [`Menu`](#menu), and
 `ControlArray` for [control arrays](#control-arrays).
 
 ---
@@ -1080,6 +1213,8 @@ All constants are plain ints or strings.
 | PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight`, `vpAlignFill` | 0, 1, 2, 3, 4, 5 |
 | TreeView: Nodes.Add relationship | `vpTvwFirst`, `vpTvwLast`, `vpTvwNext`, `vpTvwPrevious`, `vpTvwChild` | 0, 1, 2, 3, 4 |
 | TreeView.LineStyle | `vpTvwTreeLines`, `vpTvwRootLines` | 0, 1 |
+| Orientation (ProgressBar, Slider, UpDown) | `vpOrientationHorizontal`, `vpOrientationVertical` | 0, 1 |
+| Slider.TickStyle | `vpTickBottomRight`, `vpTickTopLeft`, `vpTickBoth`, `vpTickNone` | 0, 1, 2, 3 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -1158,4 +1293,9 @@ format.
   (`Load(self.cmd, 5)` for `Load cmd(5)`).
 * **Menus on macOS** are in the macOS menu bar at the top of the screen, not
   in the window.
+* **ProgressBar, Slider and UpDown** share one set of orientation
+  constants, `vpOrientationHorizontal` (0) and `vpOrientationVertical` (1);
+  in VB the UpDown's values were the other way round. A ProgressBar keeps an
+  out-of-range `Value` at the nearer end instead of raising an error, and
+  UpDown has no `AutoBuddy` (put it beside its buddy yourself).
 * **Not implemented yet:** see [BACKLOG.md](../BACKLOG.md).

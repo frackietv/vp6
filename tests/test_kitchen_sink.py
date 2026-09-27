@@ -236,6 +236,25 @@ def test_scroll_bars_page(sink):
     assert page.lblLevel.Caption == "80"
 
 
+def test_values_page(sink):
+    page = _page(sink, "values")
+    page.sldVolume.Value = 70  # Slider: Change
+    assert page.lblVolumeValue.Caption == "70" and "Change" in page.lblSliderEvent.Caption
+    page.sldLevel.Value = 25  # a vertical ProgressBar follows the vertical Slider
+    assert page.prgLevel.Value == 25
+    page.cmdStart._widget.click()  # a ProgressBar filled by a Timer
+    assert page.tmrWork.Enabled and not page.cmdStart.Enabled
+    for _ in range(50):
+        page.tmrWork_Timer()
+    assert page.prgWork.Value == 100 and page.lblWork.Caption == "Done"
+    assert not page.tmrWork.Enabled and page.cmdStart.Enabled
+    page.udCopies._widget.up.click()  # UpDown with a TextBox buddy
+    assert page.txtCopies.Text == "2" and page.lblTotal.Caption == "Total: 8 EUR"
+    assert page.lblUpDownEvent.Caption == "UpClick"
+    page.udDay._widget.down.click()  # wraps around; a Label buddy
+    assert page.lblDay.Caption == "7" and page.lblDayName.Caption == "Sunday"
+
+
 def test_pictures_page(sink):
     page = _page(sink, "pictures")
     assert page.lblOnPicture.Parent is page.picLogo  # a Label inside the PictureBox

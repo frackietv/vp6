@@ -113,6 +113,16 @@ vpTvwChild = 4
 vpTvwTreeLines = 0
 vpTvwRootLines = 1
 
+# --- Orientation (ProgressBar, Slider, UpDown) ----------------------------------
+vpOrientationHorizontal = 0
+vpOrientationVertical = 1
+
+# --- Slider.TickStyle ------------------------------------------------------------
+vpTickBottomRight = 0
+vpTickTopLeft = 1
+vpTickBoth = 2
+vpTickNone = 3
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9
