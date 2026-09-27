@@ -28,7 +28,7 @@
 - **[Language and runtime]** `SendKeys`: sending keystrokes to the active form
 - **[Language and runtime]** Form `Picture`: a background picture on the form
 - **[Controls]** Common Dialog control (open, save, color, font, print dialogs)
-- **[Language and runtime]** Form `Icon` property and an application icon (self-hosting: window icons of the IDE and its MDI windows)
+- **[Language and runtime]** Form `Icon` property: a form's own window icon, instead of the program's (the project's `icon`) (self-hosting: window icons of the IDE's MDI windows)
 - **[Controls]** `MousePointer` / `MouseIcon` properties for cursor shapes such as resize arrows and crosshair, and `Screen.MousePointer` (e.g. an hourglass during long work) (self-hosting: the designer's handles and drawing tool)
 - **[Language and runtime]** `SaveSetting` / `GetSetting` / `DeleteSetting` for per-user settings (self-hosting: recent projects, themes, window layout)
 - **[Language and runtime]** Graphics methods: `Line`, `Circle`, `PSet` and `Print` drawing on forms and PictureBoxes. `PictureBox.Cls()` exists but only clears the picture.
@@ -54,7 +54,7 @@
 - **[Language and runtime]** MDI forms (MDI parent and child forms)
 - **[Language and runtime]** Borderless popup forms that don't take the focus from the form that opened them (self-hosting: the code completion list)
 - **[Language and runtime]** Starting a program asynchronously with output, exit and error events and a way to write to its stdin (a Process object beyond VB's `Shell`) (self-hosting: F5 and the Immediate window)
-- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: graphics methods, MDI forms, Common Dialog, and TabStrip / StatusBar / Toolbar / UpDown from the common controls
+- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: graphics methods, MDI forms, Common Dialog, and TabStrip / StatusBar / Toolbar from the common controls
 - **[Language and runtime]** Twips and VB's `ScaleMode`; VP6 uses pixels only
 - **[Controls]** Data-bound controls
 - **[IDE]** Designer window frames with rounded bottom corners on macOS

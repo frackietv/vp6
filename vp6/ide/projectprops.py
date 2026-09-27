@@ -56,6 +56,12 @@ class _ProjectObject:
     def ColorScheme(self) -> str:
         return self._target.project.color_scheme
 
+    @property
+    def Icon(self) -> str:
+        """The icon's last file: the largest size, as new projects list them."""
+        icon = self._target.project.icon
+        return icon[-1] if icon else ""
+
 
 class ProjectTarget(QObject):
     selectionChanged = Signal()
@@ -80,6 +86,11 @@ class ProjectTarget(QObject):
     def specs(self) -> list[PropSpec]:
         startup = [(name, name) for name in self._get_form_names()] + [(SUB_MAIN, SUB_MAIN)]
         return [
+            P("Icon", "file", "",
+              description="The program's icon (its windows, and the Dock or taskbar): an "
+                          "image file in the project's folder, square, e.g. 256 x 256 "
+                          "pixels. Empty: the VP6 icon. New projects get the VP6 icon in "
+                          "several sizes in their icons folder."),
             P("ColorScheme", "enum", "system", COLOR_SCHEME_CHOICES,
               description="Light or dark appearance of every form whose ColorScheme is "
                           "'0 - Project Default'."),
@@ -117,6 +128,9 @@ class ProjectTarget(QObject):
             project.startup = value
         elif prop == "ColorScheme":
             project.color_scheme = value
+        elif prop == "Icon":  # one file now, whatever sizes it had
+            value = str(value or "").strip().replace(os.sep, "/")
+            project.icon = [value] if value else []
         else:
             return f"Unknown project property '{prop}'"
         self._on_changed()

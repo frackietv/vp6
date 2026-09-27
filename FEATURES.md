@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.3.29
+**Date:** 2026-09-30
+
+## IDE
+
+- VP6 has an icon: the VP6 cubes, in four sizes (32 to 256 pixels), for the IDE's window and in the Dock or taskbar
+- New projects (Standard EXE, Console Application and the Kitchen Sink) get the VP6 icon as the program's icon, in an `icons` folder, to replace with your own
+- The project's `Icon` in the Properties panel: choose an image file in the project's folder (empty: the VP6 icon)
+
+## Projects and programs
+
+- The project file's `icon`: image files relative to the project, sizes of one picture (or one file); a windowed program shows it for its windows and in the Dock or taskbar
+- A VP6 program without an icon of its own shows the VP6 icon
+
+---
+
 **Version:** 0.3.28
 **Date:** 2026-09-30
 

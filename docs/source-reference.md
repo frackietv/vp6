@@ -44,13 +44,19 @@ The declarative property system shared by forms and controls.
 Hooks a subclass may define per property: `_apply_<Name>(value)` pushes the
 value to the widget; `_read_<Name>()` returns the live value.
 
-### `vp6/app.py` (≈180 lines)
+### `vp6/app.py` (≈300 lines)
 
 Application-level services.
 
 * `ensure_app()` creates the `QApplication` on first use. Every entry point
   that needs Qt calls it. When it creates the application (a VP6 program), it
-  also installs the Ctrl+C handler.
+  also installs the Ctrl+C handler and gives it the VP6 icon.
+* **Icons:** `icon_from(paths)` is a `QIcon` of image files (sizes of one
+  picture; missing files skipped); `vp6_icon()` is the VP6 icon
+  (`project.VP6_ICON_FILES`), also the IDE's; `set_program_icon(paths)` makes
+  files the application's icon (windows, Dock, taskbar), creating the
+  application first (Qt can't read images before), and returns False,
+  keeping the old icon, if none can be read.
 * **Ctrl+C:**
   * `InterruptHandler(action)` makes SIGINT run `action` inside Qt's event
     loop. Qt keeps Python from running signal handlers, so it uses
@@ -374,7 +380,7 @@ classes for their metadata.
   * `event_stub(obj, event, args, index)` makes a new handler stub (`index`:
     `Index` first, for a control array).
 
-### `vp6/project.py` (≈400 lines)
+### `vp6/project.py` (≈440 lines)
 
 Project files, which are executable launcher scripts (format in
 architecture §6.2).
@@ -382,7 +388,12 @@ architecture §6.2).
 * `Project` dataclass:
   * fields `name`, `type` (`"exe"` / `"console"`), `startup` (a form class
     name or `SUB_MAIN = "Sub Main"`), `forms`, `modules`, `color_scheme`,
-    `path`;
+    `icon`, `path`;
+  * **the icon:** `icon` lists image files relative to the project (`load`
+    turns a single string into a list); `icon_paths()` gives them as absolute
+    paths. `add_default_icon()` copies the VP6 icon (`VP6_ICON_FILES`, four
+    sizes in the package's `images` folder) into the project's
+    `ICON_FOLDER` (`icons`), keeping files already there, and lists them;
   * helpers `directory`, `abspath(relative)` and `kind_of(relative)`
     (`"form"`, `"module"` or None);
   * **groups** (`groups`, how the Project panel shows the files; not folders
@@ -431,7 +442,9 @@ Starts a project. `run_project(path)`:
 2. puts `import_folders(project)` on `sys.path` (the project's folder, then
    every folder holding a form or module, so files in subfolders import each
    other by name) and `chdir`s into the project's folder;
-3. sets `App.Title` and `appearance.project_scheme`;
+3. sets `App.Title` and `appearance.project_scheme`, and for a windowed
+   project with an `icon`, the application's icon (`app.set_program_icon`;
+   otherwise the VP6 icon `ensure_app` gives it);
 4. starts the program:
    * **`Sub Main`:** calls `find_main(project)()` (modules are searched
      first, then forms). A console project exits with Main's return value if
@@ -615,8 +628,11 @@ Module functions:
   Main. The console template's `Main` uses `print()`/`input()`; the Standard
   EXE template's `Main` shows Form1. `"kitchensink"` delegates to
   `kitchensink.create`, which also adds its pages (`pg*.py`), `frmDialog.py`
-  and `vp6.png`.
-* `main(argv)` is the application entry point.
+  and `vp6.png`. Every template's project gets the VP6 icon
+  (`Project.add_default_icon`: the `icons` folder).
+* `main(argv)` is the application entry point. It gives the application the
+  VP6 icon (`app.vp6_icon`: the Dock or taskbar); `MainWindow` sets it on
+  itself too.
 
 `open_project` opens a windowed project's startup form designer, or its first
 form's when it starts in Sub Main, and a console project's Main module.
@@ -808,7 +824,7 @@ Window frames painted around the designed form.
   * The window is bound to a target with `set_designer(target)`: a
     `FormDesigner`, or the `ProjectTarget` (see `projectprops.py`).
 
-### `vp6/ide/projectprops.py` (≈230 lines)
+### `vp6/ide/projectprops.py` (≈250 lines)
 
 The project, files without a designer and Project panel groups, as targets
 of the Properties window.
@@ -819,7 +835,9 @@ of the Properties window.
   The Properties window therefore edits the project without special cases.
 * It exposes the project's `(Name)`, `Type`, `StartupObject` and
   `ColorScheme` as `enum` specs. `StartupObject`'s choices are the project's
-  forms plus `Sub Main`.
+  forms plus `Sub Main`. `Icon` is a `file`: the icon's last file (the
+  largest size, as new projects list them); setting it makes that one file
+  the icon, and an empty value none (the VP6 icon).
 * `set_property` validates the name, updates the `Project`, and calls the main
   window's `_project_changed` (save, update designers, explorer and titles).
 * `_ProjectObject` is the "selected object" the grid reads values from.
@@ -1318,7 +1336,7 @@ All tests run headless. `conftest.py`:
 | `test_line.py` | The Line control: its widget following the points, drawing (color, Transparent, Visible, the scheme's text color by default), clicks going through it, ZIndex; the form file; in the designer: drawing from press to release and by a click, selecting near the line (not its box), dragging an end, the move cursor over an end, moving, arrow keys (no resizing), undo, pasting with an offset, the Properties rows, no event stub; the Toolbox button and icon. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
-| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
+| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
@@ -1327,7 +1345,7 @@ All tests run headless. `conftest.py`:
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
 | `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, sliders, progress bars and spinners, pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
-| `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading. |
+| `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (the VP6 icon copied into a project, your own copy kept, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |
 
 ## Samples: `samples/`
 

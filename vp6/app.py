@@ -12,7 +12,7 @@ import threading
 import traceback
 
 from PySide6.QtCore import QEventLoop, QObject, QSocketNotifier, QTimer
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 _interrupt_handler = None  # installed by ensure_app() for VP6 programs
@@ -21,14 +21,49 @@ _interrupt_handler = None  # installed by ensure_app() for VP6 programs
 def ensure_app() -> QApplication:
     """Return the QApplication, creating it on first use. A VP6 program
     creates it here, so this is also where Ctrl+C gets wired to closing the
-    program's forms. (The IDE and the tests create their own QApplication
-    and keep their own Ctrl+C behavior.)"""
+    program's forms, and where it gets the VP6 icon (until the project's own
+    icon replaces it, see set_program_icon). (The IDE and the tests create
+    their own QApplication and keep their own Ctrl+C behavior.)"""
     global _interrupt_handler
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv[:1])
         _interrupt_handler = install_interrupt_handler(close_all_windows)
+        app.setWindowIcon(vp6_icon())
     return app
+
+
+# --- icons -----------------------------------------------------------------------------------
+
+# The VP6 icon (project.VP6_ICON_FILES, several sizes): the IDE's icon, and
+# every program's until its project names its own
+
+
+def icon_from(paths) -> QIcon:
+    """An icon from image files (the sizes of one picture); missing files are
+    skipped, so the icon may be null."""
+    icon = QIcon()
+    for path in paths:
+        if os.path.isfile(path):
+            icon.addFile(path)
+    return icon
+
+
+def vp6_icon() -> QIcon:
+    from .project import VP6_ICON_FILES
+
+    return icon_from(VP6_ICON_FILES)
+
+
+def set_program_icon(paths) -> bool:
+    """Make these image files the program's icon (its windows, and the Dock or
+    taskbar). Returns False, keeping the icon it had, if none can be read."""
+    app = ensure_app()  # first: Qt can't read images before there is an application
+    icon = icon_from(paths)
+    if icon.isNull():
+        return False
+    app.setWindowIcon(icon)
+    return True
 
 
 # --- Ctrl+C -----------------------------------------------------------------------------

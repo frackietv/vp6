@@ -67,6 +67,10 @@ def run_project(path: str) -> int:
 
     App.Title = project.name
     appearance.project_scheme = appearance.scheme_from_name(project.color_scheme)
+    if project.icon and project.type != "console":  # (a console program has no windows)
+        from .app import set_program_icon
+
+        set_program_icon(project.icon_paths())  # else the VP6 icon
     if project.startup == SUB_MAIN:
         try:
             result = find_main(project)()

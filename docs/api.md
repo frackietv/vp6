@@ -1271,6 +1271,8 @@ Its `PROJECT` dict:
 | `startup` | a form class name, or `"Sub Main"` |
 | `forms`, `modules` | file names relative to the project folder |
 | `color_scheme` | `"system"`, `"light"`, `"dark"` or `"ide"` |
+| `icon` | the program's icon (its windows, and the Dock or taskbar): image files relative to the project folder, sizes of one picture; `[]` = the VP6 icon. New projects get the VP6 icon in an `icons` folder; replace the files, or set the project's `Icon` in the Properties window |
+| `groups` | how the IDE's Project panel groups the forms and modules (not folders on disk) |
 
 The IDE maintains this dict; code you add elsewhere in the file is kept. See
 [architecture.md §6.2](architecture.md#62-project-files-vp6p) for the full

@@ -205,7 +205,7 @@ def test_project_properties_in_properties_window(window, tmp_path):
     assert window.properties.designer is window.project_target
     assert window.properties.object_combo.currentText() == "Demo  Project"
     rows = _property_rows(window)
-    assert list(rows) == ["(Name)", "ColorScheme", "StartupObject", "Type"]
+    assert list(rows) == ["(Name)", "ColorScheme", "Icon", "StartupObject", "Type"]
     assert rows["Type"].currentData() == "exe"
     assert [rows["StartupObject"].itemText(i) for i in range(rows["StartupObject"].count())] \
         == ["Form1", "Sub Main"]
@@ -862,7 +862,7 @@ def test_project_panel_files_view(window, tmp_path):
     assert root.text(0) == "Demo" and root.toolTip(0) == folder
     # Folders first, then the files, by name; hidden ones left out, and never
     # the project file, __pycache__ or .git
-    assert _names(root) == ["assets", "Form1.py", "Module1.py", "notes.txt"]
+    assert _names(root) == ["assets", "icons", "Form1.py", "Module1.py", "notes.txt"]
     assert _names(root.child(0)) == ["icons", "vendored", "logo.png"]
     assert explorer.sort_button.text() == "Folders, Name ▲"
     # The form stays selected, and works as in the Project view
@@ -872,14 +872,14 @@ def test_project_panel_files_view(window, tmp_path):
     assert "View Object" in menu and "Set as Start Up" in menu
     assert "New Group…" not in menu  # groups are the Project view's
     assert "Rename…" in menu and "Move to" in menu  # files and folders on disk
-    notes = root.child(3)
+    notes = root.child(4)
     explorer.tree.setCurrentItem(notes)  # any other file: listed, nothing to open
     assert explorer._current() == (None, None) and not explorer.view_code.isEnabled()
     assert explorer.selected_group("form") is None  # new files: where the project puts them
     # Hidden files and folders on request
     explorer.hidden_button.click()
     assert _names(root := explorer.tree.topLevelItem(0)) == [
-        ".venv", "assets", ".env", "Form1.py", "Module1.py", "notes.txt"]  # still no .git
+        ".venv", "assets", "icons", ".env", "Form1.py", "Module1.py", "notes.txt"]  # no .git
     assert _names(root.child(1)) == ["icons", "vendored", "logo.png"]  # nor __pycache__
     assert _names(root.child(1).child(1)) == []
     assert explorer.tree.currentItem().text(0) == "notes.txt"  # still selected
@@ -1119,3 +1119,24 @@ def test_moving_several_items(window, tmp_path, monkeypatch):
     assert "b/a/Form1.py" in window.project.forms
     assert "b/a/Form1.py" in Project.load(window.project.path).forms  # saved
     assert not warnings
+
+
+def test_icons_of_vp6_and_new_projects(window, tmp_path):
+    from vp6.project import ICON_FOLDER
+    assert sorted(s.width() for s in window.windowIcon().availableSizes()) == [32, 64, 128, 256]
+    # Every new project gets the VP6 icon, to replace with its own
+    for template in ("exe", "console", "kitchensink"):
+        project = Project.load(create_project(str(tmp_path), template.title(), template))
+        assert len(project.icon) == 4 and all(os.path.isfile(p) for p in project.icon_paths())
+        assert all(p.startswith(ICON_FOLDER + "/") for p in project.icon)
+    # The Properties panel: the project's Icon (its largest size); choosing one file
+    window.open_project(os.path.join(tmp_path, "Exe", "Exe.vp6p"))
+    window.explorer.select_project()
+    target = window.properties.designer
+    assert target is window.project_target
+    assert target.selected_objects()[0].Icon == "icons/vp6icon-256x256.png"
+    assert target.set_property("Icon", "art/logo.png") is None
+    assert window.project.icon == ["art/logo.png"]
+    assert Project.load(window.project.path).icon == ["art/logo.png"]  # saved
+    assert target.set_property("Icon", "") is None  # none: the VP6 icon
+    assert window.project.icon == []

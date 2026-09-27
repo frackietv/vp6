@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 import vp6
 
 from .. import formfile
-from ..app import install_interrupt_handler
+from ..app import install_interrupt_handler, vp6_icon
 from ..appearance import IDE_SCHEME_ENV, SCHEME_NAMES, scheme_from_name
 from ..project import EXTENSION, SUB_MAIN, Project
 from . import icons, kitchensink
@@ -40,6 +40,7 @@ VP6_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(vp6.__file__)))
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.setWindowIcon(vp6_icon())
         self.settings = ide_settings()
         self.project: Project | None = None
         self.documents: dict[str, Document] = {}
@@ -1598,9 +1599,11 @@ def create_project(location: str, name: str, template: str) -> str:
     # a console Main talks through print()/input(), a windowed one shows Form1.
     directory = os.path.join(location, name)
     os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, name + EXTENSION)
     if template == "kitchensink":
         project = kitchensink.create(directory, name)
-        path = os.path.join(directory, name + EXTENSION)
+        project.path = path
+        project.add_default_icon()  # the VP6 icon, to replace with your own
         project.save(path)
         return path
     console = template == "console"
@@ -1610,8 +1613,8 @@ def create_project(location: str, name: str, template: str) -> str:
         f.write(formfile.new_module_source(with_main=True, console=console,
                                            startup_form=None if console else "Form1"))
     project = Project(name=name, type="console" if console else "exe", startup=SUB_MAIN,
-                      forms=["Form1.py"], modules=["Module1.py"])
-    path = os.path.join(directory, name + EXTENSION)
+                      forms=["Form1.py"], modules=["Module1.py"], path=path)
+    project.add_default_icon()  # the VP6 icon, to replace with your own
     project.save(path)
     return path
 
@@ -1625,6 +1628,7 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication.instance() or QApplication(argv)
     app.setApplicationName("VP6")
     app.setOrganizationName("VP6")
+    app.setWindowIcon(vp6_icon())  # its windows, and the Dock or taskbar
     window = MainWindow()
     # Ctrl+C in the terminal works like File > Exit (Quit VP6): unsaved
     # changes are still offered for saving

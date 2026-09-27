@@ -14,6 +14,7 @@ A project file is an executable Python script that starts the program::
         "forms": ["Form1.py"],
         "modules": ["Module1.py"],
         "color_scheme": "system",     # "system", "light", "dark" or "ide"
+        "icon": ["icons/vp6icon-32x32.png", ...],   # the program's icon
         "groups": [                   # how the Project panel shows them
             {"group": "Forms", "items": ["Form1.py"]},
             {"group": "Modules", "items": ["Module1.py"]},
@@ -34,7 +35,10 @@ The IDE reads ``PROJECT`` with ``ast`` (the file is never executed) and only
 rewrites the region when saving, so code added elsewhere is kept.
 
 ``forms`` and ``modules`` say which files are forms and modules (the runner
-needs nothing else). ``groups`` organizes them in the Project panel,
+needs nothing else). ``icon`` is the program's icon: image files relative to
+the project, sizes of one picture (a single string is one file); new
+projects get the VP6 icon's sizes in an ``icons`` folder, and without any the
+program shows the VP6 icon. ``groups`` organizes them in the Project panel,
 independently of where the files are on disk: a list of entries, each a file
 (its path relative to the project) or a group ``{"group": name, "items":
 [entries]}``, so groups can hold files and other groups, and files can also
@@ -48,6 +52,7 @@ import ast
 import json
 import os
 import re
+import shutil
 import sys
 from dataclasses import asdict, dataclass, field
 
@@ -59,8 +64,9 @@ REGION_END = "# endregion"
 _START_RE = re.compile(r"^# region VP6 Project\b.*$", re.M)
 _END_RE = re.compile(r"^# endregion\b.*$", re.M)
 
-_FIELDS = ("name", "type", "startup", "forms", "modules", "color_scheme", "groups")
+_FIELDS = ("name", "type", "startup", "forms", "modules", "color_scheme", "icon", "groups")
 _COMMENTS = {
+    "icon": "the program's icon: image files (sizes of it), or []",
     "type": '"exe" (GUI) or "console"',
     "startup": 'a form class name, or "Sub Main"',
     "color_scheme": '"system", "light", "dark" or "ide"; forms inherit it',
@@ -89,6 +95,14 @@ if __name__ == "__main__":
 '''
 
 
+# The VP6 icon, in several sizes (the package's images/ folder). New projects get
+# a copy in their ICON_FOLDER; a program without an icon of its own shows it.
+VP6_ICON_DIR = os.path.join(os.path.dirname(__file__), "images")
+VP6_ICON_FILES = tuple(os.path.join(VP6_ICON_DIR, f"vp6icon-{n}x{n}.png")
+                       for n in (32, 64, 128, 256))
+ICON_FOLDER = "icons"
+
+
 class ProjectFileError(ValueError):
     pass
 
@@ -101,6 +115,9 @@ class Project:
     forms: list[str] = field(default_factory=list)
     modules: list[str] = field(default_factory=list)
     color_scheme: str = "system"  # system, light, dark or ide; forms inherit it
+    # The program's icon: image files relative to the project (one picture in
+    # several sizes; one file is enough). [] = the VP6 icon.
+    icon: list[str] = field(default_factory=list)
     # The Project panel's tree (None: Forms and Modules groups); compared by tree()
     groups: list | None = field(default=None, compare=False)
     path: str = field(default="", compare=False)  # the .vp6p file
@@ -108,7 +125,7 @@ class Project:
     def __eq__(self, other):
         if not isinstance(other, Project):
             return NotImplemented
-        fields = ("name", "type", "startup", "forms", "modules", "color_scheme")
+        fields = ("name", "type", "startup", "forms", "modules", "color_scheme", "icon")
         return all(getattr(self, f) == getattr(other, f) for f in fields) and \
             self.tree() == other.tree()
 
@@ -118,6 +135,24 @@ class Project:
 
     def abspath(self, relative: str) -> str:
         return os.path.join(self.directory, relative)
+
+    # -- the icon -------------------------------------------------------------------------------
+    def icon_paths(self) -> list[str]:
+        """The icon's files, as absolute paths."""
+        return [self.abspath(relative) for relative in self.icon]
+
+    def add_default_icon(self) -> None:
+        """Copy the VP6 icon into the project (its ICON_FOLDER) and make it the
+        program's icon: a new project's default, to replace with your own.
+        Files already there are kept."""
+        folder = os.path.join(self.directory, ICON_FOLDER)
+        os.makedirs(folder, exist_ok=True)
+        self.icon = []
+        for source in VP6_ICON_FILES:
+            target = os.path.join(folder, os.path.basename(source))
+            if not os.path.exists(target):
+                shutil.copyfile(source, target)
+            self.icon.append(f"{ICON_FOLDER}/{os.path.basename(source)}")
 
     # -- groups: how the Project panel shows the files ----------------------------------------
     # A group is found by its path: the names from the top, e.g. ("Forms", "Pages");
@@ -331,6 +366,8 @@ class Project:
         with open(path, encoding="utf-8") as f:
             data = parse(f.read())
         known = {k: data[k] for k in _FIELDS if k in data}
+        if isinstance(known.get("icon"), str):  # one file
+            known["icon"] = [known["icon"]] if known["icon"] else []
         return cls(**known, path=os.path.abspath(path))
 
     # -- writing ----------------------------------------------------------------------------

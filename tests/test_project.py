@@ -1,6 +1,7 @@
 """Project files are executable launcher scripts."""
 
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -202,3 +203,52 @@ def test_groups_are_saved_and_loaded(tmp_path):
     path.write_text(text[:text.index('    "groups"')] + "}\n# endregion\n")
     assert Project.load(str(path)).tree()[0] == {"group": "Forms",
                                                  "items": ["Form1.py", "Form2.py"]}
+
+
+# --- the icon -------------------------------------------------------------------------------
+
+def test_icon_field(tmp_path):
+    from vp6.project import ICON_FOLDER, VP6_ICON_FILES
+    project = Project(name="Iconic", forms=["Form1.py"])
+    assert project.icon == [] and all(os.path.isfile(f) for f in VP6_ICON_FILES)
+    path = tmp_path / "Iconic.vp6p"
+    project.path = str(path)
+    project.add_default_icon()  # copies of the VP6 icon, in several sizes
+    assert project.icon == [f"{ICON_FOLDER}/vp6icon-{n}x{n}.png" for n in (32, 64, 128, 256)]
+    assert all(os.path.isfile(p) for p in project.icon_paths())
+    project.save(str(path))
+    assert '"icon": ["icons/vp6icon-32x32.png"' in path.read_text()
+    assert Project.load(str(path)) == project
+    # Your own icon replaces a copy: it isn't overwritten when added again
+    (tmp_path / ICON_FOLDER / "vp6icon-32x32.png").write_bytes(b"mine")
+    project.add_default_icon()
+    assert (tmp_path / ICON_FOLDER / "vp6icon-32x32.png").read_bytes() == b"mine"
+    # One file is enough, written as a string by hand
+    text = path.read_text()
+    path.write_text(re.sub(r'"icon": \[[^\]]*\]', '"icon": "logo.png"', text))
+    assert Project.load(str(path)).icon == ["logo.png"]
+    # Older projects: no icon (the VP6 icon when run)
+    path.write_text(re.sub(r'\s*"icon": [^\n]*', "", text))
+    assert Project.load(str(path)).icon == []
+
+
+def test_a_program_shows_its_projects_icon(tmp_path):
+    # Main() reports the application's icon, then the program ends (no forms)
+    (tmp_path / "Module1.py").write_text(
+        "from vp6.app import ensure_app\n\n\n"
+        "def Main():\n"
+        "    icon = ensure_app().windowIcon()  # (the application a form would make)\n"
+        "    print('sizes', sorted(s.width() for s in icon.availableSizes()))\n")
+    project = Project(name="Iconic", type="exe", startup=SUB_MAIN, modules=["Module1.py"],
+                      path=str(tmp_path / "Iconic.vp6p"))
+    project.add_default_icon()
+    project.icon = project.icon[:2]  # its own: two sizes
+    project.save()
+    result = subprocess.run([sys.executable, str(tmp_path / "Iconic.vp6p")],
+                            capture_output=True, text=True, timeout=60, env=_env())
+    assert "sizes [32, 64]" in result.stdout, result.stderr
+    project.icon = []  # none: the VP6 icon, all its sizes
+    project.save()
+    result = subprocess.run([sys.executable, str(tmp_path / "Iconic.vp6p")],
+                            capture_output=True, text=True, timeout=60, env=_env())
+    assert "sizes [32, 64, 128, 256]" in result.stdout, result.stderr

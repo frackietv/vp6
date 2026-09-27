@@ -37,7 +37,7 @@ The IDE opens with a VB-style **New Project** dialog. Every new project has
 |-----------------------------|--------------------------------------------------------------|
 | Toolbox                     | Pointer, PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton, ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Splitter, ProgressBar, Slider, UpDown |
 | Form designer               | Draw controls, move/resize with 8px grid snapping (hold Alt to skip it), rubber-band select, Ctrl+drag inside a Frame, arrows nudge, Shift+arrows resize, cut/copy/paste, undo/redo; `TabIndex` values are renumbered automatically when controls are added, deleted or given a new `TabIndex` |
-| Properties window (F4)      | Object combo (control array elements as `cmdDigit(0)`), `(Name)` and `Index` first, then an alphabetical grid, enum/color/list/font/file editors, multi-select editing, description pane; select a form in the Project Explorer to edit its properties and controls without opening it, or the project to edit its Name, Type, StartupObject and ColorScheme |
+| Properties window (F4)      | Object combo (control array elements as `cmdDigit(0)`), `(Name)` and `Index` first, then an alphabetical grid, enum/color/list/font/file editors, multi-select editing, description pane; select a form in the Project Explorer to edit its properties and controls without opening it, or the project to edit its Name, Type, StartupObject, ColorScheme and Icon |
 | Code window (F7)            | Object and Procedure dropdowns that create handler stubs, Python highlighting, auto-indent, `self.` / `self.Control.` completion, Ctrl+/ comments; Edit > Find (Ctrl+F; the first match is highlighted as you type), Find Next/Previous (F3 / Shift+F3), Replace (Ctrl+H, or ⌥⌘F on macOS), with match case, whole word and Python regular expressions (escapes such as `\n`, groups such as `\1` in find and replace); Edit > Go to Line (Ctrl+L) |
 | Project Explorer (Ctrl+R)   | Forms and modules organized in groups and subgroups (Forms and Modules to begin with; New Group, Rename, Delete, Move to, or drag and drop, several items at once; not folders on disk; +/- expands or collapses them all), or a Files view of the project's folder as it is on disk (hidden files on request; new folders and subfolders with its New Folder button or Project > Add Folder…, rename, delete, and move files and folders by drag and drop), sorted by name (the Name button cycles through A to Z with the groups first, A to Z with the groups among the files, and the same Z to A; remembered), a group's name editable in the Properties window, View Code / View Object, set startup form; follows the active window |
 | Immediate window (Ctrl+G)   | Program output and `Debug.Print`, stdin for console apps, double-click a traceback line to jump to it |
@@ -104,7 +104,9 @@ groups them. Groups are only for the panel: files stay where they are on
 disk. A group can hold forms, modules and other groups. Forms and modules
 can also be in subfolders of the project's folder (organize them in the
 Project panel's Files view); they import each other by file name wherever
-they are, so their file names are unique in a project. The project file is
+they are, so their file names are unique in a project. The program's icon
+(its windows, and the Dock or taskbar) is the project's `icon`: new projects
+get the VP6 icon in an `icons` folder, to replace with your own. The project file is
 also an executable launcher script, so it starts the program by itself:
 
 ```bash

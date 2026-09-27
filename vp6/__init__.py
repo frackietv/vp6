@@ -17,7 +17,7 @@ from .controls import (CheckBox, ComboBox, CommandButton, Control, ControlArray,
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
 
-__version__ = "0.3.28"
+__version__ = "0.3.29"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen",
