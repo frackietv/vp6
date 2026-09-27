@@ -12,8 +12,8 @@ class pgTabs(Form):
         self.Width = 640
         self.Height = 440
         self.tbsOptions = TabStrip(self, Left=16, Top=16, Width=440, Height=250,
-                                   Tabs=['&General|general|Your name and a greeting', '&Colors|colors|Pick a color', '&About|about|What this page shows'],
-                                   TabIndex=1)
+                                   Tabs=['&General|general|Your name and a greeting|gear', '&Colors|colors|Pick a color|palette', '&About|about|What this page shows|info'],
+                                   ImageList='imlTabs', TabIndex=1)
         self.fraGeneral = Frame(self, Left=24, Top=56, Width=424, Height=200, TabIndex=2)
         self.lblName = Label(self.fraGeneral, Caption='Your name:', Left=16, Top=24, Width=90,
                              Height=25, TabIndex=3)
@@ -44,6 +44,8 @@ class pgTabs(Form):
                                      TabIndex=15)
         self.lblEvent = Label(self, Caption='', Left=16, Top=356, Width=440, Height=25,
                               TabIndex=16)
+        self.imlTabs = ImageList(self, Left=580, Top=16,
+                                 ListImages=['images/gear.png|gear', 'images/palette.png|palette', 'images/info.png|info'])
     # endregion
 
     def Form_Load(self):

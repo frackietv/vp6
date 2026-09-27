@@ -25,14 +25,25 @@ INDEX_SPEC = PropSpec(
                 "Empty = not in an array.")
 
 
+# Properties that are, at run time, a collection (StatusBar.Panels,
+# TabStrip.Tabs, ImageList.ListImages, Toolbar.Buttons): lines of text in the
+# designer, read from the object's _values
+COLLECTION_KINDS = ("panels", "tabs", "images", "buttons")
+
+
 class TextListDialog(QDialog):
     """Edit a list of strings (ListBox.List) or multi-line text, one per line."""
 
-    def __init__(self, title: str, text: str, parent=None, hint: str | None = None):
+    def __init__(self, title: str, text: str, parent=None, hint: str | None = None,
+                 pictures_dir: str | None = None):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.edit = QPlainTextEdit(text)
+        self.pictures_dir = pictures_dir
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        if pictures_dir is not None:  # ImageList.ListImages: pick picture files
+            add = buttons.addButton("Add Pictures…", QDialogButtonBox.ActionRole)
+            add.clicked.connect(self._choose_pictures)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
@@ -44,6 +55,27 @@ class TextListDialog(QDialog):
         layout.addWidget(self.edit)
         layout.addWidget(buttons)
         self.resize(320, 280)
+
+    def _choose_pictures(self) -> None:
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Add Pictures", self.pictures_dir,
+            "Images (*.png *.jpg *.jpeg *.gif *.bmp *.ico *.svg);;All files (*)")
+        self.add_pictures(paths)
+
+    def add_pictures(self, paths) -> None:
+        """Append a line per picture: its path (relative to the form's folder
+        when inside it) and its file name as the key."""
+        lines = [line for line in self.edit.toPlainText().split("\n") if line.strip()]
+        for path in paths:
+            relative = path
+            try:
+                if not os.path.relpath(path, self.pictures_dir).startswith(".."):
+                    relative = os.path.relpath(path, self.pictures_dir)
+            except ValueError:  # another drive (Windows)
+                pass
+            key = os.path.splitext(os.path.basename(path))[0]
+            lines.append(f"{relative.replace(os.sep, '/')}|{key}")
+        self.edit.setPlainText("\n".join(lines))
 
 
 def _swatch(value) -> QIcon:
@@ -148,7 +180,7 @@ class PropertiesWindow(QWidget):
         if spec.name == "Name":  # a control array's elements share their (Name)
             name_value = getattr(self.designer, "name_value", self.designer.object_name)
             return name_value(objects[0])
-        if spec.kind in ("panels", "tabs"):  # (at run time these are the collections)
+        if spec.kind in COLLECTION_KINDS:  # (at run time these are the collections)
             values = [obj._values.get(spec.name, spec.default) for obj in objects]
         else:
             values = [getattr(obj, spec.name) for obj in objects]
@@ -202,10 +234,10 @@ class PropertiesWindow(QWidget):
             return combo
         if kind == "color":
             return self._color_editor(spec, None if mixed else value, mixed)
-        if kind in ("list", "outline", "panels", "tabs"):
+        if kind in ("list", "outline", *COLLECTION_KINDS):
             if kind == "list":
                 text = f"(List: {len(value)} items)"
-            elif kind in ("panels", "tabs"):
+            elif kind in COLLECTION_KINDS:
                 text = f"({kind.title()}: {len(value)})"
             else:
                 text = f"(Tree: {sum(1 for line in value if str(line).strip())} nodes)"
@@ -301,12 +333,25 @@ class PropertiesWindow(QWidget):
                       "in pixels, spring (shares the space left) or contents (as wide as its "
                       "text), caps, num, ins, scrl, time or date (what it shows), center or "
                       "right. E.g. \"Ready|status|spring\" or \"|clock|time 80 right\".",
-            "tabs": "One tab per line: Caption|Key|ToolTipText, e.g. \"&General|general|Name "
-                    "and size\". An & in the Caption underlines the letter of its access key.",
+            "tabs": "One tab per line: Caption|Key|ToolTipText|Image, e.g. \"&General|general|"
+                    "Name and size|gear\". An & in the Caption underlines the letter of its "
+                    "access key; the Image is a Key or Index in the TabStrip's ImageList.",
+            "images": "One picture per line: path|key, the path relative to the form's "
+                      "folder, e.g. \"images/open.png|open\". Add Pictures… adds files.",
+            "buttons": "One button per line: Caption|Key|Image|ToolTipText|options, the Image "
+                       "a Key or Index in the Toolbar's ImageList, the options words: check "
+                       "or group (a button of a group, one of which is pressed), pressed, "
+                       "disabled, hidden. A line of just - is a separator. E.g. "
+                       "\"Open|open|open|Open a file\" or \"|bold|bold|Bold|check\".",
         }.get(kind)
-        title = {"list": "List", "outline": "Tree", "panels": "Panels", "tabs": "Tabs"}[kind]
+        if kind == "outline":
+            hint += (" A third part is the node's Image: a Key or Index in the TreeView's "
+                     "ImageList, e.g. \"Cats|cats|cat\".")
+        title = {"list": "List", "outline": "Tree", "panels": "Panels", "tabs": "Tabs",
+                 "images": "Pictures", "buttons": "Buttons"}[kind]
+        base = self.designer.base_dir if kind == "images" and self.designer else None
         dialog = TextListDialog(f"{prop} ({title})",
-                                "\n".join(value or []), self, hint)
+                                "\n".join(value or []), self, hint, pictures_dir=base)
         if dialog.exec():
             items = dialog.edit.toPlainText().split("\n")
             while items and items[-1] == "":

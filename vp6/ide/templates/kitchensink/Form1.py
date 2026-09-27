@@ -56,6 +56,9 @@ class Form1(Form):
         self.sbStatus = StatusBar(self, Left=0, Top=572, Width=900, Height=28,
                                   Panels=['Ready|status|spring', '|caps|caps 56 center', '|clock|time 90 center'],
                                   ToolTipText='A StatusBar: click the clock to see the date')
+        self.tbrMain = Toolbar(self, Left=0, Top=0, Width=900, Height=40,
+                               Buttons=['Back|back|back|The previous page', 'Forward|forward|forward|The next page', '-', 'Index|nav|sidebar|Show or hide the navigation pane|check pressed', '-', "System|scheme0|system|The system's colors|group pressed", 'Light|scheme1|sun|Light colors|group', 'Dark|scheme2|moon|Dark colors|group'],
+                               ImageList='imlToolbar', TextAlignment=1)
         self.picNav = PictureBox(self, Left=0, Top=0, Width=220, Height=572, BorderStyle=0,
                                  Align=3, TabIndex=3)
         self.tvwIndex = TreeView(self.picNav, Left=0, Top=0, Width=220, Height=572,
@@ -71,6 +74,8 @@ class Form1(Form):
         self.picContent = PictureBox(self, Left=226, Top=44, Width=674, Height=528, BorderStyle=0,
                                      Align=5, ScrollBars=3, TabIndex=7,
                                      ToolTipText='The pages are forms of their own, shown here with ShowIn')
+        self.imlToolbar = ImageList(self, Left=860, Top=540,
+                                    ListImages=['images/back.png|back', 'images/forward.png|forward', 'images/sidebar.png|sidebar', 'images/system.png|system', 'images/sun.png|sun', 'images/moon.png|moon'])
         self.mnuFile = Menu(self, Caption='&File')
         self.mnuFileEnd = Menu(self.mnuFile, Caption='&End (no questions asked)',
                                Shortcut='Ctrl+Q')
@@ -124,6 +129,7 @@ class Form1(Form):
     def show_page(self, key):
         """Show the page with this key in the content pane (it replaces the one
         there, which is hidden and deactivated, not unloaded)."""
+        self.current = key
         page = self.pages.get(key)
         if page is None:
             page = PAGES[key]()
@@ -137,6 +143,11 @@ class Form1(Form):
         self.picContent.ScrollTop = self.picContent.ScrollLeft = 0
         self.status(node.FullPath)
 
+    def step_page(self, step):
+        """The previous (-1) or next (1) page in the index, going round."""
+        keys = [key for key, _title in self.page_titles()]
+        self.show_page(keys[(keys.index(self.current) + step) % len(keys)])
+
     def page_titles(self):
         """(key, title) of every page, in the index's order (the Menus page)."""
         return [(node.Key, node.Text) for node in self.tvwIndex.Nodes if node.Key in PAGES]
@@ -146,6 +157,16 @@ class Form1(Form):
             self.show_page(Node.Key)
         elif Node.Child is not None:  # a section: its first page
             self.show_page(Node.Child.Key)
+
+    # --- the toolbar ------------------------------------------------------------------------------
+    def tbrMain_ButtonClick(self, Button):
+        # Button: the Toolbar's Button that was clicked (its Key, Value, Caption...)
+        if Button.Key in ("back", "forward"):
+            self.step_page(-1 if Button.Key == "back" else 1)
+        elif Button.Key == "nav":  # a Check button: pressed or not
+            self.show_navigation(Button.Value == vpTbrPressed)
+        elif Button.Style == vpTbrButtonGroup:  # one of the group is pressed
+            self.set_scheme(int(Button.Key[len("scheme"):]))
 
     # --- the docked panes: their Resize events size what is on them -----------------------------
     def picNav_Resize(self):
@@ -164,6 +185,7 @@ class Form1(Form):
         """Show or hide the navigation pane (a hidden docked pane takes no space)."""
         self.picNav.Visible = self.splNav.Visible = visible
         self.mnuViewNav.Checked = visible
+        self.tbrMain.Buttons("nav").Value = vpTbrPressed if visible else vpTbrUnpressed
         layout = self.pages.get("layout")
         if layout is not None:
             layout.chkNav.Value = vpChecked if visible else vpUnchecked
@@ -178,6 +200,9 @@ class Form1(Form):
         self.ColorScheme = SCHEMES[index]
         for item in self.mnuScheme:  # a menu control array
             item.Checked = item.Index == index
+        for button in self.tbrMain.Buttons:  # the toolbar's group: none for "Follow the IDE"
+            if button.Style == vpTbrButtonGroup:
+                button.Value = vpTbrPressed if button.Key == f"scheme{index}" else vpTbrUnpressed
         page = self.pages.get("schemes")
         if page is not None:
             page.optScheme[index].Value = True

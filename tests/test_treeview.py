@@ -25,12 +25,16 @@ OUTLINE = ["Animals|animals", "    Cats|cats", "        Lion|lion", "    Dogs|do
 
 def test_parse_outline():
     assert parse_outline(OUTLINE + ["", "\tTree | tree", "No key"])[:-1] == [
-        (0, "Animals", "animals"), (1, "Cats", "cats"), (2, "Lion", "lion"), (1, "Dogs", "dogs"),
-        (0, "Plants", "plants"), (1, "Tree", "tree")]  # a tab is an indent too
+        (0, "Animals", "animals", ""), (1, "Cats", "cats", ""), (2, "Lion", "lion", ""),
+        (1, "Dogs", "dogs", ""), (0, "Plants", "plants", ""),
+        (1, "Tree", "tree", "")]  # a tab is an indent too
     # Any deeper indentation is a child; going back to an earlier one is a sibling there
-    assert [level for level, _, _ in parse_outline(["a", "  b", "      c", "   d", "e"])] == \
+    assert [level for level, *_ in parse_outline(["a", "  b", "      c", "   d", "e"])] == \
         [0, 1, 2, 2, 0]
-    assert parse_outline(["No key"]) == [(0, "No key", "")]
+    assert parse_outline(["No key"]) == [(0, "No key", "", "")]
+    # An Image: a key or Index in the ImageList (digits), or a picture file
+    assert parse_outline(["Cats|cats|cat", "Dogs||2", "Birds|birds|img/bird.png"]) == [
+        (0, "Cats", "cats", "cat"), (0, "Dogs", "", 2), (0, "Birds", "birds", "img/bird.png")]
 
 
 class Zoo(Form):

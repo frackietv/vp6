@@ -1,4 +1,4 @@
-"""Kitchen Sink page: the TreeView's Nodes, check boxes and events."""
+"""Kitchen Sink page: the TreeView's Nodes, check boxes, pictures (an ImageList) and events."""
 
 from vp6 import *
 
@@ -10,7 +10,8 @@ class pgTree(Form):
         self.Width = 640
         self.Height = 440
         self.tvwDemo = TreeView(self, Left=16, Top=16, Width=260, Height=300, Checkboxes=True,
-                                Items=['Animals|animals', '    Cats|cats', '    Dogs|dogs', 'Plants|plants', '    Trees|trees'],
+                                ImageList='imlTree',
+                                Items=['Animals|animals|folder', '    Cats|cats|paw', '    Dogs|dogs|paw', 'Plants|plants|folder', '    Trees|trees|leaf'],
                                 TabIndex=1)
         self.txtNode = TextBox(self, Text='New node', Left=290, Top=16, Width=160, Height=25,
                                TabIndex=2)
@@ -20,8 +21,10 @@ class pgTree(Form):
         self.cmdRemove = CommandButton(self, Caption='&Remove', Left=290, Top=86, Width=160,
                                        Height=30, TabIndex=4)
         self.lblTree = Label(self,
-                             Caption='The nodes were typed in the designer (Items); add more in code.',
+                             Caption='The nodes were typed in the designer (Items), each with an Image from the ImageList imlTree; add more in code.',
                              Left=290, Top=130, Width=330, Height=120, WordWrap=True, TabIndex=5)
+        self.imlTree = ImageList(self, Left=580, Top=16,
+                                 ListImages=['images/folder.png|folder', 'images/paw.png|paw', 'images/leaf.png|leaf', 'images/star.png|star'])
     # endregion
 
     def Form_Load(self):
@@ -47,8 +50,11 @@ class pgTree(Form):
             node = self.tvwDemo.Nodes.Add(None, vpTvwLast, "", text)
         else:
             node = self.tvwDemo.Nodes.Add(parent, vpTvwChild, "", text)
+        node.Image = "star"  # a picture of the ImageList, by its key (or Index)
         node.EnsureVisible()
-        self.lblTree.Caption = f"Added {node.FullPath}"
+        star: ListImage = self.imlTree.ListImages("star")
+        self.lblTree.Caption = (f"Added {node.FullPath}, with picture {star.Index} of "
+                                f"{self.imlTree.ListImages.Count} ({star.Picture})")
 
     def cmdRemove_Click(self):
         node = self.tvwDemo.SelectedItem

@@ -208,7 +208,7 @@ class Form(PropertyHost):
         d["_loaded"] = False
         d["_shown_once"] = False
         d["_modal_loop"] = None
-        d["_scheme_style"] = None  # Fusion for forced light/dark, None = native
+        d["_scheme_forced"] = False  # a forced light/dark scheme: drawn with Fusion
         d["_menubar"] = None  # created with the first Menu
         d["_client"] = None  # the controls' area when the menu bar is in the window
         d["_menu_height"] = 0  # height of a menu bar in the window
@@ -226,6 +226,10 @@ class Form(PropertyHost):
         initialize = getattr(self, "InitializeComponent", None)
         if initialize is not None:
             initialize()
+        for control in self._controls:  # Images from ImageLists created after their users
+            refresh = getattr(control, "_refresh_images", None)
+            if refresh is not None:
+                refresh()
         self._layout_aligned()
         self._apply_tab_order()
         self._fire("Initialize")
@@ -450,9 +454,14 @@ class Form(PropertyHost):
         """The scheme used to draw the form (the designer may force System)."""
         return self._effective_scheme()
 
+    @property
+    def _scheme_style(self):
+        """Fusion for a forced light/dark scheme, None = native. (Fetched each
+        time, never kept: see appearance.fusion_style.)"""
+        return appearance.fusion_style() if self._scheme_forced else None
+
     def _apply_ColorScheme(self, _=None):
-        forced = self._render_scheme() != appearance.vpSchemeSystem
-        self.__dict__["_scheme_style"] = appearance.fusion_style() if forced else None
+        self.__dict__["_scheme_forced"] = self._render_scheme() != appearance.vpSchemeSystem
         appearance.style_tree(self._widget, self._scheme_style)
         self._apply_colors()
 

@@ -26,7 +26,7 @@ import sys
 
 import shiboken6
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
-from PySide6.QtWidgets import QStyleFactory, QWidget
+from PySide6.QtWidgets import QStyle, QStyleFactory, QWidget
 
 vpSchemeProjectDefault = 0
 vpSchemeSystem = 1
@@ -45,7 +45,8 @@ ide_scheme_provider = None
 # Set by the project runner; None = look for a .vp6p next to the form
 project_scheme: int | None = None
 _found_schemes: dict[str, int] = {}
-_fusion = None
+_fusion = None  # see fusion_style
+_fusion_address = None
 
 
 def scheme_from_name(name: str | None) -> int:
@@ -154,12 +155,28 @@ def is_dark(scheme: int) -> bool:
 
 
 def fusion_style():
-    """One shared Fusion style, owned by the application so it outlives
-    every widget using it (PySide would otherwise let a widget own it)."""
-    global _fusion
-    if _fusion is None or not shiboken6.isValid(_fusion):
-        _fusion = QStyleFactory.create("Fusion")
-        _fusion.setParent(QGuiApplication.instance())
+    """One shared Fusion style, a child of the application so it outlives
+    every widget using it. Don't keep what this returns: call it again.
+
+    PySide treats a style as belonging to the widgets it is set on, and when
+    such a widget is destroyed (e.g. a Toolbar's buttons being rebuilt) it
+    invalidates the style's Python wrapper, although the C++ style lives on
+    and other widgets still use it. So the style is remembered by its C++
+    address, and a fresh wrapper is found among the application's children
+    when the old one was invalidated."""
+    global _fusion, _fusion_address
+    if _fusion is not None and shiboken6.isValid(_fusion):
+        return _fusion
+    app = QGuiApplication.instance()
+    if _fusion_address is not None:
+        for child in app.children():  # the same style: a new wrapper
+            if isinstance(child, QStyle) and shiboken6.getCppPointer(child)[0] == \
+                    _fusion_address:
+                _fusion = child
+                return _fusion
+    _fusion = QStyleFactory.create("Fusion")
+    _fusion.setParent(app)
+    _fusion_address = shiboken6.getCppPointer(_fusion)[0]
     return _fusion
 
 

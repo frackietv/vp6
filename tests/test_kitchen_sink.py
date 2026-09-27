@@ -89,6 +89,8 @@ def test_create_kitchen_sink_project(qapp, tmp_path):
     for name in kitchensink.FORMS + kitchensink.MODULES:
         assert (folder / name).read_text() == (kitchensink.TEMPLATE_DIR / name).read_text()
     assert not QPixmap(str(folder / kitchensink.PICTURE)).isNull()
+    for name in kitchensink.ICONS:  # the ImageLists' pictures
+        assert not QPixmap(str(folder / kitchensink.IMAGES / f"{name}.png")).isNull()
 
 
 def test_designer_opens_every_form(qapp, tmp_path):
@@ -147,14 +149,17 @@ def _place(control):
 def test_explorer_layout(sink):
     w = sink
     assert _place(w.sbStatus) == (0, w.ScaleHeight - 28, w.ScaleWidth, 28)  # a StatusBar
-    assert _place(w.picNav) == (0, 0, 220, w.ScaleHeight - 28)  # Left
+    top = w.tbrMain.Height  # a Toolbar across the top, as tall as its buttons
+    assert _place(w.tbrMain) == (0, 0, w.ScaleWidth, top) and top > 20
+    assert _place(w.picNav) == (0, top, 220, w.ScaleHeight - 28 - top)  # Left
     assert (w.splNav.Left, w.splNav.Width) == (220, 6)  # the Splitter beside it
-    assert _place(w.picHeader) == (226, 0, w.ScaleWidth - 226, 44)  # Top of the rest
-    assert _place(w.picContent) == (226, 44, w.ScaleWidth - 226, w.ScaleHeight - 72)  # Fill
+    assert _place(w.picHeader) == (226, top, w.ScaleWidth - 226, 44)  # Top of the rest
+    assert _place(w.picContent) == (226, top + 44, w.ScaleWidth - 226,
+                                    w.ScaleHeight - 72 - top)  # Fill
     assert w.tvwIndex.Parent is w.picNav and w.tvwIndex.Width == 220  # picNav_Resize
     w.Width, w.Height = 1000, 700
     QTest.qWait(20)
-    assert _place(w.picContent) == (226, 44, 774, 628)  # follows the window
+    assert _place(w.picContent) == (226, top + 44, 774, 628 - top)  # follows the window
     bar = w.splNav._widget
     QTest.mousePress(bar, Qt.LeftButton, Qt.NoModifier, QPoint(3, 100))
     QTest.mouseMove(bar, QPoint(43, 100))  # dragged 40 pixels to the right
@@ -175,6 +180,28 @@ def test_status_bar(sink):
     assert clock.Style == vp6.vpSbrDate and _status(sink) == "The clock shows the date"
     QTest.mouseClick(bar._widget, Qt.LeftButton, Qt.NoModifier, clock._label.geometry().center())
     assert clock.Style == vp6.vpSbrTime
+
+
+def test_toolbar(sink):
+    bar = sink.tbrMain
+    assert [b.Key for b in bar.Buttons if b.Style != vp6.vpTbrSeparator] == [
+        "back", "forward", "nav", "scheme0", "scheme1", "scheme2"]
+    assert all(not b._action.icon().isNull() for b in bar.Buttons if b.Key)  # imlToolbar
+    bar.Buttons("forward")._action.trigger()  # ButtonClick: the next page
+    assert sink.lblTitle.Caption == "Text and labels"
+    bar.Buttons("back")._action.trigger()
+    bar.Buttons("back")._action.trigger()  # from the first page: round to the last
+    assert sink.current == sink.page_titles()[-1][0]
+    nav = bar.Buttons("nav")
+    nav._action.trigger()  # a Check button: unpressed hides the pane
+    assert nav.Value == vp6.vpTbrUnpressed and not sink.picNav.Visible
+    sink.mnuViewNav._action.trigger()  # the menu shows it: the button follows
+    assert nav.Value == vp6.vpTbrPressed and sink.picNav.Visible
+    bar.Buttons("scheme2")._action.trigger()  # a ButtonGroup: Dark, and the menu follows
+    assert sink.scheme == 2 and sink.mnuScheme[2].Checked
+    assert [bar.Buttons(f"scheme{i}").Value for i in range(3)] == [0, 0, 1]
+    sink.mnuScheme[3]._action.trigger()  # Follow the IDE: none of the group pressed
+    assert [bar.Buttons(f"scheme{i}").Value for i in range(3)] == [0, 0, 0]
 
 
 def test_intro_and_navigation(sink):
@@ -310,6 +337,8 @@ def test_tree_page(sink):
     page.cmdAddChild._widget.click()
     lion = tree.Nodes(tree.Nodes.Count)
     assert lion.FullPath == "Animals\\Cats\\Lion" and page.lblTree.Caption.startswith("Added")
+    assert lion.Image == "star" and not lion._item.icon(0).isNull()  # from the ImageList
+    assert all(not tree.Nodes(key)._item.icon(0).isNull() for key in ("animals", "cats", "trees"))
     tree.Nodes("plants")._item.setCheckState(0, Qt.Checked)  # the user checks it
     assert page.lblTree.Caption == "Plants is checked"
     tree.SelectedItem = "animals"
@@ -322,6 +351,8 @@ def test_tabs_page(sink):
     strip = page.tbsOptions
     frames = (page.fraGeneral, page.fraColors, page.fraAbout)
     assert [f.Visible for f in frames] == [True, False, False]  # the selected tab's Frame
+    assert [strip.Tabs(i).Image for i in (1, 2, 3)] == ["gear", "palette", "info"]
+    assert not any(strip._widget.tabIcon(i).isNull() for i in range(3))  # from imlTabs
     assert (page.fraGeneral.Left, page.fraGeneral.Top) == (strip.ClientLeft + 4,
                                                            strip.ClientTop + 4)
     strip.SelectedItem = "colors"

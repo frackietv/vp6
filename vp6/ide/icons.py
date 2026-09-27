@@ -238,6 +238,22 @@ def _tabstrip(p):
     p.drawRect(QRectF(5, 16, 8, 1.5))
 
 
+def _imagelist(p):
+    for offset, color in ((0, "#9ec5fe"), (4, "#ffe08a"), (8, "#a3e4a8")):  # a pile of pictures
+        p.setBrush(QColor(color))
+        p.drawRect(QRectF(2 + offset, 10 - offset, 12, 10))
+    p.setBrush(QColor("#3fb950") if C is _LIGHT else QColor("#2ea043"))
+    p.drawPolygon([QPointF(11, 18), QPointF(15, 12), QPointF(20, 18)])  # a hill in the top one
+
+
+def _toolbar(p):
+    p.setBrush(C.face)
+    p.drawRect(QRectF(2, 6, 20, 11))  # the bar, with three buttons
+    for x, color in ((4, "#9ec5fe"), (10, "#ffe08a"), (16, "#a3e4a8")):
+        p.setBrush(QColor(color))
+        p.drawRect(QRectF(x, 8.5, 4, 6))
+
+
 def _line(p):
     p.setPen(QPen(C.ink, 2))
     p.drawLine(QPointF(5, 19), QPointF(19, 5))
@@ -374,7 +390,7 @@ _DRAWERS = {
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
     "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image, "TreeView": _treeview, "Splitter": _splitter,
     "ProgressBar": _progressbar, "Slider": _slider, "UpDown": _updown, "StatusBar": _statusbar,
-    "TabStrip": _tabstrip,
+    "TabStrip": _tabstrip, "ImageList": _imagelist, "Toolbar": _toolbar,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

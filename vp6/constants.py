@@ -152,6 +152,20 @@ vpTabPlacementBottom = 1
 vpTabPlacementLeft = 2
 vpTabPlacementRight = 3
 
+# --- Button.Style (Toolbar) -------------------------------------------------------
+vpTbrDefault = 0
+vpTbrCheck = 1
+vpTbrButtonGroup = 2
+vpTbrSeparator = 3
+
+# --- Button.Value (Toolbar) -------------------------------------------------------
+vpTbrUnpressed = 0
+vpTbrPressed = 1
+
+# --- Toolbar.TextAlignment --------------------------------------------------------
+vpTbrTextAlignBottom = 0
+vpTbrTextAlignRight = 1
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

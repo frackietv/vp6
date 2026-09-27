@@ -1,5 +1,27 @@
 # VP6 features
 
+**Version:** 0.3.32
+**Date:** 2026-09-30
+
+## Controls
+
+- ImageList: a collection of pictures for other controls, invisible at run time. A TreeView's, TabStrip's or Toolbar's `ImageList` names it, and their nodes', tabs' and buttons' `Image` is a picture's Key or Index. All its pictures get one size (`ImageWidth` × `ImageHeight`, or the first picture's); the controls using it follow its changes, and it may come before or after them
+- The ListImages collection: `ListImages(Index)` or `ListImages(Key)`, `Count`, `Add`, `Remove`, `Clear`; a ListImage's `Picture` (its file, also usable as an Image's or PictureBox's `Picture`), `Key`, `Index`, `Tag`, `Width`, `Height`
+- In the designer, `ListImages` is a list of `path|key` lines, with an **Add Pictures…** button to pick files
+- TreeView: `ImageList`, and `Image` in the designer's outline (`Text|key|image`); TabStrip: `ImageList`, and a tab's `Image` (`Caption|Key|ToolTipText|Image`)
+- Toolbar: a row of buttons docked to the top of a form (or the bottom, or the sides as a vertical toolbar), as tall as its buttons need. Buttons show a picture from an ImageList and a Caption (under the picture or beside it: `TextAlignment`); they are ordinary buttons, Check buttons (pressed or not), ButtonGroup buttons (adjacent ones of which one is pressed) or separators. `ButtonClick` gets the Button
+- The Buttons collection: `Buttons(Index)` or `Buttons(Key)`, `Count`, `Add`, `Remove`, `Clear`; a Button's `Caption`, `Key`, `Index`, `Image`, `Style`, `Value`, `ToolTipText`, `Enabled`, `Visible`, `Tag`, and its `Left`, `Top`, `Width`, `Height`
+- In the designer, `Buttons` is a list: one button per line, `Caption|Key|Image|ToolTipText|options` (check, group, pressed, disabled, hidden), `-` for a separator
+- Constants `vpTbrDefault`, `vpTbrCheck`, `vpTbrButtonGroup`, `vpTbrSeparator`, `vpTbrUnpressed`, `vpTbrPressed`, `vpTbrTextAlignBottom`, `vpTbrTextAlignRight`
+- The Kitchen Sink's TreeView and TabStrip pages show pictures from ImageLists, drawn when the project is created
+- The Kitchen Sink window has a Toolbar: previous and next page, the navigation pane (a Check button) and the color schemes (a ButtonGroup), in step with the View menu
+
+## Fixes
+
+- Opening a new Kitchen Sink in the IDE could fail with "Internal C++ object (QCommonStyle) already deleted": a form with a forced light or dark scheme kept the shared Fusion style's Python wrapper, which PySide invalidated when a widget it was set on (a Toolbar's rebuilt button) was destroyed. The style is now fetched each time it is needed, with a fresh wrapper when the old one was invalidated
+
+---
+
 **Version:** 0.3.31
 **Date:** 2026-09-30
 

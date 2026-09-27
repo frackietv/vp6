@@ -24,7 +24,10 @@ from . import colors
 @dataclass(frozen=True)
 class PropSpec:
     name: str
-    kind: str = "str"  # str, text, int, bool, enum, color, list, outline, panels, tabs, font, file
+    # str, text, int, bool, enum, color, font, file, shortcut; list and outline (lines
+    # of text); panels, tabs, images and buttons (lines of text that are a
+    # collection at run time: StatusBar.Panels, TabStrip.Tabs, ...)
+    kind: str = "str"
     default: object = None
     choices: tuple = ()  # enum: ((value, "label"), ...)
     always: bool = False  # always written to the designer region
@@ -51,7 +54,7 @@ def normalize(kind: str, value):
         return bool(value)
     if kind == "color":
         return colors.normalize(value)
-    if kind in ("list", "outline", "panels", "tabs"):
+    if kind in ("list", "outline", "panels", "tabs", "images", "buttons"):
         if isinstance(value, str):
             value = value.splitlines()
         return [str(v) for v in value]

@@ -109,7 +109,12 @@ Light/dark color schemes for forms (see architecture §4.5).
   * `set_app_override()` and `app_override_active()` are the IDE's switch
     for that.
 * **Styling:**
-  * `fusion_style()` returns the shared Fusion style, parented to the app;
+  * `fusion_style()` returns the shared Fusion style, parented to the app.
+    Don't keep what it returns: PySide invalidates the style's wrapper when a
+    widget it was set on is destroyed (the C++ style lives on), so it
+    remembers the style's C++ address (`_fusion_address`) and finds a fresh
+    wrapper among the application's children. `Form._scheme_style` is a
+    property that calls it (the form keeps only `_scheme_forced`);
   * `scheme_palette(dark)` builds a complete light or dark palette;
   * `style_tree(widget, style)` sets (or resets, for `None`) the style on a
     widget and all descendants;
@@ -143,7 +148,7 @@ VB-compatible constants with a `vp` prefix, grouped by use:
 `__all__` is every global starting with `vp`. The values are listed in
 [api.md](api.md#constants).
 
-### `vp6/controls.py` (≈3390 lines)
+### `vp6/controls.py` (≈3980 lines)
 
 The intrinsic controls.
 
@@ -154,8 +159,11 @@ The intrinsic controls.
   * `CONTROL_TYPES`, at the end of the file: type name → class, in Toolbox
     order. The designer, form-file parser and Toolbox all use it. `Menu` is
     in it but has `InToolbox = False` (the Menu Editor designs menus).
-  * `parse_outline(lines)` reads a TreeView outline into `(level, text, key)`
-    (indentation for levels, a tab counting as 4 spaces, `|key` at the end).
+  * `parse_outline(lines)` reads a TreeView outline into `(level, text, key,
+    image)` (indentation for levels, a tab counting as 4 spaces,
+    `Text|key|image`); `_image_ref` makes a designer image of digits an
+    Index. `parse_panel`, `parse_tab` and `parse_list_image` read the other
+    designer line formats.
   * `SHORTCUT_CHOICES`: VB's list of menu shortcut keys, in Qt's key names
     (`_shortcut_choices()`), for `Menu.Shortcut`.
 * **Translation helpers:**
@@ -223,18 +231,30 @@ The intrinsic controls.
 | `ProgressBar` | `QProgressBar` (no text, `NoFocus`) | `Min`/`Max`/`Value`; `_apply_Value` keeps Value inside Min..Max (`_clamp`), and changing Min or Max re-applies it; `Orientation` (`_ORIENTATION`, `_QT_ORIENTATION`, shared with Slider and UpDown). Click synthesized from the mouse; no focus or key events. |
 | `Slider` | `QSlider` | `valueChanged` fires `Scroll` while the thumb is down (`isSliderDown`, remembering `_changed_while_dragging`) and `Change` otherwise; `sliderReleased` then fires the one `Change` of a drag. `SmallChange`/`LargeChange` are the single and page steps; `TickStyle` maps through `_TICKS` to the tick position, `TickFrequency` to the tick interval. |
 | `UpDown` | `_UpDownWidget` (two auto-repeating, `NoFocus` `QToolButton`s in a `QBoxLayout`; `set_vertical` swaps up/down for right/left arrows) | `_step(±1)` (not while designing): `_value_from_buddy` first (a number typed into the buddy, clamped, becomes the Value without a Change), then `Value ± Increment`, wrapping with `Wrap`, then `_sync_to_buddy` and UpClick/DownClick. `_apply_Value` clamps and fires `Change` when the value really changed (`_shown_value`), syncing the buddy. `Buddy` looks `BuddyControl` up on the form by name when needed (it may be created after the UpDown); `_buddy_property` is `BuddyProperty`, else the buddy's `Text` or `Caption`. |
+| `ImageList` | none at run time (a stack-of-pictures icon while designing, `_imagelist_design_widget`) | `ListImages` is a `_ListImages` collection of `ListImage` objects (`Picture` a file path, resolved like a PictureBox's; `_pixmap()` scaled to `_size()`: ImageWidth × ImageHeight, or the first picture's size while 0); the designer's `ListImages` (kind `images`) is `path\|key` lines (`parse_list_image`). Any change `_notify`s the controls whose `ImageList` is its name (`_refresh_images`). |
+| `Toolbar` | `QToolBar` (not movable or floatable), a `QAction` per shown button (`addSeparator` for separators; `NoFocus` tool buttons) | Docked like an aligned PictureBox (`_Docked`, Align None/Top/Bottom/Left/Right, Top by default; Left and Right make it vertical) and shows ImageList pictures (`_UsesImageList`). `Buttons` is a `_Buttons` collection of `Button` objects; the designer's `Buttons` (kind `buttons`) is lines parsed by `parse_button` (`Caption\|Key\|Image\|ToolTipText\|options`, `-` a separator). Any change calls `_update_buttons`, which rebuilds the actions: check and group buttons are checkable, each run of adjacent ButtonGroup buttons shares a `QActionGroup` (`ExclusiveOptional`, so code can leave none pressed; `_on_triggered` re-presses a clicked pressed one, as in VB); the icon size is the ImageList's; `TextAlignment` picks the tool button style; then `_fit` makes it as tall (or wide) as its `sizeHint`. `_on_triggered` updates `Value`s (`_group_of`) and fires `ButtonClick`. A Button's `Left`… come from `widgetForAction` (after activating the layout). |
 | `StatusBar` | `QFrame` with a `QHBoxLayout`: a `QLabel` per shown panel (sunken, transparent to the mouse), and `_simple_label` for Style = Simple | Docked like an aligned PictureBox (`_Docked`; Align None/Top/Bottom, Bottom by default). `Panels` is a `_Panels` collection of `Panel` objects (`_list`, `_by_key`; `_resolve` takes an Index from 1, a key or a Panel; `Add`, `Remove`, `Clear`); the designer's `Panels` property (kind `panels`, read from `_values` by the Properties window) is lines parsed by `parse_panel` (`Text\|Key\|options`) and rebuilds the collection. Any change calls `_update_panels`, which rebuilds the layout: Spring panels get stretch, Contents ones their text's width (at least Width), others a fixed Width; a stretch keeps the panels left when none springs. `Panel._shown_text` is the Text, the time or date (`QLocale` short format) or CAPS/NUM/INS/SCRL; a 250 ms `_timer` (not while designing) refreshes those, dimming a lock key that is off (`_lock_key_on`: `GetKeyState` on Windows, `CGEventSourceFlagsState` for Caps Lock on macOS, off elsewhere). The bar gets the mouse and finds the panel by position (`_panel_at`) for `PanelClick` / `PanelDblClick`. |
 | `TabStrip` | `_TabWidget` (a `QTabWidget` with an empty page per tab; `contents_rect()` asks the style for the pages' area, as Qt's layout does, which works before the widget is shown) | Not a container. `Tabs` is a `_Tabs` collection of `Tab` objects; the designer's `Tabs` property (kind `tabs`, read from `_values` by the Properties window) is lines parsed by `parse_tab` (`Caption\|Key\|ToolTipText`). Any change calls `_update_tabs`, which adds or removes pages and sets texts and tooltips without firing Click (`_quiet`), keeping the selected Tab (`_current_tab`). `currentChanged` fires `Click`; `BeforeClick` comes from a mouse press on another tab in the tab bar (an event target), and True swallows the press. `ClientLeft`… are `contents_rect()` moved by the widget's position; `Placement` maps to `setTabPosition`. |
 | `Menu` | a `QAction` (none in design mode) | Parent: the form (the menu bar, `Form._add_menu_item`) or a `Menu`, whose `QMenu` (`_submenu`, created for its first item by `_add_menu_item`) holds it. Caption `-` is a separator; `Checked` (Qt's own toggling is undone in `_on_triggered`), `Enabled`, `Visible`, `NegotiatePosition` (rebuilds the window's bar when merged), `Shortcut` (also added to the form widget so it works in the window). Click on `triggered`, and for a menu with items on `aboutToShow`. `_menu_container`, `_place_after` (loaded array elements follow the last one), `_dispose`. |
 
-`_KeyedItem` and `_KeyedCollection` are shared by `Panel`/`_Panels` and
-`Tab`/`_Tabs`: an item's `Index` (from 1) and unique `Key`; the collection's
+`_UsesImageList` is the mixin of the controls showing an ImageList's
+pictures (TreeView, TabStrip, Toolbar): `_image_list()` finds the ImageList named by
+their `ImageList` among the form's controls (by name, so it works in the
+designer too), and `_refresh_images()` shows every item's Image again.
+`_picture_icon(control, ref, strict)` turns an Image into an icon: a Key or
+Index in the ImageList, or without one a picture file; `strict` (code
+setting an Image) raises for an unknown Key or Index. `Form.__init__` calls
+every control's `_refresh_images` after `InitializeComponent`, since an
+ImageList may be created after the controls using it.
+
+`_KeyedItem` and `_KeyedCollection` are shared by `ListImage`/`_ListImages`,
+`Button`/`_Buttons`, `Panel`/`_Panels` and `Tab`/`_Tabs`: an item's `Index` (from 1) and unique `Key`; the collection's
 `Count`, `Item`/call (an Index, a Key or an item: `_resolve`), iteration,
 `Remove` and `Clear`, and `_insert`/`_reset` for the control; each change
 calls the control's update (`changed`).
 
 `_Docked` is the mixin of the controls with an `Align` property (PictureBox,
-Splitter, StatusBar): while docked, changing their Align, size, place or
+Splitter, StatusBar, Toolbar): while docked, changing their Align, size, place or
 visibility asks the form to place its docked controls again
 (`_relayout`, `Form._layout_aligned`, which docks any control with `Align`).
 
@@ -817,7 +837,10 @@ Window frames painted around the designed form.
 
 ### `vp6/ide/properties.py` (≈290 lines)
 
-* `TextListDialog` edits a list (one item per line) or multi-line text.
+* `TextListDialog` edits a list (one item per line) or multi-line text. With
+  `pictures_dir` (an ImageList's `ListImages`) it has an **Add Pictures…**
+  button; `add_pictures(paths)` appends `path|key` lines, relative to that
+  folder when inside it, with the file name as the key.
 * `PropertiesWindow(QWidget)`:
   * **Binding:** `set_designer(designer)` connects to `selectionChanged` and
     `designChanged`; `refresh()` rebuilds the object combo and the grid
@@ -827,7 +850,10 @@ Window frames painted around the designed form.
     has `supports_index`; `(Name)` shows the target's `name_value`. The
     `shortcut` kind (`Menu.Shortcut`) is edited with a combo box, and the
     `outline` kind (`TreeView.Items`) like a list, in a `TextListDialog` with
-    a hint about indentation and keys.
+    a hint about indentation, keys and images; so are the `panels`, `tabs`
+    and `images` kinds (StatusBar.Panels, TabStrip.Tabs, ImageList.ListImages),
+    each with a hint about its line format, shown as "(Panels: N)" and so on
+    and read from `_values` (at run time those names are the collections).
   * **Editors:** `_editor(spec, value)` picks an editor by kind;
     `_color_editor`, `_choose_color`, `_edit_list`, `_edit_text` and
     `_browse_file` (stores paths relative to the form folder when possible).
@@ -1133,13 +1159,19 @@ explorer-style.
 * `create(directory, name)` copies `FORMS` (the window, its pages in the
   index's order, and the dialog) and `MODULES` (`Module1.py`) from
   `TEMPLATE_DIR`, draws the picture `PICTURE` (`vp6.png`, via
-  `draw_picture`, so the package ships no binary), and returns a Standard
+  `draw_picture`, so the package ships no binary) and the ImageLists'
+  pictures (`draw_icons`: `IMAGES/<name>.png` for each of `ICONS`, 32 × 32),
+  and returns a Standard
   EXE `Project` that starts in Sub Main. `mainwindow.create_project(...,
   "kitchensink")` calls it.
 * **`templates/kitchensink/Form1.py`**, the explorer window. It is laid out
   with docked controls: the StatusBar `sbStatus` (Bottom; a Spring status
   panel that `status(text)` sets, Caps Lock, and a clock that
-  `sbStatus_PanelClick` switches between the time and the date), `picNav`
+  `sbStatus_PanelClick` switches between the time and the date), the
+  Toolbar `tbrMain` (Top; pictures from the ImageList `imlToolbar`: Back and
+  Forward (`step_page`), the navigation pane as a Check button, and the
+  color schemes as a ButtonGroup, kept in step with the View menu by
+  `show_navigation` and `set_scheme`; `tbrMain_ButtonClick`), `picNav`
   (Left, holding the TreeView `tvwIndex`), the Splitter `splNav`, `picHeader`
   (Top, the page title) and `picContent` (Fill, with scroll bars). The
   PictureBoxes' Resize events size what is on them.
@@ -1344,14 +1376,16 @@ All tests run headless. `conftest.py`:
 | `test_control_arrays.py` | Control arrays: elements, `[i]` / `(i)` / `Item`, iteration, bounds, read-only `Index`, handlers getting `Index` first, `Load`/`Unload` of run-time elements (copied properties, hidden, last in the tab order; designer elements can't be unloaded), one type per array; the form file round trip (elements as containers too) and invalid arrays; adding/removing the `Index` parameter and stubs; in the designer: paste asking to create an array, renaming into an array (and out, and into another type's name), the Index property (one-element arrays, moving, clearing, undo), containers that are elements; the Properties window's `(Name)`, `Index` row and object list; the code window's Object list, new handlers with `Index`, completion. |
 | `test_menus.py` | Menus at run time: the menu bar and items, separators, shortcuts; an in-window menu bar keeping `Height`, `ScaleHeight` and control positions for the area below it (the window grows), form mouse events there; Click on choosing an item and before a menu opens; `Checked` changing only in code; Enabled, Visible, Caption and Shortcut changes; menu control arrays loading after their last element and unloading; the parent check; the form file round trip; the Menu Editor's entries and ControlDefs, validation messages and dialog editing (Next, indent, shortcut, Insert, Delete, moving, outdent); menu negotiation (merged by NegotiatePosition, left out for None, the inner handlers, leaving when hidden or replaced, popped out with its own bar, NegotiateMenus off, a position changed and a menu added while merged, a window without menus, the Menu Editor's NegotiatePosition); the designer's menu bar (layout, hit testing, the drop-down opening Click code), menus kept off the canvas and edited in the Properties window, deleting a menu with its items, renames and arrays updating handlers, undo; the IDE's Tools > Menu Editor (Ctrl+E). |
 | `test_image.py` | The Image control: taking the picture's size without Stretch (and with a border), filling the control with Stretch, switching back, clearing the picture; mouse events, no focus or Tab stop, not grayed but silent when disabled, transparent; its properties in order and the form file; in the designer: sized by a new picture, resized with Stretch, the Properties rows; the Toolbox button and icon. |
+| `test_imagelist.py` | The ImageList: its designer lines; the ListImages collection (Index and Key, one size from the first picture or ImageWidth/ImageHeight, Add, errors, Remove), invisible at run time, a ListImage's Picture shown by an Image; a TreeView and TabStrip created before it showing its pictures by key and Index, code setting Images (unknown ones raising), `Nodes.Add` with an Image, following Clear and Add, no ImageList (picture files, an Index an error); the form file round trip; the designer (its icon, the pictures shown while designing, the Properties window's ListImages); Add Pictures… in the list dialog; Toolbox and icon. |
 | `test_embedded_forms.py` | Activate/Deactivate in a container (Load then Activate; hidden and shown, the container hidden and shown, popped out, unloaded), a filling form replacing another (no second Load; Fill=False forms staying), window activation not applying; `Form.ShowIn`: filling a PictureBox and following its size (Load before the first Resize), controls working, window-only properties not popping it out; a Frame's inside, a form as the container, `Fill=False` at Left/Top; popping out, moving between containers, Hide/Show; unloading only itself, going with its host (unable to cancel), a host that cancels keeping it; invalid containers and cycles; nested forms and Default buttons. |
 | `test_align.py` | PictureBox `Align`: docking in creation order, Fill panes taking the space left (after the others, several sharing it), following the form (before Form_Resize), changing a pane's thickness, place, visibility and Align; only on the form; panes created in code; under an in-window menu bar; in a form shown in a container; in the designer (Align stored with the docked geometry, the form resized, a pane dragged back, undo); the constants. |
 | `test_splitter.py` | The Splitter: docking beside its pane, cursors, dragging (live Resize with everything in place, Moved on release), Bottom/Top/Right panes growing the right way, MinSize on both sides, disabled, no pane; the PictureBox Resize event; the file, the designer (docked after the pane) and the Toolbox. |
 | `test_statusbar.py` | The StatusBar: the designer's panel lines (`parse_panel`); docking at the bottom beside other docked controls, following the window (Spring panels growing), Top, hidden taking no space; the Panels collection (Index and Key, Add at an Index, unique keys, errors, Contents and fixed widths, Alignment, ToolTipText, hidden panels, Remove, Clear, changing a Key); time and date panels kept up to date, lock keys dimmed when off; Simple style; PanelClick, Click and PanelDblClick from the mouse; the form file round trip; creating it in the designer (docked, one panel to start, no clock running, the Properties window's Panels); Toolbox, icon and constants. |
 | `test_tabstrip.py` | The TabStrip: the designer's tab lines (`parse_tab`); tabs, captions and tooltips; the selection (the first to begin with, no Click while loading, SelectedItem by Key, Index or Tab, `Selected`, Click from code); the user's clicks, BeforeClick cancelling, no BeforeClick for the selected tab; Add before the others keeping the selection without Click, Caption and ToolTipText, errors, Remove, Key changes, Clear; the client area for every Placement (equal to Qt's layout, and already right in Form_Load), a Frame over it on top; the form file round trip; the designer (one tab to start, the Properties window's Tabs); Toolbox, icon and constants. |
+| `test_toolbar.py` | The Toolbar: its designer lines (`parse_button`); docking at the top as tall as its buttons, following the window, vertical when Left; the Buttons collection (Index and Key, separators, hidden and disabled buttons, tooltips, Add at an Index, errors, Remove, read-only placement); clicks on default, Check and ButtonGroup buttons (one pressed, a pressed one staying pressed), code setting Values (no ButtonClick, none pressed allowed); ImageList pictures by key and Index at its size, TextAlignment, an unknown Image; the form file round trip; the designer (docked at the top, the Properties window's Buttons); Toolbox, icon and constants. |
 | `test_scrolling.py` | PictureBox ScrollBars: bars appearing for controls beyond the edges (both directions), ScrollLeft/ScrollTop and the Scroll event moving the contents, bars following moved, added and hidden controls, one direction only, turning it off, controls and Click on the empty area still working, a taller form shown inside scrolling, the designer not scrolling. |
 | `test_label_text.py` | Label TextFormat: plain text hiding access keys, rich text and Markdown (really rendered), switching back; links firing LinkClick or opening the browser without a handler, only for formatted captions; the file and the designer (links off while designing, the multi-line Caption editor); the constants. |
-| `test_treeview.py` | The TreeView: reading outlines; the Nodes collection (key, Index from 1, errors for unknown or duplicate keys); every relationship of `Add`; relatives, FullPath and PathSeparator; removing with children and clearing; node Text/Key/Tag/Bold/ForeColor/Image, EnsureVisible, sorting the tree and a node's children; code changes firing no events; NodeClick on clicks (also on the selected node) and keyboard moves, Expand/Collapse from the keyboard, HitTest; check boxes and NodeCheck; LineStyle, Indentation, Items; the form file; in the designer (Items building an expanded tree, the Properties button, a `Node` handler stub); the Toolbox button, icon and constants. |
+| `test_treeview.py` | The TreeView: reading outlines (outline images (a key, an Index or a file)); the Nodes collection (key, Index from 1, errors for unknown or duplicate keys); every relationship of `Add`; relatives, FullPath and PathSeparator; removing with children and clearing; node Text/Key/Tag/Bold/ForeColor/Image, EnsureVisible, sorting the tree and a node's children; code changes firing no events; NodeClick on clicks (also on the selected node) and keyboard moves, Expand/Collapse from the keyboard, HitTest; check boxes and NodeCheck; LineStyle, Indentation, Items; the form file; in the designer (Items building an expanded tree, the Properties button, a `Node` handler stub); the Toolbox button, icon and constants. |
 | `test_values.py` | ProgressBar (Value kept inside Min..Max, also when they change; orientation; Click), Slider (Scroll while dragging and one Change after, Change for code and keys, LargeChange, tick styles and frequency, orientation), UpDown (steps, Max without Wrap, Change / UpClick / DownClick, a TextBox buddy shown and read back, typed numbers clamped or ignored, Increment, wrapping, a Label buddy's Caption, BuddyProperty, a missing buddy, SyncBuddy off, horizontal arrows); the form file round trip; creating them in the designer (arrows inactive there); Toolbox, icons, default events and constants. |
 | `test_line.py` | The Line control: its widget following the points, drawing (color, Transparent, Visible, the scheme's text color by default), clicks going through it, ZIndex; the form file; in the designer: drawing from press to release and by a click, selecting near the line (not its box), dragging an end, the move cursor over an end, moving, arrow keys (no resizing), undo, pasting with an offset, the Properties rows, no event stub; the Toolbox button and icon. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
@@ -1364,7 +1398,7 @@ All tests run headless. `conftest.py`:
 | `test_outline.py` | The Outline replacing the Properties panel (in the same place) while a code window is active and giving it back for designers, View > Outline Window and F4, a closed panel staying closed, closing the last window, the default layout; the outline of the Kitchen Sink's Form1; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: following the Project panel or active window, clicking items goes to the line (unfolding the designer region); the items at a line (a method inside its class, from the first decorator, blank lines and imports at none), and the Outline highlighting the item at the code window's cursor (in a body, none on an import, after re-sorting and edits, another code window's cursor, none for a designer). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, sliders, progress bars and spinners, the TabStrip page, pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, sliders, progress bars and spinners, the TabStrip page, the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (the VP6 icon copied into a project, your own copy kept, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |
 
 ## Samples: `samples/`

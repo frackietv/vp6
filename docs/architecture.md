@@ -308,8 +308,14 @@ flowchart TD
   propagate styles to children, so `style_tree` applies the style to a whole
   widget tree, and `Form._style_widget` styles each control as it is built.
 * **Ownership of the Fusion style.** The single shared Fusion style
-  (`fusion_style()`) is parented to the `QApplication`. Otherwise PySide can
-  hand its ownership to a widget and delete it along with that widget.
+  (`fusion_style()`) is parented to the `QApplication`, so the C++ style
+  lives as long as the application. PySide, though, treats a style as
+  belonging to the widgets it is set on: when one of them is destroyed
+  (e.g. a Toolbar rebuilding its buttons), it invalidates the style's Python
+  wrapper while other widgets still use the style. So nothing keeps the
+  wrapper: `fusion_style()` is called whenever the style is needed, and
+  when its wrapper was invalidated it finds a fresh one for the same C++
+  style among the application's children (by address).
 * **Real OS appearance while the IDE forces a scheme.** When the IDE forces
   the whole application light or dark (§5.6), Qt reports the forced scheme.
   `appearance.system_is_dark()` then asks the OS directly

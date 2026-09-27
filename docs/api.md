@@ -152,6 +152,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `PanelClick` | Panel |
 | `PanelDblClick` | Panel |
 | `BeforeClick` | none |
+| `ButtonClick` | Button |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -774,7 +775,8 @@ Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button
 
 A hierarchical list of nodes, like VB's TreeView. Fill it in the designer
 with the **`Items`** outline (one node per line, indented under its parent,
-`|key` at the end to give it a key), or in code with `Nodes.Add`:
+as `Text|key|image`: the key and the image are optional), or in code with
+`Nodes.Add`:
 
 ```python
 self.tvwZoo = TreeView(self, Left=8, Top=8, Width=161, Height=193,
@@ -810,7 +812,7 @@ Keys are text and must be unique; numbers choose nodes by Index.
 | `Index` | its number in `Nodes`, from 1 |
 | `FullPath` | the texts from its root node, joined by the tree's `PathSeparator` |
 | `Expanded`, `Selected`, `Checked` | read and set |
-| `Bold`, `ForeColor`, `Image` | how it looks (`Image`: a picture file, relative to the form's folder) |
+| `Bold`, `ForeColor`, `Image` | how it looks (`Image`: with the TreeView's `ImageList`, a picture's Key or Index in it; without one, a picture file relative to the form's folder) |
 | `Parent`, `Child` (first child), `Children` (how many), `Next`, `Previous`, `FirstSibling`, `LastSibling`, `Root` | its relatives (`None` when there is none) |
 | `Sorted` | keep its children in alphabetical order |
 | `EnsureVisible()` | expand its parents and scroll to it |
@@ -828,6 +830,7 @@ Default size 161 × 193. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Checkboxes` | bool | `False` | A check box in front of every node |
+| `ImageList` | str | `''` | The name of an ImageList on the form: the nodes' Image is then a picture's Key or Index in it |
 | `Indentation` | int | `20` | How far each level is indented, in pixels |
 | `Items` | list[str] (an indented outline) | `[]` | The nodes, set in the designer: one per line, indented under its parent; a vertical bar and a key at the end give the node that key |
 | `LineStyle` | enum | 1 - Root Lines | 0 - Tree Lines, 1 - Root Lines. Root Lines: the top-level nodes have expand/collapse buttons too |
@@ -1005,6 +1008,114 @@ Default size 17 × 33. Property groups: Position.
 Events: `Change`, `UpClick`, `DownClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
+### ImageList
+
+A collection of pictures for other controls (VB's ImageList, from the Windows
+Common Controls). A [TreeView](#treeview)'s, [TabStrip](#tabstrip)'s or
+[Toolbar](#toolbar)'s `ImageList` property names it; their nodes', tabs' and
+buttons' `Image` is then a picture's Key or Index (from 1). It's invisible at run time; the designer
+shows it as an icon.
+
+```python
+self.imlIcons = ImageList(self, ListImages=["images/folder.png|folder",
+                                            "images/leaf.png|leaf"])
+self.tvwFiles = TreeView(self, ImageList="imlIcons",
+                         Items=["Documents|docs|folder", "    Notes|notes|leaf"])
+
+node = self.tvwFiles.Nodes.Add("docs", vpTvwChild, "todo", "To do", Image="leaf")
+node.Image = 1                                             # by Index: folder.png
+```
+
+* **Pictures in the designer.** `ListImages` lists them, one per line:
+  `path|key`, the path relative to the form's folder. Its editor's **Add
+  Pictures…** adds files, with their names as keys.
+* **Pictures in code.** At run time `ListImages` is the collection:
+  `ListImages(Index)` (from 1) or `ListImages(Key)`, `Count`,
+  `Add(Index, Key, Picture)`, `Remove` and `Clear`. A **ListImage** has
+  `Picture` (its file, which can also be an Image's or PictureBox's
+  `Picture`), `Key`, `Index`, `Tag`, `Width` and `Height`.
+* All pictures get one size: `ImageWidth` × `ImageHeight`, or the first
+  picture's size while they are 0.
+* The controls using it show its changes at once (pictures added, removed or
+  resized). It may come before or after them in `InitializeComponent`.
+* Setting an `Image` to a Key or Index the ImageList doesn't have raises
+  `KeyError` or `IndexError`; without an ImageList an `Image` is a picture
+  file.
+
+<!-- BEGIN GENERATED: control ImageList -->
+Default size 32 × 32.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `ImageHeight` | int | `0` | The pictures' height in pixels; 0 = the first picture's |
+| `ImageWidth` | int | `0` | The pictures' width in pixels; 0 = the first picture's |
+| `Left` | int | `0` | Position in the designer only |
+| `ListImages` | images | `[]` | The pictures, set in the designer: one per line, path|key, the path relative to the form's folder |
+| `Tag` | str | `''` | Free for your own use |
+| `Top` | int | `0` | Position in the designer only |
+
+No events.
+<!-- END GENERATED -->
+
+### Toolbar
+
+A row of buttons along the top of a form (VB's Toolbar, from the Windows
+Common Controls): pictures from an [ImageList](#imagelist), captions, check
+buttons, groups of buttons of which one is pressed, and separators. It docks
+like an aligned PictureBox (Top by default; Bottom, or Left and Right for a
+vertical toolbar), as tall (or wide) as its buttons need.
+
+```python
+self.tbrMain = Toolbar(self, ImageList="imlToolbar", Buttons=[
+    "Open|open|open|Open a file", "Save|save|save|Save it", "-",
+    "|bold|bold|Bold|check", "-",
+    "|left|left|Align left|group pressed", "|center|center|Center|group"])
+
+def tbrMain_ButtonClick(self, Button):
+    if Button.Key == "open":
+        self.open_file()
+    elif Button.Key == "bold":                       # a Check button
+        self.txtText.FontBold = Button.Value == vpTbrPressed
+```
+
+* **Buttons in the designer.** `Buttons` lists them, one per line:
+  `Caption|Key|Image|ToolTipText|options`, the Image a Key or Index in the
+  `ImageList`, the options words: `check` or `group` (the Style), `pressed`,
+  `disabled` and `hidden`. A line of just `-` is a separator.
+* **Buttons in code.** At run time `Buttons` is the collection:
+  `Buttons(Index)` (from 1) or `Buttons(Key)`, `Count`,
+  `Buttons.Add(Index, Key, Caption, Style, Image)`, `Remove` and `Clear`.
+  A **Button** has `Caption`, `Key`, `Index`, `Image`, `Style`, `Value`,
+  `ToolTipText` (the Caption when empty), `Enabled`, `Visible`, `Tag`, and
+  `Left`, `Top`, `Width`, `Height` (read-only, in the form's coordinates).
+* `Style`: `vpTbrDefault` (a button), `vpTbrCheck` (stays pressed or not,
+  its `Value` `vpTbrPressed` / `vpTbrUnpressed`), `vpTbrButtonGroup`
+  (adjacent group buttons: pressing one releases the others, and clicking the
+  pressed one keeps it pressed) or `vpTbrSeparator`. Setting a group
+  button's `Value` releases the others; code may leave none pressed.
+* `ButtonClick` gets the Button (its `Value` already changed); `Click` is
+  for the toolbar's empty part.
+* `TextAlignment`: the Caption under the picture (`vpTbrTextAlignBottom`)
+  or beside it (`vpTbrTextAlignRight`). The pictures have the ImageList's
+  size.
+
+<!-- BEGIN GENERATED: control Toolbar -->
+Default size 400 × 40. Property groups: Position, Font.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Align` | enum | 1 - Top | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right. The edge it docks to (Top), like an aligned PictureBox; Left and Right make a vertical toolbar; None: where you put it |
+| `Buttons` | buttons | `['Button1|button1']` | The buttons, set in the designer: one per line, Caption|Key|Image|ToolTipText|options (check, group, pressed, disabled, hidden); - alone is a separator |
+| `Enabled` | bool | `True` | Whether the control responds to the user |
+| `ImageList` | str | `''` | The name of an ImageList on the form: the buttons' Image is then a picture's Key or Index in it |
+| `Tag` | str | `''` | Free for your own use |
+| `TextAlignment` | enum | 0 - Bottom | 0 - Bottom, 1 - Right. Where a button's Caption is: under its picture, or beside it |
+| `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
+| `Visible` | bool | `True` | Whether the control is shown at run time |
+
+Events: `ButtonClick(Button)`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `ButtonClick`.
+<!-- END GENERATED -->
+
 ### StatusBar
 
 A bar of panels along the bottom of a form, showing texts, the time, the date
@@ -1106,14 +1217,18 @@ def tbsOptions_Click(self):
   `vpTabPlacementLeft`, `vpTabPlacementRight`).
 * Put the Frames after the TabStrip (or use `ZOrder`) so they are drawn on
   top of it.
+* With an [`ImageList`](#imagelist), each tab's `Image` (the 4th part of a
+  designer line, `Caption|Key|ToolTipText|Image`) is a picture's Key or
+  Index in it, shown before the Caption.
 
 <!-- BEGIN GENERATED: control TabStrip -->
 Default size 257 × 177. Property groups: Position, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `ImageList` | str | `''` | The name of an ImageList on the form: the tabs' Image is then a picture's Key or Index in it |
 | `Placement` | enum | 0 - Top | 0 - Top, 1 - Bottom, 2 - Left, 3 - Right. Which side the tabs are on |
-| `Tabs` | tabs | `['Tab1|tab1']` | The tabs, set in the designer: one per line, Caption|Key|ToolTipText (an & in the Caption underlines its access key) |
+| `Tabs` | tabs | `['Tab1|tab1']` | The tabs, set in the designer: one per line, Caption|Key|ToolTipText|Image (an & in the Caption underlines its access key; the Image is a Key or Index in the ImageList) |
 
 Events: `Click`, `BeforeClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
@@ -1250,7 +1365,9 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 `HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Image`](#image),
 [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
-[`StatusBar`](#statusbar) (and its `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
+[`ImageList`](#imagelist) (and its `ListImage`), [`Toolbar`](#toolbar) (and its `Button`),
+[`StatusBar`](#statusbar) (and its
+`Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
 [`Menu`](#menu), and
 `ControlArray` for [control arrays](#control-arrays).
 
@@ -1338,6 +1455,9 @@ All constants are plain ints or strings.
 | Panel.AutoSize (StatusBar) | `vpSbrNoAutoSize`, `vpSbrSpring`, `vpSbrContents` | 0, 1, 2 |
 | Panel.Alignment (StatusBar) | `vpSbrLeft`, `vpSbrCenter`, `vpSbrRight` | 0, 1, 2 |
 | TabStrip.Placement | `vpTabPlacementTop`, `vpTabPlacementBottom`, `vpTabPlacementLeft`, `vpTabPlacementRight` | 0, 1, 2, 3 |
+| Button.Style (Toolbar) | `vpTbrDefault`, `vpTbrCheck`, `vpTbrButtonGroup`, `vpTbrSeparator` | 0, 1, 2, 3 |
+| Button.Value (Toolbar) | `vpTbrUnpressed`, `vpTbrPressed` | 0, 1 |
+| Toolbar.TextAlignment | `vpTbrTextAlignBottom`, `vpTbrTextAlignRight` | 0, 1 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -1423,8 +1543,15 @@ format.
   in VB the UpDown's values were the other way round. A ProgressBar keeps an
   out-of-range `Value` at the nearer end instead of raising an error, and
   UpDown has no `AutoBuddy` (put it beside its buddy yourself).
-* **TabStrip** has no `Style` (buttons), `MultiRow` (too many tabs scroll
-  instead) or tab images.
+* **TabStrip** has no `Style` (buttons) or `MultiRow` (too many tabs scroll
+  instead).
+* **Toolbar** buttons have no `tbrDropdown` menus or `tbrPlaceholder`
+  controls, and the toolbar has no `Wrappable`, `ShowTips` or
+  customization dialog.
+* **ImageList** has no `MaskColor`/`UseMaskColor` (use pictures with
+  transparency), `Overlay` or `ExtractIcon`; a ListImage's `Picture` is its
+  file's path. Without an ImageList, a TreeView node's `Image` can be a
+  picture file.
 * **StatusBar** panels have no `Picture` or `Bevel`, and the lock-key
   panels read the key state from the system on Windows (all four keys) and
   macOS (Caps Lock only); elsewhere they show the key as off.

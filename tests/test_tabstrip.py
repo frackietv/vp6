@@ -22,8 +22,10 @@ TABS = ["&General|general|Name and size", "Colors|colors", "About"]
 
 def test_parse_tab():
     assert parse_tab("&General|general|Name and size") == {
-        "Caption": "&General", "Key": "general", "ToolTipText": "Name and size"}
-    assert parse_tab(" About ") == {"Caption": "About", "Key": "", "ToolTipText": ""}
+        "Caption": "&General", "Key": "general", "ToolTipText": "Name and size", "Image": ""}
+    assert parse_tab(" About ") == {"Caption": "About", "Key": "", "ToolTipText": "",
+                                    "Image": ""}
+    assert parse_tab("A|a||gear")["Image"] == "gear" and parse_tab("B|b||2")["Image"] == 2
 
 
 class Window(Form):

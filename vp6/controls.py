@@ -12,13 +12,14 @@ import os
 
 from PySide6.QtCore import (QDate, QEvent, QLocale, QObject, QRect, QSize, Qt, QTime,
                             QTimer, QUrl)
-from PySide6.QtGui import (QAction, QColor, QDesktopServices, QFont, QIcon, QKeyEvent,
-                           QKeySequence, QPainter, QPalette, QPen, QPixmap)
+from PySide6.QtGui import (QAction, QActionGroup, QColor, QDesktopServices, QFont, QIcon,
+                           QKeyEvent, QKeySequence, QPainter, QPalette, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox, QFrame, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
     QPushButton, QRadioButton, QScrollArea, QScrollBar, QSlider, QStyle,
-    QStyleOptionTabWidgetFrame, QTabWidget, QToolButton, QTreeWidget, QTreeWidgetItem, QWidget,
+    QStyleOptionTabWidgetFrame, QTabWidget, QToolBar, QToolButton, QTreeWidget, QTreeWidgetItem,
+    QWidget,
 )
 
 from . import colors
@@ -36,7 +37,7 @@ EVENT_ARGS = {
     "Resize": "", "Moved": "", "LinkClick": "URL",
     "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
     "UpClick": "", "DownClick": "", "PanelClick": "Panel", "PanelDblClick": "Panel",
-    "BeforeClick": "",
+    "BeforeClick": "", "ButtonClick": "Button",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -1896,55 +1897,7 @@ class Splitter(_Docked, Control):
                                    Qt.SplitHCursor if self._vertical() else Qt.SplitVCursor)
 
 
-# --- StatusBar ---------------------------------------------------------------------------------
-
-_SBR_STYLES = ("text", "caps", "num", "ins", "scrl", "time", "date")  # Panel.Style, by value
-_SBR_AUTOSIZE = ("none", "spring", "contents")  # Panel.AutoSize
-_SBR_ALIGNMENT = ("left", "center", "right")  # Panel.Alignment
-_SBR_KEY_TEXTS = {1: "CAPS", 2: "NUM", 3: "INS", 4: "SCRL"}
-_QT_PANEL_ALIGN = {0: Qt.AlignLeft, 1: Qt.AlignHCenter, 2: Qt.AlignRight}
-
-
-def parse_panel(line: str) -> dict:
-    """A panel as the designer writes it (StatusBar.Panels): ``Text|Key|options``,
-    the options being words: a number (the Width), an AutoSize (spring,
-    contents), a Style (caps, num, ins, scrl, time, date) and an Alignment
-    (center, right). E.g. ``Ready|status|spring`` or ``|clock|time 80 right``."""
-    text, _, rest = str(line).partition("|")
-    key, _, options = rest.partition("|")
-    panel = {"Text": text.strip(), "Key": key.strip()}
-    for word in options.lower().split():
-        if word.isdigit():
-            panel["Width"] = int(word)
-        elif word in _SBR_AUTOSIZE:
-            panel["AutoSize"] = _SBR_AUTOSIZE.index(word)
-        elif word in _SBR_STYLES:
-            panel["Style"] = _SBR_STYLES.index(word)
-        elif word in _SBR_ALIGNMENT:
-            panel["Alignment"] = _SBR_ALIGNMENT.index(word)
-    return panel
-
-
-def _lock_key_on(style: int) -> bool:
-    """Whether Caps Lock, Num Lock, Insert or Scroll Lock is on: read from the
-    system on Windows (all four) and macOS (Caps Lock); off elsewhere."""
-    import sys
-    try:
-        if sys.platform == "win32":
-            import ctypes
-            code = {1: 0x14, 2: 0x90, 3: 0x2D, 4: 0x91}[style]
-            return bool(ctypes.windll.user32.GetKeyState(code) & 1)
-        if sys.platform == "darwin" and style == 1:
-            import ctypes
-            import ctypes.util
-            quartz = ctypes.cdll.LoadLibrary(ctypes.util.find_library("ApplicationServices"))
-            quartz.CGEventSourceFlagsState.restype = ctypes.c_uint64
-            quartz.CGEventSourceFlagsState.argtypes = [ctypes.c_int32]
-            return bool(quartz.CGEventSourceFlagsState(0) & 0x10000)  # combined; AlphaShift
-    except (OSError, AttributeError, KeyError, TypeError):
-        pass
-    return False
-
+# --- Keyed collections (ListImages, Panels, Tabs) ------------------------------------------------
 
 class _KeyedItem:
     """An item of a _KeyedCollection (a StatusBar's Panel, a TabStrip's Tab):
@@ -2043,6 +1996,275 @@ class _KeyedCollection:
     def Clear(self) -> None:
         self._reset()
         self._changed()
+
+
+# --- ImageList ---------------------------------------------------------------------------------
+
+def parse_list_image(line: str) -> dict:
+    """A picture as the designer writes it (ImageList.ListImages): ``path|key``,
+    the path relative to the form's folder, e.g. ``images/open.png|open``."""
+    picture, _, key = str(line).partition("|")
+    return {"Picture": picture.strip(), "Key": key.strip()}
+
+
+def _image_ref(text: str):
+    """An image reference from a designer line: digits are an Index (VB's keys
+    can't be numbers), anything else a key."""
+    text = str(text).strip()
+    return int(text) if text.isdigit() else text
+
+
+class ListImage(_KeyedItem):
+    """One picture of an ImageList (``ImageList1.ListImages(1)`` or by Key)."""
+
+    def __init__(self, images: "ImageList", key: str, picture: str):
+        self._images = images
+        self._key = key
+        self._picture = str(picture)
+        self.Tag = ""
+
+    def __repr__(self):
+        return f"<ListImage {self.Index} {self._key or self._picture!r}>"
+
+    @property
+    def Picture(self) -> str:
+        """Its picture file (relative to the form's folder): also usable as an
+        Image's or PictureBox's Picture."""
+        return self._picture
+
+    @Picture.setter
+    def Picture(self, value):
+        self._picture = str(value)
+        self._changed()
+
+    def _pixmap(self) -> QPixmap:
+        """The picture, at the ImageList's size (ImageWidth, ImageHeight)."""
+        path = resolve_path(self._images, self._picture)
+        pixmap = QPixmap(path) if path else QPixmap()
+        width, height = self._images._size()
+        if not pixmap.isNull() and (width, height) != (pixmap.width(), pixmap.height()):
+            pixmap = pixmap.scaled(width, height, Qt.IgnoreAspectRatio,
+                                   Qt.SmoothTransformation)
+        return pixmap
+
+    def _icon(self) -> QIcon:
+        pixmap = self._pixmap()
+        return QIcon(pixmap) if not pixmap.isNull() else QIcon()
+
+    @property
+    def Width(self) -> int:
+        return self._images._size()[0]
+
+    @property
+    def Height(self) -> int:
+        return self._images._size()[1]
+
+
+class _ListImages(_KeyedCollection):
+    """ImageList.ListImages: its pictures in order, by Index (from 1) or Key."""
+
+    _noun = "picture"
+
+    def Add(self, Index=None, Key: str = "", Picture: str = "") -> ListImage:
+        """A new picture (a file, relative to the form's folder), at the end or
+        at Index (from 1)."""
+        image = self._insert(ListImage(self._owner, str(Key or ""), str(Picture)), Index)
+        self._changed()
+        return image
+
+
+class ImageList(Control):
+    """A collection of pictures for other controls, like VB's ImageList
+    (Windows Common Controls): a TreeView's or TabStrip's ImageList names it,
+    and their nodes' and tabs' Image is then a picture's Key or Index.
+    Invisible at run time; the pictures are set in the designer (ListImages)
+    or in code (ListImages.Add)."""
+
+    TypeName = "ImageList"
+    DefaultEvent = ""
+    DefaultSize = (32, 32)
+    Events = ()
+    Properties = (
+        P("Left", "int", 0, always=True, description="Position in the designer only"),
+        P("Top", "int", 0, always=True, description="Position in the designer only"),
+        P("ImageWidth", "int", 0,
+          description="The pictures' width in pixels; 0 = the first picture's"),
+        P("ImageHeight", "int", 0,
+          description="The pictures' height in pixels; 0 = the first picture's"),
+        P("ListImages", "images", [],
+          description="The pictures, set in the designer: one per line, path|key, the path "
+                      "relative to the form's folder"),
+        P("Tag", "str", "", description="Free for your own use"),
+    )
+
+    def __init__(self, parent, Name: str = "", **props):
+        self.__dict__["_images"] = None
+        super().__init__(parent, Name, **props)
+
+    def _create_widget(self, parent):
+        self.__dict__["_images"] = _ListImages(self, self._notify)
+        if self._design_mode:
+            return _imagelist_design_widget(parent)
+        return None
+
+    def _read_Width(self):
+        return 32
+
+    def _read_Height(self):
+        return 32
+
+    @property
+    def ListImages(self) -> "_ListImages":
+        return self._images
+
+    @ListImages.setter
+    def ListImages(self, lines):
+        """In the designer (and InitializeComponent): the pictures as lines of
+        text, see parse_list_image."""
+        self._set_prop("ListImages", lines)
+
+    def _apply_ListImages(self, lines):
+        self._images._reset()
+        for line in lines or []:
+            spec = parse_list_image(line)
+            if spec["Picture"]:
+                self._images._insert(ListImage(self, spec["Key"], spec["Picture"]))
+        self._notify()
+
+    def _size(self) -> tuple[int, int]:
+        """(ImageWidth, ImageHeight): as set, or the first picture's size."""
+        width, height = self._values.get("ImageWidth", 0), self._values.get("ImageHeight", 0)
+        if (not width or not height) and self._images is not None and len(self._images):
+            first = self._images._list[0]
+            path = resolve_path(self, first._picture)
+            pixmap = QPixmap(path) if path else QPixmap()
+            width, height = width or pixmap.width(), height or pixmap.height()
+        return max(width, 0), max(height, 0)
+
+    def _apply_ImageWidth(self, v):
+        self._notify()
+
+    _apply_ImageHeight = _apply_ImageWidth
+
+    def _notify(self) -> None:
+        """The pictures changed: the controls using this ImageList show them again."""
+        if self._images is None or not self._name or self not in self._form._controls:
+            return
+        for control in self._form._controls:
+            if control._values.get("ImageList") == self._name:
+                control._refresh_images()
+
+
+def _imagelist_design_widget(parent: QWidget) -> QLabel:
+    """The icon the designer shows for an ImageList: a stack of pictures."""
+    pixmap = QPixmap(26, 26)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(QPen(QColor("#333333"), 1.2))
+    for offset, color in ((0, "#9ec5fe"), (4, "#ffe08a"), (8, "#a3e4a8")):
+        painter.setBrush(QColor(color))
+        painter.drawRect(2 + offset, 10 - offset, 14, 12)
+    painter.end()
+    label = QLabel(parent)
+    label.setFixedSize(32, 32)
+    label.setAlignment(Qt.AlignCenter)
+    label.setFrameStyle(QFrame.Panel | QFrame.Raised)
+    label.setPixmap(pixmap)
+    return label
+
+
+class _UsesImageList:
+    """For controls whose items show pictures (TreeView, TabStrip): their
+    ImageList property names an ImageList on the form, and an item's Image
+    is then a picture's Key or Index in it (without one, a picture file)."""
+
+    def _image_list(self) -> "ImageList | None":
+        name = self._values.get("ImageList", "")
+        if not name:
+            return None
+        return next((c for c in self._form._controls
+                     if isinstance(c, ImageList) and c._name == name), None)
+
+    def _apply_ImageList(self, v):
+        self._refresh_images()
+
+    def _refresh_images(self) -> None:
+        """Show every item's Image again (the ImageList or its pictures changed)."""
+
+
+def _picture_icon(control, ref, strict: bool = False) -> QIcon:
+    """The icon of an item's Image: with the control's ImageList, the picture
+    with that Key or Index (from 1); without one, a picture file (relative to
+    the form's folder). ``strict``: an unknown Key or Index raises KeyError /
+    IndexError (code setting an Image) instead of showing none."""
+    if ref is None or ref == "":
+        return QIcon()
+    images = control._image_list()
+    if images is not None:
+        try:
+            return images.ListImages(ref)._icon()
+        except (KeyError, IndexError, ValueError):
+            if strict:
+                raise
+            return QIcon()
+    if isinstance(ref, int):
+        if strict:
+            raise ValueError(f"{control.TypeName} '{control.Name}': Image {ref} needs an "
+                             "ImageList")
+        return QIcon()
+    path = resolve_path(control, str(ref))
+    return QIcon(QPixmap(path)) if path else QIcon()
+
+
+# --- StatusBar ---------------------------------------------------------------------------------
+
+_SBR_STYLES = ("text", "caps", "num", "ins", "scrl", "time", "date")  # Panel.Style, by value
+_SBR_AUTOSIZE = ("none", "spring", "contents")  # Panel.AutoSize
+_SBR_ALIGNMENT = ("left", "center", "right")  # Panel.Alignment
+_SBR_KEY_TEXTS = {1: "CAPS", 2: "NUM", 3: "INS", 4: "SCRL"}
+_QT_PANEL_ALIGN = {0: Qt.AlignLeft, 1: Qt.AlignHCenter, 2: Qt.AlignRight}
+
+
+def parse_panel(line: str) -> dict:
+    """A panel as the designer writes it (StatusBar.Panels): ``Text|Key|options``,
+    the options being words: a number (the Width), an AutoSize (spring,
+    contents), a Style (caps, num, ins, scrl, time, date) and an Alignment
+    (center, right). E.g. ``Ready|status|spring`` or ``|clock|time 80 right``."""
+    text, _, rest = str(line).partition("|")
+    key, _, options = rest.partition("|")
+    panel = {"Text": text.strip(), "Key": key.strip()}
+    for word in options.lower().split():
+        if word.isdigit():
+            panel["Width"] = int(word)
+        elif word in _SBR_AUTOSIZE:
+            panel["AutoSize"] = _SBR_AUTOSIZE.index(word)
+        elif word in _SBR_STYLES:
+            panel["Style"] = _SBR_STYLES.index(word)
+        elif word in _SBR_ALIGNMENT:
+            panel["Alignment"] = _SBR_ALIGNMENT.index(word)
+    return panel
+
+
+def _lock_key_on(style: int) -> bool:
+    """Whether Caps Lock, Num Lock, Insert or Scroll Lock is on: read from the
+    system on Windows (all four) and macOS (Caps Lock); off elsewhere."""
+    import sys
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            code = {1: 0x14, 2: 0x90, 3: 0x2D, 4: 0x91}[style]
+            return bool(ctypes.windll.user32.GetKeyState(code) & 1)
+        if sys.platform == "darwin" and style == 1:
+            import ctypes
+            import ctypes.util
+            quartz = ctypes.cdll.LoadLibrary(ctypes.util.find_library("ApplicationServices"))
+            quartz.CGEventSourceFlagsState.restype = ctypes.c_uint64
+            quartz.CGEventSourceFlagsState.argtypes = [ctypes.c_int32]
+            return bool(quartz.CGEventSourceFlagsState(0) & 0x10000)  # combined; AlphaShift
+    except (OSError, AttributeError, KeyError, TypeError):
+        pass
+    return False
 
 
 class Panel(_KeyedItem):
@@ -2338,11 +2560,14 @@ class StatusBar(_Docked, Control):
 # --- TabStrip ----------------------------------------------------------------------------------
 
 def parse_tab(line: str) -> dict:
-    """A tab as the designer writes it (TabStrip.Tabs): ``Caption|Key|ToolTipText``,
-    e.g. ``&General|general|Name and size``."""
+    """A tab as the designer writes it (TabStrip.Tabs):
+    ``Caption|Key|ToolTipText|Image``, e.g. ``&General|general|Name and size``;
+    the Image is a Key or Index in the TabStrip's ImageList."""
     caption, _, rest = str(line).partition("|")
-    key, _, tip = rest.partition("|")
-    return {"Caption": caption.strip(), "Key": key.strip(), "ToolTipText": tip.strip()}
+    key, _, rest = rest.partition("|")
+    tip, _, image = rest.partition("|")
+    return {"Caption": caption.strip(), "Key": key.strip(), "ToolTipText": tip.strip(),
+            "Image": _image_ref(image) if image.strip() else ""}
 
 
 class Tab(_KeyedItem):
@@ -2353,10 +2578,24 @@ class Tab(_KeyedItem):
         self._key = key
         self._caption = caption
         self._tooltip = ""
+        self._image = ""
         self.Tag = ""
 
     def __repr__(self):
         return f"<Tab {self.Index} {self._key or self._caption!r}>"
+
+    @property
+    def Image(self):
+        """The picture before the Caption: a Key or Index in the TabStrip's
+        ImageList (without one, a picture file)."""
+        return self._image
+
+    @Image.setter
+    def Image(self, value):
+        value = "" if value is None else value
+        _picture_icon(self._strip, value, strict=True)  # (an unknown Key raises here)
+        self._image = value
+        self._changed()
 
     @property
     def Caption(self) -> str:
@@ -2410,7 +2649,7 @@ class _TabWidget(QTabWidget):
         return self.style().subElementRect(QStyle.SE_TabWidgetTabContents, option, self)
 
 
-class TabStrip(Control):
+class TabStrip(_UsesImageList, Control):
     """A row of tabs, like VB's TabStrip (Windows Common Controls). It isn't
     a container: put a Frame (or PictureBox) for each tab over its client
     area (ClientLeft, ClientTop, ClientWidth, ClientHeight) and show the one
@@ -2425,10 +2664,14 @@ class TabStrip(Control):
     Properties = (
         *_geometry(*DefaultSize),
         P("Tabs", "tabs", ["Tab1|tab1"],
-          description="The tabs, set in the designer: one per line, Caption|Key|ToolTipText "
-                      "(an & in the Caption underlines its access key)"),
+          description="The tabs, set in the designer: one per line, "
+                      "Caption|Key|ToolTipText|Image (an & in the Caption underlines its "
+                      "access key; the Image is a Key or Index in the ImageList)"),
         P("Placement", "enum", 0, enum_choices("Top", "Bottom", "Left", "Right"),
           description="Which side the tabs are on"),
+        P("ImageList", "str", "",
+          description="The name of an ImageList on the form: the tabs' Image is then a "
+                      "picture's Key or Index in it"),
         *_FONT, *_COMMON,
     )
     _QT_PLACEMENT = {0: QTabWidget.North, 1: QTabWidget.South, 2: QTabWidget.West,
@@ -2465,6 +2708,7 @@ class TabStrip(Control):
             spec = parse_tab(line)
             tab = Tab(self, spec["Key"], spec["Caption"])
             tab._tooltip = spec["ToolTipText"]
+            tab._image = spec["Image"]
             self._tabs._insert(tab)
         self._update_tabs()
 
@@ -2484,6 +2728,7 @@ class TabStrip(Control):
             for index, tab in enumerate(self._tabs._list):
                 widget.setTabText(index, tab._caption)
                 widget.setTabToolTip(index, tab._tooltip)
+                widget.setTabIcon(index, _picture_icon(self, tab._image))
             if selected in self._tabs._list:
                 widget.setCurrentIndex(self._tabs._list.index(selected))
         finally:
@@ -2541,6 +2786,334 @@ class TabStrip(Control):
 
     def _apply_Placement(self, v):
         self._widget.setTabPosition(self._QT_PLACEMENT.get(v, QTabWidget.North))
+
+    def _refresh_images(self) -> None:
+        if self._widget is not None:
+            self._update_tabs()
+
+
+# --- Toolbar -----------------------------------------------------------------------------------
+
+_TBR_STYLE_WORDS = {"check": 1, "group": 2, "separator": 3}
+
+
+def parse_button(line: str) -> dict:
+    """A button as the designer writes it (Toolbar.Buttons):
+    ``Caption|Key|Image|ToolTipText|options``, the Image a Key or Index in the
+    Toolbar's ImageList and the options words: check or group (the Style),
+    pressed, disabled, hidden. A line of just ``-`` is a separator. E.g.
+    ``Open|open|open|Open a file`` or ``|bold|bold|Bold|check``."""
+    line = str(line).strip()
+    if line == "-":
+        line = "||||separator"
+    caption, key, image, tip, options = ([part.strip() for part in line.split("|", 4)] +
+                                         [""] * 5)[:5]
+    words = options.lower().split()
+    style = next((_TBR_STYLE_WORDS[w] for w in words if w in _TBR_STYLE_WORDS), 0)
+    return {"Caption": caption, "Key": key, "Image": _image_ref(image) if image else "",
+            "ToolTipText": tip, "Style": style, "Value": 1 if "pressed" in words else 0,
+            "Enabled": "disabled" not in words, "Visible": "hidden" not in words}
+
+
+class Button(_KeyedItem):
+    """One button of a Toolbar (``Toolbar1.Buttons(1)`` or by Key). Setting a
+    property updates the toolbar at once."""
+
+    def __init__(self, bar: "Toolbar", key: str = "", caption: str = "", style: int = 0,
+                 image=""):
+        self._bar = bar
+        self._key = key
+        self._caption = caption
+        self._style = int(style)
+        self._image = image
+        self._value = 0
+        self._tooltip = ""
+        self._enabled = True
+        self._visible = True
+        self.Tag = ""
+        self._action = None  # its QAction while it's shown
+
+    def __repr__(self):
+        return f"<Button {self.Index} {self._key or self._caption!r}>"
+
+    @property
+    def Caption(self) -> str:
+        return self._caption
+
+    @Caption.setter
+    def Caption(self, value):
+        self._caption = str(value)
+        self._changed()
+
+    @property
+    def Image(self):
+        """Its picture: a Key or Index in the Toolbar's ImageList (without one,
+        a picture file)."""
+        return self._image
+
+    @Image.setter
+    def Image(self, value):
+        value = "" if value is None else value
+        _picture_icon(self._bar, value, strict=True)  # (an unknown Key raises here)
+        self._image = value
+        self._changed()
+
+    @property
+    def Style(self) -> int:
+        """vpTbrDefault, vpTbrCheck, vpTbrButtonGroup or vpTbrSeparator."""
+        return self._style
+
+    @Style.setter
+    def Style(self, value):
+        self._style = int(value)
+        self._changed()
+
+    @property
+    def Value(self) -> int:
+        """vpTbrPressed (1) or vpTbrUnpressed (0): a Check or ButtonGroup button's
+        state. Pressing a ButtonGroup button releases the others of its group."""
+        return self._value
+
+    @Value.setter
+    def Value(self, value):
+        self._value = 1 if value else 0
+        if self._value and self._style == 2:
+            for other in self._bar._group_of(self):
+                if other is not self:
+                    other._value = 0
+        self._changed()
+
+    @property
+    def ToolTipText(self) -> str:
+        return self._tooltip
+
+    @ToolTipText.setter
+    def ToolTipText(self, value):
+        self._tooltip = str(value)
+        self._changed()
+
+    @property
+    def Enabled(self) -> bool:
+        return self._enabled
+
+    @Enabled.setter
+    def Enabled(self, value):
+        self._enabled = bool(value)
+        self._changed()
+
+    @property
+    def Visible(self) -> bool:
+        return self._visible
+
+    @Visible.setter
+    def Visible(self, value):
+        self._visible = bool(value)
+        self._changed()
+
+    def _geometry(self) -> QRect:
+        """Where its button is, in the Toolbar's container (read-only)."""
+        widget = self._bar._widget.widgetForAction(self._action) if self._action else None
+        if widget is None:
+            return QRect()
+        self._bar._widget.layout().activate()  # (just added buttons aren't placed yet)
+        return widget.geometry().translated(self._bar._widget.pos())
+
+    @property
+    def Left(self) -> int:
+        return self._geometry().x()
+
+    @property
+    def Top(self) -> int:
+        return self._geometry().y()
+
+    @property
+    def Width(self) -> int:
+        return self._geometry().width()
+
+    @property
+    def Height(self) -> int:
+        return self._geometry().height()
+
+
+class _Buttons(_KeyedCollection):
+    """Toolbar.Buttons: its buttons in order, by Index (from 1) or Key."""
+
+    _noun = "button"
+
+    def Add(self, Index=None, Key: str = "", Caption: str = "", Style: int = 0,
+            Image="") -> Button:
+        """A new button, at the end or at Index (from 1)."""
+        button = Button(self._owner, str(Key or ""), str(Caption), Style)
+        if Image not in (None, ""):
+            _picture_icon(self._owner, Image, strict=True)
+            button._image = Image
+        self._insert(button, Index)
+        self._changed()
+        return button
+
+
+class Toolbar(_Docked, _UsesImageList, Control):
+    """A row of buttons along the top of a form, like VB's Toolbar (Windows
+    Common Controls): pictures from an ImageList, captions, check buttons,
+    groups of buttons of which one is pressed, and separators. It docks like
+    an aligned PictureBox (Top by default), as tall as its buttons need.
+    ButtonClick gets the Button."""
+
+    TypeName = "Toolbar"
+    DefaultEvent = "ButtonClick"
+    DefaultSize = (400, 40)
+    Events = ("ButtonClick", "Click", "DblClick", "MouseDown", "MouseMove", "MouseUp")
+    _synthesize_click = True
+    _qss_type = "QToolBar"
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Align", "enum", 1, enum_choices("None", "Top", "Bottom", "Left", "Right"),
+          description="The edge it docks to (Top), like an aligned PictureBox; Left and "
+                      "Right make a vertical toolbar; None: where you put it"),
+        P("Buttons", "buttons", ["Button1|button1"],
+          description="The buttons, set in the designer: one per line, "
+                      "Caption|Key|Image|ToolTipText|options (check, group, pressed, "
+                      "disabled, hidden); - alone is a separator"),
+        P("ImageList", "str", "",
+          description="The name of an ImageList on the form: the buttons' Image is then a "
+                      "picture's Key or Index in it"),
+        P("TextAlignment", "enum", 0, enum_choices("Bottom", "Right"),
+          description="Where a button's Caption is: under its picture, or beside it"),
+        *_FONT,
+        P("Enabled", "bool", True, description="Whether the control responds to the user"),
+        P("Visible", "bool", True, description="Whether the control is shown at run time"),
+        P("ToolTipText", "str", "", description="Text shown when the mouse rests on it"),
+        P("Tag", "str", "", description="Free for your own use"),
+    )
+
+    def _create_widget(self, parent):
+        self.__dict__["_buttons"] = _Buttons(self, self._update_buttons)
+        self.__dict__["_groups"] = []  # the QActionGroups of the ButtonGroup runs
+        widget = QToolBar(parent)
+        widget.setMovable(False)
+        widget.setFloatable(False)
+        return widget
+
+    # -- the collection ----------------------------------------------------------------------
+    @property
+    def Buttons(self) -> _Buttons:
+        return self._buttons
+
+    @Buttons.setter
+    def Buttons(self, lines):
+        """In the designer (and InitializeComponent): the buttons as lines of
+        text, see parse_button."""
+        self._set_prop("Buttons", lines)
+
+    def _apply_Buttons(self, lines):
+        self._buttons._reset()
+        for line in lines or []:
+            spec = parse_button(line)
+            button = Button(self, spec["Key"], spec["Caption"], spec["Style"], spec["Image"])
+            button._tooltip = spec["ToolTipText"]
+            button._value = spec["Value"]
+            button._enabled = spec["Enabled"]
+            button._visible = spec["Visible"]
+            self._buttons._insert(button)
+        self._update_buttons()
+
+    def _group_of(self, button: Button) -> list[Button]:
+        """The run of adjacent ButtonGroup buttons ``button`` is in."""
+        runs, run = [], []
+        for other in self._buttons._list:
+            if other._style == 2:
+                run.append(other)
+            elif run:
+                runs.append(run)
+                run = []
+        runs.append(run)
+        return next((r for r in runs if button in r), [button])
+
+    # -- showing the buttons -----------------------------------------------------------------
+    def _update_buttons(self) -> None:
+        """Rebuild the toolbar from the buttons."""
+        widget = self._widget
+        if widget is None:
+            return
+        widget.clear()
+        for group in self._groups:
+            group.deleteLater()
+        self._groups.clear()
+        images = self._image_list()
+        if images is not None and all(images._size()):
+            widget.setIconSize(QSize(*images._size()))
+        vertical = self._values.get("Align", 1) in (3, 4)
+        widget.setOrientation(Qt.Vertical if vertical else Qt.Horizontal)
+        widget.setToolButtonStyle(Qt.ToolButtonTextBesideIcon
+                                  if self._values.get("TextAlignment", 0) == 1
+                                  else Qt.ToolButtonTextUnderIcon)
+        group = None
+        for button in self._buttons._list:
+            button._action = None
+            if button._style != 2:
+                group = None
+            if not button._visible:
+                continue
+            if button._style == 3:
+                button._action = widget.addSeparator()
+                continue
+            action = widget.addAction(_picture_icon(self, button._image), button._caption)
+            action.setToolTip(button._tooltip or button._caption)
+            action.setEnabled(button._enabled)
+            if button._style in (1, 2):
+                action.setCheckable(True)
+                action.setChecked(bool(button._value))
+            if button._style == 2:
+                if group is None:
+                    group = QActionGroup(widget)
+                    group.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
+                    self._groups.append(group)
+                group.addAction(action)
+            action.triggered.connect(lambda checked=False, b=button: self._on_triggered(b))
+            button._action = action
+            tool = widget.widgetForAction(action)
+            if tool is not None:
+                tool.setFocusPolicy(Qt.NoFocus)
+        self._fit()
+
+    def _fit(self) -> None:
+        """Docked: as tall (Top, Bottom) or as wide (Left, Right) as the buttons need."""
+        align = self._values.get("Align", 1)
+        if not align:
+            return
+        hint = self._widget.sizeHint()
+        if align in (1, 2):
+            self._values["Height"] = hint.height()
+        else:
+            self._values["Width"] = hint.width()
+        self._relayout()
+
+    def _on_triggered(self, button: Button) -> None:
+        action = button._action
+        if button._style == 2 and not action.isChecked():
+            action.setChecked(True)  # a pressed group button stays pressed, as in VB
+        if button._style in (1, 2):
+            for other in self._group_of(button) if button._style == 2 else [button]:
+                other._value = 1 if other._action is not None and \
+                    other._action.isChecked() else 0
+        self._fire("ButtonClick", button)
+
+    def _refresh_images(self) -> None:
+        self._update_buttons()
+
+    def _apply_Align(self, v):
+        self._update_buttons()  # (its orientation, and its size)
+
+    def _apply_TextAlignment(self, v):
+        self._update_buttons()
+
+    def _apply_font(self, _=None):
+        super()._apply_font()
+        if self._widget is not None and "_buttons" in self.__dict__:
+            self._fit()
+
+    _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
+        _apply_FontUnderline = _apply_font
 
 
 # Controls in toolbox order.
@@ -2642,10 +3215,11 @@ class Line(Control):
 _TVW_FIRST, _TVW_LAST, _TVW_NEXT, _TVW_PREVIOUS, _TVW_CHILD = range(5)  # vpTvw* constants
 
 
-def parse_outline(lines) -> list[tuple[int, str, str]]:
-    """(level, text, key) for each node of an outline: one node per line,
-    indented under its parent (a tab counts as 4 spaces), with ``|key`` at the
-    end to give it a key. Blank lines are skipped."""
+def parse_outline(lines) -> list[tuple[int, str, str, object]]:
+    """(level, text, key, image) for each node of an outline: one node per
+    line, indented under its parent (a tab counts as 4 spaces), as
+    ``Text|key|image``: a key and an Image (a key or Index in the TreeView's
+    ImageList, or a picture file) are optional. Blank lines are skipped."""
     nodes, indents = [], []  # indents of the current line's ancestors
     for raw in lines:
         line = str(raw).replace("\t", "    ").rstrip()
@@ -2654,10 +3228,10 @@ def parse_outline(lines) -> list[tuple[int, str, str]]:
         indent = len(line) - len(line.lstrip(" "))
         while indents and indents[-1] >= indent:
             indents.pop()
-        text, bar, key = line.strip().rpartition("|")
-        if not bar:
-            text, key = key, ""
-        nodes.append((len(indents), text.strip(), key.strip()))
+        text, _, rest = line.strip().partition("|")
+        key, _, image = rest.partition("|")
+        nodes.append((len(indents), text.strip(), key.strip(),
+                      _image_ref(image) if image.strip() else ""))
         indents.append(indent)
     return nodes
 
@@ -2768,15 +3342,17 @@ class Node:
                            None if value is None else colors.to_qcolor(value))
 
     @property
-    def Image(self) -> str:
-        """A picture file shown before the text (relative to the form's folder)."""
+    def Image(self):
+        """The picture before the text: with the TreeView's ImageList, a
+        picture's Key or Index in it; without one, a picture file (relative to
+        the form's folder)."""
         return self._image
 
     @Image.setter
     def Image(self, value):
-        self._image = str(value or "")
-        path = resolve_path(self._tree, self._image)
-        self._item.setIcon(0, QIcon(QPixmap(path)) if path else QIcon())
+        value = "" if value is None else value
+        self._item.setIcon(0, _picture_icon(self._tree, value, strict=True))
+        self._image = value
 
     @property
     def Sorted(self) -> bool:
@@ -2891,7 +3467,7 @@ class _Nodes:
         return len(self._list)
 
     def Add(self, Relative=None, Relationship=None, Key: str = "", Text: str = "",
-            Image: str = "") -> Node:
+            Image="") -> Node:
         """Add a node, like VB: at the end of the top level; or placed by
         ``Relationship`` to the ``Relative`` node (its key, Index or Node):
         vpTvwFirst, vpTvwLast, vpTvwNext (the default) or vpTvwPrevious among
@@ -2964,7 +3540,7 @@ class _Quiet:
         self._tree.__dict__["_quiet"] -= 1
 
 
-class TreeView(Control):
+class TreeView(_UsesImageList, Control):
     """A hierarchical list of nodes, like VB's TreeView (Windows Common
     Controls). Fill it in code with ``Nodes.Add``, or in the designer with
     the ``Items`` outline. NodeClick, Expand, Collapse and NodeCheck get the
@@ -2985,6 +3561,9 @@ class TreeView(Control):
         P("Checkboxes", "bool", False, description="A check box in front of every node"),
         P("Sorted", "bool", False, description="Keep the top-level nodes in alphabetical order"),
         P("PathSeparator", "str", "\\", description="Separates the texts in a node's FullPath"),
+        P("ImageList", "str", "",
+          description="The name of an ImageList on the form: the nodes' Image is then a "
+                      "picture's Key or Index in it"),
         P("Items", "outline", [],
           description="The nodes, set in the designer: one per line, indented under its "
                       "parent; a vertical bar and a key at the end give the node that key"),
@@ -3100,15 +3679,21 @@ class TreeView(Control):
     def _apply_Sorted(self, v):
         self._keep_sorted(None)
 
+    def _refresh_images(self) -> None:
+        for node in self._nodes._list:
+            node._item.setIcon(0, _picture_icon(self, node._image))
+
     def _apply_Items(self, lines):
         """Rebuild the tree from an outline (the designer's Items)."""
         self._nodes.Clear()
         parents: list[Node] = []
-        for level, text, key in parse_outline(lines):
+        for level, text, key, image in parse_outline(lines):
             del parents[level:]
             parent = parents[-1] if parents else None
             node = self._nodes.Add(parent, _TVW_CHILD if parent else None, key, text)
+            node._image = image  # shown by _refresh_images (the ImageList may come later)
             parents.append(node)
+        self._refresh_images()
         if self._design_mode:
             self._widget.expandAll()  # show the whole outline while designing
 
@@ -3255,7 +3840,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Splitter,
-        ProgressBar, Slider, UpDown, StatusBar, TabStrip, Menu,
+        ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, Menu,
     )
 }
 

@@ -1,7 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** ImageList: a collection of pictures (`ListImages` with Key) set in the designer, used by other controls by key or index
-- **[Controls]** Toolbar: buttons (`Buttons` collection with Caption, Key, Image from an ImageList, Style: button, check, button group, separator), docked to the top, `ButtonClick` event (self-hosting: the IDE's toolbar)
 - **[Controls]** ListView: items in Icon, SmallIcon, List and Report views (`ListItems`, `ColumnHeaders`, SubItems, sorting by column, images from ImageLists, `ItemClick` / `ColumnClick` events)
 - **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)
 - **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)
@@ -52,7 +50,7 @@
 - **[Language and runtime]** MDI forms (MDI parent and child forms)
 - **[Language and runtime]** Borderless popup forms that don't take the focus from the form that opened them (self-hosting: the code completion list)
 - **[Language and runtime]** Starting a program asynchronously with output, exit and error events and a way to write to its stdin (a Process object beyond VB's `Shell`) (self-hosting: F5 and the Immediate window)
-- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: graphics methods, MDI forms, Common Dialog, and Toolbar from the common controls
+- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: graphics methods, MDI forms, Common Dialog
 - **[Language and runtime]** Twips and VB's `ScaleMode`; VP6 uses pixels only
 - **[Controls]** Data-bound controls
 - **[IDE]** Designer window frames with rounded bottom corners on macOS

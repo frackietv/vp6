@@ -49,6 +49,27 @@ def test_forced_dark_scheme_styles_form_and_controls(qapp):
     assert form.List1._widget.palette().color(QPalette.Base).name() == "#252525"
 
 
+def test_the_shared_style_survives_widgets_that_used_it(qapp):
+    # A Toolbar rebuilding its buttons destroys widgets the Fusion style was set
+    # on: PySide then invalidates the style's Python wrapper (the style itself
+    # lives on). Forms and controls made afterwards must still get it.
+    import shiboken6
+
+    form = SchemeForm()
+    form.tbr = Toolbar(form, Buttons=["A|a", "B|b"])
+    appearance.style_tree(form._widget, form._scheme_style)  # the buttons styled last
+    form.tbr.Buttons.Add(Key="c", Caption="C")  # rebuilt: the styled buttons are gone
+    qapp.processEvents()
+    style = appearance.fusion_style()
+    assert shiboken6.isValid(style)
+    form.List1 = ListBox(form)  # (this raised "Internal C++ object already deleted")
+    assert is_fusion(form.List1._widget)
+    other = SchemeForm()  # another forced-dark form: the same style
+    assert shiboken6.getCppPointer(other.Command1._widget.style())[0] == \
+        shiboken6.getCppPointer(style)[0]
+    assert is_fusion(form.Command1._widget)  # the first form keeps it too
+
+
 def test_switching_to_light_and_system(qapp):
     form = SchemeForm()
     form.ColorScheme = vpSchemeLight

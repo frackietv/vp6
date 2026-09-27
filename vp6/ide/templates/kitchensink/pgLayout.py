@@ -10,7 +10,7 @@ class pgLayout(Form):
         self.Width = 640
         self.Height = 440
         self.lblLayout = Label(self, TextFormat=2,
-                               Caption="This window is laid out with **docked controls** (`Align`), not code:\n\n- `sbStatus`: a **StatusBar**, *Bottom* (click its clock to see the date)\n- `picNav`: *Left*, holding the TreeView\n- `splNav`: a **Splitter** beside it; drag it to resize the navigation pane\n- `picHeader`: *Top*, the page title\n- `picContent`: *Fill*, the rest, with `ScrollBars`: the pages are shown in it\n\nThey follow the window's size; their `Resize` events size what is on them.",
+                               Caption="This window is laid out with **docked controls** (`Align`), not code:\n\n- `sbStatus`: a **StatusBar**, *Bottom* (click its clock to see the date)\n- `tbrMain`: a **Toolbar**, *Top*: the pages, the navigation pane and the colors\n- `picNav`: *Left*, holding the TreeView\n- `splNav`: a **Splitter** beside it; drag it to resize the navigation pane\n- `picHeader`: *Top*, the page title\n- `picContent`: *Fill*, the rest, with `ScrollBars`: the pages are shown in it\n\nThey follow the window's size; their `Resize` events size what is on them.",
                                Left=16, Top=16, Width=600, Height=270, WordWrap=True, TabIndex=1)
         self.chkNav = CheckBox(self, Caption='Show the &navigation pane (also in the View menu)',
                                Left=16, Top=296, Width=360, Height=25, Value=1, TabIndex=2)
