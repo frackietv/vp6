@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** StatusBar: panels (`Panels` collection with Text, Width, AutoSize, Style such as time/date/Caps Lock), docked to the bottom like an aligned PictureBox, `PanelClick` event (self-hosting: the IDE's status bar)
 - **[Controls]** TabStrip: tabs (`Tabs` collection with Caption, Key, ToolTipText), `SelectedItem`, `Click` when the tab changes; the program shows each tab's controls (self-hosting: the New Project dialog's tabs)
 - **[Controls]** ImageList: a collection of pictures (`ListImages` with Key) set in the designer, used by other controls by key or index
 - **[Controls]** Toolbar: buttons (`Buttons` collection with Caption, Key, Image from an ImageList, Style: button, check, button group, separator), docked to the top, `ButtonClick` event (self-hosting: the IDE's toolbar)
@@ -54,7 +53,7 @@
 - **[Language and runtime]** MDI forms (MDI parent and child forms)
 - **[Language and runtime]** Borderless popup forms that don't take the focus from the form that opened them (self-hosting: the code completion list)
 - **[Language and runtime]** Starting a program asynchronously with output, exit and error events and a way to write to its stdin (a Process object beyond VB's `Shell`) (self-hosting: F5 and the Immediate window)
-- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: graphics methods, MDI forms, Common Dialog, and TabStrip / StatusBar / Toolbar from the common controls
+- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: graphics methods, MDI forms, Common Dialog, and TabStrip / Toolbar from the common controls
 - **[Language and runtime]** Twips and VB's `ScaleMode`; VP6 uses pixels only
 - **[Controls]** Data-bound controls
 - **[IDE]** Designer window frames with rounded bottom corners on macOS

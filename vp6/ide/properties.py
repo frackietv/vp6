@@ -148,7 +148,10 @@ class PropertiesWindow(QWidget):
         if spec.name == "Name":  # a control array's elements share their (Name)
             name_value = getattr(self.designer, "name_value", self.designer.object_name)
             return name_value(objects[0])
-        values = [getattr(obj, spec.name) for obj in objects]
+        if spec.kind == "panels":  # (at run time StatusBar.Panels is the collection)
+            values = [obj._values.get(spec.name, spec.default) for obj in objects]
+        else:
+            values = [getattr(obj, spec.name) for obj in objects]
         return values[0] if all(v == values[0] for v in values) else _MIXED
 
     def _on_object_chosen(self, index: int) -> None:
@@ -199,9 +202,11 @@ class PropertiesWindow(QWidget):
             return combo
         if kind == "color":
             return self._color_editor(spec, None if mixed else value, mixed)
-        if kind in ("list", "outline"):
+        if kind in ("list", "outline", "panels"):
             if kind == "list":
                 text = f"(List: {len(value)} items)"
+            elif kind == "panels":
+                text = f"(Panels: {len(value)})"
             else:
                 text = f"(Tree: {sum(1 for line in value if str(line).strip())} nodes)"
             button = QPushButton("" if mixed else text)
@@ -288,10 +293,17 @@ class PropertiesWindow(QWidget):
             self._commit(prop, colors.from_qcolor(color))
 
     def _edit_list(self, prop: str, value, kind: str = "list") -> None:
-        hint = None if kind == "list" else (
-            "One node per line. Indent a node (spaces or a tab) to make it a child of the "
-            "node above; add |key at the end to give it a key, e.g. \"Cats|cats\".")
-        dialog = TextListDialog(f"{prop} (List)" if kind == "list" else f"{prop} (Tree)",
+        hint = {
+            "outline": "One node per line. Indent a node (spaces or a tab) to make it a child "
+                       "of the node above; add |key at the end to give it a key, e.g. "
+                       "\"Cats|cats\".",
+            "panels": "One panel per line: Text|Key|options. The options are words: a width "
+                      "in pixels, spring (shares the space left) or contents (as wide as its "
+                      "text), caps, num, ins, scrl, time or date (what it shows), center or "
+                      "right. E.g. \"Ready|status|spring\" or \"|clock|time 80 right\".",
+        }.get(kind)
+        title = {"list": "List", "outline": "Tree", "panels": "Panels"}[kind]
+        dialog = TextListDialog(f"{prop} ({title})",
                                 "\n".join(value or []), self, hint)
         if dialog.exec():
             items = dialog.edit.toPlainText().split("\n")

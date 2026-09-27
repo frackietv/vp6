@@ -30,9 +30,10 @@ def test_kitchen_sink_form1():
     source = (kitchensink.TEMPLATE_DIR / "Form1.py").read_text()
     expected = [
         "PAGES", "HELP", "Form1", "Form1::InitializeComponent", "Form1::Form_Load",
-        "Form1::Form_Unload", "Form1::status", "Form1::show_page", "Form1::page_titles",
-        "Form1::tvwIndex_NodeClick", "Form1::picNav_Resize", "Form1::picHeader_Resize",
-        "Form1::picStatus_Resize", "Form1::splNav_Moved", "Form1::picContent_Scroll",
+        "Form1::Form_Unload", "Form1::status", "Form1::sbStatus_PanelClick",
+        "Form1::show_page", "Form1::page_titles", "Form1::tvwIndex_NodeClick",
+        "Form1::picNav_Resize", "Form1::picHeader_Resize", "Form1::splNav_Moved",
+        "Form1::picContent_Scroll",
         "Form1::show_navigation", "Form1::set_scheme", "Form1::mnuFileEnd_Click",
         "Form1::mnuFileClose_Click", "Form1::mnuView_Click", "Form1::mnuViewNav_Click",
         "Form1::mnuScheme_Click", "Form1::add_bookmark", "Form1::mnuBookmark_Click",

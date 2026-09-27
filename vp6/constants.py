@@ -123,6 +123,29 @@ vpTickTopLeft = 1
 vpTickBoth = 2
 vpTickNone = 3
 
+# --- StatusBar.Style -------------------------------------------------------------
+vpSbrNormal = 0
+vpSbrSimple = 1
+
+# --- Panel.Style (StatusBar) -----------------------------------------------------
+vpSbrText = 0
+vpSbrCaps = 1
+vpSbrNum = 2
+vpSbrIns = 3
+vpSbrScrl = 4
+vpSbrTime = 5
+vpSbrDate = 6
+
+# --- Panel.AutoSize (StatusBar) --------------------------------------------------
+vpSbrNoAutoSize = 0
+vpSbrSpring = 1
+vpSbrContents = 2
+
+# --- Panel.Alignment (StatusBar) -------------------------------------------------
+vpSbrLeft = 0
+vpSbrCenter = 1
+vpSbrRight = 2
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

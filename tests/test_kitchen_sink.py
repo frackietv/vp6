@@ -133,6 +133,11 @@ def _page(window, key):
     return window.pages[key]
 
 
+def _status(window):
+    """The text in the window's StatusBar."""
+    return window.sbStatus.Panels("status").Text
+
+
 def _place(control):
     return control.Left, control.Top, control.Width, control.Height
 
@@ -141,7 +146,7 @@ def _place(control):
 
 def test_explorer_layout(sink):
     w = sink
-    assert _place(w.picStatus) == (0, w.ScaleHeight - 28, w.ScaleWidth, 28)  # Bottom
+    assert _place(w.sbStatus) == (0, w.ScaleHeight - 28, w.ScaleWidth, 28)  # a StatusBar
     assert _place(w.picNav) == (0, 0, 220, w.ScaleHeight - 28)  # Left
     assert (w.splNav.Left, w.splNav.Width) == (220, 6)  # the Splitter beside it
     assert _place(w.picHeader) == (226, 0, w.ScaleWidth - 226, 44)  # Top of the rest
@@ -155,9 +160,21 @@ def test_explorer_layout(sink):
     QTest.mouseMove(bar, QPoint(43, 100))  # dragged 40 pixels to the right
     QTest.mouseRelease(bar, Qt.LeftButton, Qt.NoModifier, QPoint(3, 100))
     assert w.picNav.Width == 260 and w.picContent.Left == 266
-    assert w.lblStatus.Caption == "The navigation pane is now 260 pixels wide"  # Moved
+    assert _status(w) == "The navigation pane is now 260 pixels wide"  # Moved
     w.mnuViewNav._action.trigger()  # View > Navigation pane: hidden panes take no space
     assert not w.picNav.Visible and w.picContent.Left == 0 and not w.mnuViewNav.Checked
+
+
+def test_status_bar(sink):
+    bar = sink.sbStatus
+    assert [panel.Key for panel in bar.Panels] == ["status", "caps", "clock"]
+    assert bar.Panels("status").AutoSize == vp6.vpSbrSpring  # the space left
+    clock = bar.Panels("clock")
+    assert clock.Style == vp6.vpSbrTime
+    sink.sbStatus_PanelClick(clock)  # a click on the clock: the date, and back
+    assert clock.Style == vp6.vpSbrDate and _status(sink) == "The clock shows the date"
+    QTest.mouseClick(bar._widget, Qt.LeftButton, Qt.NoModifier, clock._label.geometry().center())
+    assert clock.Style == vp6.vpSbrTime
 
 
 def test_intro_and_navigation(sink):
@@ -168,7 +185,7 @@ def test_intro_and_navigation(sink):
     intro.lblIntro._widget.linkActivated.emit("lists")  # a link in the introduction
     assert w.lblTitle.Caption == "Lists" and w.pages["lists"].Visible and not intro.Visible
     assert w.tvwIndex.SelectedItem is w.tvwIndex.Nodes("lists")
-    assert w.lblStatus.Caption == "Controls\\Lists"
+    assert _status(w) == "Controls\\Lists"
     w.tvwIndex_NodeClick(w.tvwIndex.Nodes("forms_section"))  # a section: its first page
     assert w.lblTitle.Caption == "Dialogs"
 
@@ -326,7 +343,7 @@ def test_scrolling_page(sink):
     page = _page(sink, "scrolling")
     assert page.ScaleHeight == 1000  # taller than the pane
     sink.picContent.ScrollTop = 300
-    assert sink.picContent.ScrollTop == 300 and sink.lblStatus.Caption == "Scrolled to 0, 300"
+    assert sink.picContent.ScrollTop == 300 and _status(sink) == "Scrolled to 0, 300"
     page.cmdTop._widget.click()
     assert sink.picContent.ScrollTop == 0
 
@@ -417,7 +434,7 @@ def test_menus_page_and_bookmarks(sink):
     assert [m.Caption for m in sink.mnuBookmark] == ["&Introduction", "Timer"]
     assert sink.mnuBookmark[1].Visible
     page.cmdBookmark._widget.click()  # not twice
-    assert sink.mnuBookmark.Count == 2 and "already" in sink.lblStatus.Caption
+    assert sink.mnuBookmark.Count == 2 and "already" in _status(sink)
     sink.mnuBookmark[1]._action.trigger()
     assert sink.lblTitle.Caption == "Timer"
     assert sink.mnuHelpKeys._action.shortcut().toString() == "F1"

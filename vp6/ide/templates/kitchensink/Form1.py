@@ -52,10 +52,9 @@ class Form1(Form):
         self.Width = 900
         self.Height = 600
         self.KeyPreview = True
-        self.picStatus = PictureBox(self, Left=0, Top=572, Width=900, Height=28, Align=2,
-                                    TabIndex=1)
-        self.lblStatus = Label(self.picStatus, Caption='Ready', Left=8, Top=4, Width=880,
-                               Height=20, TabIndex=2)
+        self.sbStatus = StatusBar(self, Left=0, Top=572, Width=900, Height=28,
+                                  Panels=['Ready|status|spring', '|caps|caps 56 center', '|clock|time 90 center'],
+                                  ToolTipText='A StatusBar: click the clock to see the date')
         self.picNav = PictureBox(self, Left=0, Top=0, Width=220, Height=572, BorderStyle=0,
                                  Align=3, TabIndex=3)
         self.tvwIndex = TreeView(self.picNav, Left=0, Top=0, Width=220, Height=572,
@@ -111,7 +110,14 @@ class Form1(Form):
             page.Unload()
 
     def status(self, text):
-        self.lblStatus.Caption = text
+        self.sbStatus.Panels("status").Text = text  # the StatusBar's first panel
+
+    def sbStatus_PanelClick(self, Panel):
+        # The clock panel shows the time or the date: a click switches
+        if Panel.Key == "clock":
+            Panel.Style = vpSbrDate if Panel.Style == vpSbrTime else vpSbrTime
+            self.status("The clock shows the " + ("date" if Panel.Style == vpSbrDate
+                                                    else "time"))
 
     # --- pages ----------------------------------------------------------------------------------
     def show_page(self, key):
@@ -146,9 +152,6 @@ class Form1(Form):
 
     def picHeader_Resize(self):
         self.lblTitle.Width = max(self.picHeader.Width - 32, 16)
-
-    def picStatus_Resize(self):
-        self.lblStatus.Width = max(self.picStatus.Width - 16, 16)
 
     def splNav_Moved(self):
         self.status(f"The navigation pane is now {self.picNav.Width} pixels wide")

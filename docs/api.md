@@ -149,6 +149,8 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `NodeCheck` | Node |
 | `UpClick` | none |
 | `DownClick` | none |
+| `PanelClick` | Panel |
+| `PanelDblClick` | Panel |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -1002,6 +1004,66 @@ Default size 17 × 33. Property groups: Position.
 Events: `Change`, `UpClick`, `DownClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
+### StatusBar
+
+A bar of panels along the bottom of a form, showing texts, the time, the date
+or the state of the lock keys (VB's StatusBar, from the Windows Common
+Controls). It docks like an aligned PictureBox: to the bottom by default, in
+creation order with the other docked controls (create it first to have it
+across the whole window).
+
+```python
+self.sbStatus = StatusBar(self, Panels=["Ready|status|spring", "|caps|caps 56 center",
+                                        "|clock|time 90 center"])
+
+def status(self, text):
+    self.sbStatus.Panels("status").Text = text
+
+def sbStatus_PanelClick(self, Panel):
+    if Panel.Key == "clock":   # the time or the date
+        Panel.Style = vpSbrDate if Panel.Style == vpSbrTime else vpSbrTime
+```
+
+* **Panels in the designer.** `Panels` lists them, one per line:
+  `Text|Key|options`, the options being words: a width in pixels, `spring` or
+  `contents` (AutoSize), `caps`, `num`, `ins`, `scrl`, `time` or `date`
+  (Style), and `center` or `right` (Alignment).
+* **Panels in code.** At run time `Panels` is the collection:
+  `Panels(Index)` (from 1) or `Panels(Key)`, `Panels.Count`,
+  `Panels.Add(Index, Key, Text, Style)` (at the end, or before Index),
+  `Panels.Remove(index)` and `Panels.Clear()`; `for panel in Panels`.
+* **A Panel** has `Text`, `Key`, `Index`, `Width` (also `MinWidth`),
+  `AutoSize`, `Style`, `Alignment`, `ToolTipText`, `Visible`, `Enabled`, `Tag`
+  and `Left` (read-only). Changing one updates the bar.
+  * `AutoSize`: `vpSbrNoAutoSize` (its `Width`), `vpSbrSpring` (Spring
+    panels share the space the others leave), `vpSbrContents` (as wide as its
+    text, at least `Width`).
+  * `Style`: `vpSbrText` (its `Text`), `vpSbrTime`, `vpSbrDate` (in the
+    system's short format, kept up to date), `vpSbrCaps`, `vpSbrNum`,
+    `vpSbrIns`, `vpSbrScrl` ("CAPS", "NUM", "INS", "SCRL", dimmed while the
+    key is off).
+  * `Alignment`: `vpSbrLeft`, `vpSbrCenter`, `vpSbrRight`.
+* `Style = vpSbrSimple` shows `SimpleText` across the whole bar instead of the
+  panels (e.g. while a menu is open); `vpSbrNormal` shows them again.
+* `PanelClick` and `PanelDblClick` get the Panel; `Click` fires too.
+
+<!-- BEGIN GENERATED: control StatusBar -->
+Default size 400 × 25. Property groups: Position, Colors, Font.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Align` | enum | 2 - Bottom | 0 - None, 1 - Top, 2 - Bottom. The edge it docks to (Bottom), like an aligned PictureBox; None: where you put it |
+| `Enabled` | bool | `True` | Whether the control responds to the user |
+| `Panels` | panels | `['|panel1|spring']` | The panels, set in the designer: one per line, Text|Key|options, the options being words: a width in pixels, spring or contents (AutoSize), caps, num, ins, scrl, time or date (Style), center or right (Alignment). E.g. Ready|status|spring |
+| `SimpleText` | str | `''` | The text shown when Style is Simple |
+| `Style` | enum | 0 - Normal | 0 - Normal, 1 - Simple. Normal: the panels; Simple: SimpleText across the whole bar |
+| `Tag` | str | `''` | Free for your own use |
+| `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
+| `Visible` | bool | `True` | Whether the control is shown at run time |
+
+Events: `PanelClick(Panel)`, `PanelDblClick(Panel)`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `PanelClick`.
+<!-- END GENERATED -->
+
 ### Menu
 
 A form's menus: the menu bar, the menus on it, their items, submenus and
@@ -1133,7 +1195,8 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
 `HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Image`](#image),
 [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
-[`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown), [`Menu`](#menu), and
+[`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
+[`StatusBar`](#statusbar) (and its `Panel`), [`Menu`](#menu), and
 `ControlArray` for [control arrays](#control-arrays).
 
 ---
@@ -1215,6 +1278,10 @@ All constants are plain ints or strings.
 | TreeView.LineStyle | `vpTvwTreeLines`, `vpTvwRootLines` | 0, 1 |
 | Orientation (ProgressBar, Slider, UpDown) | `vpOrientationHorizontal`, `vpOrientationVertical` | 0, 1 |
 | Slider.TickStyle | `vpTickBottomRight`, `vpTickTopLeft`, `vpTickBoth`, `vpTickNone` | 0, 1, 2, 3 |
+| StatusBar.Style | `vpSbrNormal`, `vpSbrSimple` | 0, 1 |
+| Panel.Style (StatusBar) | `vpSbrText`, `vpSbrCaps`, `vpSbrNum`, `vpSbrIns`, `vpSbrScrl`, `vpSbrTime`, `vpSbrDate` | 0, 1, 2, 3, 4, 5, 6 |
+| Panel.AutoSize (StatusBar) | `vpSbrNoAutoSize`, `vpSbrSpring`, `vpSbrContents` | 0, 1, 2 |
+| Panel.Alignment (StatusBar) | `vpSbrLeft`, `vpSbrCenter`, `vpSbrRight` | 0, 1, 2 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -1300,4 +1367,7 @@ format.
   in VB the UpDown's values were the other way round. A ProgressBar keeps an
   out-of-range `Value` at the nearer end instead of raising an error, and
   UpDown has no `AutoBuddy` (put it beside its buddy yourself).
+* **StatusBar** panels have no `Picture` or `Bevel`, and the lock-key
+  panels read the key state from the system on Windows (all four keys) and
+  macOS (Caps Lock only); elsewhere they show the key as off.
 * **Not implemented yet:** see [BACKLOG.md](../BACKLOG.md).

@@ -143,7 +143,7 @@ VB-compatible constants with a `vp` prefix, grouped by use:
 `__all__` is every global starting with `vp`. The values are listed in
 [api.md](api.md#constants).
 
-### `vp6/controls.py` (≈2760 lines)
+### `vp6/controls.py` (≈3160 lines)
 
 The intrinsic controls.
 
@@ -223,7 +223,13 @@ The intrinsic controls.
 | `ProgressBar` | `QProgressBar` (no text, `NoFocus`) | `Min`/`Max`/`Value`; `_apply_Value` keeps Value inside Min..Max (`_clamp`), and changing Min or Max re-applies it; `Orientation` (`_ORIENTATION`, `_QT_ORIENTATION`, shared with Slider and UpDown). Click synthesized from the mouse; no focus or key events. |
 | `Slider` | `QSlider` | `valueChanged` fires `Scroll` while the thumb is down (`isSliderDown`, remembering `_changed_while_dragging`) and `Change` otherwise; `sliderReleased` then fires the one `Change` of a drag. `SmallChange`/`LargeChange` are the single and page steps; `TickStyle` maps through `_TICKS` to the tick position, `TickFrequency` to the tick interval. |
 | `UpDown` | `_UpDownWidget` (two auto-repeating, `NoFocus` `QToolButton`s in a `QBoxLayout`; `set_vertical` swaps up/down for right/left arrows) | `_step(±1)` (not while designing): `_value_from_buddy` first (a number typed into the buddy, clamped, becomes the Value without a Change), then `Value ± Increment`, wrapping with `Wrap`, then `_sync_to_buddy` and UpClick/DownClick. `_apply_Value` clamps and fires `Change` when the value really changed (`_shown_value`), syncing the buddy. `Buddy` looks `BuddyControl` up on the form by name when needed (it may be created after the UpDown); `_buddy_property` is `BuddyProperty`, else the buddy's `Text` or `Caption`. |
+| `StatusBar` | `QFrame` with a `QHBoxLayout`: a `QLabel` per shown panel (sunken, transparent to the mouse), and `_simple_label` for Style = Simple | Docked like an aligned PictureBox (`_Docked`; Align None/Top/Bottom, Bottom by default). `Panels` is a `_Panels` collection of `Panel` objects (`_list`, `_by_key`; `_resolve` takes an Index from 1, a key or a Panel; `Add`, `Remove`, `Clear`); the designer's `Panels` property (kind `panels`, read from `_values` by the Properties window) is lines parsed by `parse_panel` (`Text\|Key\|options`) and rebuilds the collection. Any change calls `_update_panels`, which rebuilds the layout: Spring panels get stretch, Contents ones their text's width (at least Width), others a fixed Width; a stretch keeps the panels left when none springs. `Panel._shown_text` is the Text, the time or date (`QLocale` short format) or CAPS/NUM/INS/SCRL; a 250 ms `_timer` (not while designing) refreshes those, dimming a lock key that is off (`_lock_key_on`: `GetKeyState` on Windows, `CGEventSourceFlagsState` for Caps Lock on macOS, off elsewhere). The bar gets the mouse and finds the panel by position (`_panel_at`) for `PanelClick` / `PanelDblClick`. |
 | `Menu` | a `QAction` (none in design mode) | Parent: the form (the menu bar, `Form._add_menu_item`) or a `Menu`, whose `QMenu` (`_submenu`, created for its first item by `_add_menu_item`) holds it. Caption `-` is a separator; `Checked` (Qt's own toggling is undone in `_on_triggered`), `Enabled`, `Visible`, `NegotiatePosition` (rebuilds the window's bar when merged), `Shortcut` (also added to the form widget so it works in the window). Click on `triggered`, and for a menu with items on `aboutToShow`. `_menu_container`, `_place_after` (loaded array elements follow the last one), `_dispose`. |
+
+`_Docked` is the mixin of the controls with an `Align` property (PictureBox,
+Splitter, StatusBar): while docked, changing their Align, size, place or
+visibility asks the form to place its docked controls again
+(`_relayout`, `Form._layout_aligned`, which docks any control with `Align`).
 
 * **`ControlArray`**, a VB control array (after `CONTROL_TYPES`, which it
   isn't part of). The form's `__setattr__` gives it its name.
@@ -1124,10 +1130,12 @@ explorer-style.
   EXE `Project` that starts in Sub Main. `mainwindow.create_project(...,
   "kitchensink")` calls it.
 * **`templates/kitchensink/Form1.py`**, the explorer window. It is laid out
-  with docked panes: `picStatus` (Bottom, the status bar), `picNav` (Left,
-  holding the TreeView `tvwIndex`), the Splitter `splNav`, `picHeader` (Top,
-  the page title) and `picContent` (Fill, with scroll bars). Their Resize
-  events size what is on them.
+  with docked controls: the StatusBar `sbStatus` (Bottom; a Spring status
+  panel that `status(text)` sets, Caps Lock, and a clock that
+  `sbStatus_PanelClick` switches between the time and the date), `picNav`
+  (Left, holding the TreeView `tvwIndex`), the Splitter `splNav`, `picHeader`
+  (Top, the page title) and `picContent` (Fill, with scroll bars). The
+  PictureBoxes' Resize events size what is on them.
   * `PAGES` maps each index key to a page's form class. `show_page(key)`
     creates a page once (giving it `shell`, the window), shows it in
     `picContent` with `ShowIn` (replacing the one there), selects its node
@@ -1329,6 +1337,7 @@ All tests run headless. `conftest.py`:
 | `test_embedded_forms.py` | Activate/Deactivate in a container (Load then Activate; hidden and shown, the container hidden and shown, popped out, unloaded), a filling form replacing another (no second Load; Fill=False forms staying), window activation not applying; `Form.ShowIn`: filling a PictureBox and following its size (Load before the first Resize), controls working, window-only properties not popping it out; a Frame's inside, a form as the container, `Fill=False` at Left/Top; popping out, moving between containers, Hide/Show; unloading only itself, going with its host (unable to cancel), a host that cancels keeping it; invalid containers and cycles; nested forms and Default buttons. |
 | `test_align.py` | PictureBox `Align`: docking in creation order, Fill panes taking the space left (after the others, several sharing it), following the form (before Form_Resize), changing a pane's thickness, place, visibility and Align; only on the form; panes created in code; under an in-window menu bar; in a form shown in a container; in the designer (Align stored with the docked geometry, the form resized, a pane dragged back, undo); the constants. |
 | `test_splitter.py` | The Splitter: docking beside its pane, cursors, dragging (live Resize with everything in place, Moved on release), Bottom/Top/Right panes growing the right way, MinSize on both sides, disabled, no pane; the PictureBox Resize event; the file, the designer (docked after the pane) and the Toolbox. |
+| `test_statusbar.py` | The StatusBar: the designer's panel lines (`parse_panel`); docking at the bottom beside other docked controls, following the window (Spring panels growing), Top, hidden taking no space; the Panels collection (Index and Key, Add at an Index, unique keys, errors, Contents and fixed widths, Alignment, ToolTipText, hidden panels, Remove, Clear, changing a Key); time and date panels kept up to date, lock keys dimmed when off; Simple style; PanelClick, Click and PanelDblClick from the mouse; the form file round trip; creating it in the designer (docked, one panel to start, no clock running, the Properties window's Panels); Toolbox, icon and constants. |
 | `test_scrolling.py` | PictureBox ScrollBars: bars appearing for controls beyond the edges (both directions), ScrollLeft/ScrollTop and the Scroll event moving the contents, bars following moved, added and hidden controls, one direction only, turning it off, controls and Click on the empty area still working, a taller form shown inside scrolling, the designer not scrolling. |
 | `test_label_text.py` | Label TextFormat: plain text hiding access keys, rich text and Markdown (really rendered), switching back; links firing LinkClick or opening the browser without a handler, only for formatted captions; the file and the designer (links off while designing, the multi-line Caption editor); the constants. |
 | `test_treeview.py` | The TreeView: reading outlines; the Nodes collection (key, Index from 1, errors for unknown or duplicate keys); every relationship of `Add`; relatives, FullPath and PathSeparator; removing with children and clearing; node Text/Key/Tag/Bold/ForeColor/Image, EnsureVisible, sorting the tree and a node's children; code changes firing no events; NodeClick on clicks (also on the selected node) and keyboard moves, Expand/Collapse from the keyboard, HitTest; check boxes and NodeCheck; LineStyle, Indentation, Items; the form file; in the designer (Items building an expanded tree, the Properties button, a `Node` handler stub); the Toolbox button, icon and constants. |

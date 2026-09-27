@@ -1,5 +1,18 @@
 # VP6 features
 
+**Version:** 0.3.30
+**Date:** 2026-09-30
+
+## Controls
+
+- StatusBar: a bar of panels docked to the bottom of a form (or the top), like an aligned PictureBox. Panels show a text, the time, the date, or the state of Caps Lock, Num Lock, Insert or Scroll Lock (dimmed while off); they are Spring (sharing the space left), as wide as their contents, or a fixed width, aligned left, center or right. `PanelClick` and `PanelDblClick` get the Panel. Style = Simple shows `SimpleText` across the bar
+- The Panels collection: `Panels(Index)` or `Panels(Key)`, `Count`, `Add`, `Remove`, `Clear`; a Panel's `Text`, `Key`, `Width`, `AutoSize`, `Style`, `Alignment`, `ToolTipText`, `Visible`, `Enabled`, `Tag`, `Left`
+- In the designer, `Panels` is a list: one panel per line, `Text|Key|options` (e.g. `Ready|status|spring`, `|clock|time 80 right`)
+- Constants `vpSbrNormal`, `vpSbrSimple`, `vpSbrText` … `vpSbrDate`, `vpSbrNoAutoSize`, `vpSbrSpring`, `vpSbrContents`, `vpSbrLeft`, `vpSbrCenter`, `vpSbrRight`
+- The Kitchen Sink window has a StatusBar (status text, Caps Lock, and a clock that shows the date when clicked) instead of a PictureBox with a Label
+
+---
+
 **Version:** 0.3.29
 **Date:** 2026-09-30
 

@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer, QUrl
+from PySide6.QtCore import QDate, QEvent, QLocale, QObject, QRect, QSize, Qt, QTime, QTimer, QUrl
 from PySide6.QtGui import (QAction, QColor, QDesktopServices, QFont, QIcon, QKeyEvent,
                            QKeySequence, QPainter, QPalette, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox, QFrame, QGroupBox,
+    QHBoxLayout,
     QLabel, QMenu, QProgressBar, QScrollArea, QSlider, QToolButton, QTreeWidget,
     QTreeWidgetItem, QLineEdit, QListWidget, QPlainTextEdit, QPushButton, QRadioButton,
     QScrollBar, QWidget,
@@ -34,7 +35,7 @@ EVENT_ARGS = {
     "Initialize": "", "Load": "", "Unload": "", "Activate": "", "Deactivate": "",
     "Resize": "", "Moved": "", "LinkClick": "URL",
     "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
-    "UpClick": "", "DownClick": "",
+    "UpClick": "", "DownClick": "", "PanelClick": "Panel", "PanelDblClick": "Panel",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -1141,7 +1142,7 @@ class VScrollBar(_ScrollBar):
     Properties = _scroll_props(*DefaultSize)
 
 
-# --- ProgressBar, Slider and UpDown (VB's Windows Common Controls) --------------------------------
+# --- ProgressBar, Slider and UpDown (VB's Windows Common Controls) -----------------------------
 
 _ORIENTATION = enum_choices("Horizontal", "Vertical")
 _QT_ORIENTATION = {0: Qt.Horizontal, 1: Qt.Vertical}
@@ -1463,7 +1464,49 @@ class _ScrollWatcher(QObject):
         self._picture._update_scroll_size()
 
 
-class PictureBox(Control):
+class _Docked:
+    """For controls with an Align property (PictureBox, Splitter, StatusBar):
+    docked, the form places and sizes them (Form._layout_aligned) whenever
+    their Align, size, place or visibility changes; undocked, they are
+    ordinary controls."""
+
+    def _relayout(self) -> None:
+        """Docked (or just undocked): let the form place its aligned panes."""
+        if self in self._form._controls:
+            self._form._layout_aligned()
+
+    def _apply_Align(self, v):
+        self._relayout()
+
+    def _apply_Width(self, v):
+        if self._values.get("Align") and self in self._form._controls:
+            self._relayout()  # docked: the form resizes it, all panes at once
+        else:
+            super()._apply_Width(v)
+
+    def _apply_Height(self, v):
+        if self._values.get("Align") and self in self._form._controls:
+            self._relayout()
+        else:
+            super()._apply_Height(v)
+
+    def _apply_Left(self, v):
+        super()._apply_Left(v)
+        if self._values.get("Align"):
+            self._relayout()  # an aligned pane stays where the form puts it
+
+    def _apply_Top(self, v):
+        super()._apply_Top(v)
+        if self._values.get("Align"):
+            self._relayout()
+
+    def _apply_Visible(self, v):
+        super()._apply_Visible(v)
+        if self._values.get("Align"):
+            self._relayout()  # a hidden pane gives its space to the others
+
+
+class PictureBox(_Docked, Control):
     TypeName = "PictureBox"
     DefaultSize = (121, 97)
     IsContainer = True
@@ -1629,41 +1672,6 @@ class PictureBox(Control):
             self._update_scroll_size()
             self._scroll_area.verticalScrollBar().setValue(int(value))
 
-    def _relayout(self) -> None:
-        """Docked (or just undocked): let the form place its aligned panes."""
-        if self in self._form._controls:
-            self._form._layout_aligned()
-
-    def _apply_Align(self, v):
-        self._relayout()
-
-    def _apply_Width(self, v):
-        if self._values.get("Align") and self in self._form._controls:
-            self._relayout()  # docked: the form resizes it, all panes at once
-        else:
-            super()._apply_Width(v)
-
-    def _apply_Height(self, v):
-        if self._values.get("Align") and self in self._form._controls:
-            self._relayout()
-        else:
-            super()._apply_Height(v)
-
-    def _apply_Left(self, v):
-        super()._apply_Left(v)
-        if self._values.get("Align"):
-            self._relayout()  # an aligned pane stays where the form puts it
-
-    def _apply_Top(self, v):
-        super()._apply_Top(v)
-        if self._values.get("Align"):
-            self._relayout()
-
-    def _apply_Visible(self, v):
-        super()._apply_Visible(v)
-        if self._values.get("Align"):
-            self._relayout()  # a hidden pane gives its space to the others
-
     def _apply_Picture(self, v):
         path = resolve_path(self, v)
         pixmap = QPixmap(path) if path else QPixmap()
@@ -1805,7 +1813,7 @@ class _SplitterBar(QWidget):
         self._drag = None
 
 
-class Splitter(Control):
+class Splitter(_Docked, Control):
     """A bar the user drags to resize a docked pane. It docks like an aligned
     PictureBox (Align, in creation order), right after the pane it resizes:
     the nearest earlier control docked to the same edge. Moved fires when
@@ -1881,38 +1889,427 @@ class Splitter(Control):
         if self._widget is not None:
             self._widget.update()
 
-    def _relayout(self) -> None:
-        if self in self._form._controls:
-            self._form._layout_aligned()
-
-    def _apply_Width(self, v):
-        if self._values.get("Align") and self in self._form._controls:
-            self._relayout()  # its thickness; the form places it
-        else:
-            super()._apply_Width(v)
-
-    def _apply_Height(self, v):
-        if self._values.get("Align") and self in self._form._controls:
-            self._relayout()
-        else:
-            super()._apply_Height(v)
-
-    def _apply_Left(self, v):
-        super()._apply_Left(v)
-        self._relayout()  # the form places a docked splitter
-
-    def _apply_Top(self, v):
-        super()._apply_Top(v)
-        self._relayout()
-
-    def _apply_Visible(self, v):
-        super()._apply_Visible(v)
-        self._relayout()
-
     def _apply_Enabled(self, v):
         if self._widget is not None:
             self._widget.setCursor(Qt.ArrowCursor if not v else
                                    Qt.SplitHCursor if self._vertical() else Qt.SplitVCursor)
+
+
+# --- StatusBar ---------------------------------------------------------------------------------
+
+_SBR_STYLES = ("text", "caps", "num", "ins", "scrl", "time", "date")  # Panel.Style, by value
+_SBR_AUTOSIZE = ("none", "spring", "contents")  # Panel.AutoSize
+_SBR_ALIGNMENT = ("left", "center", "right")  # Panel.Alignment
+_SBR_KEY_TEXTS = {1: "CAPS", 2: "NUM", 3: "INS", 4: "SCRL"}
+_QT_PANEL_ALIGN = {0: Qt.AlignLeft, 1: Qt.AlignHCenter, 2: Qt.AlignRight}
+
+
+def parse_panel(line: str) -> dict:
+    """A panel as the designer writes it (StatusBar.Panels): ``Text|Key|options``,
+    the options being words: a number (the Width), an AutoSize (spring,
+    contents), a Style (caps, num, ins, scrl, time, date) and an Alignment
+    (center, right). E.g. ``Ready|status|spring`` or ``|clock|time 80 right``."""
+    text, _, rest = str(line).partition("|")
+    key, _, options = rest.partition("|")
+    panel = {"Text": text.strip(), "Key": key.strip()}
+    for word in options.lower().split():
+        if word.isdigit():
+            panel["Width"] = int(word)
+        elif word in _SBR_AUTOSIZE:
+            panel["AutoSize"] = _SBR_AUTOSIZE.index(word)
+        elif word in _SBR_STYLES:
+            panel["Style"] = _SBR_STYLES.index(word)
+        elif word in _SBR_ALIGNMENT:
+            panel["Alignment"] = _SBR_ALIGNMENT.index(word)
+    return panel
+
+
+def _lock_key_on(style: int) -> bool:
+    """Whether Caps Lock, Num Lock, Insert or Scroll Lock is on: read from the
+    system on Windows (all four) and macOS (Caps Lock); off elsewhere."""
+    import sys
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            code = {1: 0x14, 2: 0x90, 3: 0x2D, 4: 0x91}[style]
+            return bool(ctypes.windll.user32.GetKeyState(code) & 1)
+        if sys.platform == "darwin" and style == 1:
+            import ctypes
+            import ctypes.util
+            quartz = ctypes.cdll.LoadLibrary(ctypes.util.find_library("ApplicationServices"))
+            quartz.CGEventSourceFlagsState.restype = ctypes.c_uint64
+            quartz.CGEventSourceFlagsState.argtypes = [ctypes.c_int32]
+            return bool(quartz.CGEventSourceFlagsState(0) & 0x10000)  # combined; AlphaShift
+    except (OSError, AttributeError, KeyError, TypeError):
+        pass
+    return False
+
+
+class Panel:
+    """One panel of a StatusBar (``StatusBar1.Panels(1)`` or by Key). Setting
+    a property updates the bar at once."""
+
+    def __init__(self, bar: "StatusBar", key: str = "", text: str = "", style: int = 0):
+        self._bar = bar
+        self._key = key
+        self._text = text
+        self._style = int(style)
+        self._width = 96
+        self._auto_size = 0
+        self._alignment = 0
+        self._tooltip = ""
+        self._visible = True
+        self._enabled = True
+        self.Tag = ""
+        self._label = None  # its QLabel while it's shown
+
+    def __repr__(self):
+        return f"<Panel {self.Index} {self._key or self._text!r}>"
+
+    def _changed(self):
+        self._bar._update_panels()
+
+    @property
+    def Index(self) -> int:
+        """Its position, from 1."""
+        return self._bar._panels._list.index(self) + 1
+
+    @property
+    def Key(self) -> str:
+        return self._key
+
+    @Key.setter
+    def Key(self, value):
+        value = str(value)
+        if value and value != self._key and value in self._bar._panels._by_key:
+            raise KeyError(f"Key '{value}' is not unique in the collection")
+        self._bar._panels._by_key.pop(self._key, None)
+        self._key = value
+        if value:
+            self._bar._panels._by_key[value] = self
+
+    @property
+    def Text(self) -> str:
+        """Its text (panels showing the time, the date or a lock key show that
+        instead, but keep this)."""
+        return self._text
+
+    @Text.setter
+    def Text(self, value):
+        self._text = str(value)
+        self._changed()
+
+    @property
+    def Style(self) -> int:
+        return self._style
+
+    @Style.setter
+    def Style(self, value):
+        self._style = int(value)
+        self._changed()
+
+    @property
+    def Width(self) -> int:
+        """Its width in pixels; the smallest one for a Spring or Contents panel."""
+        return self._width
+
+    @Width.setter
+    def Width(self, value):
+        self._width = max(0, int(value))
+        self._changed()
+
+    MinWidth = Width
+
+    @property
+    def AutoSize(self) -> int:
+        return self._auto_size
+
+    @AutoSize.setter
+    def AutoSize(self, value):
+        self._auto_size = int(value)
+        self._changed()
+
+    @property
+    def Alignment(self) -> int:
+        return self._alignment
+
+    @Alignment.setter
+    def Alignment(self, value):
+        self._alignment = int(value)
+        self._changed()
+
+    @property
+    def ToolTipText(self) -> str:
+        return self._tooltip
+
+    @ToolTipText.setter
+    def ToolTipText(self, value):
+        self._tooltip = str(value)
+        self._changed()
+
+    @property
+    def Visible(self) -> bool:
+        return self._visible
+
+    @Visible.setter
+    def Visible(self, value):
+        self._visible = bool(value)
+        self._changed()
+
+    @property
+    def Enabled(self) -> bool:
+        return self._enabled
+
+    @Enabled.setter
+    def Enabled(self, value):
+        self._enabled = bool(value)
+        self._changed()
+
+    @property
+    def Left(self) -> int:
+        """Where it starts in the bar, in pixels (read-only)."""
+        return self._label.x() if self._label is not None else 0
+
+    def _shown_text(self) -> str:
+        """What the panel shows: its Text, or the time, the date or a key."""
+        if self._style == 5:
+            return QLocale().toString(QTime.currentTime(), QLocale.ShortFormat)
+        if self._style == 6:
+            return QLocale().toString(QDate.currentDate(), QLocale.ShortFormat)
+        return _SBR_KEY_TEXTS.get(self._style, self._text)
+
+
+class _Panels:
+    """StatusBar.Panels: its panels in order, by Index (from 1) or Key."""
+
+    def __init__(self, bar: "StatusBar"):
+        self._bar = bar
+        self._list: list[Panel] = []
+        self._by_key: dict[str, Panel] = {}
+
+    def __len__(self):
+        return len(self._list)
+
+    def __iter__(self):
+        return iter(list(self._list))
+
+    @property
+    def Count(self) -> int:
+        return len(self._list)
+
+    def _resolve(self, index) -> Panel:
+        if isinstance(index, Panel):
+            return index
+        if isinstance(index, str):
+            if index not in self._by_key:
+                raise KeyError(f"No panel with the key '{index}'")
+            return self._by_key[index]
+        index = int(index)
+        if not 1 <= index <= len(self._list):
+            raise IndexError(f"No panel {index} (there are {len(self._list)})")
+        return self._list[index - 1]
+
+    def __call__(self, index) -> Panel:
+        return self._resolve(index)
+
+    Item = __call__
+
+    def Add(self, Index=None, Key: str = "", Text: str = "", Style: int = 0) -> Panel:
+        """A new panel, at the end or at Index (from 1)."""
+        Key = str(Key or "")
+        if Key and Key in self._by_key:
+            raise KeyError(f"Key '{Key}' is not unique in the collection")
+        panel = Panel(self._bar, Key, str(Text), Style)
+        if Index is None:
+            self._list.append(panel)
+        else:
+            self._list.insert(max(0, int(Index) - 1), panel)
+        if Key:
+            self._by_key[Key] = panel
+        self._bar._update_panels()
+        return panel
+
+    def Remove(self, index) -> None:
+        panel = self._resolve(index)
+        self._list.remove(panel)
+        self._by_key.pop(panel._key, None)
+        self._bar._update_panels()
+
+    def Clear(self) -> None:
+        self._list.clear()
+        self._by_key.clear()
+        self._bar._update_panels()
+
+
+class StatusBar(_Docked, Control):
+    """A bar of panels at the bottom of a form, like VB's StatusBar (Windows
+    Common Controls). Each panel shows a text, or the time, the date or the
+    state of a lock key; Spring panels share the space left. It docks like an
+    aligned PictureBox (Bottom by default). Style = Simple shows SimpleText
+    across the whole bar instead of the panels."""
+
+    TypeName = "StatusBar"
+    DefaultEvent = "PanelClick"
+    DefaultSize = (400, 25)
+    Events = ("PanelClick", "PanelDblClick", "Click", "DblClick", "MouseDown", "MouseMove",
+              "MouseUp")
+    _synthesize_click = True
+    _qss_type = "QFrame"
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Align", "enum", 2, enum_choices("None", "Top", "Bottom"),
+          description="The edge it docks to (Bottom), like an aligned PictureBox; None: "
+                      "where you put it"),
+        P("Style", "enum", 0, enum_choices("Normal", "Simple"),
+          description="Normal: the panels; Simple: SimpleText across the whole bar"),
+        P("SimpleText", "str", "", description="The text shown when Style is Simple"),
+        P("Panels", "panels", ["|panel1|spring"],
+          description="The panels, set in the designer: one per line, Text|Key|options, "
+                      "the options being words: a width in pixels, spring or contents "
+                      "(AutoSize), caps, num, ins, scrl, time or date (Style), center or "
+                      "right (Alignment). E.g. Ready|status|spring"),
+        *_COLORS, *_FONT,
+        P("Enabled", "bool", True, description="Whether the control responds to the user"),
+        P("Visible", "bool", True, description="Whether the control is shown at run time"),
+        P("ToolTipText", "str", "", description="Text shown when the mouse rests on it"),
+        P("Tag", "str", "", description="Free for your own use"),
+    )
+
+    def _create_widget(self, parent):
+        self.__dict__["_panels"] = _Panels(self)
+        self.__dict__["_panel_labels"] = []
+        widget = QFrame(parent)
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(2, 1, 2, 1)
+        layout.setSpacing(2)
+        self.__dict__["_simple_label"] = QLabel(widget)
+        layout.addWidget(self._simple_label, 1)
+        self._simple_label.hide()
+        # The time, the date and the lock keys are shown as they change
+        timer = QTimer(widget)
+        timer.setInterval(250)
+        timer.timeout.connect(self._refresh_live_panels)
+        self.__dict__["_timer"] = timer
+        return widget
+
+    # -- the collection ----------------------------------------------------------------------
+    @property
+    def Panels(self) -> _Panels:
+        return self._panels
+
+    @Panels.setter
+    def Panels(self, lines):
+        """In the designer (and InitializeComponent): the panels as lines of
+        text, see parse_panel."""
+        self._set_prop("Panels", lines)
+
+    def _apply_Panels(self, lines):
+        self._panels._list.clear()
+        self._panels._by_key.clear()
+        for line in lines or []:
+            spec = parse_panel(line)
+            panel = Panel(self, spec["Key"], spec["Text"], spec.get("Style", 0))
+            panel._width = spec.get("Width", panel._width)
+            panel._auto_size = spec.get("AutoSize", 0)
+            panel._alignment = spec.get("Alignment", 0)
+            if panel._key in self._panels._by_key:
+                raise KeyError(f"Key '{panel._key}' is not unique in the collection")
+            self._panels._list.append(panel)
+            if panel._key:
+                self._panels._by_key[panel._key] = panel
+        self._update_panels()
+
+    # -- showing the panels ------------------------------------------------------------------
+    def _update_panels(self) -> None:
+        """Rebuild the bar's labels from the panels (or show SimpleText)."""
+        widget = self._widget
+        if widget is None:
+            return
+        layout = widget.layout()
+        while layout.count():  # start again: the labels, and a stretch if there was one
+            item = layout.takeAt(0)
+            label = item.widget()
+            if label is not None and label is not self._simple_label:
+                label.hide()
+                label.deleteLater()
+        self._panel_labels.clear()
+        simple = self._values.get("Style", 0) == 1
+        layout.addWidget(self._simple_label, 1)
+        self._simple_label.setVisible(simple)
+        self._simple_label.setText(self._values.get("SimpleText", ""))
+        live = False
+        for panel in self._panels._list:
+            panel._label = None
+            if simple or not panel._visible:
+                continue
+            label = QLabel(panel._shown_text(), widget)
+            label.setFrameShape(QFrame.StyledPanel)
+            label.setFrameShadow(QFrame.Sunken)
+            label.setAlignment(_QT_PANEL_ALIGN.get(panel._alignment, Qt.AlignLeft) |
+                               Qt.AlignVCenter)
+            label.setToolTip(panel._tooltip)
+            label.setEnabled(panel._enabled and self._values.get("Enabled", True) and
+                             (panel._style not in _SBR_KEY_TEXTS or _lock_key_on(panel._style)))
+            label._vp_panel = panel
+            if panel._auto_size == 1:  # Spring: shares the space left
+                label.setMinimumWidth(panel._width)
+                layout.addWidget(label, 1)
+            elif panel._auto_size == 2:  # Contents: as wide as its text (at least Width)
+                label.setMinimumWidth(max(panel._width, label.sizeHint().width()))
+                layout.addWidget(label, 0)
+            else:
+                label.setFixedWidth(panel._width)
+                layout.addWidget(label, 0)
+            # The bar gets the mouse, and finds the panel by position (_panel_at)
+            label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            label.show()
+            panel._label = label
+            self._panel_labels.append(label)
+            live = live or panel._style != 0
+        if not simple and not any(label._vp_panel._auto_size == 1
+                                  for label in self._panel_labels):
+            layout.addStretch(1)  # no Spring panel: the panels on the left
+        if live and not self._design_mode:
+            self._timer.start()
+        else:
+            self._timer.stop()
+
+    def _refresh_live_panels(self) -> None:
+        for panel in self._panels._list:
+            if panel._label is not None and panel._style != 0:
+                panel._label.setText(panel._shown_text())
+                if panel._style in _SBR_KEY_TEXTS:
+                    panel._label.setEnabled(panel._enabled and _lock_key_on(panel._style))
+
+    def _apply_Style(self, v):
+        self._update_panels()
+
+    def _apply_SimpleText(self, v):
+        self._simple_label.setText(v)
+
+    def _apply_Enabled(self, v):
+        super()._apply_Enabled(v)
+        self._update_panels()
+
+    # -- events --------------------------------------------------------------------------------
+    def _panel_at(self, pos) -> Panel | None:
+        """The panel at a position in the bar, or None (between panels)."""
+        for label in self._panel_labels:
+            if label.geometry().contains(pos):
+                return label._vp_panel
+        return None
+
+    def _on_qt_event(self, watched, event):
+        etype = event.type()
+        if not self._design_mode and etype in (QEvent.MouseButtonRelease,
+                                               QEvent.MouseButtonDblClick):
+            pos = event.position().toPoint()
+            panel = self._panel_at(pos)
+            if panel is not None and etype == QEvent.MouseButtonDblClick:
+                self._fire("PanelDblClick", panel)
+            elif panel is not None and self._widget.rect().contains(pos):
+                self._fire("PanelClick", panel)
+        return super()._on_qt_event(watched, event)
 
 
 # Controls in toolbox order.
@@ -2627,7 +3024,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Splitter,
-        ProgressBar, Slider, UpDown, Menu,
+        ProgressBar, Slider, UpDown, StatusBar, Menu,
     )
 }
 
