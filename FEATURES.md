@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.3.18
+**Date:** 2026-09-30
+
+## Controls
+
+- PictureBox `ScrollBars` (None, Horizontal, Vertical, Both): the PictureBox scrolls the controls in it, with scroll bars that appear only when they reach beyond its edges in that direction (at run time); controls keep their positions and the picture stays in place
+- `ScrollLeft` and `ScrollTop` read or set the scroll position (setting it right after adding controls works), and the PictureBox `Scroll` event fires when it changes (also by the mouse wheel); clicks on the empty area are still the PictureBox's `Click`
+- Constants `vpSBNone`, `vpHorizontal`, `vpVertical`, `vpBoth` for `ScrollBars` (TextBox and PictureBox), like VB's
+- A form shown in a scrolling PictureBox (`ShowIn`) fills the visible width and height but keeps at least its own designed size, so a taller form scrolls
+
+## Kitchen Sink
+
+- `picEmbed` has vertical scroll bars, and `frmEmbedded` is designed taller than the pane, which therefore scrolls down to its Pop out button
+
+---
+
 **Version:** 0.3.17
 **Date:** 2026-09-30
 

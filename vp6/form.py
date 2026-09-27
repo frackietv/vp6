@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 import sys
 
-from PySide6.QtCore import QEvent, QEventLoop, QObject, QRect, Qt
+from PySide6.QtCore import QEvent, QEventLoop, QObject, QRect, QSize, Qt
 from PySide6.QtGui import QFont, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 
@@ -233,6 +233,12 @@ class Form(PropertyHost):
 
     def _container_widget(self) -> QWidget:
         return self._client if self._client is not None else self._widget
+
+    def _fill_widget(self) -> QWidget:
+        return self._container_widget()
+
+    def _fill_rect(self, designed) -> QRect:
+        return self._container_widget().contentsRect()
 
     # -- menus ---------------------------------------------------------------------------------
     def _menu_container(self):
@@ -686,8 +692,9 @@ class Form(PropertyHost):
         widget.setParent(parent, Qt.Widget)  # a child widget, no longer a window
         if visible:
             widget.show()
-        watcher = _ContainerWatcher(self, parent)
-        parent.installEventFilter(watcher)
+        follows = container._fill_widget()  # e.g. a scrolling PictureBox's visible area
+        watcher = _ContainerWatcher(self, follows)
+        follows.installEventFilter(watcher)
         self.__dict__.update(_container=container, _watcher=watcher)
         host._embedded.append(self)
 
@@ -710,8 +717,9 @@ class Form(PropertyHost):
     def _fit_to_container(self) -> None:
         if self._container is None:
             return
-        if self._fill:
-            self._widget.setGeometry(self._container._container_widget().contentsRect())
+        if self._fill:  # its own (designed) size matters in a scrolling PictureBox
+            designed = QSize(self._values.get("Width", 480), self._values.get("Height", 360))
+            self._widget.setGeometry(self._container._fill_rect(designed))
         else:
             self._widget.move(self._values.get("Left", 0), self._values.get("Top", 0))
 

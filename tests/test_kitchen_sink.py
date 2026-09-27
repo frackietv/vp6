@@ -234,8 +234,11 @@ def test_kitchen_sink_embedded_form(sink_forms):
     embedded = form.embedded
     assert embedded.Container is form.picEmbed
     assert not embedded._widget.isWindow() and embedded._widget.isVisible()
-    assert (embedded.ScaleWidth, embedded.ScaleHeight) == \
-        (form.picEmbed._widget.contentsRect().width(), form.picEmbed._widget.contentsRect().height())
+    view = form.picEmbed._scroll_area.viewport()  # ScrollBars = Vertical
+    assert embedded.ScaleWidth == view.width()  # it fills the visible width...
+    assert embedded.ScaleHeight == 300 > view.height()  # ...and keeps its height: it scrolls
+    form.picEmbed.ScrollTop = 1000
+    assert form.picEmbed.ScrollTop == 300 - view.height()  # scrolled to the bottom
     buttons = embedded.picButtons  # Align = Bottom: docked, following the form's size
     assert (buttons.Left, buttons.Top, buttons.Width) == (0, embedded.ScaleHeight - 40,
                                                           embedded.ScaleWidth)
@@ -281,7 +284,7 @@ def test_kitchen_sink_side_pane_and_splitter(sink_forms):
     QTest.mouseRelease(bar, Qt.LeftButton, Qt.NoModifier, QPoint(3, 100))
     assert side.Width == 200 and side.Left == 720 and splitter.Left == 714
     assert form.tvwIndex.Width == 184 and form.picEmbed.Width == 184  # picSide_Resize
-    assert form.embedded.ScaleWidth == form.picEmbed._widget.contentsRect().width()
+    assert form.embedded.ScaleWidth == form.picEmbed._scroll_area.viewport().width()
     assert form.lblStatus.Caption == "The side pane is now 200 pixels wide"  # Moved
     assert form.lblStatus.Left + form.lblStatus.Width <= splitter.Left - 16  # clear of it
     form.Unload()

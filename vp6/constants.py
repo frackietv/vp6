@@ -77,6 +77,12 @@ vpNewLine = "\n"
 vpTab = "\t"
 vpNullString = ""
 
+# --- ScrollBars (TextBox, PictureBox) -------------------------------------------
+vpSBNone = 0
+vpHorizontal = 1
+vpVertical = 2
+vpBoth = 3
+
 # --- PictureBox.Align ----------------------------------------------------------
 vpAlignNone = 0
 vpAlignTop = 1

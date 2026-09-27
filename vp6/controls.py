@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import QEvent, QObject, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer
 from PySide6.QtGui import (QAction, QColor, QFont, QIcon, QKeyEvent, QKeySequence, QPainter,
                            QPalette, QPen, QPixmap)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCheckBox, QComboBox, QFrame, QGroupBox, QLabel, QMenu,
-    QTreeWidget, QTreeWidgetItem,
+    QScrollArea, QTreeWidget, QTreeWidgetItem,
     QLineEdit, QListWidget, QPlainTextEdit, QPushButton, QRadioButton, QScrollBar, QWidget,
 )
 
@@ -208,6 +208,14 @@ class Control(PropertyHost):
 
     def _container_widget(self) -> QWidget:
         return self._widget
+
+    def _fill_widget(self) -> QWidget:
+        """The widget a form shown in this container (Form.ShowIn) follows."""
+        return self._container_widget()
+
+    def _fill_rect(self, designed: QSize) -> QRect:
+        """Where a filling form goes; ``designed`` is the form's own size."""
+        return self._container_widget().contentsRect()
 
     def _base_dir(self) -> str:
         return self._form._base_dir()
@@ -1101,11 +1109,42 @@ class VScrollBar(_ScrollBar):
 
 # --- PictureBox ---------------------------------------------------------------------------------
 
+class _ScrollWatcher(QObject):
+    """Keeps a scrolling PictureBox's content as large as its controls need:
+    it watches the content (controls added or removed), the controls (moved,
+    resized, shown, hidden) and the visible area (resized)."""
+
+    _EVENTS = (QEvent.Move, QEvent.Resize, QEvent.Show, QEvent.Hide)
+
+    def __init__(self, picture: "PictureBox", content: QWidget):
+        super().__init__(content)
+        self._picture = picture
+        self._pending = False
+
+    def eventFilter(self, watched, event):
+        etype = event.type()
+        if etype == QEvent.ChildAdded and isinstance(event.child(), QWidget):
+            event.child().installEventFilter(self)
+            self._schedule()
+        elif etype == QEvent.ChildRemoved or etype in self._EVENTS:
+            self._schedule()
+        return False
+
+    def _schedule(self) -> None:
+        if not self._pending:  # once per round of changes
+            self._pending = True
+            QTimer.singleShot(0, self, self._update)
+
+    def _update(self) -> None:
+        self._pending = False
+        self._picture._update_scroll_size()
+
+
 class PictureBox(Control):
     TypeName = "PictureBox"
     DefaultSize = (121, 97)
     IsContainer = True
-    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp", "Resize")
+    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp", "Resize", "Scroll")
     _synthesize_click = True
     Properties = (
         *_geometry(*DefaultSize),
@@ -1117,18 +1156,154 @@ class PictureBox(Control):
         P("Align", "enum", 0, enum_choices("None", "Top", "Bottom", "Left", "Right"),
           description="Dock to that edge of the form and follow its size, keeping the height "
                       "(Top, Bottom) or width (Left, Right); only on the form itself"),
+        P("ScrollBars", "enum", 0, enum_choices("None", "Horizontal", "Vertical", "Both"),
+          description="Scroll bars that appear when the controls in it reach beyond its "
+                      "edges (at run time); the picture stays in place"),
         *_COLORS, *_COMMON,
     )
 
     def _create_widget(self, parent):
         label = QLabel(parent)
         label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.__dict__["_scroll_area"] = None  # with ScrollBars: see _apply_ScrollBars
         return label
 
     def _on_qt_event(self, watched, event):
         if event.type() == QEvent.Resize and watched is self._widget:
+            if self._scroll_area is not None:
+                self._scroll_area.setGeometry(self._widget.contentsRect())
             self._fire("Resize")  # e.g. a docked pane resized by its form or a Splitter
         return super()._on_qt_event(watched, event)
+
+    # -- scrolling -------------------------------------------------------------------------
+    def _container_widget(self) -> QWidget:
+        area = self.__dict__.get("_scroll_area")
+        return area.widget() if area is not None else self._widget
+
+    def _fill_widget(self) -> QWidget:
+        area = self._scroll_area
+        return area.viewport() if area is not None else self._widget
+
+    def _fill_rect(self, designed: QSize) -> QRect:
+        """Scrolling: a form fills the visible area but keeps at least its own
+        size, so a taller (or wider) one scrolls."""
+        area = self._scroll_area
+        if area is None:
+            return self._widget.contentsRect()
+        view = area.viewport().size()
+        width = view.width() if self._values.get("ScrollBars") in (0, 2) else \
+            max(view.width(), designed.width())
+        height = view.height() if self._values.get("ScrollBars") in (0, 1) else \
+            max(view.height(), designed.height())
+        return QRect(0, 0, width, height)
+
+    def _apply_ScrollBars(self, v):
+        if self._design_mode:
+            return  # the designer shows the controls where they are
+        if v and self._scroll_area is None:
+            self._start_scrolling()
+        elif not v and self._scroll_area is not None:
+            self._stop_scrolling()
+        area = self._scroll_area
+        if area is not None:
+            area.setHorizontalScrollBarPolicy(
+                Qt.ScrollBarAsNeeded if v in (1, 3) else Qt.ScrollBarAlwaysOff)
+            area.setVerticalScrollBarPolicy(
+                Qt.ScrollBarAsNeeded if v in (2, 3) else Qt.ScrollBarAlwaysOff)
+            self._update_scroll_size()
+
+    def _start_scrolling(self) -> None:
+        """Put the controls on a content widget in a scroll area over the
+        picture; the content grows to hold them all."""
+        label = self._widget
+        area = QScrollArea(label)
+        area.setFrameShape(QFrame.NoFrame)
+        area.setWidgetResizable(False)
+        area.setAutoFillBackground(False)
+        area.viewport().setAutoFillBackground(False)  # the PictureBox shows through
+        content = QWidget()
+        content.setAutoFillBackground(False)
+        for child in label.children():
+            if isinstance(child, QWidget) and child is not area and not child.isWindow():
+                shown = not child.isHidden()
+                child.setParent(content)
+                if shown:
+                    child.show()
+        area.setWidget(content)
+        watcher = _ScrollWatcher(self, content)
+        content.installEventFilter(watcher)
+        area.viewport().installEventFilter(watcher)
+        for child in content.children():
+            if isinstance(child, QWidget):
+                child.installEventFilter(watcher)
+        if self._bridge is not None:  # clicks on the empty area are the PictureBox's
+            content.installEventFilter(self._bridge)  # it covers the whole visible area
+            content.setMouseTracking(True)
+        area.horizontalScrollBar().valueChanged.connect(self._on_scrolled)
+        area.verticalScrollBar().valueChanged.connect(self._on_scrolled)
+        area.setGeometry(label.contentsRect())
+        area.show()
+        self.__dict__["_scroll_area"] = area
+
+    def _stop_scrolling(self) -> None:
+        area, label = self._scroll_area, self._widget
+        content = area.takeWidget()
+        for child in content.children():
+            if isinstance(child, QWidget) and not child.isWindow():
+                shown = not child.isHidden()
+                child.setParent(label)
+                if shown:
+                    child.show()
+        content.deleteLater()
+        area.hide()
+        area.deleteLater()
+        self.__dict__["_scroll_area"] = None
+
+    def _update_scroll_size(self) -> None:
+        """The content is as large as the controls in it need (at least the
+        visible area), so the scroll bars appear exactly when needed."""
+        area = self._scroll_area
+        if area is None:
+            return
+        content = area.widget()
+        right = bottom = 0
+        for child in content.children():
+            if isinstance(child, QWidget) and not child.isHidden():
+                right = max(right, child.geometry().right() + 1)
+                bottom = max(bottom, child.geometry().bottom() + 1)
+        full = area.contentsRect().size()  # the visible area without scroll bars
+        if right <= full.width() and bottom <= full.height():
+            content.resize(full)  # everything fits: no bars, in one step
+            return
+        view = area.viewport().size()
+        content.resize(max(right, view.width()), max(bottom, view.height()))
+
+    def _on_scrolled(self, *_):
+        self._fire("Scroll")
+
+    @property
+    def ScrollLeft(self) -> int:
+        """How far the contents are scrolled to the left (0 without ScrollBars)."""
+        area = self._scroll_area
+        return area.horizontalScrollBar().value() if area is not None else 0
+
+    @ScrollLeft.setter
+    def ScrollLeft(self, value):
+        if self._scroll_area is not None:
+            self._update_scroll_size()  # controls just added or moved count already
+            self._scroll_area.horizontalScrollBar().setValue(int(value))
+
+    @property
+    def ScrollTop(self) -> int:
+        """How far the contents are scrolled up (0 without ScrollBars)."""
+        area = self._scroll_area
+        return area.verticalScrollBar().value() if area is not None else 0
+
+    @ScrollTop.setter
+    def ScrollTop(self, value):
+        if self._scroll_area is not None:
+            self._update_scroll_size()
+            self._scroll_area.verticalScrollBar().setValue(int(value))
 
     def _relayout(self) -> None:
         """Docked (or just undocked): let the form place its aligned panes."""

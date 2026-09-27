@@ -160,7 +160,8 @@ from vp6 import *
   arrays (e.g. a recent files list). On macOS they are in the macOS menu bar.
 * **Docked panes**: a PictureBox with `Align` (Top, Bottom, Left, Right) sticks
   to that edge of the form and follows its size, e.g. a sidebar or a status bar.
-  A `Splitter` docked beside it lets the user drag its size.
+  A `Splitter` docked beside it lets the user drag its size, and `ScrollBars`
+  makes a PictureBox scroll the controls (or form) in it.
 * **Forms inside forms**: `frmPage().ShowIn(self.picContent)` shows a form
   designed on its own inside a PictureBox or Frame of another form, filling
   it and following its size; `ShowIn(None)` makes it a window again.

@@ -152,8 +152,8 @@ class Form1(Form):
                                  TabIndex=45,
                                  ToolTipText='A TreeView: its nodes were typed in the designer (the Items outline)')
         self.picEmbed = PictureBox(self.picSide, Left=0, Top=276, Width=144, Height=240,
-                                   TabIndex=46,
-                                   ToolTipText='A PictureBox holding another form (frmEmbedded)')
+                                   ScrollBars=2, TabIndex=46,
+                                   ToolTipText='A PictureBox with scroll bars, holding another form (frmEmbedded)')
         self.splSide = Splitter(self, Left=754, Top=0, Width=6, Height=532, Align=4, MinSize=120,
                                 ToolTipText='A Splitter: drag it to resize the side pane')
         self.lblStatus = Label(self, Caption='Ready', Left=16, Top=496, Width=728, Height=25,

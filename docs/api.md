@@ -375,7 +375,7 @@ def cmdDigit_Click(self, Index):
 
 ### PictureBox
 
-A container that shows an image. Like VB's, it paints its background: its
+A container that shows an image, optionally with scroll bars. Like VB's, it paints its background: its
 `BackColor`, or the color scheme's window color when that isn't set.
 
 **Docked panes (`Align`).** A PictureBox directly on the form with `Align`
@@ -400,6 +400,25 @@ self.picStatus = PictureBox(self, Align=vpAlignBottom, Height=24) # a status bar
   form or a [Splitter](#splitter) resizes a docked pane, so it can lay out
   its contents.
 
+**Scrolling (`ScrollBars`).** With `ScrollBars` set to Horizontal, Vertical
+or Both, a PictureBox scrolls the controls in it: a scroll bar appears
+(at run time) when they reach beyond its edges in that direction, and goes
+away when they don't. Controls keep the positions you give them; the
+picture itself stays in place.
+
+```python
+self.picContent = PictureBox(self, Left=200, Top=0, Width=400, Height=300,
+                             ScrollBars=vpVertical)
+self.picContent.ScrollTop = 0          # back to the top
+```
+
+* `ScrollLeft` and `ScrollTop` read or set how far the contents are
+  scrolled; the `Scroll` event fires when that changes (also by the mouse
+  wheel).
+* A form shown in it with `ShowIn` fills the visible width (and height) but
+  keeps at least its own size, so a taller form scrolls.
+* The designer shows the controls where they are, without scrolling.
+
 <!-- BEGIN GENERATED: control PictureBox -->
 Default size 121 × 97. A container: other controls can be placed on it. Property groups: Position, Colors, Common.
 
@@ -409,9 +428,10 @@ Default size 121 × 97. A container: other controls can be placed on it. Propert
 | `AutoSize` | bool | `False` | Resize to fit the picture |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A sunken border around the picture |
 | `Picture` | file path | `''` | Image file (relative to the form's folder) |
+| `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Scroll bars that appear when the controls in it reach beyond its edges (at run time); the picture stays in place |
 | `Stretch` | bool | `False` | Scale the picture to fit the control |
 
-Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Resize`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Resize`, `Scroll`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Methods: `Cls()` clears the picture.
@@ -987,6 +1007,7 @@ All constants are plain ints or strings.
 | Form.WindowState | `vpNormal`, `vpMinimized`, `vpMaximized` | 0, 1, 2 |
 | Form.StartUpPosition | `vpStartUpManual`, `vpStartUpOwner`, `vpStartUpScreen`, `vpStartUpWindowsDefault` | 0, 1, 2, 3 |
 | Strings | `vpCr`, `vpLf`, `vpCrLf`, `vpNewLine`, `vpTab`, `vpNullString` | `'\r'`, `'\n'`, `'\r\n'`, `'\n'`, `'\t'`, `''` |
+| ScrollBars (TextBox, PictureBox) | `vpSBNone`, `vpHorizontal`, `vpVertical`, `vpBoth` | 0, 1, 2, 3 |
 | PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight` | 0, 1, 2, 3, 4 |
 | TreeView: Nodes.Add relationship | `vpTvwFirst`, `vpTvwLast`, `vpTvwNext`, `vpTvwPrevious`, `vpTvwChild` | 0, 1, 2, 3, 4 |
 | TreeView.LineStyle | `vpTvwTreeLines`, `vpTvwRootLines` | 0, 1 |

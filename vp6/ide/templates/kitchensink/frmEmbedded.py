@@ -8,11 +8,11 @@ class frmEmbedded(Form):
     def InitializeComponent(self):
         self.Caption = 'Embedded form'
         self.Width = 144
-        self.Height = 156
+        self.Height = 300
         self.lblInfo = Label(self,
-                             Caption="A form of its own, shown in Form1's PictureBox with ShowIn",
-                             Left=8, Top=8, Width=128, Height=80, WordWrap=True, TabIndex=1)
-        self.picButtons = PictureBox(self, Left=0, Top=116, Width=144, Height=40, BorderStyle=0,
+                             Caption="A form of its own, shown in Form1's PictureBox with ShowIn. It is taller than the pane, so the pane scrolls (ScrollBars = 2 - Vertical).",
+                             Left=8, Top=8, Width=128, Height=150, WordWrap=True, TabIndex=1)
+        self.picButtons = PictureBox(self, Left=0, Top=260, Width=144, Height=40, BorderStyle=0,
                                      Align=2, TabIndex=2,
                                      ToolTipText='Align = 2 - Bottom: docked to the bottom edge')
         self.cmdPop = CommandButton(self.picButtons, Caption='Pop &out', Left=8, Top=4, Width=128,
