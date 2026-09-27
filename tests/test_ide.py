@@ -612,3 +612,109 @@ def test_windows_opened_before_the_ide_shows_are_fitted_when_it_does(qapp, tmp_p
         doc.text_document.setModified(False)
     w.close_project()
     w.close()
+
+
+# --- the Project panel's order --------------------------------------------------------------------
+
+def _listed(window, *group):
+    """The names of what is in a group of the Project panel, e.g. ("Forms",)."""
+    item = window.explorer.tree.topLevelItem(0)
+    for name in group:
+        item = next(item.child(i) for i in range(item.childCount())
+                    if item.child(i).data(0, Qt.UserRole + 2) == name)
+    return [item.child(i).data(0, Qt.UserRole + 2) for i in range(item.childCount())]
+
+
+def test_project_panel_sorts_by_name(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
+    window.add_module()  # Module2: with a form selected, into the modules' group
+    assert _listed(window, "Forms") == ["Pages", "Form1", "frmDialog"]  # groups first
+    pages = _listed(window, "Forms", "Pages")
+    assert pages == sorted(pages, key=str.lower)  # A to Z by default, not the project's order
+    assert pages[0] == "pgArrays" and pages[-1] == "pgZOrder"
+    assert window.explorer.sort_button.text() == "Name ▲"
+    window.explorer.select_path(os.path.join(tmp_path, "Sink", "pgLists.py"))
+    window.explorer.sort_button.click()  # Z to A
+    assert _listed(window, "Forms", "Pages") == pages[::-1]
+    assert _listed(window, "Forms") == ["Pages", "frmDialog", "Form1"]
+    assert _listed(window, "Modules") == ["Module2", "Module1"]
+    assert window.explorer.sort_button.text() == "Name ▼"
+    assert window.explorer._current()[0].endswith("pgLists.py")  # still selected
+    window.add_form()  # with a page selected: into the Pages group, in its place
+    assert _listed(window, "Forms", "Pages")[0] == "pgZOrder"
+    assert "Form2" in _listed(window, "Forms", "Pages")
+    # The IDE remembers the order
+    other = MainWindow()
+    assert other.explorer.sort_descending
+    other.close()
+    window.explorer.sort_button.click()
+    other = MainWindow()
+    assert not other.explorer.sort_descending
+    other.close()
+
+
+def _item(window, *path):
+    """The Project panel's item for a group or file, by names from the project."""
+    item = window.explorer.tree.topLevelItem(0)
+    for name in path:
+        item = next(item.child(i) for i in range(item.childCount())
+                    if item.child(i).data(0, Qt.UserRole + 2) == name)
+    return item
+
+
+def _menu(window, item):
+    """The context menu's actions by text (the Move to submenu's under "Move to/...")."""
+    actions = {}
+    for action in window.explorer.context_menu(item).actions():
+        actions[action.text()] = action
+        if action.menu() is not None:
+            for sub in action.menu().actions():
+                actions["Move to/" + sub.text()] = sub
+    return actions
+
+
+def test_project_panel_groups(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog, QMessageBox
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    answers = []
+    monkeypatch.setattr(QInputDialog, "getText",
+                        lambda *args, **kw: (answers.pop(0), True))
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+    assert _listed(window) == ["Forms", "Modules"]  # the default groups
+    # New Group from a group's menu: inside it, selected
+    answers.append("Dialogs")
+    _menu(window, _item(window, "Forms"))["New Group…"].trigger()
+    assert _listed(window, "Forms") == ["Dialogs", "Form1"]
+    assert window.explorer.selected_group() == ("Forms", "Dialogs")
+    window.add_form()  # into the selected group
+    assert _listed(window, "Forms", "Dialogs") == ["Form2"]
+    # Move to: a module into a group of forms (no group is special)
+    menu = _menu(window, _item(window, "Modules", "Module1"))
+    assert "Move to/Modules" not in menu  # where it is already
+    menu["Move to/Forms / Dialogs"].trigger()
+    assert _listed(window, "Forms", "Dialogs") == ["Form2", "Module1"]
+    # A group can't go into itself; dragging it onto the project: the top level
+    menu = _menu(window, _item(window, "Forms"))
+    assert "Move to/Forms / Dialogs" not in menu and "Move to/Modules" in menu
+    window.explorer._request_move(_item(window, "Forms", "Dialogs"), _item(window))
+    assert _listed(window) == ["Dialogs", "Forms", "Modules"]
+    assert _listed(window, "Dialogs") == ["Form2", "Module1"]
+    # Dropping on a file: into that file's group
+    window.explorer._request_move(_item(window, "Dialogs", "Module1"),
+                                  _item(window, "Forms", "Form1"))
+    assert _listed(window, "Forms") == ["Form1", "Module1"]
+    # Rename: a name already there is refused (and said)
+    answers.append("Forms")
+    _menu(window, _item(window, "Dialogs"))["Rename Group…"].trigger()
+    assert warnings and "already" in warnings[0]
+    answers.append("Windows")
+    _menu(window, _item(window, "Dialogs"))["Rename Group…"].trigger()
+    assert _listed(window) == ["Forms", "Modules", "Windows"]
+    # Delete: what it held moves up; nothing leaves the project
+    _menu(window, _item(window, "Windows"))["Delete Group (keeps what is in it)"].trigger()
+    assert _listed(window) == ["Forms", "Modules", "Form2"]
+    # Saved in the project file, not as folders on disk
+    loaded = Project.load(window.project.path)
+    assert loaded.group_of("Module1.py") == ("Forms",) and loaded.group_of("Form2.py") == ()
+    assert os.path.isfile(os.path.join(os.path.dirname(window.project.path), "Form2.py"))

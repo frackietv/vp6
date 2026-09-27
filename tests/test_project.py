@@ -96,3 +96,96 @@ def test_new_console_template_runs_via_script(tmp_path):
     result = subprocess.run([sys.executable, str(tmp_path / "Hi.vp6p")], input="Ada\n",
                             capture_output=True, text=True, timeout=60, env=_env())
     assert "Hello, Ada!" in result.stdout
+
+
+# --- groups: how the Project panel shows the files --------------------------------------------
+
+def _project():
+    return Project(forms=["Form1.py", "Form2.py"], modules=["Module1.py"])
+
+
+def test_default_groups():
+    project = _project()  # no groups yet (like older project files): Forms and Modules
+    assert project.tree() == [{"group": "Forms", "items": ["Form1.py", "Form2.py"]},
+                              {"group": "Modules", "items": ["Module1.py"]}]
+    assert project.group_paths() == [("Forms",), ("Modules",)]
+    assert project.group_of("Module1.py") == ("Modules",)
+
+
+def test_groups_nest_and_hold_anything():
+    project = _project()
+    project.add_group(("Forms",), "Dialogs")
+    project.move("Form2.py", ("Forms", "Dialogs"))
+    project.move("Module1.py", ("Forms", "Dialogs"))  # a module in a group of forms: fine
+    project.add_group((), "Loose")
+    project.move(("Forms", "Dialogs"), ("Loose",))  # a group into another
+    assert project.tree() == [{"group": "Forms", "items": ["Form1.py"]},
+                              {"group": "Modules", "items": []},
+                              {"group": "Loose", "items": [
+                                  {"group": "Dialogs", "items": ["Form2.py", "Module1.py"]}]}]
+    project.move("Form1.py", ())  # files can be at the top level too
+    assert project.group_of("Form1.py") == ()
+    with pytest.raises(ValueError, match="itself"):
+        project.move(("Loose",), ("Loose", "Dialogs"))
+    with pytest.raises(ValueError, match="already"):
+        project.add_group((), "Loose")
+    with pytest.raises(ValueError, match="name"):
+        project.add_group((), "  ")
+
+
+def test_rename_and_delete_groups():
+    project = _project()
+    assert project.rename_group(("Forms",), "Windows") == ("Windows",)
+    with pytest.raises(ValueError, match="already"):
+        project.rename_group(("Windows",), "Modules")
+    project.delete_group(("Windows",))  # what it held moves up, in its place
+    assert project.tree() == ["Form1.py", "Form2.py", {"group": "Modules",
+                                                       "items": ["Module1.py"]}]
+    assert project.forms == ["Form1.py", "Form2.py"]  # nothing leaves the project
+
+
+def test_new_files_find_their_place():
+    project = _project()
+    project.add_group(("Forms",), "Dialogs")
+    project.forms.append("Form3.py")
+    project.place_file("Form3.py", ("Forms", "Dialogs"))  # a chosen group
+    project.forms.append("Form4.py")
+    project.place_file("Form4.py")  # none: where the forms are (not by the group's name)
+    project.modules.append("Module2.py")
+    project.place_file("Module2.py")
+    assert project.group_of("Form3.py") == ("Forms", "Dialogs")
+    assert project.group_of("Form4.py") == ("Forms",)
+    assert project.group_of("Module2.py") == ("Modules",)
+    project.rename_group(("Modules",), "Code")
+    project.modules.append("Module3.py")
+    project.place_file("Module3.py")  # the group holding modules, whatever it's called
+    assert project.group_of("Module3.py") == ("Code",)
+    project.remove_file("Module3.py")
+    assert "Module3.py" not in project.modules and "Module3.py" not in str(project.tree())
+    project.rename_file("Form4.py", "frmMain.py")  # renamed on disk: same place
+    assert project.group_of("frmMain.py") == ("Forms",) and "frmMain.py" in project.forms
+
+
+def test_tree_repairs_itself():
+    project = _project()
+    project.groups = [{"group": "Forms", "items": ["Form1.py", "Gone.py", "Form1.py"]},
+                      "Module1.py", 42, {"no group": True}]
+    # Form2 wasn't in any group: it goes where the forms are; the rest is dropped
+    assert project.tree() == [{"group": "Forms", "items": ["Form1.py", "Form2.py"]},
+                              "Module1.py"]
+
+
+def test_groups_are_saved_and_loaded(tmp_path):
+    project = _project()
+    project.add_group(("Forms",), "Dialogs")
+    project.move("Form2.py", ("Forms", "Dialogs"))
+    path = tmp_path / "Demo.vp6p"
+    project.save(str(path))
+    text = path.read_text()
+    assert '"groups": [' in text and '"group": "Dialogs"' in text
+    loaded = Project.load(str(path))
+    assert loaded == project and loaded.group_of("Form2.py") == ("Forms", "Dialogs")
+    # An older project file without groups: the two default groups
+    path.write_text(text[:text.index('    "groups"')] + "}\n# endregion\n")
+    assert Project.load(str(path)).tree()[0] == {"group": "Forms",
+                                                 "items": ["Form1.py", "Form2.py"]}

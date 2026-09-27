@@ -9,7 +9,7 @@ import sys
 from PySide6.QtCore import QEvent, QProcess, QProcessEnvironment, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QDockWidget, QFileDialog, QLineEdit, QMainWindow, QMdiArea,
+    QApplication, QDockWidget, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMdiArea,
     QMdiSubWindow, QMessageBox, QPlainTextEdit, QSizePolicy, QWidget,
 )
 
@@ -96,6 +96,13 @@ class MainWindow(QMainWindow):
         self.explorer.setStartup.connect(self._set_startup)
         self.explorer.addForm.connect(self.add_form)
         self.explorer.addModule.connect(self.add_module)
+        self.explorer.newGroup.connect(self.new_group)
+        self.explorer.renameGroup.connect(self.rename_group)
+        self.explorer.deleteGroup.connect(self.delete_group)
+        self.explorer.moveItem.connect(self.move_item)
+        # The order of its forms and modules is remembered
+        self.explorer.set_sort(self.settings.value("explorer/descending", False, type=bool))
+        self.explorer.sortChanged.connect(self._remember_explorer_sort)
         # Bound methods, not lambdas: PySide disconnects those automatically
         # when the window is destroyed (the signals still fire during shutdown)
         self.explorer.tree.currentItemChanged.connect(self._on_explorer_changed)
@@ -440,6 +447,9 @@ class MainWindow(QMainWindow):
     def _doc_display_name(self, doc: Document) -> str:
         return doc.name
 
+    def _remember_explorer_sort(self, descending: bool):
+        self.settings.setValue("explorer/descending", descending)
+
     def _refresh_explorer(self):
         names = {path: self._doc_display_name(doc) for path, doc in self.documents.items()}
         project_was_selected = self.explorer.project_selected()
@@ -760,9 +770,8 @@ class MainWindow(QMainWindow):
                       self._designers, self._file_targets):
             if old_path in table:
                 table[new_path] = table.pop(old_path)
-        old_rel = os.path.relpath(old_path, self.project.directory)
-        self.project.modules = [os.path.relpath(new_path, self.project.directory)
-                                if m == old_rel else m for m in self.project.modules]
+        self.project.rename_file(os.path.relpath(old_path, self.project.directory),
+                                 os.path.relpath(new_path, self.project.directory))
         for other in self.documents.values():
             if other is not doc:
                 other.replace_text(
@@ -797,6 +806,7 @@ class MainWindow(QMainWindow):
         with open(path, "w", encoding="utf-8") as f:
             f.write(formfile.new_form_source(name))
         self.project.forms.append(filename)
+        self.project.place_file(filename, self.explorer.selected_group("form"))
         self.project.save()
         self._add_document(open_document(path))
         self._refresh_explorer()
@@ -810,6 +820,7 @@ class MainWindow(QMainWindow):
         with open(path, "w", encoding="utf-8") as f:
             f.write(formfile.new_module_source())
         self.project.modules.append(filename)
+        self.project.place_file(filename, self.explorer.selected_group("module"))
         self.project.save()
         self._add_document(open_document(path))
         self._refresh_explorer()
@@ -836,6 +847,8 @@ class MainWindow(QMainWindow):
         doc = open_document(path)
         (self.project.forms if isinstance(doc, FormDocument) else self.project.modules).append(
             relative)
+        self.project.place_file(relative, self.explorer.selected_group(
+            "form" if isinstance(doc, FormDocument) else "module"))
         self.project.save()
         self._add_document(doc)
         self._refresh_explorer()
@@ -858,14 +871,70 @@ class MainWindow(QMainWindow):
             if sub is not None:
                 sub.setAttribute(Qt.WA_DeleteOnClose, True)
                 sub.close()
-        relative = os.path.relpath(path, self.project.directory)
-        for files in (self.project.forms, self.project.modules):
-            if relative in files:
-                files.remove(relative)
+        self.project.remove_file(os.path.relpath(path, self.project.directory))
         del self.documents[path]
         self._file_targets.pop(path, None)
         self.project.save()
         self._refresh_explorer()
+
+    # -- groups in the Project panel (not folders on disk) ---------------------------------------
+    def _organize(self, change, select=None) -> bool:
+        """Apply a change to the project's groups, save and show it; an error
+        (e.g. a name already used) is shown instead. ``select``: a group's
+        path to select afterwards."""
+        try:
+            change()
+        except ValueError as exc:
+            QMessageBox.warning(self, "Project", str(exc))
+            return False
+        self.project.save()
+        self._refresh_explorer()
+        if select is not None:
+            self.explorer.select_group(select())
+        return True
+
+    def new_group(self, parent=None):
+        """A new group in ``parent`` (a group's path; None or () is the
+        project itself)."""
+        if self.project is None:
+            return
+        parent = tuple(parent or ())
+        taken = {path[-1] for path in self.project.group_paths() if path[:-1] == parent}
+        number = 1
+        while f"Group{number}" in taken:
+            number += 1
+        name, ok = QInputDialog.getText(self, "New Group", "Name of the new group:",
+                                        text=f"Group{number}")
+        if ok:
+            made = []
+            self._organize(lambda: made.append(self.project.add_group(parent, name)),
+                           select=lambda: made[0])
+
+    def rename_group(self, group):
+        if self.project is None:
+            return
+        name, ok = QInputDialog.getText(self, "Rename Group", "New name:", text=group[-1])
+        if ok and name.strip() != group[-1]:
+            renamed = []
+            self._organize(lambda: renamed.append(self.project.rename_group(group, name)),
+                           select=lambda: renamed[0])
+
+    def delete_group(self, group):
+        """Remove a group; its forms, modules and groups move up a level
+        (no file is deleted)."""
+        if self.project is not None:
+            self._organize(lambda: self.project.delete_group(group))
+
+    def move_item(self, item, target):
+        """Move a file (relative path) or a group (path) into a group."""
+        if self.project is None:
+            return
+        selected = self.explorer._selection()
+        if self._organize(lambda: self.project.move(item, target)) and selected is not None:
+            kind, ref = selected
+            if kind == "group" and tuple(ref) == tuple(item):  # the moved group: its new path
+                selected = (kind, tuple(target) + (item[-1],))
+            self.explorer._restore_selection(selected)
 
     # -- windows ------------------------------------------------------------------------------------------
     def _add_subwindow(self, widget, icon_name) -> QMdiSubWindow:

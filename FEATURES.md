@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.3.26
+**Date:** 2026-09-30
+
+## IDE
+
+- The Project panel lists its forms and modules sorted by name, A to Z by default (they were in the order they were added to the project); its Name ▲/▼ button reverses the order, keeping the selected file selected, and the IDE remembers the choice
+
+---
+
 **Version:** 0.3.25
 **Date:** 2026-09-30
 

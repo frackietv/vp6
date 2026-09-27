@@ -40,7 +40,13 @@ def create(directory: str, name: str) -> Project:
     for filename in FORMS + MODULES:
         shutil.copyfile(TEMPLATE_DIR / filename, os.path.join(directory, filename))
     draw_picture(os.path.join(directory, PICTURE))
-    return Project(name=name, type="exe", startup=SUB_MAIN, forms=list(FORMS),
+    pages = [name for name in FORMS if name.startswith("pg")]
+    groups = [  # the Project panel: the pages in a group of their own
+        {"group": "Forms", "items": [name for name in FORMS if name not in pages] +
+         [{"group": "Pages", "items": pages}]},
+        {"group": "Modules", "items": list(MODULES)},
+    ]
+    return Project(name=name, type="exe", startup=SUB_MAIN, forms=list(FORMS), groups=groups,
                    modules=list(MODULES), color_scheme="system")
 
 
