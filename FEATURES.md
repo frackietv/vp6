@@ -1,5 +1,31 @@
 # VP6 features
 
+**Version:** 0.3.27
+**Date:** 2026-09-30
+
+## IDE
+
+- The Project panel is organized in groups and subgroups instead of reflecting folders on disk: a group can hold forms, modules and other groups, and files can also sit at the top level. Forms and Modules are the default groups, and new forms and modules go where files of their kind are; nothing else about them is special. The context menu has New Group…, Rename Group…, Delete Group (what it held moves up), and Move to (the project or any other group); items can also be dragged onto a group, a file (into its group) or the project. A new form or module goes in the selected group. Within each group, subgroups come first, then files, each sorted by name. Duplicate names among siblings are refused with a message
+- Selecting a group shows its (Name) in the Properties panel, where it can be renamed (any name except a sibling's)
+- The Project panel's Name button cycles through four orders: A to Z with the groups first, A to Z with the groups among the forms and modules, and the same two Z to A; the IDE remembers the choice
+- The project file stores the groups (`"groups"` in `PROJECT`, written over several lines); `forms` and `modules` still say what each file is, and projects without groups get the two default groups
+- The Kitchen Sink's pages are in a Pages subgroup of Forms
+- The project item at the top of the Project panel can't be collapsed (no arrow; double-click and the Left/minus keys leave it open)
+- The Project panel's +/- button expands every group, or collapses them all when everything is open; groups you collapse stay collapsed when the panel is refilled (e.g. after adding a form)
+- The Project panel has two views: Project (the groups) and Files, the project's folder as it is on disk, with folders and all files (hidden files and folders with the Hidden button; never the project file, `.git` or `__pycache__`). In the Files view forms and modules open, set the startup object and are removed as in the Project view; it follows changes on disk; sorting and +/- work on its folders. The IDE remembers the view
+- The Files view changes the project's folder: new folders and subfolders (its New Folder button, New Folder… in the context menu of a folder or file, or Project > Add Folder…, which shows the Files view), Rename… (files and folders), Delete (to the Trash; forms and modules in it leave the project, after asking) and Move to, or drag and drop onto a folder. The forms and modules in a renamed or moved file or folder stay in the project, in their groups, with their windows open; renaming a form's or module's file updates the imports of it in the other files. A form's or module's file keeps a Python name, unique in the project. New forms and modules go in the selected folder
+- Several items can be selected in the Project panel (Ctrl/Cmd-click, Shift-click) and moved at once, in both views: dragged onto a group or folder, or with the context menu's Move N Items to. A selected group or folder takes what is in it; the moved items stay selected; any that can't move are listed in one message while the others move
+- Forms and modules in subfolders run: the program imports them by name from every folder holding one
+- The Outline highlights the item the code editor's cursor is in: the function or method (inside its class), class, variable or top-level code, from a definition's first decorator to its last line; it follows as you move and type, in any sort order
+- Panels sharing a place (Immediate and Output, Properties and Outline) have their tabs above them instead of below
+- About VP6 shows the VP6 logo, and is in the Help menu on every platform (on macOS Qt had moved it to the application menu, where it also stays)
+
+## Fixes
+
+- The Project panel no longer uses `QTreeWidgetItemIterator`, whose items' Python wrappers could crash the IDE the next time the panel was refilled (e.g. after a drag and drop)
+
+---
+
 **Version:** 0.3.26
 **Date:** 2026-09-30
 

@@ -160,7 +160,8 @@ class PropertiesWindow(QWidget):
         if 0 <= row < len(self._specs):
             spec = self._specs[row]
             doc = spec.description or {
-                "name": "Returns the name used in code to identify an object.",
+                "name": getattr(self.designer, "name_description",
+                                "Returns the name used in code to identify an object."),
             }.get(spec.kind, "")
             self.description.setText(f"<b>{spec.name}</b><br>{doc}")
 

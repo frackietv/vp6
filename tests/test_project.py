@@ -98,6 +98,19 @@ def test_new_console_template_runs_via_script(tmp_path):
     assert "Hello, Ada!" in result.stdout
 
 
+
+def test_files_in_subfolders_run(tmp_path):
+    # Forms and modules in subfolders import each other by name, like at the top
+    (tmp_path / "lib" / "deep").mkdir(parents=True)
+    (tmp_path / "lib" / "deep" / "Helpers.py").write_text("def greet():\n    return 'hi'\n")
+    (tmp_path / "Module1.py").write_text(
+        "from Helpers import greet\n\n\ndef Main():\n    print(greet(), 'from a subfolder')\n")
+    Project(name="Sub", type="console", startup=SUB_MAIN,
+            modules=["Module1.py", "lib/deep/Helpers.py"]).save(str(tmp_path / "Sub.vp6p"))
+    result = subprocess.run([sys.executable, str(tmp_path / "Sub.vp6p")],
+                            capture_output=True, text=True, timeout=60, env=_env())
+    assert "hi from a subfolder" in result.stdout, result.stderr
+
 # --- groups: how the Project panel shows the files --------------------------------------------
 
 def _project():

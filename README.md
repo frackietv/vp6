@@ -39,9 +39,9 @@ The IDE opens with a VB-style **New Project** dialog. Every new project has
 | Form designer               | Draw controls, move/resize with 8px grid snapping (hold Alt to skip it), rubber-band select, Ctrl+drag inside a Frame, arrows nudge, Shift+arrows resize, cut/copy/paste, undo/redo; `TabIndex` values are renumbered automatically when controls are added, deleted or given a new `TabIndex` |
 | Properties window (F4)      | Object combo (control array elements as `cmdDigit(0)`), `(Name)` and `Index` first, then an alphabetical grid, enum/color/list/font/file editors, multi-select editing, description pane; select a form in the Project Explorer to edit its properties and controls without opening it, or the project to edit its Name, Type, StartupObject and ColorScheme |
 | Code window (F7)            | Object and Procedure dropdowns that create handler stubs, Python highlighting, auto-indent, `self.` / `self.Control.` completion, Ctrl+/ comments; Edit > Find (Ctrl+F; the first match is highlighted as you type), Find Next/Previous (F3 / Shift+F3), Replace (Ctrl+H, or ⌥⌘F on macOS), with match case, whole word and Python regular expressions (escapes such as `\n`, groups such as `\1` in find and replace); Edit > Go to Line (Ctrl+L) |
-| Project Explorer (Ctrl+R)   | Forms and modules sorted by name (A to Z, or Z to A with the Name button; remembered), View Code / View Object, set startup form; follows the active window |
+| Project Explorer (Ctrl+R)   | Forms and modules organized in groups and subgroups (Forms and Modules to begin with; New Group, Rename, Delete, Move to, or drag and drop, several items at once; not folders on disk; +/- expands or collapses them all), or a Files view of the project's folder as it is on disk (hidden files on request; new folders and subfolders with its New Folder button or Project > Add Folder…, rename, delete, and move files and folders by drag and drop), sorted by name (the Name button cycles through A to Z with the groups first, A to Z with the groups among the files, and the same Z to A; remembered), a group's name editable in the Properties window, View Code / View Object, set startup form; follows the active window |
 | Immediate window (Ctrl+G)   | Program output and `Debug.Print`, stdin for console apps, double-click a traceback line to jump to it |
-| Outline window              | The structure of the current file: constants, variables, classes and their members, functions, top-level code, with type icons; sort by file order, name or type; click an item to go to its line. It takes the Properties panel's place while a code window is active, and gives it back for designers (also View > Outline Window and F4) |
+| Outline window              | The structure of the current file: constants, variables, classes and their members, functions, top-level code, with type icons; sort by file order, name or type; click an item to go to its line; the item the cursor is in is highlighted. It takes the Properties panel's place while a code window is active, and gives it back for designers (also View > Outline Window and F4) |
 | Output window               | The IDE's own output, including library messages such as Qt warnings (hidden by default; View > Output Window) |
 | Menu Editor (Ctrl+E)        | Tools > Menu Editor designs the form's menus like VB's: Caption (`-` for a separator), Name, Index, Shortcut, Checked, Enabled, Visible, with arrows to indent and move items. The designer shows the menu bar; click a menu to see it and an item to open its Click code |
 | Format menu                 | Align, Make Same Size, Center in Form, Bring to Front (Ctrl+J), Send to Back (Ctrl+K) |
@@ -99,8 +99,13 @@ is one.
 ## Files
 
 A project is a folder with a `Name.vp6p` project file listing forms, modules
-and the startup object (a form or `Sub Main`). The project file is also an
-executable launcher script, so it starts the program by itself:
+and the startup object (a form or `Sub Main`), and how the Project panel
+groups them. Groups are only for the panel: files stay where they are on
+disk. A group can hold forms, modules and other groups. Forms and modules
+can also be in subfolders of the project's folder (organize them in the
+Project panel's Files view); they import each other by file name wherever
+they are, so their file names are unique in a project. The project file is
+also an executable launcher script, so it starts the program by itself:
 
 ```bash
 ./Calculator.vp6p                                  # uses the first python3 on PATH

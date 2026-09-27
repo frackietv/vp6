@@ -12,6 +12,10 @@ its outline:
 
 Imports and the module docstring aren't listed. The designer region's
 ``InitializeComponent`` is listed like any method, but nothing inside it.
+
+Each item knows the lines it covers (``spans``), so the window can highlight
+the item the code editor's cursor is in (``OutlineWindow.set_line``): the
+innermost one, e.g. a method rather than its class.
 """
 
 from __future__ import annotations
@@ -46,6 +50,14 @@ class OutlineItem:
     line: int  # 1-based line of the definition
     children: list["OutlineItem"] = field(default_factory=list)
     detail: str = ""  # e.g. the first line of top-level code
+    # (first, last) 1-based lines it covers: a definition from its first
+    # decorator to its last line; top-level code, every statement of it
+    spans: list[tuple[int, int]] = field(default_factory=list)
+
+
+def _span(node) -> tuple[int, int]:
+    decorators = [d.lineno for d in getattr(node, "decorator_list", [])]
+    return min([node.lineno] + decorators), node.end_lineno or node.lineno
 
 
 def _names(target) -> list[str]:
@@ -73,11 +85,12 @@ def _members(cls: ast.ClassDef) -> list[OutlineItem]:
     members = []
     for index, node in enumerate(cls.body):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            members.append(OutlineItem(node.name, "method", node.lineno))
+            members.append(OutlineItem(node.name, "method", node.lineno, spans=[_span(node)]))
         elif isinstance(node, ast.ClassDef):
-            members.append(OutlineItem(node.name, "class", node.lineno, _members(node)))
+            members.append(OutlineItem(node.name, "class", node.lineno, _members(node),
+                                       spans=[_span(node)]))
         elif not _is_docstring(node, index):
-            members += [OutlineItem(name, "attribute", node.lineno)
+            members += [OutlineItem(name, "attribute", node.lineno, spans=[_span(node)])
                         for name in _assigned_names(node)]
     return members
 
@@ -86,24 +99,35 @@ def outline(source: str) -> list[OutlineItem]:
     """The outline of a Python source, in file order. Raises SyntaxError."""
     tree = ast.parse(source)
     lines = source.splitlines()
-    items, first_code = [], None
+    items, code = [], []
     for index, node in enumerate(tree.body):
         if isinstance(node, (ast.Import, ast.ImportFrom)) or _is_docstring(node, index):
             continue
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            items.append(OutlineItem(node.name, "function", node.lineno))
+            items.append(OutlineItem(node.name, "function", node.lineno, spans=[_span(node)]))
         elif isinstance(node, ast.ClassDef):
-            items.append(OutlineItem(node.name, "class", node.lineno, _members(node)))
+            items.append(OutlineItem(node.name, "class", node.lineno, _members(node),
+                                     spans=[_span(node)]))
         elif _assigned_names(node):
             for name in _assigned_names(node):
                 kind = "constant" if _CONSTANT_RE.fullmatch(name) else "variable"
-                items.append(OutlineItem(name, kind, node.lineno))
-        elif first_code is None:
-            first_code = node.lineno
-    if first_code is not None:
+                items.append(OutlineItem(name, kind, node.lineno, spans=[_span(node)]))
+        else:
+            code.append(_span(node))
+    if code:
+        first_code = code[0][0]
         items.append(OutlineItem(GLOBAL_CODE, "code", first_code,
-                                 detail=lines[first_code - 1].strip()))
+                                 detail=lines[first_code - 1].strip(), spans=code))
     return items
+
+
+def item_path_at(items: list[OutlineItem], line: int) -> list[OutlineItem]:
+    """The items covering ``line``, outermost first (e.g. [class, method]);
+    empty if none does (a blank line between functions, an import)."""
+    for item in items:
+        if any(first <= line <= last for first, last in item.spans):
+            return [item] + item_path_at(item.children, line)
+    return []
 
 
 # --- sorting ------------------------------------------------------------------------------
@@ -121,7 +145,8 @@ def sorted_outline(items: list[OutlineItem], key: str = "order",
     result = []
     for item in sorted(items, key=SORT_KEYS[key], reverse=descending):
         result.append(OutlineItem(item.name, item.kind, item.line,
-                                  sorted_outline(item.children, key, descending), item.detail))
+                                  sorted_outline(item.children, key, descending), item.detail,
+                                  item.spans))
     return result
 
 
@@ -140,6 +165,7 @@ class OutlineWindow(QWidget):
         super().__init__(parent)
         self.document = None
         self.items: list[OutlineItem] = []
+        self.line: int | None = None  # the code editor's cursor line: its item is highlighted
         self.sort_key, self.descending = "order", False
 
         self.buttons: dict[str, QToolButton] = {}
@@ -191,6 +217,38 @@ class OutlineWindow(QWidget):
             document.text_document.contentsChanged.connect(self._timer.start)
         self.refresh()
 
+    def set_line(self, line: int | None) -> None:
+        """Highlight the innermost item covering this 1-based line (the code
+        editor's cursor), or none."""
+        self.line = line
+        self._highlight()
+
+    def _highlight(self) -> None:
+        node = None
+        if self.line is not None:
+            path = item_path_at(self.items, self.line)
+            node = self._node_for(path)
+        if node is None:
+            self.tree.setCurrentItem(None)
+            self.tree.clearSelection()
+        else:
+            self.tree.setCurrentItem(node)
+            self.tree.scrollToItem(node)
+
+    def _node_for(self, path: list[OutlineItem]):
+        """The tree's node for an item path (the tree may be sorted), by kind,
+        name and line at each level."""
+        parent, node = self.tree.invisibleRootItem(), None
+        for item in path:
+            node = next((parent.child(i) for i in range(parent.childCount())
+                         if parent.child(i).data(0, Qt.UserRole) == item.line and
+                         parent.child(i).data(0, Qt.UserRole + 1) == item.kind and
+                         parent.child(i).text(0) == item.name), None)
+            if node is None:
+                return None
+            parent = node
+        return node
+
     def refresh(self) -> None:
         """Re-read the document. On a syntax error, keep the last outline."""
         self._timer.stop()
@@ -230,6 +288,7 @@ class OutlineWindow(QWidget):
         self._add(self.tree.invisibleRootItem(),
                   sorted_outline(self.items, self.sort_key, self.descending))
         self.tree.expandAll()
+        self._highlight()
 
     def _add(self, parent: QTreeWidgetItem, items: list[OutlineItem]) -> None:
         for item in items:

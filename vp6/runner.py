@@ -20,6 +20,19 @@ import sys
 from .project import SUB_MAIN, Project
 
 
+def import_folders(project: Project) -> list[str]:
+    """Where the project's files are imported from: its folder, then every
+    folder (subfolders too) holding a form or module. Files are imported by
+    their name (``from Module1 import *``) wherever they are, which is why the
+    IDE keeps the file names of forms and modules unique in a project."""
+    folders = [project.directory]
+    for relative in project.forms + project.modules:
+        folder = os.path.dirname(project.abspath(relative))
+        if folder not in folders:
+            folders.append(folder)
+    return folders
+
+
 def _import_file(project: Project, relative: str):
     name = os.path.splitext(os.path.basename(relative))[0]
     return importlib.import_module(name)
@@ -47,7 +60,7 @@ def find_main(project: Project):
 
 def run_project(path: str) -> int:
     project = Project.load(path)
-    sys.path.insert(0, project.directory)
+    sys.path[:0] = import_folders(project)
     os.chdir(project.directory)
     from . import appearance
     from .app import App

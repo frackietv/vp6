@@ -626,6 +626,10 @@ PROJECT = {
     "forms": ["frmCalculator.py"],
     "modules": [],
     "color_scheme": "system",           # "system", "light", "dark" or "ide"; forms inherit it
+    "groups": [                         # how the Project panel shows them (not folders)
+        {"group": "Forms", "items": ["frmCalculator.py"]},
+        {"group": "Modules", "items": []}
+    ]
 }
 # endregion
 
@@ -644,6 +648,17 @@ if __name__ == "__main__":
 * **Reading.** `Project.load` reads `PROJECT` with `ast` (`project.parse`).
 * **Saving.** `Project.save` rewrites only the region when the file exists,
   so user code elsewhere is kept, then calls `make_executable`.
+* **Forms, modules and groups.** `forms` and `modules` say what each file
+  is; that's all the runner needs. `groups` only organizes the Project
+  panel, and doesn't reflect where the files are on disk. It is a list of
+  entries. Each entry is a file (its path relative to the project) or a
+  group, `{"group": name, "items": [entries]}`. So a group can hold forms,
+  modules and other groups, and files can also sit at the top level. Forms
+  and Modules are only the default groups, used when a project has no
+  `groups` (as in older files); new forms and modules go where files of
+  their kind already are. Nothing else about them is special: they can be
+  renamed, deleted or hold anything. `Project.tree()` normalizes the list
+  and repairs it: missing files are dropped and unplaced ones are placed.
 
 ## 7. Settings and environment
 
@@ -658,6 +673,8 @@ suite redirects to a temporary INI file.
 | `geometry`, `state` | `MainWindow.closeEvent` | window and dock layout (removed by View > Reset Window Layout) |
 | `recent` | `MainWindow._remember` | recent project paths (max 10) |
 | `tabbed` | Window > Tabbed Documents | MDI view mode |
+| `explorer/descending`, `explorer/groupsFirst` | `MainWindow._remember_explorer_sort` | the Project panel's order: Z to A or A to Z; groups before the files or among them |
+| `explorer/files`, `explorer/hidden` | `MainWindow._remember_explorer_view` | the Project panel's view: the Files view (the folder on disk) or the Project view (groups); hidden files shown |
 | `editor/theme` | ThemeManager | selected theme or `System` |
 | `editor/system_light`, `editor/system_dark` | ThemeManager | themes used for each OS appearance |
 | `editor/font_family`, `editor/font_size` | ThemeManager | code font (empty/0 = default) |

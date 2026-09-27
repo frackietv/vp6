@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QPushButton, QTabWidget, QVBoxLayout, QWidget,
@@ -15,6 +16,11 @@ import vp6
 from ..project import SUB_MAIN, Project
 from . import icons
 from .projectprops import COLOR_SCHEME_CHOICES, TYPE_CHOICES
+
+# The logo: a copy of images/vp6logo.png scaled to 720 pixels wide, shown at
+# half that (sharp on high-DPI screens)
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "images", "vp6logo.png")
+LOGO_WIDTH = 360
 
 DEFAULT_LOCATION = os.path.join(os.path.expanduser("~"), "VP6 Projects")
 
@@ -231,3 +237,38 @@ double-click a control to write its event handler, press <b>F5</b> (or <b>Cmd+En
 <code>Form_Unload</code> to cancel closing, return <code>0</code> from
 <code>KeyPress</code> to swallow a key.</p>
 """
+
+
+def logo_pixmap(width: int = LOGO_WIDTH, ratio: float = 2.0) -> QPixmap:
+    """The VP6 logo, ``width`` pixels wide on screen (an empty pixmap if the
+    file is missing)."""
+    pixmap = QPixmap(LOGO_PATH)
+    if pixmap.isNull():
+        return pixmap
+    pixmap = pixmap.scaledToWidth(round(width * ratio), Qt.SmoothTransformation)
+    pixmap.setDevicePixelRatio(ratio)
+    return pixmap
+
+
+class AboutDialog(QDialog):
+    """About VP6: the logo, the version and a few words on how it works (Help >
+    About VP6, and the application menu on macOS)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("About VP6")
+        self.logo = QLabel()
+        self.logo.setPixmap(logo_pixmap())
+        self.logo.setAlignment(Qt.AlignCenter)
+        self.text = QLabel(ABOUT_HTML)
+        self.text.setWordWrap(True)
+        self.text.setTextFormat(Qt.RichText)
+        self.text.setFixedWidth(LOGO_WIDTH + 80)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+        buttons.accepted.connect(self.accept)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 16)
+        layout.addWidget(self.logo)
+        layout.addWidget(self.text)
+        layout.addWidget(buttons)
+        layout.setSizeConstraint(QVBoxLayout.SetFixedSize)

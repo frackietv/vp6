@@ -57,3 +57,5 @@
 - **[Appearance]** Per-window title bar color: a forced Light or Dark form still gets a title bar in the OS appearance, since Qt can't set it per window on macOS
 - **[Appearance]** Picking up a macOS light/dark change live for System forms in the designer while the IDE is forced to Light or Dark (they update on the next redraw)
 - **[Appearance]** Programs started from the IDE with the "IDE" color scheme follow the IDE's appearance at launch only, not later IDE theme changes
+- **[IDE - Term]** Add a terminal emultator panel (default position same as immediate panel) to allow a shell to be opened in the IDE.
+- **[AI]** Add Claude integration to allow use of Claude straight from the IDE

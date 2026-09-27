@@ -371,7 +371,7 @@ classes for their metadata.
   * `event_stub(obj, event, args, index)` makes a new handler stub (`index`:
     `Index` first, for a control array).
 
-### `vp6/project.py` (≈170 lines)
+### `vp6/project.py` (≈400 lines)
 
 Project files, which are executable launcher scripts (format in
 architecture §6.2).
@@ -380,11 +380,33 @@ architecture §6.2).
   * fields `name`, `type` (`"exe"` / `"console"`), `startup` (a form class
     name or `SUB_MAIN = "Sub Main"`), `forms`, `modules`, `color_scheme`,
     `path`;
-  * helpers `directory` and `abspath(relative)`;
+  * helpers `directory`, `abspath(relative)` and `kind_of(relative)`
+    (`"form"`, `"module"` or None);
+  * **groups** (`groups`, how the Project panel shows the files; not folders
+    on disk). A group is addressed by its path, a tuple of names (`()` is the
+    project), and an item is a file's relative path or a group's path:
+    * `tree()` is the normalized list of entries (a file, or
+      `{"group": name, "items": [...]}`): the default groups Forms and
+      Modules when `groups` is None, files no longer in the project dropped,
+      duplicates and junk dropped, unplaced files placed;
+    * `group_paths()`, `group_of(relative)`;
+    * `place_file(relative, group=None)` puts a new file in a group, by
+      default the first group (depth first) holding a file of the same kind,
+      else the top level; `remove_file` and `rename_file` keep `forms`,
+      `modules` and the groups in step;
+    * `add_group(parent, name)` and `rename_group(path, name)` return the new
+      path; `delete_group(path)` moves what it held up, in its place;
+      `move(item, target)` moves a file or group into a group. A name must be
+      non-empty and unique among its siblings, and a group can't go into
+      itself: `ValueError` otherwise;
+    * `groups` isn't compared as is (`compare=False`); `__eq__` compares
+      `tree()`, so a project without groups equals its saved and reloaded
+      self;
   * `Project.load(path)`;
   * `project.save(path=None)` rewrites only the region when the file exists,
     else writes `_TEMPLATE`, then makes the file executable;
-  * `region()` renders the `PROJECT` dict with comments.
+  * `region()` renders the `PROJECT` dict with comments; `"groups"` is
+    written as indented JSON over several lines.
 * `parse(text)` → dict. It reads the region, or the whole file if there is no
   region, with `ast`, and raises `ProjectFileError` (a `ValueError`) for
   invalid files.
@@ -393,7 +415,7 @@ architecture §6.2).
 * Constants: `EXTENSION = ".vp6p"`, `REGION_START` / `REGION_END`, and
   `_FIELDS` (the order the fields are written in).
 
-### `vp6/runner.py` (≈80 lines)
+### `vp6/runner.py` (≈95 lines)
 
 It's deliberately not named `run.py`: importing a `vp6.run` submodule would
 replace the public `vp6.run()` function on the package, and `run(Form1)` in
@@ -403,7 +425,9 @@ programs would then fail.
 Starts a project. `run_project(path)`:
 
 1. loads the project;
-2. puts its folder on `sys.path` and `chdir`s into it;
+2. puts `import_folders(project)` on `sys.path` (the project's folder, then
+   every folder holding a form or module, so files in subfolders import each
+   other by name) and `chdir`s into the project's folder;
 3. sets `App.Title` and `appearance.project_scheme`;
 4. starts the program:
    * **`Sub Main`:** calls `find_main(project)()` (modules are searched
@@ -426,7 +450,7 @@ console script.
 Package docstring; `python -m vp6.ide [PROJECT.vp6p]` calls
 `mainwindow.main()`.
 
-### `vp6/ide/mainwindow.py` (≈870 lines)
+### `vp6/ide/mainwindow.py` (≈1600 lines)
 
 The IDE shell. `VP6_ROOT` is the folder containing the `vp6` package; it's
 prepended to `PYTHONPATH` for programs started with F5.
@@ -436,8 +460,10 @@ prepended to `PYTHONPATH` for programs started with F5.
 * **Construction.**
   * Calls `theme_manager().manage_application()` (the IDE follows the theme)
     and sets the icon variant.
-  * Creates the MDI area, the four docks, the actions, the toolbar, the menus
-    and the status bar.
+  * Creates the MDI area, the docks, the actions, the toolbar, the menus
+    and the status bar. Panels sharing a place get their tabs above them
+    (`setTabPosition(Qt.AllDockWidgetAreas, QTabWidget.North)`; Qt puts them
+    below by default).
   * Restores `geometry` and `state` from the settings.
 * **Light/dark:**
   * `_on_theme_changed` redraws the icons, the Toolbox, the window icons, the
@@ -490,7 +516,41 @@ prepended to `PYTHONPATH` for programs started with F5.
     `open_project(path)`, `close_project()`;
   * `save_all()`, `_confirm_save`, `project_properties`, `_set_startup`,
     `_project_scheme`;
-  * `add_form`, `add_module`, `add_file`, `remove_file`;
+  * `add_form`, `add_module`, `add_file` (new files go in
+    `explorer.selected_group(kind)`, else where the project puts that kind),
+    `remove_file`;
+  * **the Files view's changes on disk:** Project > Add Folder…
+    (`act_add_folder`, `add_folder`) switches the Project panel to the Files
+    view and makes a folder in its selected folder; `new_folder(parent)` and
+    `rename_path(path)` ask with `QInputDialog.getText`; `move_paths(paths,
+    folder)` moves each (failures in one message). Renaming and moving go
+    through `_relocate(old, new)` (`relocate` also saves and shows it, like
+    `_after_relocating` after several), which returns an error message or None: the project file and folder stay put,
+    files stay in the project's folder, a folder can't go into itself, and
+    nothing is overwritten. A form's or module's file name is its import name,
+    so it must stay a `.py` file named like an identifier and unique in the
+    project (`_import_names`); a renamed one is changed in the other files'
+    imports (`formfile.rename_module_references`). The file or folder is
+    renamed with `os.rename`, and the forms and modules in it follow: their
+    documents, windows, designers and `FileTarget`s are re-keyed and
+    `project.rename_file` keeps their place in the groups. `delete_path(path)`
+    asks first, naming the forms and modules that leave the project (and
+    lost changes), moves the file or folder to the Trash (`_move_to_trash`,
+    `QFile.moveToTrash`; the tests replace it) and forgets its documents
+    (`_forget_document`, shared with `remove_file`). `_unique_file` picks a
+    new form's or module's name and file in `explorer.selected_folder()`;
+    `_relative(path)` is a path as the project lists it;
+  * **groups** (the Project panel's, not folders): `new_group(parent)`
+    (suggests an unused `GroupN`) and `rename_group(group)` ask with
+    `QInputDialog.getText`; `delete_group(group)`; `move_items(items, target)`
+    moves each (a failure doesn't stop the others: the failures are shown in
+    one message) and selects the moved ones, groups at their new paths. All go
+    through `_organize(change, select)`, which shows a `ValueError` (a
+    name already used, a group into itself) in a message box, else saves the
+    project and repopulates the explorer. A selected group shows its
+    `(Name)` in the Properties panel (`group_target`, a `GroupTarget`);
+    `_rename_group_object` renames it from there and keeps it selected.
+    `_refresh_explorer` keeps a selected group selected;
   * `recent_projects` and `_remember`.
   * **What the Properties window shows:** `_properties_target()` follows the
     Project panel's selection while that panel is open, or the active window
@@ -745,10 +805,10 @@ Window frames painted around the designed form.
   * The window is bound to a target with `set_designer(target)`: a
     `FormDesigner`, or the `ProjectTarget` (see `projectprops.py`).
 
-### `vp6/ide/projectprops.py` (≈120 lines)
+### `vp6/ide/projectprops.py` (≈230 lines)
 
-The project, and files without a designer, as targets of the Properties
-window.
+The project, files without a designer and Project panel groups, as targets
+of the Properties window.
 
 * `ProjectTarget(QObject)` offers the same interface as `FormDesigner`
   (`selected_objects`, `all_objects`, `object_name`, `select_by_name`,
@@ -766,6 +826,14 @@ window.
   forms a designer instead, even when it isn't open). It shows just `(Name)`
   (through `_FileObject`, which has no specs). `set_property("Name", …)`
   calls the main window's `_rename_file_object`, which also handles forms.
+* `GroupTarget(QObject)` is the same interface for a Project panel group
+  (`group`, its path): just `(Name)`, through `_GroupObject`. One instance
+  serves every group: `set_group(path)` switches to another and emits
+  `selectionChanged`, so the Properties window refreshes even though its
+  target object stays the same. `set_property("Name", …)` calls the main
+  window's `_rename_group_object`. It has a `name_description` for the
+  description pane, which the Properties window uses instead of its default
+  "the name used in code" text.
 
 ### `vp6/ide/findreplace.py` (≈300 lines)
 
@@ -822,23 +890,28 @@ The Menu Editor.
   level). `result_entries()` drops blank items; OK refuses invalid menus
   with the `validate` message.
 
-### `vp6/ide/outline.py` (≈230 lines)
+### `vp6/ide/outline.py` (≈300 lines)
 
 The Outline window: the structure of a source file.
 
 * `outline(source)` reads the file with `ast` (never runs it) and returns
-  `OutlineItem`s (`name`, `kind`, `line`, `children`, `detail`), in file order:
+  `OutlineItem`s (`name`, `kind`, `line`, `children`, `detail`, `spans`), in
+  file order. `spans` are the (first, last) lines an item covers (`_span`): a
+  definition from its first decorator to its last line (`end_lineno`):
   * module-level assignments are `constant` (ALL_CAPS names) or `variable`;
   * classes are `class`, with their members: `method`s, `attribute`s and
     nested classes;
   * module-level functions are `function`;
   * one `*global code*` item (`code`) points at the first top-level
     statement that isn't an import, definition or assignment. Its `detail` is
-    that line.
+    that line; its `spans` are all such statements.
   * Imports and docstrings are skipped. `InitializeComponent` is listed as a
     method, without its contents.
 * `sorted_outline(items, key, descending)` sorts by `"order"` (line),
   `"name"` or `"type"` (the `KINDS` order), recursively.
+* `item_path_at(items, line)` is the items covering a line, outermost first
+  (`[class, method]`); empty on a blank line between definitions or an
+  import.
 * `OutlineWindow(QWidget)`:
   * **Sort buttons** (`buttons`, `sort_by`): clicking the active one reverses
     it, and the active one shows ▲/▼.
@@ -847,6 +920,13 @@ The Outline window: the structure of a source file.
   * `set_document(doc)` follows the document's edits, debounced 300 ms
     (`refresh`).
   * Clicking or activating an item emits `lineChosen(line)`.
+  * **Following the cursor:** `set_line(line)` (the main window's
+    `_sync_outline_line`, on every code editor's `cursorPositionChanged` and
+    whenever the Outline's document changes, passes the active code window's
+    cursor line when it shows that file, else None) makes the innermost item
+    at that line current (`_highlight`, `_node_for`: found by name, kind and
+    line at each level, so it works in any sort order); nothing is current
+    off any item. It is applied again after every re-read and re-sort.
 
 ### `vp6/ide/outputcapture.py` (≈130 lines)
 
@@ -871,7 +951,7 @@ Captures the IDE process's stdout and stderr for the Output window.
 * `mainwindow.main()` starts it before Qt, unless `VP6_NO_OUTPUT_CAPTURE` is
   set.
 
-### `vp6/ide/panels.py` (≈370 lines)
+### `vp6/ide/panels.py` (≈920 lines)
 
 * **`Toolbox`:**
   * checkable tool buttons (the pointer plus the `CONTROL_TYPES` whose
@@ -880,15 +960,100 @@ Captures the IDE process's stdout and stderr for the Output window.
   * `reset()` goes back to the pointer; `refresh_icons()` is used after
     light/dark changes.
 * **`ProjectExplorer`:**
-  * a tree of Forms and Modules, with the startup object in bold; each
-    folder is sorted by name, case-insensitively (`sort_descending`; the
-    Name ▲/▼ `sort_button` calls `toggle_sort`, which emits `sortChanged`;
-    `set_sort` re-sorts the last `populate` keeping the selection). The main
-    window stores the choice under `explorer/descending` in the settings;
-  * View Code / View Object buttons, a context menu, and double-click to
-    open;
+  * a tree of the project's groups, forms and modules (`project.tree()`: groups,
+    not folders on disk), with the startup object in bold. The project item
+    can't be collapsed: the tree doesn't decorate top-level items
+    (`setRootIsDecorated(False)`), and `_keep_project_expanded` re-expands
+    it on `itemCollapsed` (double-click, Left or minus key).
+    The `expand_button` ("+" / "-", `toggle_expanded`) expands every group
+    (`expand_all`) when any is collapsed, else collapses them all
+    (`collapse_all`; the project item stays open, showing the top level).
+    `all_expanded()` decides; `_update_expand_button` follows
+    `itemExpanded` / `itemCollapsed`. `populate` keeps collapsed groups
+    collapsed (`_collapsed`, by group path) unless it's another project,
+    which starts with everything open.
+  * **Two views** (`project_button` / `files_button`, `set_view(files,
+    hidden)`, `viewChanged(files, hidden)` for the user's choice, stored by
+    the main window under `explorer/files` and `explorer/hidden`):
+    * the Project view (`files_mode` False) described above;
+    * the Files view shows the project's folder as it is on disk
+      (`_add_folder`): folders (kind `"folder"`) and every file, sorted like
+      the groups ("Folders, Name ▲" …). Forms and modules are `_add_file`
+      items as in the Project view (labelled with the file name), so opening,
+      View Object, Set as Start Up, Remove and following the active window
+      work the same; any other file is a `"file"` item with the system's icon
+      (`QFileIconProvider`) and nothing to open. Item data `+3` is the absolute
+      path of every item. Hidden files and folders (a leading dot, or
+      `QFileInfo.isHidden`) are left out unless `show_hidden`
+      (`hidden_button`, shown only in this view). Never shown, whatever the
+      Hidden button says (`_never_shown`): the project file, and anything
+      named `.git` or `__pycache__` (`NEVER_SHOWN`), in any folder. Symbolic
+      links to folders are listed, not followed;
+    * there are no groups in the Files view (no New Group…; `selected_group`
+      is None, so new files go in the default group). Instead it changes the
+      disk: its context menu (`_files_menu`) has New Folder… (in a folder or
+      the project's folder, or next to a file), Rename…, Delete and **Move to** (the project's folder and
+      every folder shown but its own and, for a folder, itself and its
+      subfolders), emitting `newFolder(folder)`, `renamePath(path)`,
+      `deletePath(path)` and `movePaths(paths, folder)`; dragging onto a folder,
+      a file (its folder) or the project item (the project's folder) emits
+      `movePaths` too (`_request_move`). The project file (`_is_project_file`)
+      isn't listed, and `relocate` / `delete_path` refuse it anyway. For a
+      form or module, "Remove …
+      from the Project" (not deleting the file) stays;
+    * the `new_folder_button` (shown in the Files view only) emits
+      `newFolder(selected_folder())`;
+    * `selected_folder()` is where a new form, module or folder goes: the selected
+      folder, the selected file's folder, or the project's folder. `_item_path`
+      (the project's folder for the top item) and `_folders()` help;
+    * a `QFileSystemWatcher` on the folders shown calls `refresh()` (the last
+      `populate` again, keeping the selection) 150 ms after the last change;
+    * switching views keeps a selected form or module selected (by path);
+      `+`/`-` works on folders, and collapsed groups and folders are
+      remembered for each view (`_collapsed[files_mode]`). Within each group
+    everything is sorted by name, case-insensitively: A to Z or Z to A
+    (`sort_descending`), with the subgroups first or sorted in among the
+    files (`groups_first`). The `sort_button` ("Groups, Name ▲", "Name ▲",
+    "Groups, Name ▼", "Name ▼") calls `toggle_sort`, which moves to the next
+    of the four `SORT_ORDERS` and emits `sortChanged(descending,
+    groups_first)`. `set_sort(descending, groups_first=True)` re-sorts the
+    last `populate`, keeping the selection. The main window stores the
+    choice under `explorer/descending` and `explorer/groupsFirst` in the
+    settings;
+  * View Code / View Object buttons, and double-click to open;
+  * `context_menu(item)` builds the context menu (testable without showing
+    it): View Code / View Object / Set as Start Up / Remove for a file;
+    Rename Group… / Delete Group for a group; a **Move to** submenu for files
+    and groups ("(Project)" and every group but the current one and, for a
+    group, its own subgroups); New Group…, Add Form, Add Module;
+  * **drag and drop** (`_ProjectTree`, a `QTreeWidget` with `InternalMove`
+    and `ExtendedSelection`, so several items can be selected with Ctrl/Cmd-
+    and Shift-click and dragged at once): its `dropEvent` doesn't move
+    anything itself but calls `_request_move(selected items, target)`, which
+    emits `moveItems(items, group)` into the group dropped on, the dropped-on
+    file's group, or the top level for the project; the main window changes
+    the project and repopulates;
+  * **moving several items:** `move_sources(item)` is what a move moves: the
+    selected items (or `item` alone when it isn't selected), only movable
+    ones (not the project item or file), and not those inside a selected
+    group or folder, which move with it (`_sources_of`); each is `(kind,
+    ref, place)` (`_source`). `_can_move_to(sources, target)` leaves out
+    targets where they all are already and targets inside one of them. The
+    Move to submenu ("Move N Items to" for several) and drops use them.
+    Right-clicking an item of the selection keeps the selection
+    (`_on_context_menu`). `select_refs(refs)` and `select_paths(paths)`
+    select the moved items afterwards (`_select_all`);
   * signals `openObject`, `openCode`, `removeFile`, `setStartup`, `addForm`,
-    `addModule`; `populate(project, names)`;
+    `addModule`, `newGroup(parent)`, `renameGroup(group)`,
+    `deleteGroup(group)`, `moveItems(items, group)`; `populate(project, names)`.
+    Item data: `UserRole` a file's absolute path, `+1` the kind (`"form"`,
+    `"module"`, `"group"`, `"project"`), `+2` the name, `+3` the relative
+    path or the group's path (a list of names);
+  * `items()` walks every item by `child()`. `QTreeWidgetItemIterator` isn't
+    used: the Python wrappers of its items crashed the next `clear()`;
+  * `selected_group(kind)` is the group a new file goes in: the selected
+    group, or the selected file's group when it's the same kind; else None,
+    and the project's default applies. `select_group(path)`;
   * `select_path(path)` selects a file's item without opening it. The main
     window uses it to follow the active designer or code window.
   * `projectSelected` / `fileSelected(path)` fire when the current item
@@ -1012,7 +1177,15 @@ explorer-style.
   `next_free_name`.
 * `ProjectPropertiesDialog` edits the name, type, startup object and color
   scheme (System / Light / Dark / Follow the IDE); `apply(project)`.
-* `ABOUT_HTML` is the Help > About text.
+* `AboutDialog` shows the logo (`logo_pixmap(width)`: `LOGO_PATH`,
+  `vp6/ide/images/vp6logo.png`, a 720-pixel-wide copy of the repository's
+  `images/vp6logo.png`, shown `LOGO_WIDTH` = 360 pixels wide at device pixel
+  ratio 2, so it is sharp on high-DPI screens) above `ABOUT_HTML`. The
+  image is package data (`pyproject.toml`).
+* The main window's `show_about()` opens it from Help > About VP6
+  (`act_about`, `QAction.NoRole`, so Qt doesn't move it out of the Help
+  menu on macOS) and, on macOS, from the application menu (`act_about_app`,
+  `AboutRole`).
 
 ### `vp6/ide/options.py` (≈330 lines)
 
@@ -1137,16 +1310,16 @@ All tests run headless. `conftest.py`:
 | `test_line.py` | The Line control: its widget following the points, drawing (color, Transparent, Visible, the scheme's text color by default), clicks going through it, ZIndex; the form file; in the designer: drawing from press to release and by a click, selecting near the line (not its box), dragging an end, the move cursor over an end, moving, arrow keys (no resizing), undo, pasting with an offset, the Properties rows, no event stub; the Toolbox button and icon. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
-| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name A to Z (not the project's order), reversed with its Name button (keeping the selection, new files in their place) and remembered |
+| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
 | `test_docs.py` | The docs keep up with the code: every source file in the source reference, every test file in the test table, every public API name in `api.md` (key-code ranges count), the generated `api.md` tables up to date with a section per control, every property with a description, and every relative link and anchor in the Markdown files resolving. |
-| `test_outline.py` | The Outline replacing the Properties panel (in the same place) while a code window is active and giving it back for designers, View > Outline Window and F4, a closed panel staying closed, closing the last window, the default layout; the outline of the Kitchen Sink's Form1; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: following the Project panel or active window, clicking items goes to the line (unfolding the designer region). |
+| `test_outline.py` | The Outline replacing the Properties panel (in the same place) while a code window is active and giving it back for designers, View > Outline Window and F4, a closed panel staying closed, closing the last window, the default layout; the outline of the Kitchen Sink's Form1; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: following the Project panel or active window, clicking items goes to the line (unfolding the designer region); the items at a line (a method inside its class, from the first decorator, blank lines and imports at none), and the Outline highlighting the item at the code window's cursor (in a body, none on an import, after re-sorting and edits, another code window's cursor, none for a designer). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
 | `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
-| `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6. |
+| `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading. |
 
 ## Samples: `samples/`
 

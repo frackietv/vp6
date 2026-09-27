@@ -6,11 +6,11 @@ import os
 import shutil
 import sys
 
-from PySide6.QtCore import QEvent, QProcess, QProcessEnvironment, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QFile, QProcess, QProcessEnvironment, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QDockWidget, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMdiArea,
-    QMdiSubWindow, QMessageBox, QPlainTextEdit, QSizePolicy, QWidget,
+    QMdiSubWindow, QMessageBox, QPlainTextEdit, QSizePolicy, QTabWidget, QWidget,
 )
 
 import vp6
@@ -22,7 +22,7 @@ from ..project import EXTENSION, SUB_MAIN, Project
 from . import icons, kitchensink
 from .codeeditor import CodeWindow
 from .designer import FormDesigner, is_identifier
-from .dialogs import ABOUT_HTML, NewProjectDialog, ProjectPropertiesDialog
+from .dialogs import AboutDialog, NewProjectDialog, ProjectPropertiesDialog
 from .documents import Document, FormDocument, open_document
 from .findreplace import FindReplaceDialog, ask_line
 from .options import OptionsDialog
@@ -30,7 +30,7 @@ from .outline import OutlineWindow
 from .outputcapture import OutputCapture
 from .panels import (ImmediateWindow, OutputWindow, ProjectExplorer, Toolbox,
                      pump_process_output)
-from .projectprops import FileTarget, ProjectTarget
+from .projectprops import FileTarget, GroupTarget, ProjectTarget
 from .properties import PropertiesWindow
 from .theme import SYSTEM, ide_settings, theme_manager
 
@@ -67,6 +67,10 @@ class MainWindow(QMainWindow):
         self.mdi.subWindowActivated.connect(self._on_subwindow_activated)
         self.setCentralWidget(self.mdi)
 
+        # Panels sharing a place (Immediate and Output, Properties and Outline)
+        # get their tabs above them, not Qt's default below
+        self.setTabPosition(Qt.AllDockWidgetAreas, QTabWidget.North)
+
         self.toolbox = Toolbox()
         self.explorer = ProjectExplorer()
         self.properties = PropertiesWindow()
@@ -99,16 +103,26 @@ class MainWindow(QMainWindow):
         self.explorer.newGroup.connect(self.new_group)
         self.explorer.renameGroup.connect(self.rename_group)
         self.explorer.deleteGroup.connect(self.delete_group)
-        self.explorer.moveItem.connect(self.move_item)
+        self.explorer.moveItems.connect(self.move_items)
+        self.explorer.newFolder.connect(self.new_folder)
+        self.explorer.renamePath.connect(self.rename_path)
+        self.explorer.deletePath.connect(self.delete_path)
+        self.explorer.movePaths.connect(self.move_paths)
         # The order of its forms and modules is remembered
-        self.explorer.set_sort(self.settings.value("explorer/descending", False, type=bool))
+        self.explorer.set_sort(self.settings.value("explorer/descending", False, type=bool),
+                               self.settings.value("explorer/groupsFirst", True, type=bool))
         self.explorer.sortChanged.connect(self._remember_explorer_sort)
+        # and its view: the Project view (groups) or the Files view (the disk)
+        self.explorer.set_view(self.settings.value("explorer/files", False, type=bool),
+                               self.settings.value("explorer/hidden", False, type=bool))
+        self.explorer.viewChanged.connect(self._remember_explorer_view)
         # Bound methods, not lambdas: PySide disconnects those automatically
         # when the window is destroyed (the signals still fire during shutdown)
         self.explorer.tree.currentItemChanged.connect(self._on_explorer_changed)
         self._file_targets: dict[str, FileTarget] = {}
         self.project_target = ProjectTarget(
             lambda: self.project, self._form_names, self._project_changed)
+        self.group_target = GroupTarget(self._rename_group_object)
         self.immediate.openLocation.connect(self.open_location)
         self.immediate.inputSubmitted.connect(self._send_input)
 
@@ -207,6 +221,7 @@ class MainWindow(QMainWindow):
         self.act_add_form = a("Add &Form", self.add_form, None, "Form")
         self.act_add_module = a("Add &Module", self.add_module, None, "Module")
         self.act_add_file = a("Add F&ile…", self.add_file, "Ctrl+D")
+        self.act_add_folder = a("Add F&older…", self.add_folder)
         self.act_project_props = a("Project P&roperties…", self.project_properties)
         self.act_exit = a("E&xit", self.close, QKeySequence.Quit)
 
@@ -286,8 +301,8 @@ class MainWindow(QMainWindow):
         self.view_menu = view
 
         project = bar.addMenu("&Project")
-        for act in (self.act_add_form, self.act_add_module, self.act_add_file, None,
-                    self.act_project_props):
+        for act in (self.act_add_form, self.act_add_module, self.act_add_file,
+                    self.act_add_folder, None, self.act_project_props):
             project.addSeparator() if act is None else project.addAction(act)
 
         fmt = bar.addMenu("F&ormat")
@@ -327,8 +342,17 @@ class MainWindow(QMainWindow):
             self.act_tabbed.setChecked(True)
 
         help_menu = bar.addMenu("&Help")
-        help_menu.addAction("&About VP6", lambda: QMessageBox.about(self, "About VP6",
-                                                                     ABOUT_HTML))
+        # Qt moves an "About" item into the application menu on macOS
+        # (AboutRole), which would leave Help without one: this one stays put
+        self.act_about = help_menu.addAction("&About VP6", self.show_about)
+        self.act_about.setMenuRole(QAction.NoRole)
+        if sys.platform == "darwin":  # VP6 > About VP6 too, where Mac apps have it
+            self.act_about_app = help_menu.addAction("About VP6", self.show_about)
+            self.act_about_app.setMenuRole(QAction.AboutRole)
+
+    def show_about(self):
+        """Help > About VP6 (and the application menu's About on macOS)."""
+        AboutDialog(self).exec()
 
     def _create_toolbar(self):
         toolbar = self.toolbar = self.addToolBar("Standard")
@@ -438,7 +462,7 @@ class MainWindow(QMainWindow):
     def _update_actions(self):
         has_project = self.project is not None
         for act in (self.act_save, self.act_close, self.act_add_form, self.act_add_module,
-                    self.act_add_file, self.act_project_props):
+                    self.act_add_file, self.act_add_folder, self.act_project_props):
             act.setEnabled(has_project)
         self.act_run.setEnabled(has_project and not self.running)
         self.act_restart.setEnabled(has_project)
@@ -447,16 +471,24 @@ class MainWindow(QMainWindow):
     def _doc_display_name(self, doc: Document) -> str:
         return doc.name
 
-    def _remember_explorer_sort(self, descending: bool):
+    def _remember_explorer_sort(self, descending: bool, groups_first: bool):
         self.settings.setValue("explorer/descending", descending)
+        self.settings.setValue("explorer/groupsFirst", groups_first)
+
+    def _remember_explorer_view(self, files: bool, hidden: bool):
+        self.settings.setValue("explorer/files", files)
+        self.settings.setValue("explorer/hidden", hidden)
 
     def _refresh_explorer(self):
         names = {path: self._doc_display_name(doc) for path, doc in self.documents.items()}
         project_was_selected = self.explorer.project_selected()
         selected_path, _kind = self.explorer._current()
+        selected = self.explorer._selection()
         self.explorer.populate(self.project, names)
         if project_was_selected:
             self.explorer.select_project()
+        elif selected is not None and selected[0] == "group":
+            self.explorer.select_group(selected[1])
         elif selected_path in self.documents:  # keep what was selected
             self.explorer.select_path(selected_path)
         else:
@@ -656,13 +688,19 @@ class MainWindow(QMainWindow):
 
     def _properties_target(self):
         """With the Project panel open, Properties follows its selection: the
-        project, a form (its designer, or just its Name if the designer isn't
-        open) or a module (its Name); nothing for folders or no selection.
-        With the Project panel closed, it follows the active window."""
+        project, a group (its Name), a form (its designer, or just its Name
+        if the designer isn't open) or a module (its Name); nothing without a
+        selection. With the Project panel closed, it follows the active
+        window."""
         if self.project is None:
             return None
-        if self.explorer_dock.isVisibleTo(self) and self.explorer.project_selected():
-            return self.project_target
+        if self.explorer_dock.isVisibleTo(self):
+            if self.explorer.project_selected():
+                return self.project_target
+            selected = self.explorer._selection()
+            if selected is not None and selected[0] == "group":
+                self.group_target.set_group(selected[1])
+                return self.group_target
         path = self._context_path()
         return self._target_for_path(path) if path else None
 
@@ -681,6 +719,16 @@ class MainWindow(QMainWindow):
         self.properties.set_designer(self._properties_target())
         path = self._context_path()
         self.outline.set_document(self.documents.get(path) if path else None)
+        self._sync_outline_line()
+
+    def _sync_outline_line(self, *_):
+        """The Outline highlights the item at the cursor of the active code
+        window, when it shows that window's file."""
+        widget = self._active_widget()
+        if isinstance(widget, CodeWindow) and widget.doc is self.outline.document:
+            self.outline.set_line(widget.editor.textCursor().blockNumber() + 1)
+        else:
+            self.outline.set_line(None)
 
     # -- Outline window ---------------------------------------------------------------------------
     def _place_outline(self):
@@ -739,6 +787,19 @@ class MainWindow(QMainWindow):
         self._update_properties_target()
 
     # -- renaming from the Properties panel ------------------------------------------------------
+    def _rename_group_object(self, group: tuple, name: str) -> str | None:
+        """(Name) of a group: renames it in the project (nothing on disk)."""
+        if self.project is None or name.strip() == group[-1]:
+            return None
+        try:
+            renamed = self.project.rename_group(group, name)
+        except ValueError as exc:
+            return str(exc)
+        self.project.save()
+        self._refresh_explorer()
+        self.explorer.select_group(renamed)
+        return None
+
     def _rename_file_object(self, doc: Document, new_name: str) -> str | None:
         """(Name) of a FileTarget: a form's class, or a module's file."""
         if not is_identifier(new_name):
@@ -792,11 +853,27 @@ class MainWindow(QMainWindow):
             self._refresh_explorer()
 
     def _unique_file(self, base: str) -> tuple[str, str]:
-        taken = {d.name for d in self.documents.values()}
+        """A new form's or module's name and its file's path relative to the
+        project: in the Files view's selected folder, else the project's
+        folder. The name is unused by forms and modules (their file names
+        are their import names) and by files in that folder."""
+        folder = self.explorer.selected_folder() or self.project.directory
+        taken = {d.name.lower() for d in self.documents.values()} | self._import_names()
         i = 1
-        while f"{base}{i}" in taken or os.path.exists(self.project.abspath(f"{base}{i}.py")):
+        while f"{base}{i}".lower() in taken or \
+                os.path.exists(os.path.join(folder, f"{base}{i}.py")):
             i += 1
-        return f"{base}{i}", f"{base}{i}.py"
+        return f"{base}{i}", self._relative(os.path.join(folder, f"{base}{i}.py"))
+
+    def _relative(self, path: str) -> str:
+        """A path as the project lists it: relative to its folder, with /."""
+        return os.path.relpath(path, self.project.directory).replace(os.sep, "/")
+
+    def _import_names(self, ignore: str | None = None) -> set[str]:
+        """The file names (without .py, lower case) of the project's forms and
+        modules: what the program imports them by (see runner.import_folders)."""
+        return {os.path.splitext(os.path.basename(path))[0].lower()
+                for path in self.documents if path != ignore}
 
     def add_form(self):
         if self.project is None:
@@ -865,17 +942,190 @@ class MainWindow(QMainWindow):
                 return
             if answer == QMessageBox.Save:
                 doc.save()
+        self._forget_document(path)
+        self.project.save()
+        self._refresh_explorer()
+
+    def _forget_document(self, path: str):
+        """Take a form or module out of the project and close its windows
+        (the file itself is left alone)."""
         self._discard_designers([path])  # before its window is forgotten
         for windows in (self.designer_windows, self.code_windows):
             sub = windows.pop(path, None)
             if sub is not None:
                 sub.setAttribute(Qt.WA_DeleteOnClose, True)
                 sub.close()
-        self.project.remove_file(os.path.relpath(path, self.project.directory))
+        self.project.remove_file(self._relative(path))
         del self.documents[path]
         self._file_targets.pop(path, None)
+
+    # -- the Files view: folders and files on disk ----------------------------------------------
+    def _file_name_error(self, name: str) -> str | None:
+        name = name.strip()
+        if not name or name in (".", "..") or "/" in name or os.sep in name:
+            return f"'{name}' is not a valid name"
+        return None
+
+    def add_folder(self):
+        """Project > Add Folder…: a new folder in the Files view's selected
+        folder (switching the Project panel to the Files view to show it)."""
+        if self.project is None:
+            return
+        if not self.explorer.files_mode:
+            self.explorer._choose_view(True, self.explorer.show_hidden)
+        self._show_dock(self.explorer_dock)
+        self.new_folder(self.explorer.selected_folder())
+
+    def new_folder(self, parent: str | None = None):
+        """A new folder in ``parent`` (the project's folder by default)."""
+        if self.project is None:
+            return
+        parent = parent or self.project.directory
+        number = 1
+        while os.path.exists(os.path.join(parent, f"NewFolder{number}")):
+            number += 1
+        name, ok = QInputDialog.getText(self, "New Folder", "Name of the new folder:",
+                                        text=f"NewFolder{number}")
+        if not ok:
+            return
+        name = name.strip()
+        path = os.path.join(parent, name)
+        error = self._file_name_error(name)
+        if error is None and os.path.exists(path):
+            error = f"'{name}' already exists"
+        if error is None:
+            try:
+                os.mkdir(path)
+            except OSError as exc:
+                error = f"The folder couldn't be made: {exc}"
+        if error:
+            QMessageBox.warning(self, "New Folder", error)
+            return
+        self._refresh_explorer()
+        self.explorer.select_path(path)
+
+    def rename_path(self, path: str):
+        """Rename a file or folder (the Files view)."""
+        if self.project is None:
+            return
+        old = os.path.basename(path)
+        name, ok = QInputDialog.getText(self, "Rename", f"New name for {old}:", text=old)
+        if ok and name.strip() != old:
+            error = self._file_name_error(name) or \
+                self.relocate(path, os.path.join(os.path.dirname(path), name.strip()))
+            if error:
+                QMessageBox.warning(self, "Rename", error)
+
+    def move_paths(self, paths: list, folder: str):
+        """Move files and folders into another folder (the Files view); those
+        that can't move are listed in one message, the others move."""
+        if self.project is None:
+            return
+        moved, errors = [], []
+        for path in paths:
+            new = os.path.join(folder, os.path.basename(path))
+            error = self._relocate(path, new)
+            if error:
+                errors.append(f"{os.path.basename(path)}: {error}")
+            else:
+                moved.append(new)
+        if moved:
+            self._after_relocating(moved)
+        if errors:
+            QMessageBox.warning(self, "Move", "\n".join(errors))
+
+    def relocate(self, old: str, new: str) -> str | None:
+        """Rename or move a file or folder (see _relocate), and show it."""
+        error = self._relocate(old, new)
+        if error is None:
+            self._after_relocating([new])
+        return error
+
+    def _after_relocating(self, paths: list):
         self.project.save()
         self._refresh_explorer()
+        self.explorer.select_paths([os.path.abspath(p) for p in paths])
+        self._update_window_titles()
+
+    def _relocate(self, old: str, new: str) -> str | None:
+        """Rename or move a file or folder on disk, and follow it: the forms
+        and modules in it keep their place in the project and their windows.
+        A form's or module's file name is what other files import it by: it
+        must stay a .py file named like a Python identifier and unique in the
+        project, and a new name is changed in the imports of the other files.
+        Returns an error message or None."""
+        project = self.project
+        old, new = os.path.abspath(old), os.path.abspath(new)
+        if old in (os.path.abspath(project.path), project.directory):
+            return "The project file and folder stay where they are"
+        if not new.startswith(project.directory + os.sep):
+            return "Files stay in the project's folder"
+        if os.path.isdir(old) and new.startswith(old + os.sep):
+            return "A folder can't be moved into itself"
+        name = os.path.basename(new)
+        # (on a case-insensitive disk, a new case of the same name is the same file)
+        if os.path.lexists(new) and not os.path.samefile(old, new):
+            return f"'{name}' already exists in {os.path.dirname(new)}"
+        old_stem = new_stem = None
+        if old in self.documents and os.path.basename(old) != name:  # a form's or module's
+            old_stem, ext = os.path.splitext(os.path.basename(old))
+            new_stem, new_ext = os.path.splitext(name)
+            if new_ext != ".py" or not new_stem.isidentifier():
+                return "A form's or module's file must be a .py file named like a Python " \
+                       "identifier (it is imported by that name)"
+            if new_stem.lower() in self._import_names(ignore=old):
+                return f"A form or module named '{new_stem}' is already in the project " \
+                       "(files are imported by name)"
+        try:
+            os.rename(old, new)
+        except OSError as exc:
+            return f"'{os.path.basename(old)}' couldn't be moved: {exc}"
+        for path in [p for p in self.documents if p == old or p.startswith(old + os.sep)]:
+            moved = new + path[len(old):]
+            self.documents[path].path = moved
+            for table in (self.documents, self.code_windows, self.designer_windows,
+                          self._designers, self._file_targets):
+                if path in table:
+                    table[moved] = table.pop(path)
+            project.rename_file(self._relative(path), self._relative(moved))
+        if old_stem is not None and new_stem != old_stem:
+            for other in self.documents.values():
+                if other.path != new:
+                    other.replace_text(
+                        formfile.rename_module_references(other.text, old_stem, new_stem))
+        return None
+
+    def delete_path(self, path: str):
+        """Delete a file or folder (the Files view): it goes to the Trash (the
+        Recycle Bin), and the forms and modules in it leave the project."""
+        if self.project is None:
+            return
+        path = os.path.abspath(path)
+        if path in (os.path.abspath(self.project.path), self.project.directory):
+            QMessageBox.warning(self, "Delete", "The project file and folder can't be deleted "
+                                "from here")
+            return
+        inside = [p for p in self.documents if p == path or p.startswith(path + os.sep)]
+        question = f"Move {os.path.basename(path)} to the Trash?"
+        if inside:
+            names = ", ".join(sorted(os.path.basename(p) for p in inside))
+            question += f"\n\nThese leave the project: {names}."
+            if any(self.documents[p].modified for p in inside):
+                question += "\nTheir unsaved changes are lost."
+        if QMessageBox.question(self, "Delete", question) != QMessageBox.Yes:
+            return
+        if not self._move_to_trash(path):
+            QMessageBox.warning(self, "Delete", f"{os.path.basename(path)} couldn't be moved "
+                                "to the Trash")
+            return
+        for doc_path in inside:
+            self._forget_document(doc_path)
+        self.project.save()
+        self._refresh_explorer()
+
+    @staticmethod
+    def _move_to_trash(path: str) -> bool:
+        return bool(QFile.moveToTrash(path))
 
     # -- groups in the Project panel (not folders on disk) ---------------------------------------
     def _organize(self, change, select=None) -> bool:
@@ -925,16 +1175,27 @@ class MainWindow(QMainWindow):
         if self.project is not None:
             self._organize(lambda: self.project.delete_group(group))
 
-    def move_item(self, item, target):
-        """Move a file (relative path) or a group (path) into a group."""
+    def move_items(self, items: list, target):
+        """Move files (relative paths) and groups (paths) into a group; those
+        that can't move are listed in one message, the others move and stay
+        selected."""
         if self.project is None:
             return
-        selected = self.explorer._selection()
-        if self._organize(lambda: self.project.move(item, target)) and selected is not None:
-            kind, ref = selected
-            if kind == "group" and tuple(ref) == tuple(item):  # the moved group: its new path
-                selected = (kind, tuple(target) + (item[-1],))
-            self.explorer._restore_selection(selected)
+        target = tuple(target)
+        moved, errors = [], []
+        for item in items:
+            try:
+                self.project.move(item, target)
+            except ValueError as exc:
+                errors.append(str(exc))
+            else:  # a moved group has a new path
+                moved.append(target + (item[-1],) if isinstance(item, tuple) else item)
+        if moved:
+            self.project.save()
+            self._refresh_explorer()
+            self.explorer.select_refs(moved)
+        if errors:
+            QMessageBox.warning(self, "Project", "\n".join(errors))
 
     # -- windows ------------------------------------------------------------------------------------------
     def _add_subwindow(self, widget, icon_name) -> QMdiSubWindow:
@@ -1057,6 +1318,7 @@ class MainWindow(QMainWindow):
         sub = self.code_windows.get(path)
         if sub is None:
             window = CodeWindow(doc)
+            window.editor.cursorPositionChanged.connect(self._sync_outline_line)
             sub = self._add_subwindow(window, "Module")
             self.code_windows[path] = sub
             self._update_window_titles()

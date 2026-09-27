@@ -12,7 +12,7 @@ from conftest import wait_for
 from vp6.ide import kitchensink
 from vp6.ide.documents import Document, FormDocument
 from vp6.ide.mainwindow import MainWindow, create_project
-from vp6.ide.outline import GLOBAL_CODE, OutlineWindow, outline, sorted_outline
+from vp6.ide.outline import GLOBAL_CODE, OutlineWindow, item_path_at, outline, sorted_outline
 
 
 def flatten(items, prefix=""):
@@ -83,6 +83,22 @@ def test_kinds_lines_and_skipped_statements():
         ("sides", "attribute"), ("area", "method"), ("Unit", "class")]
     assert [(m.name, m.kind) for m in shape.children[2].children] == [("name", "attribute")]
     assert items[-1].detail == 'print("top-level code")'  # the first line of top-level code
+
+
+def test_the_items_at_a_line():
+    items = outline(SAMPLE + "\n\n@staticmethod\n@property\ndef decorated():\n    pass\n")
+
+    def at(line):
+        return [item.name for item in item_path_at(items, line)]
+
+    assert at(14) == at(15) == ["Shape", "area"]  # a method, inside its class
+    assert at(11) == at(16) == ["Shape"]  # its docstring, a blank line in it
+    assert at(18) == ["Shape", "Unit", "name"]  # a nested class's attribute
+    assert at(22) == ["helper"]
+    assert at(19) == [] and at(2) == []  # a blank line, an import: nothing
+    assert at(5) == ["LIMIT"] and at(6) == ["counter"]
+    assert at(25) == [GLOBAL_CODE] and at(26) == ["Main"]
+    assert at(29) == at(30) == at(32) == ["decorated"]  # from its first decorator
 
 
 def test_syntax_error_is_reported():
@@ -166,14 +182,10 @@ def ide(qapp, tmp_path):
 
 
 def _select(ide, text):
-    from PySide6.QtWidgets import QTreeWidgetItemIterator
-
-    iterator = QTreeWidgetItemIterator(ide.explorer.tree)
-    while iterator.value() is not None:
-        if iterator.value().text(0).startswith(text):
-            ide.explorer.tree.setCurrentItem(iterator.value())
+    for item in ide.explorer.items():
+        if item.text(0).startswith(text):
+            ide.explorer.tree.setCurrentItem(item)
             return
-        iterator += 1
     raise AssertionError(text)
 
 
@@ -257,6 +269,56 @@ def test_outline_follows_the_context_and_navigates(ide, tmp_path):
     ide.outline.tree.itemClicked.emit(region_item, 0)
     assert editor.textCursor().block().isVisible()
     assert "def InitializeComponent" in editor.textCursor().block().text()
+
+
+def test_outline_highlights_the_item_at_the_cursor(ide, tmp_path):
+    folder = os.path.join(tmp_path, "Sink")
+    ide.explorer_dock.hide()  # the Outline follows the active window
+    window = ide.view_code(os.path.join(folder, "frmDialog.py"))
+    editor = window.editor
+    tree = ide.outline.tree
+
+    def current():
+        node = tree.currentItem()
+        return None if node is None or not node.isSelected() else node.text(0)
+
+    def put_cursor(text):
+        """The cursor on the first line containing ``text``."""
+        block = editor.document().begin()
+        while block.isValid() and text not in block.text():
+            block = block.next()
+        cursor = editor.textCursor()
+        cursor.setPosition(block.position() + len(block.text()) // 2)
+        editor.setTextCursor(cursor)
+
+    put_cursor("def cmdOK_Click")
+    assert current() == "cmdOK_Click"
+    assert tree.currentItem().parent().text(0) == "frmDialog"  # inside its class
+    lines = editor.toPlainText().splitlines()
+    body = next(i for i, text in enumerate(lines) if "def cmdOK_Click" in text) + 1
+    cursor = editor.textCursor()
+    cursor.setPosition(editor.document().findBlockByNumber(body).position())
+    editor.setTextCursor(cursor)  # in its body
+    assert current() == "cmdOK_Click"
+    put_cursor("from vp6 import")  # an import: nothing highlighted
+    assert current() is None
+    put_cursor("def cmdOK_Click")
+    ide.outline.sort_by("name")  # re-sorted: still highlighted
+    assert current() == "cmdOK_Click"
+    # Typing re-reads the file after a moment: the highlight follows
+    editor.textCursor().insertText("    ")
+    wait_for(lambda: not ide.outline._timer.isActive())
+    assert current() == "cmdOK_Click"
+    # Another code window: its own cursor
+    other = ide.view_code(os.path.join(folder, "Module1.py"))
+    assert ide.outline.document is other.doc
+    cursor = other.editor.textCursor()
+    cursor.setPosition(other.editor.document().find("def Main").position())
+    other.editor.setTextCursor(cursor)
+    assert current() == "Main"
+    # A designer: nothing to follow
+    ide.view_object(os.path.join(folder, "Form1.py"))
+    assert ide.outline.line is None
 
 
 def test_outline_of_a_form_document(qapp, tmp_path):

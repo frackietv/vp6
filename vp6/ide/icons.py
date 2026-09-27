@@ -1,5 +1,5 @@
 """Toolbox, toolbar and project icons, drawn with QPainter so the IDE ships no
-assets. Every icon has a light and a dark variant so it stays visible in
+icon files. Every icon has a light and a dark variant so it stays visible in
 both IDE color schemes."""
 
 from __future__ import annotations

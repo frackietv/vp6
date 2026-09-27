@@ -1,9 +1,10 @@
 import os
 
 import pytest
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QItemSelectionModel, QSize, Qt
 from PySide6.QtTest import QTest
 
+import vp6
 from conftest import wait_for
 
 from vp6.ide.codeeditor import CodeWindow, complete
@@ -307,14 +308,10 @@ def _props(window):
 
 
 def _select_item(window, text):
-    from PySide6.QtWidgets import QTreeWidgetItemIterator
-
-    iterator = QTreeWidgetItemIterator(window.explorer.tree)
-    while iterator.value() is not None:
-        if iterator.value().text(0).startswith(text):
-            window.explorer.tree.setCurrentItem(iterator.value())
+    for item in window.explorer.items():
+        if item.text(0).startswith(text):
+            window.explorer.tree.setCurrentItem(item)
             return
-        iterator += 1
     raise AssertionError(f"no explorer item {text!r}")
 
 
@@ -327,8 +324,8 @@ def test_properties_follow_project_panel_selection(window, tmp_path):
     assert "frmDialog.py" not in " ".join(window.designer_windows)  # still not open
     _select_item(window, "Form1")  # designer open: all its properties
     assert _props(window)[0] == "Form1  Form" and "Caption" in _props(window)[1]
-    _select_item(window, "Forms")  # a folder has no properties
-    assert _props(window) == ("", [])
+    _select_item(window, "Forms")  # a group: its (Name)
+    assert _props(window) == ("Forms  Group", ["(Name)"])
     window.explorer.tree.setCurrentItem(None)  # nothing selected
     assert _props(window) == ("", [])
     window.explorer.select_project()
@@ -487,6 +484,9 @@ def test_output_window_hidden_by_default(window):
     assert not window.output_dock.isHidden()
     # it opens as a tab next to the Immediate window (Qt lists shown tabs only)
     assert window.output_dock in window.tabifiedDockWidgets(window.immediate_dock)
+    from PySide6.QtWidgets import QTabWidget
+    for area in (Qt.BottomDockWidgetArea, Qt.RightDockWidgetArea):  # their tabs above them
+        assert window.tabPosition(area) == QTabWidget.North
     window.reset_layout()  # back to the default: hidden again
     assert window.output_dock.isHidden() and not window.immediate_dock.isHidden()
 
@@ -628,29 +628,73 @@ def _listed(window, *group):
 def test_project_panel_sorts_by_name(window, tmp_path):
     window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
     window.add_module()  # Module2: with a form selected, into the modules' group
+    explorer = window.explorer
     assert _listed(window, "Forms") == ["Pages", "Form1", "frmDialog"]  # groups first
     pages = _listed(window, "Forms", "Pages")
     assert pages == sorted(pages, key=str.lower)  # A to Z by default, not the project's order
     assert pages[0] == "pgArrays" and pages[-1] == "pgZOrder"
-    assert window.explorer.sort_button.text() == "Name ▲"
-    window.explorer.select_path(os.path.join(tmp_path, "Sink", "pgLists.py"))
-    window.explorer.sort_button.click()  # Z to A
+    assert explorer.sort_button.text() == "Groups, Name ▲"
+    explorer.select_path(os.path.join(tmp_path, "Sink", "pgLists.py"))
+    # The Name button cycles: A to Z with the groups among the files...
+    explorer.sort_button.click()
+    assert explorer.sort_button.text() == "Name ▲"
+    assert _listed(window, "Forms") == ["Form1", "frmDialog", "Pages"]
+    assert _listed(window, "Forms", "Pages") == pages
+    # ...Z to A, groups first...
+    explorer.sort_button.click()
+    assert explorer.sort_button.text() == "Groups, Name ▼"
     assert _listed(window, "Forms", "Pages") == pages[::-1]
     assert _listed(window, "Forms") == ["Pages", "frmDialog", "Form1"]
     assert _listed(window, "Modules") == ["Module2", "Module1"]
-    assert window.explorer.sort_button.text() == "Name ▼"
-    assert window.explorer._current()[0].endswith("pgLists.py")  # still selected
+    assert explorer._current()[0].endswith("pgLists.py")  # still selected
     window.add_form()  # with a page selected: into the Pages group, in its place
     assert _listed(window, "Forms", "Pages")[0] == "pgZOrder"
     assert "Form2" in _listed(window, "Forms", "Pages")
+    # ...Z to A among the files (a group named after them: in its place)
+    explorer.sort_button.click()
+    assert explorer.sort_button.text() == "Name ▼"
+    window.project.add_group(("Forms",), "Gadgets")
+    window._refresh_explorer()
+    assert _listed(window, "Forms") == ["Pages", "Gadgets", "frmDialog", "Form1"]
+    assert explorer._current()[0].endswith("Form2.py")
     # The IDE remembers the order
     other = MainWindow()
-    assert other.explorer.sort_descending
+    assert (other.explorer.sort_descending, other.explorer.groups_first) == (True, False)
     other.close()
-    window.explorer.sort_button.click()
+    explorer.sort_button.click()  # and back to the start
+    assert explorer.sort_button.text() == "Groups, Name ▲"
+    assert _listed(window, "Forms") == ["Gadgets", "Pages", "Form1", "frmDialog"]
     other = MainWindow()
-    assert not other.explorer.sort_descending
+    assert (other.explorer.sort_descending, other.explorer.groups_first) == (False, True)
     other.close()
+
+
+def test_group_properties(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+    window.explorer.select_group(("Forms",))
+    assert window.properties.designer is window.group_target
+    assert _props(window) == ("Forms  Group", ["(Name)"])
+    window.properties._on_row_changed(0)
+    assert "changes no file" in window.properties.description.text()
+    window.properties._commit("Name", "Modules")  # a sibling's name: refused
+    assert warnings and "already" in warnings[0]
+    assert _listed(window) == ["Forms", "Modules"]
+    window.properties._commit("Name", "Windows and dialogs")  # any name, not an identifier
+    assert _listed(window) == ["Modules", "Windows and dialogs"]
+    assert window.explorer.selected_group() == ("Windows and dialogs",)  # still selected
+    assert _props(window) == ("Windows and dialogs  Group", ["(Name)"])
+    assert Project.load(window.project.path).group_paths() == [("Windows and dialogs",),
+                                                               ("Modules",)]
+    # A subgroup; a file's selection shows the file again
+    window.project.add_group(("Modules",), "Helpers")
+    window._refresh_explorer()
+    window.explorer.select_group(("Modules", "Helpers"))
+    assert _props(window)[0] == "Helpers  Group"
+    _select_item(window, "Module1")
+    assert window.properties.designer is not window.group_target
 
 
 def _item(window, *path):
@@ -718,3 +762,360 @@ def test_project_panel_groups(window, tmp_path, monkeypatch):
     loaded = Project.load(window.project.path)
     assert loaded.group_of("Module1.py") == ("Forms",) and loaded.group_of("Form2.py") == ()
     assert os.path.isfile(os.path.join(os.path.dirname(window.project.path), "Form2.py"))
+
+
+def test_about_vp6(window, monkeypatch):
+    import sys
+
+    from PySide6.QtGui import QAction
+
+    from vp6.ide.dialogs import LOGO_WIDTH, AboutDialog
+    shown = []
+    monkeypatch.setattr(AboutDialog, "exec", lambda self: shown.append(self) or 0)
+    help_menu = next(a.menu() for a in window.menuBar().actions() if a.text() == "&Help")
+    # Help > About VP6 stays in the Help menu (not moved to the macOS application menu)
+    assert window.act_about in help_menu.actions()
+    assert window.act_about.menuRole() == QAction.NoRole
+    window.act_about.trigger()
+    if sys.platform == "darwin":  # and VP6 > About VP6: the same dialog
+        assert window.act_about_app.menuRole() == QAction.AboutRole
+        window.act_about_app.trigger()
+        assert len(shown) == 2
+    dialog = shown[0]
+    logo = dialog.logo.pixmap()
+    assert not logo.isNull()  # the logo, packaged with the IDE
+    assert round(logo.width() / logo.devicePixelRatio()) == LOGO_WIDTH
+    assert vp6.__version__ in dialog.text.text()
+
+
+def test_project_item_is_not_collapsible(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    tree = window.explorer.tree
+    root = tree.topLevelItem(0)
+    assert root.isExpanded() and not tree.rootIsDecorated()  # no arrow
+    assert tree.visualItemRect(root.child(0)).isValid()  # its contents are shown
+    root.setExpanded(False)
+    assert root.isExpanded()
+    tree.setCurrentItem(root)
+    tree.setFocus()
+    for key in (Qt.Key_Left, Qt.Key_Minus):  # the keys that collapse an item
+        QTest.keyClick(tree, key)
+        assert root.isExpanded()
+    rect = tree.visualItemRect(root)
+    QTest.mouseDClick(tree.viewport(), Qt.LeftButton, pos=rect.center())
+    assert root.isExpanded()
+    groups = root.child(0)  # the groups still collapse
+    groups.setExpanded(False)
+    assert not groups.isExpanded()
+
+
+def test_project_panel_expand_collapse_all(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
+    explorer = window.explorer
+    button = explorer.expand_button
+    root = explorer.tree.topLevelItem(0)
+    pages = _item(window, "Forms", "Pages")
+    assert button.text() == "-" and explorer.all_expanded()  # everything open at first
+    button.click()  # collapse every group; the project stays open
+    assert button.text() == "+"
+    assert root.isExpanded() and not _item(window, "Forms").isExpanded()
+    assert not pages.isExpanded() and not _item(window, "Modules").isExpanded()
+    button.click()  # and expand everything again
+    assert button.text() == "-" and pages.isExpanded() and _item(window, "Forms").isExpanded()
+    pages.setExpanded(False)  # one group collapsed by hand: + expands all
+    assert button.text() == "+"
+    # Collapsed groups stay collapsed when the panel is refilled (e.g. a new form)
+    window.explorer.select_group(("Modules",))
+    window.add_module()
+    assert not _item(window, "Forms", "Pages").isExpanded()
+    assert _item(window, "Modules").isExpanded()
+    button.click()
+    assert button.text() == "-" and _item(window, "Forms", "Pages").isExpanded()
+    # Another project starts with everything open
+    button.click()
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    assert window.explorer.all_expanded() and button.text() == "-"
+
+
+def _names(item):
+    return [item.child(i).text(0) for i in range(item.childCount())]
+
+
+def test_project_panel_files_view(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    folder = os.path.dirname(window.project.path)
+    os.makedirs(os.path.join(folder, "assets", "icons"))
+    open(os.path.join(folder, "assets", "logo.png"), "wb").close()
+    open(os.path.join(folder, "notes.txt"), "w").close()
+    open(os.path.join(folder, ".env"), "w").close()
+    os.makedirs(os.path.join(folder, ".git", "objects"))
+    os.makedirs(os.path.join(folder, ".venv"))
+    os.makedirs(os.path.join(folder, "__pycache__"))
+    os.makedirs(os.path.join(folder, "assets", "__pycache__"))
+    os.makedirs(os.path.join(folder, "assets", "vendored", ".git"))
+    explorer = window.explorer
+    assert explorer.project_button.isChecked() and not explorer.hidden_button.isVisible()
+    _select_item(window, "Form1")
+    explorer.files_button.click()  # the folder as it is on disk
+    assert explorer.files_mode and explorer.hidden_button.isVisibleTo(explorer)
+    root = explorer.tree.topLevelItem(0)
+    assert root.text(0) == "Demo" and root.toolTip(0) == folder
+    # Folders first, then the files, by name; hidden ones left out, and never
+    # the project file, __pycache__ or .git
+    assert _names(root) == ["assets", "Form1.py", "Module1.py", "notes.txt"]
+    assert _names(root.child(0)) == ["icons", "vendored", "logo.png"]
+    assert explorer.sort_button.text() == "Folders, Name ▲"
+    # The form stays selected, and works as in the Project view
+    assert explorer._current() == (os.path.join(folder, "Form1.py"), "form")
+    assert explorer.view_object.isEnabled()
+    menu = [a.text() for a in explorer.context_menu(explorer.tree.currentItem()).actions()]
+    assert "View Object" in menu and "Set as Start Up" in menu
+    assert "New Group…" not in menu  # groups are the Project view's
+    assert "Rename…" in menu and "Move to" in menu  # files and folders on disk
+    notes = root.child(3)
+    explorer.tree.setCurrentItem(notes)  # any other file: listed, nothing to open
+    assert explorer._current() == (None, None) and not explorer.view_code.isEnabled()
+    assert explorer.selected_group("form") is None  # new files: where the project puts them
+    # Hidden files and folders on request
+    explorer.hidden_button.click()
+    assert _names(root := explorer.tree.topLevelItem(0)) == [
+        ".venv", "assets", ".env", "Form1.py", "Module1.py", "notes.txt"]  # still no .git
+    assert _names(root.child(1)) == ["icons", "vendored", "logo.png"]  # nor __pycache__
+    assert _names(root.child(1).child(1)) == []
+    assert explorer.tree.currentItem().text(0) == "notes.txt"  # still selected
+    explorer.hidden_button.click()
+    root = explorer.tree.topLevelItem(0)
+    # +/- works on folders; they stay collapsed when the view is refilled
+    explorer.expand_button.click()
+    assert not explorer.tree.topLevelItem(0).child(0).isExpanded()
+    # The view follows the disk
+    open(os.path.join(folder, "readme.md"), "w").close()
+    wait_for(lambda: "readme.md" in _names(explorer.tree.topLevelItem(0)))
+    assert not explorer.tree.topLevelItem(0).child(0).isExpanded()
+    # The IDE remembers the view
+    other = MainWindow()
+    assert other.explorer.files_mode and not other.explorer.show_hidden
+    other.close()
+    # Back to the Project view: the groups again, the form still selected
+    _select_item(window, "Form1.py")
+    explorer.project_button.click()
+    assert not explorer.files_mode and not explorer.hidden_button.isVisibleTo(explorer)
+    assert _listed(window) == ["Forms", "Modules"]
+    assert explorer._current()[0] == os.path.join(folder, "Form1.py")
+    assert explorer.sort_button.text() == "Groups, Name ▲"
+    other = MainWindow()
+    assert not other.explorer.files_mode
+    other.close()
+
+
+def test_files_view_changes_on_disk(window, tmp_path, monkeypatch):
+    import shutil
+
+    from PySide6.QtWidgets import QInputDialog, QMessageBox
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    folder = os.path.dirname(window.project.path)
+    here = lambda *parts: os.path.join(folder, *parts)  # noqa: E731
+    open(here("notes.txt"), "w").close()
+    answers, warnings = [], []
+    monkeypatch.setattr(QInputDialog, "getText", lambda *args, **kw: (answers.pop(0), True))
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+    monkeypatch.setattr(MainWindow, "_move_to_trash", staticmethod(
+        lambda path: (shutil.rmtree(path) if os.path.isdir(path) else os.remove(path)) or True))
+    explorer = window.explorer
+    explorer.files_button.click()
+
+    def item(*parts):
+        return explorer._find(lambda i: explorer._item_path(i) == here(*parts))
+
+    def menu(it):
+        actions = {}
+        for action in explorer.context_menu(it).actions():
+            actions[action.text()] = action
+            if action.menu() is not None:
+                for sub in action.menu().actions():
+                    actions["Move to/" + sub.text()] = sub
+        return actions
+
+    # New folders: in the project's folder, and in a folder
+    answers.append("lib")
+    menu(explorer.tree.topLevelItem(0))["New Folder…"].trigger()
+    assert os.path.isdir(here("lib")) and explorer._item_path(explorer.tree.currentItem()) == \
+        here("lib")
+    answers.append("deep")
+    menu(item("lib"))["New Folder…"].trigger()
+    assert os.path.isdir(here("lib", "deep"))
+    answers.append("lib")  # already there
+    menu(explorer.tree.topLevelItem(0))["New Folder…"].trigger()
+    assert "already exists" in warnings.pop()
+    # A new module in the selected folder (and in the Modules group)
+    explorer.select_path(here("lib", "deep"))
+    window.add_module()
+    assert "lib/deep/Module2.py" in window.project.modules
+    assert window.project.group_of("lib/deep/Module2.py") == ("Modules",)
+    # Moving: with Move to, and by drag and drop; open windows follow
+    window.view_code(here("Module1.py"))
+    menu(item("Module1.py"))["Move to/lib"].trigger()
+    assert os.path.isfile(here("lib", "Module1.py")) and not os.path.exists(here("Module1.py"))
+    assert "lib/Module1.py" in window.project.modules
+    assert window.project.group_of("lib/Module1.py") == ("Modules",)  # its place kept
+    assert here("lib", "Module1.py") in window.code_windows
+    explorer._request_move(item("Form1.py"), item("lib", "Module1.py"))  # onto a file: its folder
+    assert window.project.forms == ["lib/Form1.py"]
+    assert "Move to/lib" not in menu(item("lib", "Form1.py"))  # where it is already
+    assert "Move to/lib/deep" not in menu(item("lib"))  # not into itself
+    assert "into itself" in window.relocate(here("lib"), here("lib", "deep", "lib"))
+    # Renaming a form's file: the imports of it follow; its class doesn't change
+    answers.append("frmMain.py")
+    menu(item("lib", "Form1.py"))["Rename…"].trigger()
+    assert window.project.forms == ["lib/frmMain.py"]
+    module1 = window.documents[here("lib", "Module1.py")]
+    assert "from frmMain import Form1" in module1.text
+    # A form's or module's file keeps a Python name, unique in the project
+    for name, error in (("bad name.py", "identifier"), ("Module1.txt", ".py file"),
+                        ("FRMMAIN.py", "already in the project"), ("a/b.py", "not a valid")):
+        answers.append(name)
+        menu(item("lib", "deep", "Module2.py"))["Rename…"].trigger()
+        assert error in warnings.pop(), name
+    # Any other file: any name
+    answers.append("readme.txt")
+    menu(item("notes.txt"))["Rename…"].trigger()
+    assert os.path.isfile(here("readme.txt"))
+    # Renaming a folder: what is in it follows
+    answers.append("code")
+    menu(item("lib"))["Rename…"].trigger()
+    assert sorted(window.project.modules) == ["code/Module1.py", "code/deep/Module2.py"]
+    assert window.project.forms == ["code/frmMain.py"]
+    assert here("code", "Module1.py") in window.code_windows
+    assert os.path.isfile(here("code", "deep", "Module2.py"))
+    loaded = Project.load(window.project.path)  # saved
+    assert loaded.forms == ["code/frmMain.py"] and "code/deep/Module2.py" in loaded.modules
+    # Deleting a folder: to the Trash, and its modules leave the project
+    menu(item("code", "deep"))["Delete"].trigger()
+    assert not os.path.exists(here("code", "deep"))
+    assert window.project.modules == ["code/Module1.py"]
+    assert not any("Module2" in path for path in window.documents)
+    # The project file stays put (and isn't in the Files view)
+    assert item("Demo.vp6p") is None
+    assert "stay where they are" in window.relocate(window.project.path, here("code", "x.vp6p"))
+
+
+def test_new_folders_and_subfolders(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    folder = os.path.dirname(window.project.path)
+    answers = []
+    monkeypatch.setattr(QInputDialog, "getText", lambda *args, **kw: (answers.pop(0), True))
+    explorer = window.explorer
+    assert not explorer.new_folder_button.isVisibleTo(explorer)  # the Files view's
+    assert window.act_add_folder.isEnabled()
+    # Project > Add Folder…: from the Project view too (it switches to the Files view)
+    answers.append("assets")
+    window.act_add_folder.trigger()
+    assert explorer.files_mode and os.path.isdir(os.path.join(folder, "assets"))
+    assert explorer.new_folder_button.isVisibleTo(explorer)
+    # The New Folder button: in the selected folder (a subfolder)...
+    assert explorer._item_path(explorer.tree.currentItem()) == os.path.join(folder, "assets")
+    answers.append("icons")
+    explorer.new_folder_button.click()
+    assert os.path.isdir(os.path.join(folder, "assets", "icons"))
+    answers.append("large")
+    explorer.new_folder_button.click()  # (the new one is selected: a sub-subfolder)
+    assert os.path.isdir(os.path.join(folder, "assets", "icons", "large"))
+    # ...or the selected file's folder
+    explorer.select_path(os.path.join(folder, "Form1.py"))
+    answers.append("docs")
+    explorer.new_folder_button.click()
+    assert os.path.isdir(os.path.join(folder, "docs"))
+    # The context menu of a file: New Folder… next to it
+    explorer.select_path(os.path.join(folder, "Form1.py"))
+    actions = {a.text(): a for a in explorer.context_menu(explorer.tree.currentItem()).actions()}
+    answers.append("more")
+    actions["New Folder…"].trigger()
+    assert os.path.isdir(os.path.join(folder, "more"))
+
+
+def _drop(explorer, target):
+    """Drop the selected items on ``target``, as a drag and drop does."""
+    from PySide6.QtCore import QMimeData, QPointF
+    from PySide6.QtGui import QDropEvent
+    pos = QPointF(explorer.tree.visualItemRect(target).center())
+    event = QDropEvent(pos, Qt.MoveAction, QMimeData(), Qt.LeftButton, Qt.NoModifier)
+    explorer.tree.dropEvent(event)
+
+
+def _selected_names(explorer):
+    return sorted(i.data(0, Qt.UserRole + 2) for i in explorer.tree.selectedItems())
+
+
+def test_moving_several_items(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QAbstractItemView, QMessageBox
+    window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: warnings.append(args[2]))
+    explorer = window.explorer
+    assert explorer.tree.selectionMode() == QAbstractItemView.ExtendedSelection
+
+    def select(*items):
+        explorer.tree.clearSelection()
+        for it in items:
+            it.setSelected(True)
+        explorer.tree.setCurrentItem(items[0], 0, QItemSelectionModel.NoUpdate)
+
+    def moves(it):
+        move = next(a for a in explorer.context_menu(it).actions() if a.menu() is not None
+                    and a.text().startswith("Move"))
+        return move.text(), {a.text(): a for a in move.menu().actions()}
+
+    # Project view: three pages from the context menu of one of them
+    pages = [_item(window, "Forms", "Pages", name) for name in ("pgLists", "pgMenus", "pgTree")]
+    select(*pages)
+    text, targets = moves(pages[1])
+    assert text == "Move 3 Items to" and "Forms" in targets
+    targets["Forms"].trigger()
+    assert {"pgLists", "pgMenus", "pgTree"} <= set(_listed(window, "Forms"))
+    assert _selected_names(explorer) == ["pgLists", "pgMenus", "pgTree"]  # still selected
+    # The context menu of an item outside the selection: that item alone
+    select(_item(window, "Forms", "pgLists"), _item(window, "Forms", "pgMenus"))
+    assert moves(_item(window, "Forms", "Form1"))[0] == "Move to"
+    # Dragging several onto a group; a group and something in it: the group moves
+    select(_item(window, "Forms", "pgLists"), _item(window, "Forms", "pgMenus"))
+    _drop(explorer, _item(window, "Modules"))
+    assert {"pgLists", "pgMenus"} <= set(_listed(window, "Modules"))
+    select(_item(window, "Forms", "Pages"), _item(window, "Forms", "Pages", "pgArrays"))
+    assert moves(_item(window, "Forms", "Pages"))[0] == "Move to"
+    _drop(explorer, _item(window, "Modules", "pgLists"))  # onto a file: into its group
+    assert "Pages" in _listed(window, "Modules") and "pgArrays" in _listed(
+        window, "Modules", "Pages")
+    # Those that can't move are said in one message; the others move
+    window.project.add_group((), "Pages")
+    window._refresh_explorer()
+    select(_item(window, "Modules", "Pages"), _item(window, "Modules", "pgMenus"))
+    _drop(explorer, _item(window))
+    assert "pgMenus" in _listed(window) and "Pages" in _listed(window, "Modules")
+    assert len(warnings) == 1 and "already" in warnings.pop()
+
+    # Files view: several files, then a folder with a file of it
+    folder = os.path.dirname(window.project.path)
+    for name in ("a", "b"):
+        os.mkdir(os.path.join(folder, name))
+    open(os.path.join(folder, "notes.txt"), "w").close()
+    explorer.files_button.click()
+
+    def item(*parts):
+        return explorer._find(lambda i: explorer._item_path(i) == os.path.join(folder, *parts))
+
+    select(item("Form1.py"), item("Module1.py"), item("notes.txt"))
+    text, targets = moves(item("notes.txt"))
+    assert text == "Move 3 Items to"
+    targets["a"].trigger()
+    assert sorted(os.listdir(os.path.join(folder, "a"))) == ["Form1.py", "Module1.py",
+                                                             "notes.txt"]
+    assert "a/Form1.py" in window.project.forms and "a/Module1.py" in window.project.modules
+    assert _selected_names(explorer) == ["Form1", "Module1", "notes.txt"]
+    select(item("a"), item("a", "Form1.py"))
+    _drop(explorer, item("b"))  # the folder moves, and the file with it
+    assert os.listdir(os.path.join(folder, "b")) == ["a"]
+    assert "b/a/Form1.py" in window.project.forms
+    assert "b/a/Form1.py" in Project.load(window.project.path).forms  # saved
+    assert not warnings
