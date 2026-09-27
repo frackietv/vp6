@@ -400,8 +400,8 @@ def test_rename_unopened_form_from_properties(window, tmp_path):
     _select_item(window, "frmDialog")
     assert window.properties.designer.set_property("Name", "Form1") is not None  # taken
     assert window.properties.designer.set_property("Name", "dlgAdd") is None
-    form1 = next(d for d in window.documents.values() if d.name == "Form1")
-    assert "from frmDialog import dlgAdd" in form1.text and "dialog = dlgAdd()" in form1.text
+    page = next(d for d in window.documents.values() if d.name == "pgDialogs")  # its user
+    assert "from frmDialog import dlgAdd" in page.text and "dialog = dlgAdd()" in page.text
     assert _props(window)[0] == "dlgAdd  Form"
 
 

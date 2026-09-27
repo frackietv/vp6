@@ -1477,8 +1477,10 @@ class _SplitterBar(QWidget):
         splitter = self._splitter
         painter = QPainter(self)
         back = splitter._values.get("BackColor")
+        # Unset: the button color (the Window color can be a pattern, e.g. the
+        # designer's grid, whose color isn't the one you see)
         color = colors.to_qcolor(back) if back is not None else \
-            self.palette().color(QPalette.Window).darker(112)
+            self.palette().color(QPalette.Button)
         painter.fillRect(self.rect(), color)
         painter.setPen(Qt.NoPen)
         painter.setBrush(self.palette().color(QPalette.WindowText))

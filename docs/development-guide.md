@@ -212,8 +212,8 @@ Example: a `ProgressBar`.
    (`"ProgressBar": "Progress"` → `Progress1`, `Progress2`, …).
 4. **Toolbox icon:** add a drawer to `vp6/ide/icons.py` and register it in
    `_DRAWERS` under the exact `TypeName` (see §5.8).
-5. **Kitchen Sink:** place it on the Kitchen Sink's `Form1` and handle its
-   default event (§5.11). `test_kitchen_sink.py` fails until you do.
+5. **Kitchen Sink:** demonstrate it on a Kitchen Sink page (a new page for
+   a new kind of control) and handle its default event (§5.11). `test_kitchen_sink.py` fails until you do.
    **API reference:** add its section to `docs/api.md` and run
    `python tools/apidocs.py` (§5.12). `test_docs.py` fails until you do.
 6. **Nothing else.** The Toolbox, the form-file parser and generator, the
@@ -458,7 +458,10 @@ it**.
 **Where it lives:**
 
 * The sources are in `vp6/ide/templates/kitchensink/`:
-  * `Form1.py` is the main demo form;
+  * `Form1.py` is the explorer window: a TreeView index of the topics on the
+    left, and a content pane in which the chosen topic's page is shown;
+  * each topic is a page, a form of its own (`pgText.py`, `pgLists.py`, …),
+    listed in `Form1.PAGES` and in the index (the TreeView's `Items`);
   * `frmDialog.py` is a modal dialog with its own Dark color scheme;
   * `Module1.py` holds `Main()`, which shows Form1.
 * `vp6/ide/kitchensink.py` copies them into a new project, draws the
@@ -473,20 +476,23 @@ it**.
 | `test_every_public_api_name_is_used` | a non-constant name in `vp6.__all__` (a function, class or object) isn't referenced |
 | `test_every_color_scheme_is_demonstrated` | a `vpScheme*` value isn't used |
 | `test_designer_regions_are_canonical` | a form's designer region isn't exactly what the designer would write |
-| `test_kitchen_sink_runs` | the demo raises errors or its main interactions stop working |
+| the page tests (`test_text_page`, …) | a page raises errors or its demo stops working |
 
 **How to update it:**
 
-1. Create a Kitchen Sink project in the IDE and open `Form1` (or `frmDialog`).
+1. Create a Kitchen Sink project in the IDE and open the page the feature
+   belongs on, or add a new form for a new topic (Project > Add Form, sized
+   like the others, 640 × 440).
 2. Add your control or feature with the designer and write the handler code
    in the code window, like any VP6 user would. Keep the handlers short and
-   self-explanatory, and use the status bar (`lblStatus`) to show what
-   happened.
-3. Copy the changed files back into `vp6/ide/templates/kitchensink/`.
+   self-explanatory, and show what happened in a Label on the page.
+3. A new page: add its node to the index (Form1's TreeView `Items`, with its
+   key after `|`), import it in Form1 and add it to `PAGES` under that key.
+4. Copy the changed files back into `vp6/ide/templates/kitchensink/`.
    Because you edited them with the designer, their regions are canonical.
-4. If you added a file, list it in `kitchensink.FORMS` / `MODULES`.
-5. Run `pytest tests/test_kitchen_sink.py`, and extend `test_kitchen_sink_runs`
-   to exercise the new feature.
+5. If you added a file, list it in `kitchensink.FORMS` / `MODULES`.
+6. Run `pytest tests/test_kitchen_sink.py`, and add a test for the page's
+   demo (`_page(sink, key)` shows it).
 
 New constants don't need to appear individually, since there are too many to
 require. Do demonstrate a new *group* of constants that changes behavior, as

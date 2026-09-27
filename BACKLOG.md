@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Kitchen Sink]** Redesign the Kitchen Sink explorer-style: instead of everything on one form, a navigation tree on the left lists all the features, controls and APIs, and choosing an item shows its demo in the main pane. The first item is an introduction with introductory text. Depends on the items above; tests/test_kitchen_sink.py must keep checking that everything is demonstrated.
 - **[Language and runtime]** Menus on a form shown in a container (`ShowIn`): the menu bar is drawn inside the container, and on macOS it would be a system menu bar tied to a child widget; decide whether an embedded form's menus merge into the host window's menu bar, or aren't shown
 - **[Controls]** Common controls: ProgressBar, Slider, ListView, TabStrip, StatusBar, Toolbar, ImageList, UpDown, and others
 - **[Controls]** CommandButton pictures (`Style = Graphical`, `Picture`) and toggle/checkable buttons (self-hosting: the Toolbox and toolbar buttons)

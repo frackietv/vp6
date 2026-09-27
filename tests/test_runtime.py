@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtTest import QTest
@@ -247,3 +249,42 @@ def test_rebuilt_widget_keeps_its_place(qapp):
     form = F()
     form.Text1.MultiLine = True  # replaces the widget
     assert _stack(form._widget) == ["Text1", "Label1"]
+
+
+def test_end_stops_without_unload_events(tmp_path):
+    """End() ends the program at once: no Form_Unload (e.g. no "Close?"
+    question), like VB's End statement. It ends the process, so the program
+    runs in one of its own."""
+    import subprocess
+    import sys
+
+    marker = tmp_path / "unloaded.txt"
+    script = tmp_path / "ender.py"
+    script.write_text(f"""
+from vp6 import *
+
+
+class frmMain(Form):
+    def Form_Load(self):
+        self.tmrEnd = Timer(self, Interval=50)
+
+    def tmrEnd_Timer(self):
+        print("ending", flush=True)
+        End()
+
+    def Form_Unload(self):
+        open({str(marker)!r}, "w").write("Form_Unload ran")
+        return True  # would cancel a normal close
+
+
+run(frmMain)
+print("after run", flush=True)
+""")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = dict(os.environ, QT_QPA_PLATFORM="offscreen", PYTHONPATH=root,
+               VP6_NO_ERROR_DIALOG="1")
+    result = subprocess.run([sys.executable, str(script)], env=env, capture_output=True,
+                            text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "ending\n"  # nothing after End()
+    assert not marker.exists()  # Form_Unload didn't run

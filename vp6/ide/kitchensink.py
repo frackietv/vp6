@@ -1,10 +1,9 @@
 """The Kitchen Sink project template.
 
 A ready-made project that demonstrates every VP6 control and most of the
-API: all intrinsic controls (with Frames and a PictureBox as containers),
-the common events, MsgBox/InputBox, colors, fonts, color schemes, a modal
-dialog, a form shown inside another (frmEmbedded), Clipboard, Debug, App,
-Screen, Forms, DoEvents and End.
+API, explorer-style: Form1 is a window with a TreeView of topics on the left
+and a content pane, in which each topic's page (a form of its own, pg*.py)
+is shown with ShowIn. The first page is an introduction.
 
 The sources live in ``templates/kitchensink/`` next to this file. **When VP6
 gains a control, event or API function, demonstrate it there**:
@@ -25,9 +24,14 @@ from ..app import ensure_app
 from ..project import SUB_MAIN, Project
 
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "kitchensink"
-FORMS = ("Form1.py", "frmDialog.py", "frmEmbedded.py")
+FORMS = (  # the window, its pages (in the index's order) and the modal dialog
+    "Form1.py", "pgIntro.py", "pgText.py", "pgButtons.py", "pgLists.py", "pgScrollBars.py",
+    "pgPictures.py", "pgZOrder.py", "pgTree.py", "pgTimer.py", "pgLayout.py", "pgScrolling.py",
+    "pgEmbedded.py", "pgDialogs.py", "pgSchemes.py", "pgKeyboard.py", "pgMouse.py",
+    "pgArrays.py", "pgMenus.py", "pgGlobals.py", "frmDialog.py",
+)
 MODULES = ("Module1.py",)
-PICTURE = "vp6.png"  # shown by Form1's PictureBox
+PICTURE = "vp6.png"  # shown on the Pictures page
 
 
 def create(directory: str, name: str) -> Project:

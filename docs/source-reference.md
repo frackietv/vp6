@@ -62,8 +62,9 @@ Application-level services.
   * `close_all_windows()` is the action for programs: it closes every open
     window, so each `Form_Unload` runs and may cancel. The IDE's action is
     File > Exit.
-* `DoEvents()`, `Beep()`, `End()`. `End` closes all windows and calls
-  `os._exit(0)`, like VB's `End`, without running `Form_Unload` handlers.
+* `DoEvents()`, `Beep()`, `End()`. `End` flushes stdout and stderr and calls
+  `os._exit(0)`, like VB's `End`, without running `Form_Unload` handlers:
+  it doesn't close the windows first, since closing them would run them.
 * Singleton objects:
   * `App`: `Title`, `Path` (folder of `__main__`), `EXEName`;
   * `Screen`: `Width`, `Height`, `ActiveForm`;
@@ -534,8 +535,8 @@ Module functions:
   template gets `Form1.py`, `Module1.py` and the `.vp6p`, and starts in Sub
   Main. The console template's `Main` uses `print()`/`input()`; the Standard
   EXE template's `Main` shows Form1. `"kitchensink"` delegates to
-  `kitchensink.create`, which also adds `frmDialog.py`, `frmEmbedded.py` and
-  `vp6.png`.
+  `kitchensink.create`, which also adds its pages (`pg*.py`), `frmDialog.py`
+  and `vp6.png`.
 * `main(argv)` is the application entry point.
 
 `open_project` opens a windowed project's startup form designer, or its first
@@ -906,48 +907,74 @@ Captures the IDE process's stdout and stderr for the Output window.
 
 ### `vp6/ide/kitchensink.py` (≈70 lines) and `vp6/ide/templates/kitchensink/`
 
-The Kitchen Sink project template: a demo of every control and feature.
+The Kitchen Sink project template: a demo of every control and feature,
+explorer-style.
 
-* `create(directory, name)` copies `FORMS` (`Form1.py`, `frmDialog.py`,
-  `frmEmbedded.py`) and
-  `MODULES` (`Module1.py`) from `TEMPLATE_DIR`, draws the PictureBox image
-  `PICTURE` (`vp6.png`, via `draw_picture`, so the package ships no binary),
-  and returns a Standard EXE `Project` that starts in Sub Main.
-  `mainwindow.create_project(..., "kitchensink")` calls it.
-* **`templates/kitchensink/Form1.py`** contains every control type:
-  * Frames and a PictureBox as containers (a Label inside the picture);
-  * text boxes (multi-line, password, upper-casing KeyPress);
-  * Default and Cancel buttons;
-  * option buttons as the control array `optScheme`, switching the form's
-    `ColorScheme` at run time, and the `cmdMore` control array that loads
-    and unloads elements;
-  * check boxes, scroll bars, combo boxes, a sorted list with Add/Remove;
-  * Lines (a dashed one over the Z-order labels, one stretched by
-    `Form_Resize`), an Image thumbnail, and ZIndex / ZOrder labels;
-  * a TreeView index of the form's sections (nodes from the designer's
-    `Items` outline and from code) and the `picEmbed` pane, both in the side
-    pane `picSide` (docked right, `Align`), whose `Resize` keeps them as wide
-    as the pane, next to the Splitter `splSide`;
-  * File, View and Help menus, with the menu control array `mnuScheme`;
-  * a `DoEvents` loop, a Timer clock, and MsgBox/InputBox;
-  * Clipboard, App, Screen and Forms;
-  * a `KeyPreview` F1 help and Ctrl+Q `End()`;
-  * a `Form_Unload` confirmation, and a status bar kept at the bottom by
-    `Form_Resize`;
-  * the PictureBox `picEmbed` (vertical `ScrollBars`), in which `Form_Load`
-    shows `frmEmbedded` with `ShowIn`; the status bar stops at the Splitter
-    (`place_status_bar`).
+* `create(directory, name)` copies `FORMS` (the window, its pages in the
+  index's order, and the dialog) and `MODULES` (`Module1.py`) from
+  `TEMPLATE_DIR`, draws the picture `PICTURE` (`vp6.png`, via
+  `draw_picture`, so the package ships no binary), and returns a Standard
+  EXE `Project` that starts in Sub Main. `mainwindow.create_project(...,
+  "kitchensink")` calls it.
+* **`templates/kitchensink/Form1.py`**, the explorer window. It is laid out
+  with docked panes: `picStatus` (Bottom, the status bar), `picNav` (Left,
+  holding the TreeView `tvwIndex`), the Splitter `splNav`, `picHeader` (Top,
+  the page title) and `picContent` (Fill, with scroll bars). Their Resize
+  events size what is on them.
+  * `PAGES` maps each index key to a page's form class. `show_page(key)`
+    creates a page once (giving it `shell`, the window), shows it in
+    `picContent` with `ShowIn` (replacing the one there), selects its node
+    and shows its title; `tvwIndex_NodeClick` calls it (a section node shows
+    its first page). `page_titles()` lists the pages for the Menus page.
+  * Menus: File (End with Ctrl+Q, Close), View (the navigation pane, and the
+    color schemes as the menu control array `mnuScheme`), Bookmarks (the
+    menu control array `mnuBookmark`, grown by `add_bookmark`) and Help
+    (Keys with F1, About).
+  * `set_scheme(index)` keeps the window's ColorScheme, the View menu and
+    the Color schemes page in step; `show_navigation(visible)` hides or
+    shows the navigation pane and its Splitter.
+  * `Form_Unload` asks first, then unloads the pages (also one popped out).
+* **The pages** (one form each, shown in the content pane):
+  * `pgIntro.py`: the introduction, a Markdown Label whose links show pages;
+  * `pgText.py`: Labels (alignment, AutoSize, access keys) and TextBoxes
+    (multi-line, password, upper-casing KeyPress), GotFocus/LostFocus,
+    Change, a Default button with InputBox/MsgBox, a Frame's Click;
+  * `pgButtons.py`: CommandButtons (Value = True clicks), CheckBoxes (also
+    grayed), OptionButtons in two Frames (two groups);
+  * `pgLists.py`: a sorted ListBox with Add/Remove, Click and DblClick,
+    ComboBoxes (a list with colors from `vpRed`, `RGB` and `QBColor`, and an
+    editable one);
+  * `pgScrollBars.py`: HScrollBar and VScrollBar, Change and Scroll;
+  * `pgPictures.py`: a PictureBox with a Label on it (Click, MouseDown, a
+    Tag from InputBox) and an Image thumbnail;
+  * `pgZOrder.py`: ZIndex and ZOrder, Lines (a dashed one above the labels,
+    a control array of Lines with BorderStyle 1 to 5, a thick one);
+  * `pgTree.py`: a TreeView with check boxes, adding and removing nodes,
+    NodeClick/NodeCheck/Expand/Collapse;
+  * `pgTimer.py`: a clock whose Timer runs only while the page is visible
+    (Form_Activate / Form_Deactivate);
+  * `pgLayout.py`: how the window is laid out, hiding and widening the
+    navigation pane;
+  * `pgScrolling.py`: a page 1000 pixels tall, and ScrollTop;
+  * `pgEmbedded.py`: a page popping out into a window of its own and back
+    (`ShowIn(None)`), laid out with a Bottom and a Fill pane, with a clock
+    that runs while it is visible;
+  * `pgDialogs.py`: MsgBox, InputBox, the modal `frmDialog`, Beep;
+  * `pgSchemes.py`: the color schemes as the option-button control array
+    `optScheme` (`SCHEMES`);
+  * `pgKeyboard.py`: KeyPreview, KeyDown/KeyUp, KeyPress replacing or
+    swallowing keys, Default and Cancel buttons;
+  * `pgMouse.py`: MouseDown/MouseMove/MouseUp with buttons, Click, DblClick;
+  * `pgArrays.py`: the `cmdMore` control array loading and unloading
+    elements;
+  * `pgMenus.py`: the menus, and adding bookmarks (a menu control array
+    grown at run time);
+  * `pgGlobals.py`: App, Screen, Forms, Clipboard, DoEvents, Debug.Print and
+    End.
+  Pages that talk to the window use their `shell` attribute (None when a
+  page runs on its own).
 * **`frmDialog.py`** is a modal dialog (`Show(vpModal)`) with its own Dark
   color scheme, using `Load`/`Unload` and a `Result` attribute.
-* **`frmEmbedded.py`** is a small form shown inside Form1's `picEmbed`,
-  taller than the pane, which therefore scrolls. Its Label is Markdown with
-  a link (`lblInfo_LinkClick`) that pops the form out. It is laid out with
-  two docked PictureBoxes, `picButtons` (Bottom) and `picInfo` (Fill), whose
-  Resize events size what is on them. Its clock `tmrShown` runs only while
-  it is visible: `Form_Activate` starts it and `Form_Deactivate` stops it. It follows the pane's size
-  in `Form_Resize`, its button sits on a PictureBox
-  docked to the bottom (`Align = 2 - Bottom`), and the button pops it out into
-  a window of its own (`ShowIn(None)`) and puts it back.
 * **`Module1.py`** is `Main()` with `run(Form1)`.
 * The files are package data (`pyproject.toml`). `tests/test_kitchen_sink.py`
   keeps them covering every control and API name (development guide §5.11).
@@ -1073,7 +1100,7 @@ All tests run headless. `conftest.py`:
 
 | File | Covers |
 |---|---|
-| `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results. |
+| `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results, `End()` ending a program (in a process of its own) without Form_Unload. |
 | `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames (controls, form classes, class and module references in other files), the console template. |
 | `test_control_arrays.py` | Control arrays: elements, `[i]` / `(i)` / `Item`, iteration, bounds, read-only `Index`, handlers getting `Index` first, `Load`/`Unload` of run-time elements (copied properties, hidden, last in the tab order; designer elements can't be unloaded), one type per array; the form file round trip (elements as containers too) and invalid arrays; adding/removing the `Index` parameter and stubs; in the designer: paste asking to create an array, renaming into an array (and out, and into another type's name), the Index property (one-element arrays, moving, clearing, undo), containers that are elements; the Properties window's `(Name)`, `Index` row and object list; the code window's Object list, new handlers with `Index`, completion. |
 | `test_menus.py` | Menus at run time: the menu bar and items, separators, shortcuts; an in-window menu bar keeping `Height`, `ScaleHeight` and control positions for the area below it (the window grows), form mouse events there; Click on choosing an item and before a menu opens; `Checked` changing only in code; Enabled, Visible, Caption and Shortcut changes; menu control arrays loading after their last element and unloading; the parent check; the form file round trip; the Menu Editor's entries and ControlDefs, validation messages and dialog editing (Next, indent, shortcut, Insert, Delete, moving, outdent); the designer's menu bar (layout, hit testing, the drop-down opening Click code), menus kept off the canvas and edited in the Properties window, deleting a menu with its items, renames and arrays updating handlers, undo; the IDE's Tools > Menu Editor (Ctrl+E). |
@@ -1095,7 +1122,7 @@ All tests run headless. `conftest.py`:
 | `test_outline.py` | The outline of the Kitchen Sink's Form1 matches the backlog example exactly; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: hidden by default, opened under Properties, following the Project panel or active window, clicking items goes to the line (unfolding the designer region). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name and color scheme, and control arrays (an array, `Load`/`Unload`, `Count`, bounds, `Index` handlers); its regions are canonical; the project is created correctly; the designer opens its forms; the demo runs (typing, lists, scroll bars, colors, schemes, the modal dialog, the clock, unload), the option-button control array, the `cmdMore` control array loading and unloading elements, the menus (the View menu's control array and check marks kept in step with the option buttons and the clock, a menu's Click before it opens, a shortcut), the Lines (the one above the status bar following the window size), the Image thumbnail showing and hiding the big picture, the TreeView index (nodes from the designer and from code, NodeClick naming the control a node points at, Expand), and frmEmbedded shown in picEmbed (filling it, popping out and back, unloaded with Form1). Controls without events (Line) needn't have a handler. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6. |
 
 ## Samples: `samples/`

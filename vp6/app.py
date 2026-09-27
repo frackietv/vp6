@@ -120,10 +120,9 @@ def Beep() -> None:
 
 
 def End() -> None:
-    """Terminate the program immediately, like VB6's End statement."""
-    app = QApplication.instance()
-    if app is not None:
-        app.closeAllWindows()
+    """Terminate the program immediately, like VB6's End statement: no form
+    gets Form_Unload (closing the windows would run it, so they aren't
+    closed; the process just ends)."""
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(0)

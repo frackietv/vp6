@@ -26,8 +26,10 @@ The IDE opens with a VB-style **New Project** dialog. Every new project has
 
 * *Standard EXE:* `Main()` shows `Form1` with `run(Form1)`.
 * *Console Application:* `Main()` talks through `print()` / `input()`.
-* *Kitchen Sink:* a demo project showing every VP6 control and feature. Open
-  it to see how things work, and copy code out of it.
+* *Kitchen Sink:* a demo project showing every VP6 control and feature,
+  explorer-style: choose a topic in the tree on the left and its page, a form
+  of its own, is shown beside it. Open the pages to see how things work, and
+  copy code out of them.
 
 ## The IDE
 

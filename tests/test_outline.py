@@ -26,30 +26,17 @@ def flatten(items, prefix=""):
 
 # --- the outline itself ---------------------------------------------------------------------
 
-def test_kitchen_sink_form1_matches_the_backlog_example():
+def test_kitchen_sink_form1():
     source = (kitchensink.TEMPLATE_DIR / "Form1.py").read_text()
     expected = [
-        "HELP", "SCHEMES", "SWATCH_COLORS", "Form1", "Form1::InitializeComponent",
-        "Form1::Form_Load", "Form1::Form_Resize", "Form1::place_status_bar",
-        "Form1::Form_MouseMove", "Form1::Form_KeyDown",
-        "Form1::Form_Unload", "Form1::fraText_Click", "Form1::txtName_Change",
-        "Form1::cmdGreet_Click", "Form1::txtNotes_GotFocus", "Form1::txtPassword_LostFocus",
-        "Form1::txtUpper_KeyPress", "Form1::optScheme_Click", "Form1::chkBold_Click",
-        "Form1::chkTimer_Click", "Form1::chkPicture_Click", "Form1::hsbSize_Change",
-        "Form1::hsbSize_Scroll", "Form1::cboColors_Click", "Form1::cboFree_Change",
-        "Form1::lstItems_Click", "Form1::lstItems_DblClick", "Form1::cmdAdd_Click",
-        "Form1::cmdRemove_Click", "Form1::cmdCount_Click", "Form1::vsbLevel_Change",
-        "Form1::picLogo_Click", "Form1::picLogo_MouseDown", "Form1::imgThumb_Click",
-        "Form1::lblOnPicture_Click",
-        "Form1::tmrClock_Timer", "Form1::cmdSwapZ_Click", "Form1::lblZRed_Click",
-        "Form1::lblZBlue_Click", "Form1::show_z_order", "Form1::cmdMore_Click",
-        "Form1::picSide_Resize", "Form1::splSide_Moved", "Form1::tvwIndex_NodeClick",
-        "Form1::tvwIndex_Expand",
-        "Form1::cmdDialog_Click",
-        "Form1::cmdClipboard_Click", "Form1::cmdAbout_Click", "Form1::cmdClose_Click",
-        "Form1::mnuFileDialog_Click", "Form1::mnuFileClose_Click", "Form1::mnuView_Click",
-        "Form1::mnuViewClock_Click", "Form1::mnuScheme_Click", "Form1::mnuHelpKeys_Click",
-        "Form1::mnuHelpAbout_Click", GLOBAL_CODE,
+        "PAGES", "HELP", "Form1", "Form1::InitializeComponent", "Form1::Form_Load",
+        "Form1::Form_Unload", "Form1::status", "Form1::show_page", "Form1::page_titles",
+        "Form1::tvwIndex_NodeClick", "Form1::picNav_Resize", "Form1::picHeader_Resize",
+        "Form1::picStatus_Resize", "Form1::splNav_Moved", "Form1::picContent_Scroll",
+        "Form1::show_navigation", "Form1::set_scheme", "Form1::mnuFileEnd_Click",
+        "Form1::mnuFileClose_Click", "Form1::mnuView_Click", "Form1::mnuViewNav_Click",
+        "Form1::mnuScheme_Click", "Form1::add_bookmark", "Form1::mnuBookmark_Click",
+        "Form1::mnuHelpKeys_Click", "Form1::mnuHelpAbout_Click", GLOBAL_CODE,
     ]
     assert flatten(outline(source)) == expected
 
@@ -210,7 +197,7 @@ def test_outline_follows_the_context_and_navigates(ide, tmp_path):
     _select(ide, "Module1")
     assert _tree_names(ide.outline) == ["Main", GLOBAL_CODE]
     _select(ide, "Form1")
-    assert "Form1::cmdGreet_Click" in _tree_names(ide.outline)
+    assert "Form1::tvwIndex_NodeClick" in _tree_names(ide.outline)
     ide.explorer.select_project()  # the project isn't code
     assert _tree_names(ide.outline) == []
     ide.explorer_dock.hide()  # Project panel closed: follows the active window

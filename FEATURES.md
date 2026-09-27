@@ -1,5 +1,31 @@
 # VP6 features
 
+**Version:** 0.3.23
+**Date:** 2026-09-30
+
+## Programming model (the `vp6` library)
+
+- Fix: `End()` ran every form's `Form_Unload` before ending the program (it closed the windows first), so e.g. a "Close?" question appeared and its answer was ignored; now it ends at once without any Unload event, like VB's `End` (the Kitchen Sink's File > End and the End button on its App page)
+
+---
+
+**Version:** 0.3.22
+**Date:** 2026-09-30
+
+## Kitchen Sink
+
+- Redesigned explorer-style: Form1 is a window with a TreeView index of the topics on the left (with a Splitter), the page title across the top, a status bar across the bottom, and a scrolling content pane showing the chosen topic's page; all laid out with docked PictureBoxes (Align Bottom, Left, Top and Fill), without layout code
+- Each topic is a page, a form of its own designed on its own (pgText, pgLists, …), shown in the content pane with `ShowIn`; a page is loaded the first time it's chosen and shown again afterwards; the first page is an introduction (a Markdown Label whose links open the pages)
+- Pages: Text and labels, Buttons and options, Lists, Scroll bars, Pictures, Lines and z-order, TreeView, Timer (runs only while visible), Docked panes and Splitter, Scrolling (a page taller than the pane), Forms inside forms (pops out and back), Dialogs (MsgBox, InputBox, the modal dialog, Beep), Color schemes, Keyboard, Mouse, Control arrays, Menus, App/Screen/Clipboard/Debug/DoEvents/End
+- Menus: File (End with Ctrl+Q, Close), View (the navigation pane, the color schemes as a menu control array kept in step with the Color schemes page), Bookmarks (a menu control array the Menus page adds pages to at run time), Help (Keys with F1, About)
+- Closing the window asks first, then unloads every page (also one popped out)
+
+## Controls
+
+- The Splitter's bar uses the button color when it has no BackColor (it was drawn black in the designer)
+
+---
+
 **Version:** 0.3.21
 **Date:** 2026-09-30
 
