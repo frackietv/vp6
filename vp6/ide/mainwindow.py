@@ -6,7 +6,7 @@ import os
 import shutil
 import sys
 
-from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QProcess, QProcessEnvironment, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QDockWidget, QFileDialog, QLineEdit, QMainWindow, QMdiArea,
@@ -372,8 +372,9 @@ class MainWindow(QMainWindow):
         self.tabifyDockWidget(self.immediate_dock, self.output_dock)
         self.output_dock.hide()
         self.immediate_dock.raise_()
-        self._place_outline()  # under Properties, hidden by default (View > Outline Window)
+        self._place_outline()  # in the Properties panel's place, shown for code windows
         self.outline_dock.hide()
+        self.properties_dock.raise_()
         self.resizeDocks([self.immediate_dock], [150], Qt.Vertical)
         self.resizeDocks([self.explorer_dock, self.properties_dock], [180, 420], Qt.Vertical)
         self.resizeDocks([self.properties_dock], [290], Qt.Horizontal)
@@ -411,6 +412,7 @@ class MainWindow(QMainWindow):
         dock.raise_()
 
     def _show_properties(self):
+        self._show_side_panel(False, force=True)  # in the Outline window's place
         self._show_dock(self.properties_dock)
         self.properties.table.setFocus()
 
@@ -672,19 +674,38 @@ class MainWindow(QMainWindow):
 
     # -- Outline window ---------------------------------------------------------------------------
     def _place_outline(self):
-        """Dock the Outline window right under the Properties panel."""
+        """Dock the Outline window in the Properties panel's place (the two
+        share it, see _show_side_panel)."""
         self.outline_dock.setFloating(False)
-        if self.properties_dock.isVisibleTo(self) and \
-                self.dockWidgetArea(self.properties_dock) != Qt.NoDockWidgetArea and \
+        if self.dockWidgetArea(self.properties_dock) != Qt.NoDockWidgetArea and \
                 not self.properties_dock.isFloating():
-            self.splitDockWidget(self.properties_dock, self.outline_dock, Qt.Vertical)
+            self.tabifyDockWidget(self.properties_dock, self.outline_dock)
         else:
             self.addDockWidget(Qt.RightDockWidgetArea, self.outline_dock)
 
+    def _show_side_panel(self, outline: bool, force: bool = False) -> None:
+        """The Properties panel and the Outline window take turns in one place:
+        the Outline while a code window is active, the Properties panel
+        otherwise. Automatic switching (``force`` False) only happens while
+        one of them is showing: closed by the user, neither comes back by
+        itself (F4 or View > Outline Window brings it back)."""
+        properties, outline_dock = self.properties_dock, self.outline_dock
+        if not force and properties.isHidden() and outline_dock.isHidden():
+            return
+        show, hide = (outline_dock, properties) if outline else (properties, outline_dock)
+        if show is outline_dock and show.isHidden() and \
+                self.dockWidgetArea(show) != self.dockWidgetArea(properties):
+            self._place_outline()  # e.g. a layout saved when it was somewhere else
+        show.show()
+        show.raise_()
+        if not hide.isFloating():  # a floating one is somewhere else: leave it
+            hide.hide()
+
     def _show_outline(self):
-        """View > Outline Window: opens under the Properties panel."""
+        """View > Outline Window: in the Properties panel's place."""
         if self.outline_dock.isHidden():
             self._place_outline()
+        self._show_side_panel(True, force=True)
         self._show_dock(self.outline_dock)
 
     def _goto_outline_line(self, line: int):
@@ -850,6 +871,7 @@ class MainWindow(QMainWindow):
     def _add_subwindow(self, widget, icon_name) -> QMdiSubWindow:
         sub = self.mdi.addSubWindow(widget)
         sub.setAttribute(Qt.WA_DeleteOnClose, False)
+        sub.installEventFilter(self)  # its closing (hiding): see eventFilter
         sub.setWindowIcon(icons.icon(icon_name))
         sub.resize(760, 520)
         return sub
@@ -1008,14 +1030,31 @@ class MainWindow(QMainWindow):
 
     def _on_subwindow_activated(self, sub):
         if sub is None:
+            # None also while the IDE's window isn't active: only when no window
+            # is left open does the Properties panel come back (checked once the
+            # window being closed is gone)
+            QTimer.singleShot(0, self, self._after_last_window)
             return
         widget = sub.widget()
+        # A code window: the Outline in the Properties panel's place
+        self._show_side_panel(isinstance(widget, CodeWindow))
         self.explorer.select_path(self._path_of(widget))
         if isinstance(widget, FormDesigner):
             self._last_designer = widget
             widget.set_tool(self.current_tool)
         # A form's code window shows the form's properties, like VB
         self._update_properties_target()
+
+    def eventFilter(self, watched, event):
+        # A closed MDI window is only hidden (kept for reuse), and QMdiArea
+        # doesn't report the last one going: check after it has
+        if event.type() == QEvent.Hide and isinstance(watched, QMdiSubWindow):
+            QTimer.singleShot(0, self, self._after_last_window)
+        return super().eventFilter(watched, event)
+
+    def _after_last_window(self):
+        if not any(window.isVisible() for window in self.mdi.subWindowList()):
+            self._show_side_panel(False)
 
     def _on_form_renamed(self, old: str, new: str):
         # Other files refer to the form class, e.g. Module1's

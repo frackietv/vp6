@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.3.25
+**Date:** 2026-09-30
+
+## IDE
+
+- The Outline window and the Properties panel take turns in one place: while a code window is active the Outline window replaces the Properties panel, and for a designer (or when no window is open) the Properties panel is back; View > Outline Window and F4 switch them by hand
+- A panel closed with its close button stays closed (neither comes back by itself) until View > Outline Window or F4 opens it
+
+---
+
 **Version:** 0.3.24
 **Date:** 2026-09-30
 

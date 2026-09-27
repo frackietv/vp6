@@ -177,18 +177,59 @@ def _select(ide, text):
     raise AssertionError(text)
 
 
-def test_outline_hidden_by_default_and_opens_under_properties(ide):
+def _showing(ide):
+    """Which of the two panels sharing a place shows: 'properties', 'outline'
+    or both/neither."""
+    shown = {name for name, dock in (("properties", ide.properties_dock),
+                                     ("outline", ide.outline_dock)) if not dock.isHidden()}
+    return shown.pop() if len(shown) == 1 else shown
+
+
+def test_outline_replaces_properties_for_code_windows(ide, tmp_path):
     assert QTest.qWaitForWindowExposed(ide)
-    assert ide.outline_dock.isHidden()
-    ide.act_view_outline.trigger()  # View > Outline Window
+    folder = os.path.join(tmp_path, "Sink")
+    assert _showing(ide) == "properties"  # a designer is active
+    properties_place = ide.properties_dock.geometry()
+    ide.view_code(os.path.join(folder, "Module1.py"))
     QTest.qWait(20)
-    assert not ide.outline_dock.isHidden()
+    assert _showing(ide) == "outline"  # a code window: the Outline instead
     assert ide.dockWidgetArea(ide.outline_dock) == Qt.RightDockWidgetArea
-    properties, outline_rect = ide.properties_dock.geometry(), ide.outline_dock.geometry()
-    assert outline_rect.top() >= properties.bottom()  # right under the Properties panel
-    assert abs(outline_rect.left() - properties.left()) < 5
+    assert ide.outline_dock.geometry() == properties_place  # in the same place
+    ide.view_object(os.path.join(folder, "Form1.py"))
+    QTest.qWait(20)
+    assert _showing(ide) == "properties"  # a designer again
+    ide.act_view_outline.trigger()  # View > Outline Window: in its place anyway
+    assert _showing(ide) == "outline"
+    ide.act_view_props.trigger()  # F4: the Properties panel back
+    assert _showing(ide) == "properties"
+
+
+def test_a_closed_panel_stays_closed(ide, tmp_path):
+    folder = os.path.join(tmp_path, "Sink")
+    ide.properties_dock.close()  # the user closes the Properties panel
+    ide.view_code(os.path.join(folder, "Module1.py"))
+    ide.view_object(os.path.join(folder, "Form1.py"))
+    QTest.qWait(20)
+    assert _showing(ide) == set()  # neither comes back by itself
+    ide.act_view_props.trigger()  # until asked for
+    assert _showing(ide) == "properties"
+
+
+def test_closing_the_last_window_shows_properties(ide, tmp_path):
+    folder = os.path.join(tmp_path, "Sink")
+    ide.view_code(os.path.join(folder, "Module1.py"))
+    QTest.qWait(20)
+    assert _showing(ide) == "outline"
+    for sub in ide.mdi.subWindowList():
+        sub.close()
+    QTest.qWait(20)
+    assert _showing(ide) == "properties"
+
+
+def test_default_layout(ide):
+    ide.act_view_outline.trigger()
     ide.reset_layout()
-    assert ide.outline_dock.isHidden()  # hidden by default
+    assert _showing(ide) == "properties" and ide.outline_dock.isHidden()
 
 
 def test_outline_follows_the_context_and_navigates(ide, tmp_path):

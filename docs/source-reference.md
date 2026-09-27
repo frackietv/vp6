@@ -450,10 +450,15 @@ prepended to `PYTHONPATH` for programs started with F5.
   * `_action(text, slot, shortcut, icon, tip)` (the icon is an
     `icons._DRAWERS` name and is redrawn on theme changes);
   * `_dock`, `_create_actions` / `_create_menus` / `_create_toolbar`;
-  * **Outline window** (`outline`, dock `outline_dock`, hidden by default):
-    `_place_outline` docks it right under Properties, `_show_outline` (View >
-    Outline Window) does that when it opens, and `_goto_outline_line` opens
-    the code window at a chosen item's line.
+  * **Outline window** (`outline`, dock `outline_dock`): it shares the
+    Properties panel's place (`_place_outline` tabifies it with Properties).
+    `_show_side_panel(outline, force)` shows one and hides the other:
+    `_on_subwindow_activated` shows the Outline for a code window and the
+    Properties panel otherwise, and `_after_last_window` (run when an MDI
+    window hides, see `eventFilter`) shows Properties once none is open.
+    Automatic switching only happens while one of the two is showing; View >
+    Outline Window (`_show_outline`) and F4 (`_show_properties`) force it.
+    `_goto_outline_line` opens the code window at a chosen item's line.
   * `_context_path()` is the file the Properties and Outline panels are
     about: the Project panel's selection while it's open, else the active
     window's file. `_update_properties_target()` updates both panels.
@@ -1133,7 +1138,7 @@ All tests run headless. `conftest.py`:
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
 | `test_docs.py` | The docs keep up with the code: every source file in the source reference, every test file in the test table, every public API name in `api.md` (key-code ranges count), the generated `api.md` tables up to date with a section per control, every property with a description, and every relative link and anchor in the Markdown files resolving. |
-| `test_outline.py` | The outline of the Kitchen Sink's Form1 matches the backlog example exactly; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: hidden by default, opened under Properties, following the Project panel or active window, clicking items goes to the line (unfolding the designer region). |
+| `test_outline.py` | The Outline replacing the Properties panel (in the same place) while a code window is active and giving it back for designers, View > Outline Window and F4, a closed panel staying closed, closing the last window, the default layout; the outline of the Kitchen Sink's Form1; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: following the Project panel or active window, clicking items goes to the line (unfolding the designer region). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
 | `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
