@@ -15,22 +15,40 @@ class frmEmbedded(Form):
         self.lblInfo = Label(self.picInfo, TextFormat=2,
                              Caption="A **form of its own**, shown in Form1's PictureBox with `ShowIn`.\n\nIt is taller than the pane, so the pane *scrolls* (ScrollBars = Vertical).\n\n[Pop it out](popout) or scroll down to the button.",
                              Left=8, Top=8, Width=128, Height=200, WordWrap=True, TabIndex=2)
+        self.lblShown = Label(self.picInfo, Caption='Shown here for 0 s', Left=8, Top=216,
+                              Width=128, Height=25, TabIndex=3)
+        self.tmrShown = Timer(self, Left=104, Top=216, Interval=1000, Enabled=False)
         self.picButtons = PictureBox(self, Left=0, Top=260, Width=144, Height=40, BorderStyle=0,
-                                     Align=2, TabIndex=3,
+                                     Align=2, TabIndex=4,
                                      ToolTipText='Align = 2 - Bottom: docked to the bottom edge')
         self.cmdPop = CommandButton(self.picButtons, Caption='Pop &out', Left=8, Top=4, Width=128,
-                                    Height=32, TabIndex=4,
+                                    Height=32, TabIndex=5,
                                     ToolTipText='Show this form in a window of its own, or put it back')
     # endregion
 
     def Form_Load(self):
         self.home = None  # the container it was in before popping out
+        self.seconds = 0
+
+    # Shown in a container, the form is activated when it becomes visible there
+    # and deactivated when it is hidden (also when its pane is): the clock only
+    # runs while the form can be seen
+    def Form_Activate(self):
+        self.tmrShown.Enabled = True
+
+    def Form_Deactivate(self):
+        self.tmrShown.Enabled = False
+
+    def tmrShown_Timer(self):
+        self.seconds += 1
+        self.lblShown.Caption = f"Shown here for {self.seconds} s"
 
     # In a container, the form fills it and follows its size. Its two panes dock
     # by themselves: picButtons at the bottom (Align = Bottom) and picInfo in the
     # rest (Align = Fill); each one's Resize event sizes what is on it
     def picInfo_Resize(self):
         self.lblInfo.Width = max(self.picInfo.Width - 16, 16)
+        self.lblShown.Width = self.lblInfo.Width
 
     def picButtons_Resize(self):
         self.cmdPop.Width = max(self.picButtons.Width - 16, 16)

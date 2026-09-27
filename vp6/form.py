@@ -65,11 +65,16 @@ class _FormWidget(QWidget):
         else:
             event.ignore()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._vp_form._embedded_visibility(True)
+
     def hideEvent(self, event):
         super().hideEvent(event)
         loop = self._vp_form._modal_loop
         if loop is not None and not self.isVisible():
             loop.quit()
+        self._vp_form._embedded_visibility(False)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -79,7 +84,9 @@ class _FormWidget(QWidget):
 
     def changeEvent(self, event):
         super().changeEvent(event)
-        if event.type() == QEvent.ActivationChange:
+        # Only a window follows window activation; a form shown in a container
+        # is activated by being shown there (Form._embedded_visibility)
+        if event.type() == QEvent.ActivationChange and self._vp_form._container is None:
             self._vp_form._fire("Activate" if self.isActiveWindow() else "Deactivate")
 
     def _mouse(self, name, event, buttons):
@@ -206,6 +213,7 @@ class Form(PropertyHost):
         d["_fill"] = True  # shown in a container: fill it
         d["_watcher"] = None
         d["_embedded"] = []  # the forms shown in this form (or its containers)
+        d["_active_in_container"] = False  # shown in its container: Activate fired
         d["_free_area"] = (0, 0, 480, 360)  # the client area the docked panes leave
         d["_widget"] = _FormWidget(self)
         self._widget.resize(480, 360)
@@ -687,7 +695,26 @@ class Form(PropertyHost):
                 self._leave_container()
             self._enter_container(Container, host)
         self.__dict__["_fill"] = bool(Fill)
+        if Fill:  # it replaces the other forms filling that container
+            for other in list(host._embedded):
+                if other is not self and other._container is Container and other._fill and \
+                        other._widget.isVisible():
+                    other.Hide()
         self.Show()
+
+    def _embedded_visibility(self, shown: bool) -> None:
+        """A form in a container gets Activate when it becomes visible there
+        (also when its container is shown) and Deactivate when it stops being
+        visible (hidden, its container hidden); once each way, and only while
+        loaded."""
+        if self._container is None or self._design_mode:
+            return
+        shown = shown and self._widget.isVisible()
+        if shown == self._active_in_container or (shown and not self._loaded):
+            return
+        self.__dict__["_active_in_container"] = shown
+        if self._loaded:
+            self._fire("Activate" if shown else "Deactivate")
 
     def _hosts(self, form: "Form") -> bool:
         """Whether ``form`` is shown in this one, directly or not."""
@@ -696,14 +723,15 @@ class Form(PropertyHost):
     def _enter_container(self, container, host: "Form") -> None:
         widget, parent = self._widget, container._container_widget()
         visible = widget.isVisible()
-        widget.setParent(parent, Qt.Widget)  # a child widget, no longer a window
-        if visible:
-            widget.show()
         follows = container._fill_widget()  # e.g. a scrolling PictureBox's visible area
         watcher = _ContainerWatcher(self, follows)
         follows.installEventFilter(watcher)
+        # In its container before being shown there, so that counts as Activate
         self.__dict__.update(_container=container, _watcher=watcher)
         host._embedded.append(self)
+        widget.setParent(parent, Qt.Widget)  # a child widget, no longer a window
+        if visible:
+            widget.show()
 
     def _leave_container(self) -> None:
         """Back to a window of its own (hidden until shown)."""
@@ -713,6 +741,10 @@ class Form(PropertyHost):
         host = container if isinstance(container, Form) else container._owner_form()
         if self in host._embedded:
             host._embedded.remove(self)
+        if self._active_in_container:  # leaving: deactivated there first
+            self.__dict__["_active_in_container"] = False
+            if self._loaded:
+                self._fire("Deactivate")
         watcher = self._watcher
         if watcher is not None:
             watcher.parent().removeEventFilter(watcher)

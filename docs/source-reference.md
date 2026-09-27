@@ -261,7 +261,12 @@ The intrinsic controls.
     makes the form's widget a child of the container's widget (no longer a
     window) and installs a `_ContainerWatcher`, which calls
     `_fit_to_container` when the container is resized; `_leave_container`
-    makes it a window again. The host form lists these forms in
+    makes it a window again (a form in a container gets Deactivate first).
+    `_FormWidget.showEvent` / `hideEvent` call `_embedded_visibility`, which
+    fires Activate/Deactivate once each way while in a container
+    (`_active_in_container`); `changeEvent` leaves window activation to
+    windows. `ShowIn` with Fill hides the other forms filling the same
+    container. The host form lists these forms in
     `_embedded`, and `_query_unload` unloads them after itself (`force`:
     they can't cancel). `_apply_window_flags`, `_apply_fixed_size`,
     `_apply_WindowState` and `Show`'s positioning are skipped while it is in
@@ -938,7 +943,8 @@ The Kitchen Sink project template: a demo of every control and feature.
   taller than the pane, which therefore scrolls. Its Label is Markdown with
   a link (`lblInfo_LinkClick`) that pops the form out. It is laid out with
   two docked PictureBoxes, `picButtons` (Bottom) and `picInfo` (Fill), whose
-  Resize events size what is on them. It follows the pane's size
+  Resize events size what is on them. Its clock `tmrShown` runs only while
+  it is visible: `Form_Activate` starts it and `Form_Deactivate` stops it. It follows the pane's size
   in `Form_Resize`, its button sits on a PictureBox
   docked to the bottom (`Align = 2 - Bottom`), and the button pops it out into
   a window of its own (`ShowIn(None)`) and puts it back.
@@ -1072,7 +1078,7 @@ All tests run headless. `conftest.py`:
 | `test_control_arrays.py` | Control arrays: elements, `[i]` / `(i)` / `Item`, iteration, bounds, read-only `Index`, handlers getting `Index` first, `Load`/`Unload` of run-time elements (copied properties, hidden, last in the tab order; designer elements can't be unloaded), one type per array; the form file round trip (elements as containers too) and invalid arrays; adding/removing the `Index` parameter and stubs; in the designer: paste asking to create an array, renaming into an array (and out, and into another type's name), the Index property (one-element arrays, moving, clearing, undo), containers that are elements; the Properties window's `(Name)`, `Index` row and object list; the code window's Object list, new handlers with `Index`, completion. |
 | `test_menus.py` | Menus at run time: the menu bar and items, separators, shortcuts; an in-window menu bar keeping `Height`, `ScaleHeight` and control positions for the area below it (the window grows), form mouse events there; Click on choosing an item and before a menu opens; `Checked` changing only in code; Enabled, Visible, Caption and Shortcut changes; menu control arrays loading after their last element and unloading; the parent check; the form file round trip; the Menu Editor's entries and ControlDefs, validation messages and dialog editing (Next, indent, shortcut, Insert, Delete, moving, outdent); the designer's menu bar (layout, hit testing, the drop-down opening Click code), menus kept off the canvas and edited in the Properties window, deleting a menu with its items, renames and arrays updating handlers, undo; the IDE's Tools > Menu Editor (Ctrl+E). |
 | `test_image.py` | The Image control: taking the picture's size without Stretch (and with a border), filling the control with Stretch, switching back, clearing the picture; mouse events, no focus or Tab stop, not grayed but silent when disabled, transparent; its properties in order and the form file; in the designer: sized by a new picture, resized with Stretch, the Properties rows; the Toolbox button and icon. |
-| `test_embedded_forms.py` | `Form.ShowIn`: filling a PictureBox and following its size (Load before the first Resize), controls working, window-only properties not popping it out; a Frame's inside, a form as the container, `Fill=False` at Left/Top; popping out, moving between containers, Hide/Show; unloading only itself, going with its host (unable to cancel), a host that cancels keeping it; invalid containers and cycles; nested forms and Default buttons. |
+| `test_embedded_forms.py` | Activate/Deactivate in a container (Load then Activate; hidden and shown, the container hidden and shown, popped out, unloaded), a filling form replacing another (no second Load; Fill=False forms staying), window activation not applying; `Form.ShowIn`: filling a PictureBox and following its size (Load before the first Resize), controls working, window-only properties not popping it out; a Frame's inside, a form as the container, `Fill=False` at Left/Top; popping out, moving between containers, Hide/Show; unloading only itself, going with its host (unable to cancel), a host that cancels keeping it; invalid containers and cycles; nested forms and Default buttons. |
 | `test_align.py` | PictureBox `Align`: docking in creation order, Fill panes taking the space left (after the others, several sharing it), following the form (before Form_Resize), changing a pane's thickness, place, visibility and Align; only on the form; panes created in code; under an in-window menu bar; in a form shown in a container; in the designer (Align stored with the docked geometry, the form resized, a pane dragged back, undo); the constants. |
 | `test_splitter.py` | The Splitter: docking beside its pane, cursors, dragging (live Resize with everything in place, Moved on release), Bottom/Top/Right panes growing the right way, MinSize on both sides, disabled, no pane; the PictureBox Resize event; the file, the designer (docked after the pane) and the Toolbox. |
 | `test_scrolling.py` | PictureBox ScrollBars: bars appearing for controls beyond the edges (both directions), ScrollLeft/ScrollTop and the Scroll event moving the contents, bars following moved, added and hidden controls, one direction only, turning it off, controls and Click on the empty area still working, a taller form shown inside scrolling, the designer not scrolling. |

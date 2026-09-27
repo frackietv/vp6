@@ -247,6 +247,13 @@ def test_kitchen_sink_embedded_form(sink_forms):
     assert (info.Left, info.Top, info.Width, info.Height) == (0, 0, embedded.ScaleWidth,
                                                               embedded.ScaleHeight - 40)
     assert embedded.lblInfo.Width == info.Width - 16  # picInfo_Resize ran
+    assert embedded.tmrShown.Enabled  # Form_Activate: shown in its pane
+    form.picEmbed.Visible = False  # its pane hidden: Form_Deactivate
+    assert not embedded.tmrShown.Enabled
+    form.picEmbed.Visible = True
+    assert embedded.tmrShown.Enabled
+    embedded.tmrShown_Timer()
+    assert embedded.lblShown.Caption == "Shown here for 1 s"
     assert embedded.lblInfo._widget.textFormat() == Qt.MarkdownText  # a Markdown caption
     embedded.lblInfo._widget.linkActivated.emit("popout")  # its [Pop it out](popout) link
     assert embedded.Container is None

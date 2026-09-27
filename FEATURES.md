@@ -1,5 +1,20 @@
 # VP6 features
 
+**Version:** 0.3.21
+**Date:** 2026-09-30
+
+## Programming model (the `vp6` library)
+
+- A form shown in a container (`ShowIn`) gets `Form_Activate` when it becomes visible there (after `Form_Load` the first time, and whenever it or its container is shown again) and `Form_Deactivate` when it stops being visible (hidden, its container hidden, replaced, moved out with `ShowIn(None)`); window activation no longer fires them for it; an unloaded form gets `Form_Unload`, not `Form_Deactivate`
+- A form shown filling a container replaces the other forms filling it: they are hidden and deactivated, not unloaded, so coming back to one doesn't fire `Form_Load` again (forms shown with `Fill=False` are left alone)
+- Fix: moving a form that was showing as a window into a container now activates it there
+
+## Kitchen Sink
+
+- frmEmbedded counts the seconds it has been visible in its pane: `Form_Activate` starts its Timer and `Form_Deactivate` stops it (e.g. when the pane is hidden)
+
+---
+
 **Version:** 0.3.20
 **Date:** 2026-09-30
 

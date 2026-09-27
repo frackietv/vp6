@@ -243,6 +243,17 @@ self.page.ShowIn(self.picContent)     # back into the pane
 * It is part of the host window: it has no title bar, and its `Caption`,
   `BorderStyle`, `WindowState` and `StartUpPosition` apply only when it is a
   window. It hides and shows with its container.
+* **Activate and Deactivate:** a form in a container gets `Form_Activate`
+  when it becomes visible there (after `Form_Load` the first time, and again
+  when it or its container is shown after being hidden) and
+  `Form_Deactivate` when it stops being visible (hidden, its container
+  hidden, replaced, or moved out with `ShowIn(None)`), e.g. to start and
+  stop a Timer. Window activation doesn't apply to it; an unloaded form gets
+  `Form_Unload` instead of `Form_Deactivate`.
+* A form shown with `ShowIn` (filling) **replaces** the other forms filling
+  the same container: they are hidden (and deactivated), not unloaded, so
+  showing one again doesn't fire `Form_Load` again. Forms shown with
+  `Fill=False` don't replace or get replaced.
 * `Unload()` unloads just that form. When the host form unloads, the forms
   shown in it get `Form_Unload` after the host's own and can't cancel it;
   they become (hidden) windows again, so they can be shown elsewhere.

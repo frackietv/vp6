@@ -139,3 +139,73 @@ def test_nested_and_keys(host):
     assert inner.events[-1] == "go" and "go" not in outer.events
     host.Unload()
     assert not inner._loaded and not outer._loaded
+
+
+class Tracked(Form):
+    """Records its events in the list it is given."""
+
+    def __init__(self, name, log):
+        self._log_name, self._log = name, log
+        super().__init__()
+
+    def Form_Load(self):
+        self._log.append((self._log_name, "load"))
+
+    def Form_Activate(self):
+        self._log.append((self._log_name, "activate"))
+
+    def Form_Deactivate(self):
+        self._log.append((self._log_name, "deactivate"))
+
+    def Form_Unload(self):
+        self._log.append((self._log_name, "unload"))
+
+
+def test_activate_and_deactivate_in_a_container(host):
+    log = []
+    page = Tracked("a", log)
+    page.ShowIn(host.picPane)
+    assert log == [("a", "load"), ("a", "activate")]  # like a window: Load, then Activate
+    log.clear()
+    page.Hide()
+    page.Show()
+    host.picPane.Visible = False  # its container hidden...
+    host.picPane.Visible = True  # ...and shown again
+    page.Show()  # already visible: nothing more
+    assert log == [("a", "deactivate"), ("a", "activate")] * 2
+    log.clear()
+    page.ShowIn(None)  # a window of its own: deactivated in the container first
+    assert log == [("a", "deactivate")]
+    log.clear()
+    page.ShowIn(host.fraPane)
+    page.Unload()  # Unload, without a Deactivate after it
+    assert log == [("a", "activate"), ("a", "unload")]
+
+
+def test_a_form_replaces_the_other_one_filling_its_container(host):
+    log = []
+    first, second = Tracked("first", log), Tracked("second", log)
+    first.ShowIn(host.picPane)
+    log.clear()
+    second.ShowIn(host.picPane)  # like choosing another page
+    assert not first.Visible and second.Visible and first._loaded
+    assert log == [("first", "deactivate"), ("second", "load"), ("second", "activate")]
+    log.clear()
+    first.ShowIn(host.picPane)  # back: no second Load
+    assert log == [("second", "deactivate"), ("first", "activate")]
+    beside = Tracked("beside", log)
+    beside.Left = 50
+    beside.ShowIn(host.picPane, Fill=False)  # not filling: the others stay
+    assert first.Visible and beside.Visible
+
+
+def test_window_activation_is_not_theirs(host):
+    log = []
+    page = Tracked("page", log)
+    page.ShowIn(host.picPane)
+    log.clear()
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
+
+    QApplication.sendEvent(page._widget, QEvent(QEvent.ActivationChange))  # the host window
+    assert log == []
