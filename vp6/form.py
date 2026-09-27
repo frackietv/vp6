@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 import sys
 
-from PySide6.QtCore import QEvent, QEventLoop, QObject, Qt
+from PySide6.QtCore import QEvent, QEventLoop, QObject, QRect, Qt
 from PySide6.QtGui import QFont, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 
@@ -206,6 +206,7 @@ class Form(PropertyHost):
         d["_fill"] = True  # shown in a container: fill it
         d["_watcher"] = None
         d["_embedded"] = []  # the forms shown in this form (or its containers)
+        d["_free_area"] = (0, 0, 480, 360)  # the client area the docked panes leave
         d["_widget"] = _FormWidget(self)
         self._widget.resize(480, 360)
         self._init_values({"Caption": type(self).__name__})
@@ -291,6 +292,7 @@ class Form(PropertyHost):
         width (Left, Right). Hidden ones take no space (at run time)."""
         area = self._container_widget().rect()
         left, top, right, bottom = 0, 0, area.width(), area.height()
+        places = []  # (widget, rect): computed first, applied below
         for control in self._controls:
             align = control._values.get("Align", 0) if "Align" in control._specs else 0
             widget = control._widget
@@ -299,22 +301,31 @@ class Form(PropertyHost):
             if not self._design_mode and not control._values.get("Visible", True):
                 continue
             width, height = max(right - left, 0), max(bottom - top, 0)
+            # Its thickness: the Height (Top, Bottom) or Width (Left, Right) it was given
+            thick_h = control._values.get("Height", widget.height())
+            thick_w = control._values.get("Width", widget.width())
             if align == 1:  # Top
-                size = min(widget.height(), height)
-                widget.setGeometry(left, top, width, size)
+                size = min(thick_h, height)
+                places.append((widget, QRect(left, top, width, size)))
                 top += size
             elif align == 2:  # Bottom
-                size = min(widget.height(), height)
-                widget.setGeometry(left, bottom - size, width, size)
+                size = min(thick_h, height)
+                places.append((widget, QRect(left, bottom - size, width, size)))
                 bottom -= size
             elif align == 3:  # Left
-                size = min(widget.width(), width)
-                widget.setGeometry(left, top, size, height)
+                size = min(thick_w, width)
+                places.append((widget, QRect(left, top, size, height)))
                 left += size
             elif align == 4:  # Right
-                size = min(widget.width(), width)
-                widget.setGeometry(right - size, top, size, height)
+                size = min(thick_w, width)
+                places.append((widget, QRect(right - size, top, size, height)))
                 right -= size
+        # Moves first, resizes last: a pane's Resize handler then sees every
+        # pane (e.g. the Splitter beside it) already in its new place
+        places.sort(key=lambda place: place[0].size() != place[1].size())
+        for widget, rect in places:
+            widget.setGeometry(rect)
+        self.__dict__["_free_area"] = (left, top, right, bottom)  # what the panes left
 
     def _base_dir(self) -> str:
         module = sys.modules.get(type(self).__module__)
@@ -436,7 +447,8 @@ class Form(PropertyHost):
         frame = self._widget.frameGeometry()
         target = None
         if position == 1:
-            owner_widget = owner._widget if isinstance(owner, Form) else QApplication.activeWindow()
+            owner_widget = owner._widget if isinstance(owner, Form) else \
+                QApplication.activeWindow()
             if owner_widget is not None:
                 target = owner_widget.frameGeometry().center()
         if target is None:

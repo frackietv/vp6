@@ -205,10 +205,11 @@ The intrinsic controls.
 | `ComboBox` | `QComboBox` | `Style` 0 (editable) / 2 (list only); Click on selection change, Change on edit. |
 | `Timer` | none at run time (`QTimer`) | Stopwatch icon in design mode (`_timer_design_widget`). |
 | `HScrollBar`, `VScrollBar` | `QScrollBar` | `_ScrollBar` base; Change on value change, Scroll while dragging. |
-| `PictureBox` | `QLabel` | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle; `Cls()`. `Align` docks it (`Form._layout_aligned`); changing Align, its size, place or Visible calls `_relayout`. |
+| `PictureBox` | `QLabel` | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle; `Cls()`. `Align` docks it (`Form._layout_aligned`); changing Align, its size, place or Visible calls `_relayout` (a docked pane's size is left to the layout). `Resize` event when its widget is resized. Always opaque (`autoFillBackground`), with the scheme's window color when BackColor is unset. |
 | `Line` | `_LineWidget` (transparent to the mouse, covering the line's box) | `X1`, `Y1`, `X2`, `Y2` instead of Left/Top/Width/Height (`_update_geometry` sizes the widget, with `_padding` for the width); `BorderColor` (unset: the palette's text color), `BorderStyle` (`_PEN_STYLES`; 0 = Transparent), `BorderWidth`, `Visible`, `Tag`, `ZIndex`; no events (`DefaultEvent` is empty); `_moved_points()` for the designer. |
 | `Image` | `QLabel` | Not a container, `NoFocus`, no `TabIndex`, no colors (transparent). `Stretch` and `BorderStyle` come before `Picture` in `Properties`, because loading a picture sizes the control: without Stretch `_fit_to_picture` gives it the picture's size (plus the border). `Enabled` doesn't gray it: `_on_qt_event` drops events instead. |
 | `TreeView` | `QTreeWidget` (header hidden, one column) | `Nodes` is a `_Nodes` collection (`_list` in the order added, `_by_key`; `_resolve` takes a key, an Index from 1 or a Node; `Add` places a `QTreeWidgetItem` by relationship, `Remove` with descendants, `Clear`). Each `Node` wraps its item (stored in the item's `Qt.UserRole` data; `UserRole + 1` holds its `Sorted`) with Text, Key, Tag, Index, FullPath, Expanded, Selected, Checked, Bold, ForeColor, Image, the relatives and `EnsureVisible`. `Items` (kind `outline`) rebuilds the tree from `parse_outline` (expanded in design mode). Events: NodeClick on `currentItemChanged`, or `itemClicked` on the node that was current at the press (`_current_at_press`); Expand/Collapse; NodeCheck when the check state changes (`Node._check_state`). Code changes run under `_quietly()` (`_Quiet`), so only the user's actions fire events. `SelectedItem`, `HitTest`, `LineStyle`, `Indentation`, `Checkboxes`, `Sorted` (`_keep_sorted`), `PathSeparator`. |
+| `Splitter` | `_SplitterBar` (paints the bar and a grip, handles the mouse) | Docks by `Align` (Left by default) like an aligned PictureBox; `_pane()` is the nearest earlier visible control docked to the same edge; dragging calls `_resize_pane`, which clamps the pane between `MinSize` and what leaves `MinSize` of the form's `_free_area`, and `Moved` fires on release. `_vertical()`: Left/Right. Thickness changes relayout. |
 | `Menu` | a `QAction` (none in design mode) | Parent: the form (the menu bar, `Form._add_menu_item`) or a `Menu`, whose `QMenu` (`_submenu`, created for its first item by `_add_menu_item`) holds it. Caption `-` is a separator; `Checked` (Qt's own toggling is undone in `_on_triggered`), `Enabled`, `Visible`, `Shortcut` (also added to the form widget so it works in the window). Click on `triggered`, and for a menu with items on `aboutToShow`. `_menu_container`, `_place_after` (loaded array elements follow the last one), `_dispose`. |
 
 * **`ControlArray`**, a VB control array (after `CONTROL_TYPES`, which it
@@ -268,8 +269,12 @@ The intrinsic controls.
   * **Keyboard:** `_preview_key`, `_handle_default_cancel`,
     `_apply_tab_order`.
   * **Docked panes:** `_layout_aligned()` places the PictureBoxes with an
-    `Align` at the edges of the client area, in creation order, each taking
-    its edge of what the earlier ones left. It runs after
+    `Align` (and Splitters) at the edges of the client area, in creation
+    order, each taking its edge of what the earlier ones left, with the
+    thickness from its Width/Height value. It computes every place first,
+    then applies moves before resizes, so a pane's Resize handler sees
+    everything in place; it records the space left in `_free_area`. It runs
+    after
     `InitializeComponent`, on every resize (before `Form_Resize`), after the
     menu bar's layout, and when an aligned control is registered or changed.
   * **Menus:** `_add_menu_item(menu)` puts a top-level `Menu` on the menu
@@ -911,7 +916,9 @@ The Kitchen Sink project template: a demo of every control and feature.
   * Lines (a dashed one over the Z-order labels, one stretched by
     `Form_Resize`), an Image thumbnail, and ZIndex / ZOrder labels;
   * a TreeView index of the form's sections (nodes from the designer's
-    `Items` outline and from code);
+    `Items` outline and from code) and the `picEmbed` pane, both in the side
+    pane `picSide` (docked right, `Align`), whose `Resize` keeps them as wide
+    as the pane, next to the Splitter `splSide`;
   * File, View and Help menus, with the menu control array `mnuScheme`;
   * a `DoEvents` loop, a Timer clock, and MsgBox/InputBox;
   * Clipboard, App, Screen and Forms;
@@ -919,7 +926,8 @@ The Kitchen Sink project template: a demo of every control and feature.
   * a `Form_Unload` confirmation, and a status bar kept at the bottom by
     `Form_Resize`;
   * the PictureBox `picEmbed`, in which `Form_Load` shows `frmEmbedded`
-    with `ShowIn`.
+    with `ShowIn`; the status bar stops at the Splitter
+    (`place_status_bar`).
 * **`frmDialog.py`** is a modal dialog (`Show(vpModal)`) with its own Dark
   color scheme, using `Load`/`Unload` and a `Result` attribute.
 * **`frmEmbedded.py`** is a small form shown inside Form1's `picEmbed`. It
@@ -990,7 +998,8 @@ Icons drawn with `QPainter`, in light and dark variants.
   module-level palette `C`, which `_render` switches.
 * One drawer per icon in `_DRAWERS`:
   * one per Toolbox control, keyed by `TypeName` (`Line`: `_line`, `Image`:
-    `_image`, `TreeView`: `_treeview`), plus `Pointer`;
+    `_image`, `TreeView`: `_treeview`, `Splitter`: `_splitter`),
+    plus `Pointer`;
   * project icons `Form`, `Module`, `Project`, `Console`;
   * toolbar icons `New`, `Open`, `Save`, `Run`, `Stop`, `Sun`, `Moon`;
   * the `KitchenSink` template icon;
@@ -1057,6 +1066,7 @@ All tests run headless. `conftest.py`:
 | `test_image.py` | The Image control: taking the picture's size without Stretch (and with a border), filling the control with Stretch, switching back, clearing the picture; mouse events, no focus or Tab stop, not grayed but silent when disabled, transparent; its properties in order and the form file; in the designer: sized by a new picture, resized with Stretch, the Properties rows; the Toolbox button and icon. |
 | `test_embedded_forms.py` | `Form.ShowIn`: filling a PictureBox and following its size (Load before the first Resize), controls working, window-only properties not popping it out; a Frame's inside, a form as the container, `Fill=False` at Left/Top; popping out, moving between containers, Hide/Show; unloading only itself, going with its host (unable to cancel), a host that cancels keeping it; invalid containers and cycles; nested forms and Default buttons. |
 | `test_align.py` | PictureBox `Align`: docking in creation order, following the form (before Form_Resize), changing a pane's thickness, place, visibility and Align; only on the form; panes created in code; under an in-window menu bar; in a form shown in a container; in the designer (Align stored with the docked geometry, the form resized, a pane dragged back, undo); the constants. |
+| `test_splitter.py` | The Splitter: docking beside its pane, cursors, dragging (live Resize with everything in place, Moved on release), Bottom/Top/Right panes growing the right way, MinSize on both sides, disabled, no pane; the PictureBox Resize event; the file, the designer (docked after the pane) and the Toolbox. |
 | `test_treeview.py` | The TreeView: reading outlines; the Nodes collection (key, Index from 1, errors for unknown or duplicate keys); every relationship of `Add`; relatives, FullPath and PathSeparator; removing with children and clearing; node Text/Key/Tag/Bold/ForeColor/Image, EnsureVisible, sorting the tree and a node's children; code changes firing no events; NodeClick on clicks (also on the selected node) and keyboard moves, Expand/Collapse from the keyboard, HitTest; check boxes and NodeCheck; LineStyle, Indentation, Items; the form file; in the designer (Items building an expanded tree, the Properties button, a `Node` handler stub); the Toolbox button, icon and constants. |
 | `test_line.py` | The Line control: its widget following the points, drawing (color, Transparent, Visible, the scheme's text color by default), clicks going through it, ZIndex; the form file; in the designer: drawing from press to release and by a click, selecting near the line (not its box), dragging an end, the move cursor over an end, moving, arrow keys (no resizing), undo, pasting with an offset, the Properties rows, no event stub; the Toolbox button and icon. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |

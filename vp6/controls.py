@@ -31,7 +31,7 @@ EVENT_ARGS = {
     "MouseMove": "Button, Shift, X, Y",
     "KeyDown": "KeyCode, Shift", "KeyUp": "KeyCode, Shift", "KeyPress": "KeyAscii",
     "Initialize": "", "Load": "", "Unload": "", "Activate": "", "Deactivate": "",
-    "Resize": "",
+    "Resize": "", "Moved": "",
     "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
 }
 
@@ -1105,7 +1105,7 @@ class PictureBox(Control):
     TypeName = "PictureBox"
     DefaultSize = (121, 97)
     IsContainer = True
-    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp")
+    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp", "Resize")
     _synthesize_click = True
     Properties = (
         *_geometry(*DefaultSize),
@@ -1125,6 +1125,11 @@ class PictureBox(Control):
         label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         return label
 
+    def _on_qt_event(self, watched, event):
+        if event.type() == QEvent.Resize and watched is self._widget:
+            self._fire("Resize")  # e.g. a docked pane resized by its form or a Splitter
+        return super()._on_qt_event(watched, event)
+
     def _relayout(self) -> None:
         """Docked (or just undocked): let the form place its aligned panes."""
         if self in self._form._controls:
@@ -1134,14 +1139,16 @@ class PictureBox(Control):
         self._relayout()
 
     def _apply_Width(self, v):
-        super()._apply_Width(v)
-        if self._values.get("Align"):
-            self._relayout()
+        if self._values.get("Align") and self in self._form._controls:
+            self._relayout()  # docked: the form resizes it, all panes at once
+        else:
+            super()._apply_Width(v)
 
     def _apply_Height(self, v):
-        super()._apply_Height(v)
-        if self._values.get("Align"):
+        if self._values.get("Align") and self in self._form._controls:
             self._relayout()
+        else:
+            super()._apply_Height(v)
 
     def _apply_Left(self, v):
         super()._apply_Left(v)
@@ -1177,6 +1184,10 @@ class PictureBox(Control):
 
     def _apply_colors(self, _=None):
         _container_palette(self)
+        # Opaque like VB's PictureBox (the scheme's window color without a
+        # BackColor), so e.g. a docked pane covers what is underneath
+        if self._widget is not None:
+            self._widget.setAutoFillBackground(True)
 
     _apply_BackColor = _apply_ForeColor = _apply_colors
 
@@ -1244,6 +1255,163 @@ class Image(Control):
         if not self._values.get("Enabled", True):
             return False
         return super()._on_qt_event(watched, event)
+
+
+class _SplitterBar(QWidget):
+    """The bar the user drags; see Splitter."""
+
+    def __init__(self, splitter: "Splitter", parent: QWidget):
+        super().__init__(parent)
+        self._splitter = splitter
+        self._drag = None  # (start position, the pane's size then) while dragging
+
+    def paintEvent(self, event):
+        splitter = self._splitter
+        painter = QPainter(self)
+        back = splitter._values.get("BackColor")
+        color = colors.to_qcolor(back) if back is not None else \
+            self.palette().color(QPalette.Window).darker(112)
+        painter.fillRect(self.rect(), color)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(self.palette().color(QPalette.WindowText))
+        painter.setOpacity(0.35)
+        center = self.rect().center()
+        vertical = splitter._vertical()
+        for i in (-6, 0, 6):  # a grip in the middle
+            x, y = (center.x(), center.y() + i) if vertical else (center.x() + i, center.y())
+            painter.drawEllipse(x - 1, y - 1, 3, 3)
+
+    def mousePressEvent(self, event):
+        splitter = self._splitter
+        pane = splitter._pane()
+        if event.button() != Qt.LeftButton or pane is None or splitter._design_mode or \
+                not splitter._values.get("Enabled", True):
+            return
+        size = pane.Width if splitter._vertical() else pane.Height
+        self._drag = (event.globalPosition().toPoint(), size, False)
+
+    def mouseMoveEvent(self, event):
+        if self._drag is None:
+            return
+        start, size, _moved = self._drag
+        delta = event.globalPosition().toPoint() - start
+        self._splitter._resize_pane(size, delta.x() if self._splitter._vertical() else delta.y())
+        self._drag = (start, size, True)
+
+    def mouseReleaseEvent(self, event):
+        if self._drag is not None and self._drag[2]:
+            self._splitter._fire("Moved")
+        self._drag = None
+
+
+class Splitter(Control):
+    """A bar the user drags to resize a docked pane. It docks like an aligned
+    PictureBox (Align, in creation order), right after the pane it resizes:
+    the nearest earlier control docked to the same edge. Moved fires when
+    the user lets go."""
+
+    TypeName = "Splitter"
+    DefaultEvent = "Moved"
+    DefaultSize = (6, 97)
+    Events = ("Moved",)
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Align", "enum", 3, enum_choices("None", "Top", "Bottom", "Left", "Right"),
+          description="The edge it docks to, next to the pane it resizes (docked to the "
+                      "same edge before it)"),
+        P("MinSize", "int", 30,
+          description="The smallest size the pane, and the space left beside it, can get"),
+        P("BackColor", "color", None,
+          description="The bar's color; unset = a shade of the form's"),
+        P("Enabled", "bool", True, description="Whether the user can drag it"),
+        P("Visible", "bool", True, description="Whether the splitter is shown at run time"),
+        P("ToolTipText", "str", "", description="Text shown when the mouse rests on it"),
+        P("Tag", "str", "", description="Free for your own use"),
+    )
+
+    def _create_widget(self, parent):
+        return _SplitterBar(self, parent)
+
+    def _event_targets(self):
+        return []  # it handles the mouse itself
+
+    def _vertical(self) -> bool:
+        """A Left or Right splitter: a vertical bar that changes widths."""
+        return self._values.get("Align", 3) in (3, 4)
+
+    def _pane(self) -> "Control | None":
+        """The control it resizes: the nearest earlier one docked to its edge."""
+        align = self._values.get("Align", 0)
+        pane = None
+        for control in self._form._controls:
+            if control is self:
+                break
+            if control.Parent is self.Parent and not isinstance(control, Splitter) and \
+                    "Align" in control._specs and control._values.get("Align") == align and \
+                    control._values.get("Visible", True):
+                pane = control
+        return pane if align else None
+
+    def _resize_pane(self, size: int, delta: int) -> None:
+        """Dragged by ``delta`` pixels from where the pane was ``size``."""
+        pane = self._pane()
+        if pane is None:
+            return
+        align = self._values.get("Align")
+        grow = delta if align in (1, 3) else -delta  # Top/Left grow with the mouse
+        minimum = max(0, self._values.get("MinSize", 30))
+        left, top, right, bottom = self._form._free_area
+        free = (right - left) if self._vertical() else (bottom - top)
+        current = pane.Width if self._vertical() else pane.Height
+        largest = max(minimum, current + free - minimum)  # leave MinSize beside it
+        new = max(minimum, min(size + grow, largest))
+        if self._vertical():
+            pane.Width = new
+        else:
+            pane.Height = new
+
+    def _apply_Align(self, v):
+        if self._widget is not None:
+            self._widget.setCursor(Qt.SplitHCursor if v in (3, 4) else Qt.SplitVCursor)
+        if self in self._form._controls:
+            self._form._layout_aligned()
+
+    def _apply_BackColor(self, v):
+        if self._widget is not None:
+            self._widget.update()
+
+    def _relayout(self) -> None:
+        if self in self._form._controls:
+            self._form._layout_aligned()
+
+    def _apply_Width(self, v):
+        if self._values.get("Align") and self in self._form._controls:
+            self._relayout()  # its thickness; the form places it
+        else:
+            super()._apply_Width(v)
+
+    def _apply_Height(self, v):
+        if self._values.get("Align") and self in self._form._controls:
+            self._relayout()
+        else:
+            super()._apply_Height(v)
+
+    def _apply_Left(self, v):
+        super()._apply_Left(v)
+        self._relayout()  # the form places a docked splitter
+
+    def _apply_Top(self, v):
+        super()._apply_Top(v)
+        self._relayout()
+
+    def _apply_Visible(self, v):
+        super()._apply_Visible(v)
+        self._relayout()
+
+    def _apply_Enabled(self, v):
+        if self._widget is not None:
+            self._widget.setCursor(Qt.ArrowCursor if not v else
+                                   Qt.SplitHCursor if self._vertical() else Qt.SplitVCursor)
 
 
 # Controls in toolbox order.
@@ -1721,7 +1889,8 @@ class TreeView(Control):
     def _keep_sorted(self, parent_item) -> None:
         parent_item = parent_item or self._widget.invisibleRootItem()
         top = parent_item is self._widget.invisibleRootItem()
-        if (top and self._values.get("Sorted")) or (not top and parent_item.data(0, Qt.UserRole + 1)):
+        sorted_here = self._values.get("Sorted") if top else parent_item.data(0, Qt.UserRole + 1)
+        if sorted_here:
             parent_item.sortChildren(0, Qt.AscendingOrder)
 
     @staticmethod
@@ -1945,7 +2114,8 @@ class Menu(Control):
 CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
-        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Menu,
+        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Splitter,
+        Menu,
     )
 }
 

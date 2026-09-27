@@ -144,12 +144,18 @@ class Form1(Form):
                                       ToolTipText='Cancel button: Esc clicks it')
         self.tmrClock = Timer(self, Left=600, Top=440, Interval=1000)
         self.linStatus = Line(self, X1=16, Y1=493, X2=744, Y2=493, BorderColor=0x808080)
-        self.tvwIndex = TreeView(self, Left=760, Top=16, Width=144, Height=250,
+        self.picSide = PictureBox(self, Left=760, Top=0, Width=160, Height=532, BorderStyle=0,
+                                  Align=4, TabIndex=44,
+                                  ToolTipText='A PictureBox docked to the right (Align = 4 - Right)')
+        self.tvwIndex = TreeView(self.picSide, Left=0, Top=16, Width=144, Height=250,
                                  Items=['Text and buttons|fraText', '    Name|txtName', '    Notes|txtNotes', '    Greet|cmdGreet', 'Options|fraOptions', '    Color schemes|optScheme', '    Font size|hsbSize', '    Colors|cboColors', 'Lists|lstItems', 'Pictures|picLogo', '    Thumbnail|imgThumb', 'Z-order|lblZRed', 'Menus|mnuFile'],
-                                 TabIndex=44,
+                                 TabIndex=45,
                                  ToolTipText='A TreeView: its nodes were typed in the designer (the Items outline)')
-        self.picEmbed = PictureBox(self, Left=760, Top=276, Width=144, Height=156, TabIndex=45,
+        self.picEmbed = PictureBox(self.picSide, Left=0, Top=276, Width=144, Height=240,
+                                   TabIndex=46,
                                    ToolTipText='A PictureBox holding another form (frmEmbedded)')
+        self.splSide = Splitter(self, Left=754, Top=0, Width=6, Height=532, Align=4, MinSize=120,
+                                ToolTipText='A Splitter: drag it to resize the side pane')
         self.lblStatus = Label(self, Caption='Ready', Left=16, Top=496, Width=728, Height=25,
                                BorderStyle=1, TabIndex=39)
         self.mnuFile = Menu(self, Caption='&File')
@@ -183,10 +189,16 @@ class Form1(Form):
         self.lblStatus.Caption = f"{controls} controls loaded. Press F1 for help."
 
     def Form_Resize(self):
-        # Keep the status bar along the bottom edge, with a Line just above it
-        self.lblStatus.Move(16, self.ScaleHeight - 36, self.ScaleWidth - 32)
+        self.place_status_bar()
+
+    def place_status_bar(self):
+        # The status bar along the bottom edge, with a Line just above it, up to
+        # the Splitter beside the docked side pane (all docked panes are in place
+        # when Form_Resize or a pane's Resize runs)
+        right = self.splSide.Left - 16
+        self.lblStatus.Move(16, self.ScaleHeight - 36, max(right - 16, 40))
         self.linStatus.Y1 = self.linStatus.Y2 = self.ScaleHeight - 39
-        self.linStatus.X2 = self.ScaleWidth - 16
+        self.linStatus.X2 = right
 
     def Form_MouseMove(self, Button, Shift, X, Y):
         self.lblStatus.Caption = f"Mouse at {X}, {Y}"
@@ -356,6 +368,19 @@ class Form1(Form):
         self.lblStatus.Caption = (f"cmdMore has {more.Count} elements, Index {more.LBound} "
                                   f"to {more.UBound}: " +
                                   ", ".join(element.Caption for element in more))
+
+    # --- the side pane (docked PictureBox, Splitter) --------------------------------------------
+    def picSide_Resize(self):
+        # A PictureBox's Resize event: when the Splitter (or the form) changes the
+        # docked pane's size, the index and the embedded form follow it
+        width = max(self.picSide.Width - 16, 40)
+        self.tvwIndex.Width = width
+        self.picEmbed.Move(0, self.picEmbed.Top, width,
+                           max(self.picSide.Height - self.picEmbed.Top - 16, 60))
+        self.place_status_bar()
+
+    def splSide_Moved(self):
+        self.lblStatus.Caption = f"The side pane is now {self.picSide.Width} pixels wide"
 
     # --- the index (TreeView) ----------------------------------------------------------------
     def tvwIndex_NodeClick(self, Node):

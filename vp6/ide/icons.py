@@ -169,6 +169,18 @@ def _treeview(p):
     p.setPen(QPen(C.ink, 1))
 
 
+def _splitter(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 4, 8, 16))  # two panes and the bar between them
+    p.drawRect(QRectF(14, 4, 8, 16))
+    p.setBrush(C.face)
+    p.drawRect(QRectF(10, 4, 4, 16))
+    p.drawLine(QPointF(5, 12), QPointF(19, 12))  # the two-headed drag arrow
+    for x, dx in ((5, 2), (19, -2)):
+        p.drawLine(QPointF(x, 12), QPointF(x + dx, 10))
+        p.drawLine(QPointF(x, 12), QPointF(x + dx, 14))
+
+
 def _line(p):
     p.setPen(QPen(C.ink, 2))
     p.drawLine(QPointF(5, 19), QPointF(19, 5))
@@ -303,7 +315,7 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image, "TreeView": _treeview,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image, "TreeView": _treeview, "Splitter": _splitter,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

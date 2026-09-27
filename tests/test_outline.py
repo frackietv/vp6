@@ -29,8 +29,9 @@ def flatten(items, prefix=""):
 def test_kitchen_sink_form1_matches_the_backlog_example():
     source = (kitchensink.TEMPLATE_DIR / "Form1.py").read_text()
     expected = [
-        "HELP", "SCHEMES", "SWATCH_COLORS", "Form1", "Form1::InitializeComponent", "Form1::Form_Load",
-        "Form1::Form_Resize", "Form1::Form_MouseMove", "Form1::Form_KeyDown",
+        "HELP", "SCHEMES", "SWATCH_COLORS", "Form1", "Form1::InitializeComponent",
+        "Form1::Form_Load", "Form1::Form_Resize", "Form1::place_status_bar",
+        "Form1::Form_MouseMove", "Form1::Form_KeyDown",
         "Form1::Form_Unload", "Form1::fraText_Click", "Form1::txtName_Change",
         "Form1::cmdGreet_Click", "Form1::txtNotes_GotFocus", "Form1::txtPassword_LostFocus",
         "Form1::txtUpper_KeyPress", "Form1::optScheme_Click", "Form1::chkBold_Click",
@@ -42,7 +43,8 @@ def test_kitchen_sink_form1_matches_the_backlog_example():
         "Form1::lblOnPicture_Click",
         "Form1::tmrClock_Timer", "Form1::cmdSwapZ_Click", "Form1::lblZRed_Click",
         "Form1::lblZBlue_Click", "Form1::show_z_order", "Form1::cmdMore_Click",
-        "Form1::tvwIndex_NodeClick", "Form1::tvwIndex_Expand",
+        "Form1::picSide_Resize", "Form1::splSide_Moved", "Form1::tvwIndex_NodeClick",
+        "Form1::tvwIndex_Expand",
         "Form1::cmdDialog_Click",
         "Form1::cmdClipboard_Click", "Form1::cmdAbout_Click", "Form1::cmdClose_Click",
         "Form1::mnuFileDialog_Click", "Form1::mnuFileClose_Click", "Form1::mnuView_Click",

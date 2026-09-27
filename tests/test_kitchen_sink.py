@@ -267,12 +267,33 @@ def test_kitchen_sink_tree_view(sink_forms):
     form.Unload()
 
 
+def test_kitchen_sink_side_pane_and_splitter(sink_forms):
+    form = sink_forms["Form1"].Form1()
+    form.Show()
+    side, splitter = form.picSide, form.splSide
+    assert (side.Left, side.Width, side.Height) == (760, 160, form.ScaleHeight)  # docked right
+    assert (splitter.Left, splitter.Width) == (754, 6)  # beside it
+    assert form.tvwIndex.Parent is side and form.picEmbed.Parent is side
+    bar = splitter._widget
+    # One move: the bar itself moves while dragged (live), and QTest positions are its own
+    QTest.mousePress(bar, Qt.LeftButton, Qt.NoModifier, QPoint(3, 100))
+    QTest.mouseMove(bar, QPoint(-37, 100))  # dragged 40 pixels to the left
+    QTest.mouseRelease(bar, Qt.LeftButton, Qt.NoModifier, QPoint(3, 100))
+    assert side.Width == 200 and side.Left == 720 and splitter.Left == 714
+    assert form.tvwIndex.Width == 184 and form.picEmbed.Width == 184  # picSide_Resize
+    assert form.embedded.ScaleWidth == form.picEmbed._widget.contentsRect().width()
+    assert form.lblStatus.Caption == "The side pane is now 200 pixels wide"  # Moved
+    assert form.lblStatus.Left + form.lblStatus.Width <= splitter.Left - 16  # clear of it
+    form.Unload()
+
+
 def test_kitchen_sink_lines(sink_forms):
     form = sink_forms["Form1"].Form1()
     form.Show()
-    form.Width, form.Height = 900, 600  # Form_Resize stretches the line above the status bar
+    form.Width, form.Height = 1000, 600  # Form_Resize stretches the line above the status bar
     QTest.qWait(20)
-    assert (form.linStatus.X2, form.linStatus.Y1) == (900 - 16, 600 - 39)
+    assert (form.linStatus.X2, form.linStatus.Y1) == (form.splSide.Left - 16, 600 - 39)
+    assert form.splSide.Left == 1000 - 160 - 6  # up to the docked side pane
     assert form.linStatus.Y1 == form.linStatus.Y2 < form.lblStatus.Top
     assert form.linZ.ZIndex == 3 and form.linZ.BorderStyle == 2
     form.Unload()

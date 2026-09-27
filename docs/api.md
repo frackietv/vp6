@@ -141,6 +141,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `Activate` | none |
 | `Deactivate` | none |
 | `Resize` | none |
+| `Moved` | none |
 | `NodeClick` | Node |
 | `Expand` | Node |
 | `Collapse` | Node |
@@ -374,7 +375,8 @@ def cmdDigit_Click(self, Index):
 
 ### PictureBox
 
-A container that shows an image.
+A container that shows an image. Like VB's, it paints its background: its
+`BackColor`, or the color scheme's window color when that isn't set.
 
 **Docked panes (`Align`).** A PictureBox directly on the form with `Align`
 set to `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft` or `vpAlignRight` sticks
@@ -394,6 +396,9 @@ self.picStatus = PictureBox(self, Align=vpAlignBottom, Height=24) # a status bar
   hidden panes take no space. Other controls keep their positions.
 * It works in a form shown in a container (`ShowIn`) too, and in the
   designer, where the file stores where the form docks them.
+* A PictureBox's `Resize` event fires when its size changes, e.g. when the
+  form or a [Splitter](#splitter) resizes a docked pane, so it can lay out
+  its contents.
 
 <!-- BEGIN GENERATED: control PictureBox -->
 Default size 121 × 97. A container: other controls can be placed on it. Property groups: Position, Colors, Common.
@@ -406,7 +411,7 @@ Default size 121 × 97. A container: other controls can be placed on it. Propert
 | `Picture` | file path | `''` | Image file (relative to the form's folder) |
 | `Stretch` | bool | `False` | Scale the picture to fit the control |
 
-Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Resize`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Methods: `Cls()` clears the picture.
@@ -756,6 +761,44 @@ Default size 161 × 193. Property groups: Position, Colors, Font, Common.
 Events: `NodeClick(Node)`, `Expand(Node)`, `Collapse(Node)`, `NodeCheck(Node)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `NodeClick`.
 <!-- END GENERATED -->
 
+### Splitter
+
+A bar the user drags to resize a docked pane (VB6 had none; this one works
+like Delphi's). It docks like an aligned PictureBox, right after the pane
+it resizes: the nearest control docked to the same edge before it.
+
+```python
+self.picNav = PictureBox(self, Align=vpAlignLeft, Width=200)
+self.splNav = Splitter(self, Align=vpAlignLeft, MinSize=80)   # beside picNav
+
+def splNav_Moved(self):
+    self.lblStatus.Caption = f"The navigation pane is {self.picNav.Width} pixels wide"
+```
+
+* Dragging changes the pane's `Width` (Left, Right) or `Height` (Top,
+  Bottom) live; the pane gets `Resize`, and `Moved` fires when the user lets
+  go.
+* `MinSize` is the smallest the pane can get, and the smallest space left
+  beside it.
+* Its `Width` (or `Height`) is the bar's thickness, 6 pixels by default.
+  Disabled, it can't be dragged.
+
+<!-- BEGIN GENERATED: control Splitter -->
+Default size 6 × 97. Property groups: Position.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Align` | enum | 3 - Left | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right. The edge it docks to, next to the pane it resizes (docked to the same edge before it) |
+| `BackColor` | color | (default) | The bar's color; unset = a shade of the form's |
+| `Enabled` | bool | `True` | Whether the user can drag it |
+| `MinSize` | int | `30` | The smallest size the pane, and the space left beside it, can get |
+| `Tag` | str | `''` | Free for your own use |
+| `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
+| `Visible` | bool | `True` | Whether the splitter is shown at run time |
+
+Events: `Moved`. Default event (double-click in the designer): `Moved`.
+<!-- END GENERATED -->
+
 ### Menu
 
 A form's menus: the menu bar, the menus on it, their items, submenus and
@@ -870,7 +913,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 `Form`, `Control` (base class), `Label`, `TextBox`, `CommandButton`,
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
 `HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Image`](#image),
-[`TreeView`](#treeview) (and its `Node`), [`Menu`](#menu), and
+[`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`Menu`](#menu), and
 `ControlArray` for [control arrays](#control-arrays).
 
 ---

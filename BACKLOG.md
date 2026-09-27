@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Splitter control for resizable panes (Kitchen Sink redesign: between the navigation tree and the demo; self-hosting: the Properties window's grid/description split)
 - **[Controls]** Scrollable container: a PictureBox/Frame that scrolls its contents with automatic scroll bars (Kitchen Sink redesign: demos taller than the content pane; self-hosting: the designer canvas)
 - **[Controls]** Label rich text: bold parts, headings and links in a caption (Kitchen Sink redesign: the introduction page; self-hosting: the Properties description pane and the About box)
 - **[Kitchen Sink]** Redesign the Kitchen Sink explorer-style: instead of everything on one form, a navigation tree on the left lists all the features, controls and APIs, and choosing an item shows its demo in the main pane. The first item is an introduction with introductory text. Depends on the items above; tests/test_kitchen_sink.py must keep checking that everything is demonstrated.

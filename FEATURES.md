@@ -1,5 +1,26 @@
 # VP6 features
 
+**Version:** 0.3.17
+**Date:** 2026-09-30
+
+## Controls
+
+- Splitter control: a bar the user drags to resize a docked pane; it docks with `Align` (Left by default) like an aligned PictureBox, right after the pane it resizes (the nearest earlier control docked to the same edge)
+- Dragging resizes the pane's Width (Left, Right) or Height (Top, Bottom) live, the right way for every edge; `Moved` fires when the user lets go; `MinSize` keeps both the pane and the space beside it from getting smaller; `BackColor`, `Enabled`, split cursors and a grip
+- PictureBox `Resize` event, like VB's: fires when the PictureBox's size changes, e.g. when the form or a Splitter resizes a docked pane
+- A PictureBox always paints its background (its `BackColor`, or the color scheme's window color), like VB's, so a docked pane covers what is underneath
+- Docked panes are all in place before any `Resize` handler runs (moves are applied before resizes), and a docked pane's `Width`/`Height` is its thickness, applied by the form's layout
+
+## IDE
+
+- Splitter in the Toolbox, with its own icon; in the designer it docks beside the pane before it
+
+## Kitchen Sink
+
+- The TreeView index and the embedded form are in a side pane docked to the right, with a Splitter beside it; dragging it resizes the pane, whose `Resize` event keeps the index and the embedded form as wide as the pane, and the status bar stops at the Splitter
+
+---
+
 **Version:** 0.3.16
 **Date:** 2026-09-30
 
