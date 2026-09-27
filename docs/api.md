@@ -392,6 +392,16 @@ self.picStatus = PictureBox(self, Align=vpAlignBottom, Height=24) # a status bar
 
 * Several panes dock in the order they were created: each takes its edge
   of the space the earlier ones left.
+* `vpAlignFill` panes take all the space the edge panes leave (placed after
+  them, whatever their creation order), e.g. the content pane beside a
+  navigation pane and its Splitter. Several Fill panes share that space, the
+  visible one showing (hidden panes take no space).
+
+  ```python
+  self.picNav = PictureBox(self, Align=vpAlignLeft, Width=200)
+  self.splNav = Splitter(self, Align=vpAlignLeft)
+  self.picContent = PictureBox(self, Align=vpAlignFill)   # the rest, always
+  ```
 * The form places them before `Form_Resize` fires, so the handler can lay
   out the rest around them. Setting their `Left` or `Top` has no effect;
   hidden panes take no space. Other controls keep their positions.
@@ -425,7 +435,7 @@ Default size 121 × 97. A container: other controls can be placed on it. Propert
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
-| `Align` | enum | 0 - None | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right. Dock to that edge of the form and follow its size, keeping the height (Top, Bottom) or width (Left, Right); only on the form itself |
+| `Align` | enum | 0 - None | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right, 5 - Fill. Dock to that edge of the form and follow its size, keeping the height (Top, Bottom) or width (Left, Right); Fill takes all the space the others leave; only on the form itself |
 | `AutoSize` | bool | `False` | Resize to fit the picture |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A sunken border around the picture |
 | `Picture` | file path | `''` | Image file (relative to the form's folder) |
@@ -1034,7 +1044,7 @@ All constants are plain ints or strings.
 | Strings | `vpCr`, `vpLf`, `vpCrLf`, `vpNewLine`, `vpTab`, `vpNullString` | `'\r'`, `'\n'`, `'\r\n'`, `'\n'`, `'\t'`, `''` |
 | Label.TextFormat | `vpPlainText`, `vpRichText`, `vpMarkdown` | 0, 1, 2 |
 | ScrollBars (TextBox, PictureBox) | `vpSBNone`, `vpHorizontal`, `vpVertical`, `vpBoth` | 0, 1, 2, 3 |
-| PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight` | 0, 1, 2, 3, 4 |
+| PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight`, `vpAlignFill` | 0, 1, 2, 3, 4, 5 |
 | TreeView: Nodes.Add relationship | `vpTvwFirst`, `vpTvwLast`, `vpTvwNext`, `vpTvwPrevious`, `vpTvwChild` | 0, 1, 2, 3, 4 |
 | TreeView.LineStyle | `vpTvwTreeLines`, `vpTvwRootLines` | 0, 1 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |

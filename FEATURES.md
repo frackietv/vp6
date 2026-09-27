@@ -1,5 +1,18 @@
 # VP6 features
 
+**Version:** 0.3.20
+**Date:** 2026-09-30
+
+## Controls
+
+- PictureBox `Align = 5 - Fill` (`vpAlignFill`): the PictureBox takes all the space the edge panes (Top, Bottom, Left, Right, Splitters) leave, placed after them whatever its creation order, and follows that space as the form resizes or a Splitter is dragged; several Fill panes share the space (hidden ones take none), e.g. one page per pane
+
+## Kitchen Sink
+
+- frmEmbedded is laid out with two docked panes instead of Form_Resize code: `picButtons` at the bottom and `picInfo` filling the rest, each sizing what is on it in its Resize event
+
+---
+
 **Version:** 0.3.19
 **Date:** 2026-09-30
 

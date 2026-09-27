@@ -94,6 +94,7 @@ vpAlignTop = 1
 vpAlignBottom = 2
 vpAlignLeft = 3
 vpAlignRight = 4
+vpAlignFill = 5
 
 # --- TreeView: Nodes.Add relationship ----------------------------------------
 vpTvwFirst = 0

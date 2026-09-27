@@ -5,8 +5,8 @@ import os
 import pytest
 from PySide6.QtCore import QPoint, QRect
 
-from vp6 import (Form, Frame, Label, Menu, PictureBox, formfile, vpAlignBottom, vpAlignLeft,
-                 vpAlignNone, vpAlignRight, vpAlignTop)
+from vp6 import (Form, Frame, Label, Menu, PictureBox, Splitter, formfile, vpAlignBottom,
+                 vpAlignFill, vpAlignLeft, vpAlignNone, vpAlignRight, vpAlignTop)
 from vp6.ide.designer import FormDesigner
 from vp6.ide.documents import FormDocument
 
@@ -152,5 +152,37 @@ def test_in_the_designer(qapp, tmp_path):
     d.close()
 
 
+def test_fill_takes_the_space_left(qapp):
+    class Explorer(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 600, 400
+            self.picContent = PictureBox(self, Align=vpAlignFill)  # created first, placed last
+            self.picNav = PictureBox(self, Align=vpAlignLeft, Width=150)
+            self.splNav = Splitter(self, Align=vpAlignLeft)
+            self.picStatus = PictureBox(self, Align=vpAlignBottom, Height=24)
+            self.picOther = PictureBox(self, Align=vpAlignFill, Visible=False)
+
+        def Form_Load(self):
+            self.sizes = []
+
+        def picContent_Resize(self):
+            self.sizes.append((self.picContent.Left, self.picContent.Width))
+
+    form = Explorer()
+    form.Show()
+    assert _place(form.picContent) == (156, 0, 444, 376)
+    form.splNav._resize_pane(150, 50)  # the user drags the Splitter
+    assert _place(form.picContent) == (206, 0, 394, 376)
+    assert form.sizes[-1] == (206, 394)
+    form.Width = 800
+    assert _place(form.picContent) == (206, 0, 594, 376)
+    form.picOther.Visible = True  # several Fill panes share the space (e.g. pages)
+    assert _place(form.picOther) == _place(form.picContent)
+    form.picNav.Visible = False
+    assert _place(form.picContent)[0] == 6  # only the Splitter left of it now
+    form.Unload()
+
+
 def test_constants():
-    assert (vpAlignNone, vpAlignTop, vpAlignBottom, vpAlignLeft, vpAlignRight) == (0, 1, 2, 3, 4)
+    assert (vpAlignNone, vpAlignTop, vpAlignBottom, vpAlignLeft, vpAlignRight, vpAlignFill) == \
+        (0, 1, 2, 3, 4, 5)

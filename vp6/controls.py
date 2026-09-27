@@ -1185,9 +1185,10 @@ class PictureBox(Control):
         P("AutoSize", "bool", False, description="Resize to fit the picture"),
         P("BorderStyle", "enum", 1, enum_choices("None", "Fixed Single"),
           description="A sunken border around the picture"),
-        P("Align", "enum", 0, enum_choices("None", "Top", "Bottom", "Left", "Right"),
+        P("Align", "enum", 0, enum_choices("None", "Top", "Bottom", "Left", "Right", "Fill"),
           description="Dock to that edge of the form and follow its size, keeping the height "
-                      "(Top, Bottom) or width (Left, Right); only on the form itself"),
+                      "(Top, Bottom) or width (Left, Right); Fill takes all the space the "
+                      "others leave; only on the form itself"),
         P("ScrollBars", "enum", 0, enum_choices("None", "Horizontal", "Vertical", "Both"),
           description="Scroll bars that appear when the controls in it reach beyond its "
                       "edges (at run time); the picture stays in place"),

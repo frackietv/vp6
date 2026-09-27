@@ -295,16 +295,21 @@ class Form(PropertyHost):
         """Dock the PictureBoxes whose Align is set to the edges of the form's
         client area, in the order they were created: each takes its edge of
         the space the earlier ones left, keeping its height (Top, Bottom) or
-        width (Left, Right). Hidden ones take no space (at run time)."""
+        width (Left, Right). Then Fill ones take all the space left. Hidden
+        ones take no space (at run time)."""
         area = self._container_widget().rect()
         left, top, right, bottom = 0, 0, area.width(), area.height()
         places = []  # (widget, rect): computed first, applied below
+        fills = []  # Align = Fill: the space the others leave, after them
         for control in self._controls:
             align = control._values.get("Align", 0) if "Align" in control._specs else 0
             widget = control._widget
             if not align or widget is None or control.Parent is not self:
                 continue
             if not self._design_mode and not control._values.get("Visible", True):
+                continue
+            if align == 5:  # Fill
+                fills.append(widget)
                 continue
             width, height = max(right - left, 0), max(bottom - top, 0)
             # Its thickness: the Height (Top, Bottom) or Width (Left, Right) it was given
@@ -326,12 +331,14 @@ class Form(PropertyHost):
                 size = min(thick_w, width)
                 places.append((widget, QRect(right - size, top, size, height)))
                 right -= size
+        rest = QRect(left, top, max(right - left, 0), max(bottom - top, 0))
+        places += [(widget, rest) for widget in fills]
+        self.__dict__["_free_area"] = (left, top, right, bottom)  # what the edge panes left
         # Moves first, resizes last: a pane's Resize handler then sees every
         # pane (e.g. the Splitter beside it) already in its new place
         places.sort(key=lambda place: place[0].size() != place[1].size())
         for widget, rect in places:
             widget.setGeometry(rect)
-        self.__dict__["_free_area"] = (left, top, right, bottom)  # what the panes left
 
     def _base_dir(self) -> str:
         module = sys.modules.get(type(self).__module__)

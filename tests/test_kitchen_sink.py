@@ -242,7 +242,11 @@ def test_kitchen_sink_embedded_form(sink_forms):
     buttons = embedded.picButtons  # Align = Bottom: docked, following the form's size
     assert (buttons.Left, buttons.Top, buttons.Width) == (0, embedded.ScaleHeight - 40,
                                                           embedded.ScaleWidth)
-    assert embedded.cmdPop.Width == buttons.Width - 16  # its Form_Resize ran
+    assert embedded.cmdPop.Width == buttons.Width - 16  # picButtons_Resize ran
+    info = embedded.picInfo  # Align = Fill: the rest of the form
+    assert (info.Left, info.Top, info.Width, info.Height) == (0, 0, embedded.ScaleWidth,
+                                                              embedded.ScaleHeight - 40)
+    assert embedded.lblInfo.Width == info.Width - 16  # picInfo_Resize ran
     assert embedded.lblInfo._widget.textFormat() == Qt.MarkdownText  # a Markdown caption
     embedded.lblInfo._widget.linkActivated.emit("popout")  # its [Pop it out](popout) link
     assert embedded.Container is None

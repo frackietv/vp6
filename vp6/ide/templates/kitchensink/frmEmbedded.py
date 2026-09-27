@@ -9,24 +9,30 @@ class frmEmbedded(Form):
         self.Caption = 'Embedded form'
         self.Width = 144
         self.Height = 300
-        self.lblInfo = Label(self, TextFormat=2,
+        self.picInfo = PictureBox(self, Left=0, Top=0, Width=144, Height=260, BorderStyle=0,
+                                  Align=5, TabIndex=1,
+                                  ToolTipText='Align = 5 - Fill: the space the button pane leaves')
+        self.lblInfo = Label(self.picInfo, TextFormat=2,
                              Caption="A **form of its own**, shown in Form1's PictureBox with `ShowIn`.\n\nIt is taller than the pane, so the pane *scrolls* (ScrollBars = Vertical).\n\n[Pop it out](popout) or scroll down to the button.",
-                             Left=8, Top=8, Width=128, Height=200, WordWrap=True, TabIndex=1)
+                             Left=8, Top=8, Width=128, Height=200, WordWrap=True, TabIndex=2)
         self.picButtons = PictureBox(self, Left=0, Top=260, Width=144, Height=40, BorderStyle=0,
-                                     Align=2, TabIndex=2,
+                                     Align=2, TabIndex=3,
                                      ToolTipText='Align = 2 - Bottom: docked to the bottom edge')
         self.cmdPop = CommandButton(self.picButtons, Caption='Pop &out', Left=8, Top=4, Width=128,
-                                    Height=32, TabIndex=3,
+                                    Height=32, TabIndex=4,
                                     ToolTipText='Show this form in a window of its own, or put it back')
     # endregion
 
     def Form_Load(self):
         self.home = None  # the container it was in before popping out
 
-    def Form_Resize(self):
-        # In a container, the form fills it and follows its size. The button's
-        # PictureBox has Align = Bottom, so it stays docked at the bottom by itself
-        self.lblInfo.Width = max(self.ScaleWidth - 16, 16)
+    # In a container, the form fills it and follows its size. Its two panes dock
+    # by themselves: picButtons at the bottom (Align = Bottom) and picInfo in the
+    # rest (Align = Fill); each one's Resize event sizes what is on it
+    def picInfo_Resize(self):
+        self.lblInfo.Width = max(self.picInfo.Width - 16, 16)
+
+    def picButtons_Resize(self):
         self.cmdPop.Width = max(self.picButtons.Width - 16, 16)
 
     def lblInfo_LinkClick(self, URL):
