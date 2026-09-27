@@ -24,7 +24,7 @@ FRAME_STYLES = {
     MACOS: "macOS",
     WINDOWS: "Windows 11",
     GNOME: "Linux (GNOME)",
-    CLASSIC: "Classic (Visual Basic 6)",
+    CLASSIC: "Classic (VB6)",
 }
 
 

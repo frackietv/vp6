@@ -429,6 +429,14 @@ prepended to `PYTHONPATH` for programs started with F5.
     window's editor, or with a designer current, its form's code window
     (opened if needed). `find_dialog` is one non-modal `FindReplaceDialog`,
     created when first needed.
+  * **Placing windows:** `_activate(sub, content_size)` fits a subwindow
+    that wasn't showing into the MDI area with `_fit_subwindow`: a new
+    designer's window is just large enough for `FormDesigner.preferred_size()`
+    plus the subwindow's title bar and borders (`contentsMargins`), or fills
+    the area when that doesn't fit (a geometry, not the maximized state,
+    which would maximize later windows too); others keep their size, shrunk
+    if needed, and are moved inside. Before the main window is shown the
+    area has no size, so they wait in `_pending_fits` for `showEvent`.
   * **Menu Editor:** `act_menu_editor` (Tools > Menu Editor, Ctrl+E) runs
     `show_menu_editor`, which opens it for `_current_designer()`: the active
     designer, or the designer of the form whose code window is active.
@@ -541,7 +549,8 @@ The form designer (architecture §5.3).
     use keys; `key_of(control)` gives a live control's key.
   * **Building:** `load_def(form_def)`, `_instantiate`, `_prepare_widget`
     (NoFocus), `_layout_form` (below the frame's title bar),
-    `update_canvas_size`. `eventFilter` calls `update_canvas_size` on the
+    `update_canvas_size`, `preferred_size()` (what shows the whole form, used
+    to size its window). `eventFilter` calls `update_canvas_size` on the
     scroll area viewport's resize, so the canvas fills the window after
     maximize and restore.
   * **Scheme and frame:** `set_project_scheme`, `refresh_scheme` (also on
@@ -1019,7 +1028,7 @@ All tests run headless. `conftest.py`:
 | `test_line.py` | The Line control: its widget following the points, drawing (color, Transparent, Visible, the scheme's text color by default), clicks going through it, ZIndex; the form file; in the designer: drawing from press to release and by a click, selecting near the line (not its box), dragging an end, the move cursor over an end, moving, arrow keys (no resizing), undo, pasting with an offset, the Properties rows, no event stub; the Toolbox button and icon. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
-| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`. |
+| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is. |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |

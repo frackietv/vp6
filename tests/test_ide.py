@@ -1,7 +1,7 @@
 import os
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtTest import QTest
 
 from conftest import wait_for
@@ -545,3 +545,70 @@ def test_bottom_tabs_after_restoring_a_side_by_side_layout(qapp, tmp_path):
     QTest.qWait(20)
     assert second.output_dock in second.tabifiedDockWidgets(second.immediate_dock)
     second.close()
+
+
+# --- sizing and placing windows in the MDI area --------------------------------------------------
+
+def _inside(window, sub) -> bool:
+    return window.mdi.viewport().rect().contains(sub.geometry())
+
+
+def test_a_form_window_is_just_large_enough_for_the_form(window, tmp_path):
+    window.resize(1600, 1000)
+    QTest.qWait(20)
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))  # Form1: 480 x 360
+    sub = window.mdi.currentSubWindow()
+    designer = sub.widget()
+    frame = sub.contentsMargins()
+    wanted = designer.preferred_size()
+    assert sub.size() == QSize(wanted.width() + frame.left() + frame.right(),
+                               wanted.height() + frame.top() + frame.bottom())
+    assert sub.size().width() < window.mdi.viewport().width()  # not maximized
+    assert designer.form_canvas_rect().width() == 480  # the whole form shows
+    assert _inside(window, sub) and not sub.isMaximized()
+
+
+def test_a_form_too_big_for_the_area_fills_it(window, tmp_path):
+    window.resize(900, 600)  # the Kitchen Sink's Form1 (920 wide) can't fit
+    QTest.qWait(20)
+    window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
+    sub = window.mdi.currentSubWindow()
+    assert sub.geometry() == window.mdi.viewport().rect()  # as large as maximized
+    assert not sub.isMaximized()  # so the next windows aren't maximized too
+
+
+def test_other_windows_open_inside_the_area(window, tmp_path):
+    window.resize(1000, 700)
+    QTest.qWait(20)
+    window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
+    folder = tmp_path / "Sink"
+    for path in ("Module1.py", "Form1.py", "frmDialog.py"):
+        window.view_code(str(folder / path))
+        sub = window.code_windows[str(folder / path)]
+        assert _inside(window, sub), path
+    dialog = window.view_object(str(folder / "frmDialog.py"))
+    assert _inside(window, window.designer_windows[str(folder / "frmDialog.py")])
+    assert dialog.form_canvas_rect().width() == dialog.form.Width
+    # A window moved partly out and closed comes back inside
+    sub = window.code_windows[str(folder / "Module1.py")]
+    sub.move(900, 600)
+    sub.close()
+    window.view_code(str(folder / "Module1.py"))
+    assert _inside(window, sub)
+
+
+def test_windows_opened_before_the_ide_shows_are_fitted_when_it_does(qapp, tmp_path):
+    w = MainWindow()
+    w.resize(1600, 1000)
+    w.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    sub = w.mdi.subWindowList()[0]
+    w.show()
+    QTest.qWait(50)
+    wanted = sub.widget().preferred_size()
+    frame = sub.contentsMargins()
+    assert sub.width() == wanted.width() + frame.left() + frame.right()
+    assert _inside(w, sub)
+    for doc in w.documents.values():
+        doc.text_document.setModified(False)
+    w.close_project()
+    w.close()

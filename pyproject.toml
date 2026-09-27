@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vp6"
-version = "0.3.13"
-description = "A Visual Basic 6 style IDE and GUI framework for Python"
+version = "0.3.14"
+description = "VB6-style IDE and GUI framework for Python"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["PySide6>=6.6"]

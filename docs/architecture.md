@@ -9,7 +9,7 @@ settings). For a file-by-file breakdown see
 
 ## 1. Goals and guiding decisions
 
-VP6 recreates the Visual Basic 6 experience for Python: draw a form, set
+VP6 recreates the VB6 experience for Python: draw a form, set
 properties, double-click a control to write its event handler, press F5.
 Several decisions shape the whole code base:
 

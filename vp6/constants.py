@@ -1,4 +1,4 @@
-"""Visual Basic 6 compatible constants (vpOK, vpYesNo, vpKeyReturn, ...)."""
+"""VB6-compatible constants (vpOK, vpYesNo, vpKeyReturn, ...)."""
 
 # --- MsgBox buttons ---------------------------------------------------------
 vpOKOnly = 0

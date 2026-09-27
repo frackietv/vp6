@@ -223,7 +223,7 @@ class ProjectPropertiesDialog(QDialog):
 
 ABOUT_HTML = f"""
 <h2>VP6 {vp6.__version__}</h2>
-<p>A Visual Basic 6 style IDE and framework for Python.</p>
+<p>A VB6 style IDE and framework for Python.</p>
 <p>Draw forms with the Toolbox, set properties in the Properties window,
 double-click a control to write its event handler, press <b>F5</b> (or <b>Cmd+Enter</b> on macOS, <b>Ctrl+Enter</b> elsewhere) to run.</p>
 <p>Handlers are ordinary methods named <code>ControlName_EventName</code>, e.g.

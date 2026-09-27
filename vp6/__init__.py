@@ -1,4 +1,4 @@
-"""VP6 - Visual Basic 6 style GUI programming for Python.
+"""VP6 - VB6-style GUI programming for Python.
 
     from vp6 import *
 """
@@ -16,7 +16,7 @@ from .controls import (CheckBox, ComboBox, CommandButton, Control, ControlArray,
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
 
-__version__ = "0.3.13"
+__version__ = "0.3.14"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen",

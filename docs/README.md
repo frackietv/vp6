@@ -1,6 +1,6 @@
 # VP6 documentation
 
-VP6 is a Visual Basic 6 style IDE and GUI framework for Python, built on
+VP6 is a VB6-style IDE and GUI framework for Python, built on
 PySide6 (Qt).
 
 | Document | Read it to… |

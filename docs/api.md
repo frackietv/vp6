@@ -6,7 +6,7 @@ Everything a VP6 program can use after:
 from vp6 import *
 ```
 
-The API follows Visual Basic 6 naming: PascalCase properties and methods
+The API follows VB6-style naming: PascalCase properties and methods
 (`Caption`, `Show()`), event handlers named `Object_Event`, and constants
 with a `vp` prefix (VB's `vbYes` is `vpYes`). Positions and sizes are in
 **pixels**.
@@ -26,7 +26,7 @@ Contents:
 7. [Color schemes (light/dark)](#7-color-schemes-lightdark)
 8. [Constants](#constants)
 9. [Projects and running programs](#9-projects-and-running-programs)
-10. [Differences from Visual Basic 6](#10-differences-from-visual-basic-6)
+10. [Differences from VB66](#10-differences-from-visual-basic-6)
 
 ---
 
@@ -963,7 +963,7 @@ format.
 
 ---
 
-## 10. Differences from Visual Basic 6
+## 10. Differences from VB6
 
 * **The language is Python.** `Me` is `self`, handlers are methods, and there
   are no `Dim` statements.

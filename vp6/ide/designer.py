@@ -599,9 +599,14 @@ class FormDesigner(QWidget):
         self.refresh_scheme()  # also redraws the grid (it can be turned off)
         self._layout_form()
 
-    def update_canvas_size(self) -> None:
+    def preferred_size(self) -> QSize:
+        """The size that shows the whole form: its window frame plus the margin
+        and room for the selection handles around it."""
         frame = self.canvas.form_frame_rect()
-        size = QSize(frame.right() + MARGIN + HANDLE, frame.bottom() + MARGIN + HANDLE)
+        return QSize(frame.right() + MARGIN + HANDLE, frame.bottom() + MARGIN + HANDLE)
+
+    def update_canvas_size(self) -> None:
+        size = self.preferred_size()
         # The canvas paints the workspace, so it covers the whole visible area
         self.canvas.resize(size.expandedTo(self.scroll.viewport().size()))
         self.overlay.setGeometry(self.canvas.rect())

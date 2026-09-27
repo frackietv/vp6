@@ -1,6 +1,6 @@
 # VP6
 
-Visual Basic 6 style programming for Python: an IDE where you draw forms,
+VB6-style programming for Python: an IDE where you draw forms,
 set properties, double-click a control to write its event handler and press
 **F5** to run, plus the `vp6` framework that makes the resulting code work
 (also usable without the IDE).
@@ -44,7 +44,7 @@ The IDE opens with a VB-style **New Project** dialog. Every new project has
 | Menu Editor (Ctrl+E)        | Tools > Menu Editor designs the form's menus like VB's: Caption (`-` for a separator), Name, Index, Shortcut, Checked, Enabled, Visible, with arrows to indent and move items. The designer shows the menu bar; click a menu to see it and an item to open its Click code |
 | Format menu                 | Align, Make Same Size, Center in Form, Bring to Front (Ctrl+J), Send to Back (Ctrl+K) |
 | Run (F5 or Cmd+Enter / Ctrl+Enter, Shift+F5, End) | Saves everything and runs the project in a separate process; the title shows `[design]` / `[run]` |
-| Toolbar and layout          | Sun/moon switch at the right end of the toolbar toggles light/dark; View > Toolbars shows a hidden toolbar; View > Reset Window Layout restores all panels; panels at the bottom edge are always tabs |
+| Toolbar and layout          | Sun/moon switch at the right end of the toolbar toggles light/dark; View > Toolbars shows a hidden toolbar; View > Reset Window Layout restores all panels; panels at the bottom edge are always tabs; a form's window opens just large enough to show the whole form (or filling the main area when it can't), and every window opens inside the main area |
 
 ### Themes: light and dark
 

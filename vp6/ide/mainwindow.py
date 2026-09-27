@@ -6,7 +6,7 @@ import os
 import shutil
 import sys
 
-from PySide6.QtCore import QProcess, QProcessEnvironment, Qt, QTimer
+from PySide6.QtCore import QProcess, QProcessEnvironment, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QDockWidget, QFileDialog, QLineEdit, QMainWindow, QMdiArea,
@@ -52,6 +52,7 @@ class MainWindow(QMainWindow):
         self.current_tool: str | None = None
         self._last_designer: FormDesigner | None = None
         self.find_dialog: FindReplaceDialog | None = None  # created when first needed
+        self._pending_fits: list = []  # subwindows to fit once the window is shown
         self._icon_actions: list[tuple[QAction, str]] = []
 
         # The whole IDE follows the light/dark choice of the editor theme
@@ -853,12 +854,17 @@ class MainWindow(QMainWindow):
         sub.resize(760, 520)
         return sub
 
-    def _activate(self, sub: QMdiSubWindow):
+    def _activate(self, sub: QMdiSubWindow, content_size: QSize | None = None):
+        """Show and activate a subwindow. One that wasn't showing is fitted into
+        the MDI area (see _fit_subwindow)."""
+        appearing = not sub.isVisible()
         # Closing a subwindow keeps it for reuse (WA_DeleteOnClose is off), but
         # Qt also closes - i.e. hides - the widget inside it. Show both, or a
         # reopened code window or designer would be an empty frame.
         sub.widget().show()
         sub.show()
+        if appearing:
+            self._fit_subwindow(sub, content_size)
         if sub.isMinimized():
             sub.showNormal()
         self.mdi.setActiveSubWindow(sub)
@@ -908,12 +914,50 @@ class MainWindow(QMainWindow):
         if not isinstance(doc, FormDocument):
             return None
         sub = self.designer_windows.get(path)
+        content_size = None
         if sub is None:
-            sub = self._add_subwindow(self._designer_for(path), "Form")
+            designer = self._designer_for(path)
+            sub = self._add_subwindow(designer, "Form")
             self.designer_windows[path] = sub
             self._update_window_titles()
-        self._activate(sub)
+            content_size = designer.preferred_size()  # a new window shows the whole form
+        self._activate(sub, content_size)
         return sub.widget()
+
+    def _fit_subwindow(self, sub: QMdiSubWindow, content_size: QSize | None = None) -> None:
+        """Keep a subwindow entirely inside the MDI area. With a content size
+        (a new designer: its whole form), the window is just large enough to
+        show it, or, if that doesn't fit, as large as the area (like maximized,
+        without maximizing, which would maximize the next windows too).
+        Otherwise it keeps its size, made smaller if needed. Until the main
+        window is shown the area has no size yet: done later, in showEvent."""
+        area = self.mdi.viewport().rect()
+        if not self.isVisible() or area.width() < 100 or area.height() < 100:
+            self._pending_fits.append((sub, content_size))
+            return
+        if content_size is not None:
+            frame = sub.contentsMargins()  # title bar and borders
+            size = QSize(content_size.width() + frame.left() + frame.right(),
+                         content_size.height() + frame.top() + frame.bottom())
+            if size.width() > area.width() or size.height() > area.height():
+                sub.setGeometry(area)
+                return
+        else:
+            size = sub.size().boundedTo(area.size())
+        sub.resize(size)
+        sub.move(max(0, min(sub.x(), area.width() - size.width())),
+                 max(0, min(sub.y(), area.height() - size.height())))
+
+    def _fit_pending_subwindows(self) -> None:
+        pending, self._pending_fits = self._pending_fits, []
+        for sub, content_size in pending:
+            if sub in self.mdi.subWindowList() and sub.isVisible():
+                self._fit_subwindow(sub, content_size)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._pending_fits:  # after the layout has given the MDI area its size
+            QTimer.singleShot(0, self, self._fit_pending_subwindows)
 
     def view_code(self, path: str) -> CodeWindow | None:
         doc = self.documents.get(path)
