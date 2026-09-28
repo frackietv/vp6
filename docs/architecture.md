@@ -39,6 +39,7 @@ vp6/                    runtime library - "from vp6 import *"
   formfile.py           parse/generate the designer region of form files
   project.py            .vp6p project files (executable launcher scripts)
   runner.py             run a project (form or Sub Main)
+  make.py               make a standalone executable of a project (PyInstaller)
   ide/                  the IDE - "python -m vp6.ide" or the "vp6" command
     __main__.py         entry point
     mainwindow.py       MainWindow: menus, docks, MDI, running programs

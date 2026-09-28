@@ -1644,6 +1644,49 @@ The IDE maintains this dict; code you add elsewhere in the file is kept. See
 [architecture.md §6.2](architecture.md#62-project-files-vp6p) for the full
 format.
 
+### Making an executable
+
+A program can be made a standalone executable that runs without Python,
+PySide6 or VP6 installed, like VB's **File > Make Project1.exe**: in the IDE
+**File > Make Executable…**, or
+
+```bash
+pip install "vp6[make]"                             # PyInstaller and Pillow
+vp6-make Calculator.vp6p                            # or: python -m vp6.make ...
+vp6-make Calculator.vp6p --onefile                  # one file instead of a folder
+vp6-make Calculator.vp6p --dist /some/folder        # elsewhere than the project's dist
+```
+
+It goes in the project's `dist` folder:
+
+| System | Windowed program | Console program |
+|---|---|---|
+| macOS | `Calculator.app` | `Calculator/Calculator` (or one `Calculator` file) |
+| Windows | `Calculator\Calculator.exe` (or one `Calculator.exe`) | the same |
+| Linux | `Calculator/Calculator` (or one `Calculator` file) | the same |
+
+* **Make it on each system.** PyInstaller, which bundles the program, makes
+  executables only for the system it runs on: the Windows one on Windows
+  (10 or 11), the Linux one on Linux, the macOS one on macOS. The
+  repository's GitHub Actions workflow (`.github/workflows/executables.yml`)
+  does this for the three, making and running a test program and making the
+  Calculator sample; copy it for your own program.
+* **What goes in:** the project's files as they are, in the same folders
+  (forms, modules, pictures, data files, the project file), except `dist`,
+  `build`, `__pycache__` and hidden files; everything their code imports
+  (found by reading it), and VP6 with PySide6. The program then runs as
+  from the project's folder: forms find their pictures, and relative paths
+  in your code (`open("data/words.txt")`) find the bundled files. A module
+  imported in an unusual way (`importlib.import_module(name)`) isn't seen:
+  import it somewhere plainly too.
+* **The icon** is the project's (its largest size), else the VP6 icon.
+* **Size:** around 100 MB, most of it Qt; one file starts more slowly (it
+  unpacks itself first) and can't be made of a windowed macOS program (an
+  app is a folder).
+* **Files the program writes** go where it runs from: inside the app or
+  folder, or, for one file, a temporary folder that is removed when it ends.
+  Write lasting files elsewhere, e.g. under the user's home folder.
+
 ---
 
 ## 10. Differences from VB6
@@ -1687,4 +1730,7 @@ format.
 * **StatusBar** panels have no `Picture` or `Bevel`, and the lock-key
   panels read the key state from the system on Windows (all four keys) and
   macOS (Caps Lock only); elsewhere they show the key as off.
+* **Making an executable** (File > Make Executable…) bundles Python with the
+  program, so it is large (around 100 MB) and made for the system it is made
+  on (see [Making an executable](#making-an-executable)).
 * **Not implemented yet:** see [BACKLOG.md](../BACKLOG.md).

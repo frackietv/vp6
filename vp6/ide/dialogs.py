@@ -1,13 +1,14 @@
-"""New Project, Project Properties and About dialogs."""
+"""New Project, Project Properties, Make Executable and About dialogs."""
 
 from __future__ import annotations
 
 import os
+import sys
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QPushButton, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -272,3 +273,49 @@ class AboutDialog(QDialog):
         layout.addWidget(self.text)
         layout.addWidget(buttons)
         layout.setSizeConstraint(QVBoxLayout.SetFixedSize)
+
+
+class MakeDialog(QDialog):
+    """File > Make Executable...: what will be made, and where (the options of
+    vp6.make)."""
+
+    SYSTEMS = {"darwin": "macOS", "win32": "Windows"}
+
+    def __init__(self, project: Project, parent=None):
+        from ..make import can_be_one_file, output_path
+
+        super().__init__(parent)
+        self.setWindowTitle("Make Executable")
+        self.project = project
+        dist = os.path.join(project.directory, "dist")
+        system = self.SYSTEMS.get(sys.platform, "Linux")
+        intro = QLabel(
+            f"Make <b>{project.name}</b> a standalone program for {system}: it runs "
+            "without Python or VP6 installed. It goes in the project's <b>dist</b> "
+            "folder.<br><br>For another system, make it on that system: executables are "
+            "made for the system they are made on.")
+        intro.setWordWrap(True)
+        self.onefile = QCheckBox("One file instead of a folder (it starts more slowly)")
+        if not can_be_one_file(project):
+            self.onefile.setEnabled(False)
+            self.onefile.setToolTip("On macOS a windowed program is an app, which is a folder")
+        self.where = QLabel()
+        self.where.setWordWrap(True)
+        self.where.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+        def show_where():
+            path = output_path(project, dist, self.onefile.isChecked())
+            self.where.setText(f"It will be: {path}")
+
+        self.onefile.toggled.connect(show_where)
+        show_where()
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setText("Make")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
+        layout.addWidget(self.onefile)
+        layout.addWidget(self.where)
+        layout.addWidget(buttons)
+        self.resize(460, 0)

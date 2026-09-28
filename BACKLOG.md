@@ -1,5 +1,6 @@
 # VP6 backlog
 
+- **[Distribution and tooling]** Publishing VP6 as an installable package (e.g. on PyPI)
 - **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)
 - **[Controls]** ListBox/ComboBox completeness: `NewIndex`, `TopIndex`, `SelCount`, ListBox `Style = Checkbox` with the `ItemCheck` event, ComboBox `Style = 1` (simple combo) and the `DropDown` event
 - **[Controls]** Label access keys: `&` in a Label's Caption underlines the letter and Alt+letter focuses the next control in the tab order, as in VB (today the `&` is just removed), plus `UseMnemonic`
@@ -41,8 +42,6 @@
 - **[IDE - Debugging]** breakpoints, stepping, watches
 - **[IDE - Debugging]** evaluating expressions in the Immediate window
 - **[IDE - Debugging]** editing code while the program is paused
-- **[Distribution and tooling]** Packaging a program as a standalone executable
-- **[Distribution and tooling]** Publishing VP6 as an installable package (e.g. on PyPI)
 - **[Language and runtime]** Font enumeration: `Screen.Fonts` / `Screen.FontCount` (self-hosting: the Options font list, the FontName editor)
 - **[Language and runtime]** An event when the OS switches between light and dark, and a way to ask which one is active (self-hosting: repainting custom-drawn surfaces and icons)
 - **[Language and runtime]** MDI forms (MDI parent and child forms)

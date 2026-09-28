@@ -6,8 +6,9 @@ import os
 import shutil
 import sys
 
-from PySide6.QtCore import QEvent, QFile, QProcess, QProcessEnvironment, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QColor, QKeySequence
+from PySide6.QtCore import (QEvent, QFile, QProcess, QProcessEnvironment, QSize, Qt, QTimer,
+                            QUrl)
+from PySide6.QtGui import QAction, QActionGroup, QColor, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QDockWidget, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMdiArea,
     QMdiSubWindow, QMessageBox, QPlainTextEdit, QSizePolicy, QTabWidget, QWidget,
@@ -22,7 +23,7 @@ from ..project import EXTENSION, SUB_MAIN, Project
 from . import icons, kitchensink
 from .codeeditor import CodeWindow
 from .designer import FormDesigner, is_identifier
-from .dialogs import AboutDialog, NewProjectDialog, ProjectPropertiesDialog
+from .dialogs import AboutDialog, MakeDialog, NewProjectDialog, ProjectPropertiesDialog
 from .splash import SplashScreen
 from .documents import Document, FormDocument, open_document
 from .findreplace import FindReplaceDialog, ask_line
@@ -51,6 +52,8 @@ class MainWindow(QMainWindow):
         self._designers: dict[str, FormDesigner] = {}
         self.code_windows: dict[str, QMdiSubWindow] = {}
         self.process: QProcess | None = None
+        self.make_process: QProcess | None = None  # File > Make Executable…, while it runs
+        self._made_path: str | None = None
         self.current_tool: str | None = None
         self._last_designer: FormDesigner | None = None
         self.find_dialog: FindReplaceDialog | None = None  # created when first needed
@@ -225,6 +228,7 @@ class MainWindow(QMainWindow):
         self.act_add_file = a("Add F&ile…", self.add_file, "Ctrl+D")
         self.act_add_folder = a("Add F&older…", self.add_folder)
         self.act_project_props = a("Project P&roperties…", self.project_properties)
+        self.act_make = a("&Make Executable…", self.make_executable)
         self.act_exit = a("E&xit", self.close, QKeySequence.Quit)
 
         self.act_undo = a("&Undo", lambda: self._edit("undo"), QKeySequence.Undo)
@@ -276,7 +280,7 @@ class MainWindow(QMainWindow):
         bar = self.menuBar()
         file_menu = bar.addMenu("&File")
         for act in (self.act_new, self.act_open, None, self.act_save, self.act_close, None,
-                    self.act_exit):
+                    self.act_make, None, self.act_exit):
             file_menu.addSeparator() if act is None else file_menu.addAction(act)
         self.recent_menu = file_menu.addMenu("Recent Projects")
         self.recent_menu.aboutToShow.connect(self._fill_recent_menu)
@@ -469,6 +473,9 @@ class MainWindow(QMainWindow):
         self.act_run.setEnabled(has_project and not self.running)
         self.act_restart.setEnabled(has_project)
         self.act_end.setEnabled(self.running)
+        # (it may be called while the window is being built)
+        making = getattr(self, "make_process", None) is not None
+        self.act_make.setEnabled(has_project and not making)
 
     def _doc_display_name(self, doc: Document) -> str:
         return doc.name
@@ -1544,6 +1551,76 @@ class MainWindow(QMainWindow):
         self.immediate.set_running(self.project.type == "console")
         self._update_title()
         self._update_actions()
+
+    # -- File > Make Executable… (vp6.make, in a process of its own) ----------------------------
+    def make_executable(self):
+        """Make a standalone executable of the project (VB's Make Project1.exe):
+        saves, asks the options, then runs vp6.make in the background,
+        showing its output in the Output window."""
+        if self.project is None or self.make_process is not None:
+            return
+        if not self.save_all():  # the executable has what is on disk
+            return
+        dialog = MakeDialog(self.project, self)
+        if dialog.exec():
+            self.start_make(dialog.onefile.isEnabled() and dialog.onefile.isChecked())
+
+    def _make_command(self, onefile: bool) -> tuple[str, list[str]]:
+        return sys.executable, ["-u", "-m", "vp6.make", self.project.path] + \
+            (["--onefile"] if onefile else [])
+
+    def start_make(self, onefile: bool = False):
+        self._show_dock(self.output_dock)
+        self.output.append(f"▶ Making an executable of {self.project.name}…\n", "info")
+        process = QProcess(self)
+        env = QProcessEnvironment.systemEnvironment()
+        python_path = env.value("PYTHONPATH", "")
+        env.insert("PYTHONPATH", VP6_ROOT + (os.pathsep + python_path if python_path else ""))
+        env.insert("PYTHONUNBUFFERED", "1")
+        env.insert("PYTHONIOENCODING", "utf-8")
+        process.setProcessEnvironment(env)
+        process.setWorkingDirectory(self.project.directory)
+        process.setProcessChannelMode(QProcess.MergedChannels)
+        process.readyReadStandardOutput.connect(self._on_make_output)
+        process.finished.connect(self._on_make_finished)
+        process.errorOccurred.connect(self._on_make_error)
+        self.make_process = process
+        self._made_path = None
+        process.start(*self._make_command(onefile))
+        self.statusBar().showMessage(f"Making {self.project.name}…")
+        self._update_actions()
+
+    def _on_make_output(self):
+        if self.make_process is None:
+            return
+        text = bytes(self.make_process.readAllStandardOutput()).decode("utf-8", "replace")
+        for line in text.splitlines():
+            if line.startswith("Made "):  # vp6.make's last word: where it is
+                self._made_path = line[len("Made "):].strip()
+        if text:
+            self.output.append(text if text.endswith("\n") else text + "\n")
+
+    def _on_make_finished(self, code, _status):
+        self._on_make_output()
+        self.make_process = None
+        self.statusBar().clearMessage()
+        self._update_actions()
+        if code == 0 and self._made_path:
+            self.output.append(f"■ Made {self._made_path}\n", "info")
+            box = QMessageBox(QMessageBox.Information, "Make Executable",
+                              f"Made {self._made_path}", QMessageBox.Ok, self)
+            show = box.addButton("Show in Folder", QMessageBox.ActionRole)
+            box.exec()
+            if box.clickedButton() is show:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(self._made_path)))
+        else:
+            self.output.append(f"■ Making the executable failed (exit code {code}).\n", "err")
+            QMessageBox.warning(self, "Make Executable", "Making the executable failed: its "
+                                "messages are in the Output window.")
+
+    def _on_make_error(self, error):
+        if error == QProcess.FailedToStart and self.make_process is not None:
+            self._on_make_finished(-1, QProcess.CrashExit)
 
     def stop_project(self):
         if self.process is not None:

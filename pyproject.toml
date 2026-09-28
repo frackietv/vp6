@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vp6"
-version = "0.3.35"
+version = "0.3.36"
 description = "VB6-style IDE and GUI framework for Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,10 +12,12 @@ dependencies = ["PySide6>=6.6"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
+make = ["pyinstaller>=6", "pillow"]  # vp6-make: standalone executables
 
 [project.scripts]
 vp6 = "vp6.ide.mainwindow:main"
 vp6-run = "vp6.runner:main"
+vp6-make = "vp6.make:main"
 
 [tool.setuptools.packages.find]
 include = ["vp6*"]

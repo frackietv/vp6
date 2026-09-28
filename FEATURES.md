@@ -1,5 +1,20 @@
 # VP6 features
 
+**Version:** 0.3.36
+**Date:** 2026-09-30
+
+## IDE
+
+- File > Make Executable… makes the project a standalone program that runs without Python, PySide6 or VP6 installed (VB's Make Project1.exe): a macOS app, a Windows .exe or a Linux program, in the project's `dist` folder, optionally as one file; its output shows in the Output window, and a message gives where it is (Show in Folder)
+
+## Projects and programs
+
+- `vp6-make Name.vp6p [--onefile] [--dist DIR]` (or `python -m vp6.make`) makes the executable from the command line, with PyInstaller (`pip install "vp6[make]"`)
+- The executable has the project's files in their folders (so forms find their pictures and code its data files), everything its code imports, VP6 and PySide6, and the project's icon
+- Executables are made for the system they are made on; a GitHub Actions workflow makes and runs one on Linux, Windows and macOS, and makes the Calculator sample for each
+
+---
+
 **Version:** 0.3.35
 **Date:** 2026-09-30
 

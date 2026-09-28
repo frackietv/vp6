@@ -478,6 +478,42 @@ architecture §6.2).
 * Constants: `EXTENSION = ".vp6p"`, `REGION_START` / `REGION_END`, and
   `_FIELDS` (the order the fields are written in).
 
+### `vp6/make.py` (≈200 lines)
+
+Makes a standalone executable of a project with PyInstaller: `vp6-make
+Name.vp6p [--onefile] [--dist DIR]`, `python -m vp6.make`, and the IDE's
+File > Make Executable…. PyInstaller makes executables for the system it
+runs on only.
+
+* `project_files(project)`: the files that go in (relative, with `/`), all
+  but `EXCLUDED_FOLDERS` (`build`, `dist`, `__pycache__`, `venv`), hidden
+  files and folders, and compiled files.
+* The project's code goes in as files, not as PyInstaller-analyzed modules,
+  so the runner imports it from the bundle as from the project's folder and
+  forms find their pictures relative to their files (`__file__`).
+  PyInstaller can't see what it imports, so `imported_modules(project)`
+  reads every `.py` file with `ast` for its top-level imports (absolute
+  ones; not the project's own modules) and they become `--hidden-import`s.
+* `launcher_source(project)` is the entry script: `run_project` on the
+  project file in `sys._MEIPASS` (where PyInstaller unpacks the bundle).
+* `pyinstaller_command(project, launcher, dist, work, onefile, platform)`:
+  `--console` or `--windowed` from the project's type; `--onefile` when
+  `can_be_one_file` (not a windowed program on macOS: apps are folders);
+  `--icon` (`icon_file`: the project's largest icon, else VP6's; none
+  without Pillow, which PyInstaller needs to convert PNGs); `--paths` to
+  VP6's own folder (an editable install's import hook is invisible to
+  PyInstaller) and VP6's `images` as data; an `--add-data` per project file,
+  into the same folder (`os.pathsep` between source and destination, as
+  PyInstaller wants on every system).
+* `make(project_path, dist, onefile, log)` writes the launcher into a
+  temporary work folder (also PyInstaller's work and spec folder, removed
+  afterwards), runs the command, passes its output to `log` line by line and
+  returns `output_path(...)`; `MakeError` without PyInstaller (`pip install
+  "vp6[make]"`), when PyInstaller fails, or when the result isn't there.
+  Its last line is `Made <path>`, which the IDE reads.
+* `main(argv)`: the `vp6-make` command (exit code 1 with the reason on
+  stderr).
+
 ### `vp6/runner.py` (≈95 lines)
 
 It's deliberately not named `run.py`: importing a `vp6.run` submodule would
@@ -605,6 +641,14 @@ prepended to `PYTHONPATH` for programs started with F5.
     (`_forget_document`, shared with `remove_file`). `_unique_file` picks a
     new form's or module's name and file in `explorer.selected_folder()`;
     `_relative(path)` is a path as the project lists it;
+  * **File > Make Executable…** (`act_make`, `make_executable`): saves
+    everything, asks with a `MakeDialog`, then `start_make(onefile)` runs
+    `python -u -m vp6.make` (`_make_command`) in a `QProcess` of its own
+    (`make_process`; the action is disabled meanwhile) with VP6 on its
+    PYTHONPATH, its output merged into the Output window
+    (`_on_make_output`, which notes the `Made <path>` line). When it ends
+    (`_on_make_finished`), a message box gives the path with **Show in
+    Folder**, or says it failed;
   * **groups** (the Project panel's, not folders): `new_group(parent)`
     (suggests an unused `GroupN`) and `rename_group(group)` ask with
     `QInputDialog.getText`; `delete_group(group)`; `move_items(items, target)`
@@ -1278,6 +1322,9 @@ explorer-style.
   `next_free_name`.
 * `ProjectPropertiesDialog` edits the name, type, startup object and color
   scheme (System / Light / Dark / Follow the IDE); `apply(project)`.
+* `MakeDialog(project)`: File > Make Executable…: what will be made and
+  where (`make.output_path`), and a "One file" check box, disabled where it
+  can't apply (`make.can_be_one_file`).
 * `AboutDialog` shows the logo (`logo_pixmap(width)`: `LOGO_PATH`,
   `vp6/ide/images/vp6logo.png`, a 720-pixel-wide copy of the repository's
   `images/vp6logo.png`, shown `LOGO_WIDTH` = 360 pixels wide at device pixel
@@ -1431,6 +1478,7 @@ All tests run headless. `conftest.py`:
 | `test_values.py` | ProgressBar (Value kept inside Min..Max, also when they change; orientation; Click), Slider (Scroll while dragging and one Change after, Change for code and keys, LargeChange, tick styles and frequency, orientation), UpDown (steps, Max without Wrap, Change / UpClick / DownClick, a TextBox buddy shown and read back, typed numbers clamped or ignored, Increment, wrapping, a Label buddy's Caption, BuddyProperty, a missing buddy, SyncBuddy off, horizontal arrows); the form file round trip; creating them in the designer (arrows inactive there); Toolbox, icons, default events and constants. |
 | `test_line.py` | The Line control: its widget following the points, drawing (color, Transparent, Visible, the scheme's text color by default), clicks going through it, ZIndex; the form file; in the designer: drawing from press to release and by a click, selecting near the line (not its box), dragging an end, the move cursor over an end, moving, arrow keys (no resizing), undo, pasting with an offset, the Properties rows, no event stub; the Toolbox button and icon. |
 | `test_listview.py` | The ListView: its designer lines (`parse_column`, `parse_list_item`); ListItems (Index and Key, SubItems read and set, Add at an Index, Text, Key changes, errors, Remove, Clear); ColumnHeaders (labels, widths, alignments of existing and new cells, a new column, HideColumnHeaders); the four views keeping one selection, MultiSelect; sorting by the Text or a SubItem (as text), new and renamed items sorted in; ItemClick, HitTest and ColumnClick from the mouse, ItemCheck from the user but not code, Checkboxes off; Icons in the Icon view and SmallIcons in the others, unknown ones raising, an ImageList's changes; the form file round trip; the designer (the Properties window's Columns and Items); Toolbox, icon and constants. |
+| `test_make.py` | Making executables: the files that go in (not `dist`, `build`, caches or hidden files), the modules their code imports (not the project's own, nor relative imports; files with syntax errors skipped), the launcher, where the result goes on each system (apps, folders, one file, `.exe`), the PyInstaller command (console or windowed, one file, the project's or VP6's icon and none without Pillow, `--add-data` into the same folders with `os.pathsep`, hidden imports, VP6's folder and icons), the message without PyInstaller, `make()` with PyInstaller faked, File > Make Executable… with the process faked (success with the path, failure); with `VP6_TEST_MAKE=1` a real one-file executable made and run (its output, its data file, a module in a subfolder, its exit code). |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu). |

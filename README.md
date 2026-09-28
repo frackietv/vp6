@@ -21,6 +21,11 @@ python3 -m venv .venv
 .venv/bin/vp6 --no-splash           # without the two-second splash screen
 ```
 
+To make standalone executables (File > Make Executable…, or `vp6-make
+Project.vp6p`), install PyInstaller too: `.venv/bin/pip install -e ".[dev,make]"`.
+Executables are made for the system they are made on (macOS, Windows,
+Linux); see [Making an executable](docs/api.md#making-an-executable).
+
 The IDE opens with a VB-style **New Project** dialog. Every new project has
 `Form1` and `Module1` and starts in `Sub Main`, the `Main()` function in
 `Module1`:
