@@ -26,7 +26,7 @@ From the source:
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/vp6                       # start the IDE (or: python -m vp6.ide)
-.venv/bin/vp6 samples/Calculator/Calculator.vp6p
+.venv/bin/vp6 path/to/Project.vp6p      # open a project
 .venv/bin/vp6 --no-splash           # without the two-second splash screen
 ```
 
@@ -218,13 +218,6 @@ from vp6 import *
 * Unhandled exceptions in event handlers show a VB-style *Run-time error*
   box with **End** / **Continue**, and the traceback goes to the Immediate
   window.
-
-## Samples
-
-* `samples/Calculator`: a calculator form with keyboard support. Its digit
-  and operator buttons are control arrays (`cmdDigit`, `cmdOperator`), each
-  with one handler.
-* `samples/GuessNumber`: a console application (`Sub Main`).
 
 ## Tests
 

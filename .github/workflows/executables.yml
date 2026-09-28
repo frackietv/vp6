@@ -1,6 +1,5 @@
 # Standalone executables on the three systems VP6 supports: PyInstaller makes
 # executables only for the system it runs on, so each is made (and run) there.
-# The made Calculator sample of each system is kept as a downloadable artifact.
 name: Standalone executables
 
 on:
@@ -34,9 +33,3 @@ jobs:
         env:
           VP6_TEST_MAKE: "1"
         run: python -m pytest -q tests/test_make.py
-      - name: Make the Calculator sample
-        run: vp6-make samples/Calculator/Calculator.vp6p
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Calculator-${{ runner.os }}
-          path: samples/Calculator/dist

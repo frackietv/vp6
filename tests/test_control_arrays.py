@@ -328,22 +328,3 @@ def test_code_window_and_completion(designer):
         complete("self.Command1.", doc)
     assert "Caption" in complete("self.Command1[0].", doc)
     assert "Caption" in complete("self.Command1(Index).", doc)
-
-
-# --- the Calculator sample ---------------------------------------------------------------------
-
-def test_calculator_sample_uses_control_arrays(qapp, monkeypatch):
-    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                          "samples", "Calculator")
-    monkeypatch.syspath_prepend(folder)
-    from frmCalculator import frmCalculator
-
-    form = frmCalculator()
-    form.Load()
-    assert form.cmdDigit.Count == 10 and form.cmdOperator.UBound == 4
-    for button in (form.cmdDigit[1], form.cmdDigit(2), form.cmdOperator[3],  # 12 +
-                   form.cmdDigit[3], form.cmdPoint, form.cmdDigit[5],        # 3.5
-                   form.cmdOperator[4]):                                      # =
-        button._widget.click()
-    assert form.txtDisplay.Text == "15.5"
-    form.Unload()

@@ -1718,8 +1718,8 @@ It goes in the project's `dist` folder:
   executables only for the system it runs on: the Windows one on Windows
   (10 or 11), the Linux one on Linux, the macOS one on macOS. The
   repository's GitHub Actions workflow (`.github/workflows/executables.yml`)
-  does this for the three, making and running a test program and making the
-  Calculator sample; copy it for your own program.
+  does this for the three, making and running a test program; copy it for
+  your own program.
 * **What goes in:** the project's files as they are, in the same folders
   (forms, modules, pictures, data files, the project file), except `dist`,
   `build`, `__pycache__` and hidden files; everything their code imports

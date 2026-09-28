@@ -3,7 +3,6 @@ contains, and its commands."""
 
 import fnmatch
 import importlib
-import os
 import re
 from pathlib import Path
 
@@ -56,9 +55,9 @@ def test_the_commands():
 def test_the_source_distribution_has_the_docs_and_tests():
     manifest = (ROOT / "MANIFEST.in").read_text()
     for line in ("include LICENSE README.md", "recursive-include docs *.md",
-                 "recursive-include samples", "recursive-include tests *.py"):
+                 "recursive-include tests *.py"):
         assert line in manifest
-    assert (ROOT / "docs" / "api.md").exists() and os.listdir(ROOT / "samples")
+    assert (ROOT / "docs" / "api.md").exists()
 
 
 def test_the_release_workflow_checks_the_version():

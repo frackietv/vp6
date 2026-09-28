@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.4.3
+**Date:** 2026-09-30
+
+## Repository
+
+- The Calculator and GuessNumber samples are gone (the Kitchen Sink template demonstrates every feature); the executables workflow no longer makes the Calculator sample, and the source distribution has the docs and the tests
+
+---
+
 **Version:** 0.4.2
 **Date:** 2026-09-30
 

@@ -61,7 +61,6 @@ vp6/                    runtime library - "from vp6 import *"
     icons.py            icons drawn in code (light + dark variants)
 tests/                  pytest suite (runs headless)
 tools/apidocs.py        generates the reference tables in docs/api.md
-samples/                Calculator (GUI) and GuessNumber (console)
 docs/                   this documentation
 ```
 

@@ -1,7 +1,6 @@
-# The source distribution (sdist): the package, plus the documentation, the
-# samples and the tests (the wheel has the package only; see pyproject.toml)
+# The source distribution (sdist): the package, plus the documentation and the
+# tests (the wheel has the package only; see pyproject.toml)
 include LICENSE README.md FEATURES.md BACKLOG.md
 recursive-include docs *.md
-recursive-include samples *.py *.vp6p
 recursive-include tests *.py
 include tools/*.py
