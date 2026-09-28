@@ -10,7 +10,8 @@ and step-by-step recipes for extending the VP6 runtime and IDE. Read
 ```bash
 cd VP6
 python3 -m venv .venv
-.venv/bin/pip install -e ".[dev]"      # editable install: vp6, vp6-run, pytest
+.venv/bin/pip install -e ".[dev]"      # editable install: vp6, vp6-run, pytest, build
+.venv/bin/pip install -e ".[dev,make]" # ...and PyInstaller, for vp6-make
 
 .venv/bin/vp6                          # start the IDE (or: .venv/bin/python -m vp6.ide)
 .venv/bin/vp6 samples/Calculator/Calculator.vp6p
@@ -648,3 +649,52 @@ Set `QSettings.setDefaultFormat(QSettings.IniFormat)` and a temporary
   through the editor's key handling.
 * **Real preferences.** Construct settings only through `ide_settings()`. The
   test guard fails loudly if isolation breaks.
+
+## 8. Releasing
+
+VP6 is published on PyPI as `vp6` (`pip install vp6`), under the MIT license
+(`LICENSE`). A release is a version in `pyproject.toml` and
+`vp6/__init__.py` (`tests/test_packaging.py` checks they agree), with its
+entry at the top of `FEATURES.md`.
+
+**Check the distributions locally first:**
+
+```bash
+.venv/bin/python -m build                    # dist/vp6-<version>.tar.gz and ...whl
+.venv/bin/twine check --strict dist/*
+python3 -m venv /tmp/vp6-try                 # install the wheel somewhere clean
+/tmp/vp6-try/bin/pip install dist/vp6-*.whl
+/tmp/vp6-try/bin/vp6                         # the IDE, from the wheel
+```
+
+* The **wheel** has the `vp6` package with its data files (pictures, the
+  Kitchen Sink templates: `[tool.setuptools.package-data]`, which
+  `tests/test_packaging.py` checks covers every one), the license and the
+  `vp6`, `vp6-run` and `vp6-make` commands. The **source distribution** also
+  has the docs, the samples and the tests (`MANIFEST.in`).
+* PyPI shows `README.md` as the project's page; its relative links (to
+  `docs/`, `FEATURES.md`, `BACKLOG.md`) only work in the repository. Once the
+  repository is public, add its address under `[project.urls]` and make those
+  links absolute.
+
+**Publishing** is done by GitHub Actions (`.github/workflows/publish.yml`)
+with PyPI's *trusted publishing*, so no password or token is stored anywhere:
+
+1. Once: on pypi.org (logged in), *Your account > Publishing > Add a new
+   pending publisher*: project name `vp6`, the repository's owner and name,
+   workflow `publish.yml`, environment `pypi`. (Test it first on
+   test.pypi.org the same way if you like.) In the GitHub repository's
+   settings, add an environment named `pypi`.
+2. For each release: commit the new version, then tag and push it:
+
+   ```bash
+   git tag v0.4.0 && git push origin v0.4.0
+   ```
+
+   The workflow checks the tag is `v` + the version in `pyproject.toml`,
+   builds and checks the distributions, and uploads them. A version can be
+   uploaded only once: a mistake needs a new version.
+
+Without GitHub, upload from your machine with an API token from pypi.org
+(*Account settings > API tokens*): `.venv/bin/twine upload dist/*` (it asks
+for the token; the user name is `__token__`).

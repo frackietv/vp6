@@ -1,17 +1,41 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]  # (license as an SPDX expression)
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "vp6"
-version = "0.3.36"
+version = "0.4.0"
 description = "VB6-style IDE and GUI framework for Python"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "FrackieTV" }]
 requires-python = ">=3.10"
 dependencies = ["PySide6>=6.6"]
+keywords = ["vb6", "visual basic", "ide", "gui", "form designer", "rad", "qt", "pyside6"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: MacOS X",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: User Interfaces",
+    "Topic :: Software Development :: Widget Sets",
+]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "build", "twine"]
 make = ["pyinstaller>=6", "pillow"]  # vp6-make: standalone executables
 
 [project.scripts]

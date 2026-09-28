@@ -87,7 +87,10 @@ def test_the_pyinstaller_command(project, monkeypatch):
     hidden = [command[i + 1] for i, arg in enumerate(command) if arg == "--hidden-import"]
     assert {"csv", "vp6"} <= set(hidden)
     vp6_folder = os.path.dirname(os.path.dirname(os.path.abspath(make.__file__)))
-    assert command[command.index("--paths") + 1] == vp6_folder
+    # VP6's folder only when PyInstaller can't find it itself (an editable install)
+    assert make.vp6_search_path(site_folders=["/elsewhere"]) == vp6_folder  # (editable)
+    assert make.vp6_search_path(site_folders=[vp6_folder]) is None  # installed
+    assert ("--paths" in command) == (make.vp6_search_path() is not None)
     # The executable's icon: the project's largest (with Pillow)
     monkeypatch.setattr(make.importlib.util, "find_spec", lambda name: object())
     assert make.icon_file(project) == project.icon_paths()[-1]

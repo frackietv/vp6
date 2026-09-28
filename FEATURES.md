@@ -1,5 +1,16 @@
 # VP6 features
 
+**Version:** 0.4.0
+**Date:** 2026-09-30
+
+## Distribution
+
+- VP6 is ready to publish on PyPI as `vp6` (`pip install vp6`, `pip install "vp6[make]"` for standalone executables): MIT license (`LICENSE`), author, classifiers and keywords in `pyproject.toml`; the wheel has the package with its pictures and Kitchen Sink templates and the `vp6`, `vp6-run` and `vp6-make` commands, the source distribution also the docs, samples and tests
+- Publishing: pushing a tag `v<version>` runs a GitHub Actions workflow that checks the tag against the version, builds and checks the distributions and uploads them with PyPI's trusted publishing; "Releasing" in the development guide has the one-time PyPI setup and the manual alternative
+- `vp6-make` no longer gives PyInstaller VP6's folder when VP6 is a normal install (in site-packages), which PyInstaller warned about and will refuse
+
+---
+
 **Version:** 0.3.36
 **Date:** 2026-09-30
 

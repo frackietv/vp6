@@ -35,6 +35,7 @@ import ast
 import importlib.util
 import os
 import shutil
+import site
 import subprocess
 import sys
 import tempfile
@@ -125,6 +126,18 @@ def output_path(project: Project, dist: str, onefile: bool, platform: str = sys.
     return os.path.join(dist, name, exe)
 
 
+def vp6_search_path(site_folders: list[str] | None = None) -> str | None:
+    """The folder PyInstaller must search to find VP6, or None when it finds
+    it anyway: a normal install is in site-packages, which PyInstaller
+    searches (and mustn't be given); an editable one (pip install -e) is
+    imported through a hook PyInstaller can't see, from the source folder."""
+    folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if site_folders is None:
+        site_folders = site.getsitepackages() + [site.getusersitepackages()]
+    installed = {os.path.realpath(p) for p in site_folders if p}
+    return None if os.path.realpath(folder) in installed else folder
+
+
 def pyinstaller_command(project: Project, launcher: str, dist: str, work: str,
                         onefile: bool = False, platform: str = sys.platform) -> list[str]:
     """The PyInstaller command line that makes the executable."""
@@ -137,11 +150,12 @@ def pyinstaller_command(project: Project, launcher: str, dist: str, work: str,
     icon = icon_file(project)
     if icon:
         command += ["--icon", icon]
-    # VP6 itself: found where it is (an editable install's import hook is
-    # invisible to PyInstaller), with its icon files (a program's default icon)
+    # VP6 itself, with its icon files (a program's default icon)
     package = os.path.dirname(os.path.abspath(__file__))
-    command += ["--paths", os.path.dirname(package),
-                "--add-data", f"{os.path.join(package, 'images')}{os.pathsep}vp6/images"]
+    folder = vp6_search_path()
+    if folder is not None:
+        command += ["--paths", folder]
+    command += ["--add-data", f"{os.path.join(package, 'images')}{os.pathsep}vp6/images"]
     for module in imported_modules(project) + ["vp6"]:
         command += ["--hidden-import", module]
     for relative in project_files(project):

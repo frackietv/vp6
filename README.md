@@ -13,6 +13,15 @@ Detailed documentation is in [docs/](docs/README.md):
 
 ## Getting started
 
+From PyPI:
+
+```bash
+pip install vp6                      # then: vp6 (the IDE), vp6-run Project.vp6p
+pip install "vp6[make]"              # also vp6-make: standalone executables
+```
+
+From the source:
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
