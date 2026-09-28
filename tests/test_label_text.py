@@ -7,7 +7,8 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QToolButton
 
-from vp6 import CommandButton, Form, Label, TextBox, formfile, vpMarkdown, vpPlainText, vpRichText
+from vp6 import (CommandButton, Form, Label, TextBox, formfile, vpMarkdown, vpPlainText,
+                 vpRichText)
 from vp6.ide.designer import FormDesigner
 from vp6.ide.documents import FormDocument
 from vp6.ide.properties import PropertiesWindow
@@ -195,3 +196,37 @@ def test_no_access_keys_while_designing(qapp, tmp_path):
     label = d.controls[name]
     assert "<u>N</u>" in label._widget.text() and label._shortcut is None  # shown, not active
     d.close()
+
+
+# --- BackStyle -----------------------------------------------------------------------------------
+
+def test_back_style(qapp):
+    from vp6 import Frame, PictureBox, vpOpaque, vpRed, vpTransparent
+
+    class Styles(Form):
+        def InitializeComponent(self):
+            self.lblPlain = Label(self, Caption="opaque")
+            self.picBack = PictureBox(self, Left=100, BackColor=vpRed)
+            self.lblOnPicture = Label(self.picBack, Caption="on the picture box")
+            self.fraBox = Frame(self, Left=200)
+            self.lblInFrame = Label(self.fraBox, Caption="in a frame")
+            self.lblClear = Label(self, Caption="clear", BackStyle=vpTransparent,
+                                  BackColor=vpRed)
+
+    form = Styles()
+    assert (vpTransparent, vpOpaque) == (0, 1)
+    plain, on_picture = form.lblPlain, form.lblOnPicture
+    assert plain.BackStyle == vpOpaque  # the default, as in VB
+    assert plain._widget.autoFillBackground()  # filled: hides what is behind it...
+    assert on_picture._widget.autoFillBackground()  # ...with its container's color
+    assert on_picture._widget.palette().color(on_picture._widget.backgroundRole()) == \
+        form.picBack._widget.palette().color(form.picBack._widget.backgroundRole())
+    assert not form.lblInFrame._widget.autoFillBackground()  # a frame's panel: kept
+    clear = form.lblClear
+    assert not clear._widget.autoFillBackground()
+    assert "transparent" in clear._widget.styleSheet()  # BackColor ignored
+    assert "#ff0000" not in clear._widget.styleSheet()
+    clear.BackStyle = vpOpaque  # now its BackColor shows
+    assert "#ff0000" in clear._widget.styleSheet() and not clear._widget.autoFillBackground()
+    clear.BackColor = None
+    assert clear._widget.autoFillBackground() and clear._widget.styleSheet() == ""

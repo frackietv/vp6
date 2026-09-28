@@ -13,7 +13,12 @@ class pgPictures(Form):
                                   Stretch=True, TabIndex=1)
         self.lblOnPicture = Label(self.picLogo, Caption='Click to set a Tag', Left=12, Top=140,
                                   Width=216, Height=25, Alignment=2, BackColor=0xFFFFFF,
-                                  ForeColor=0x000000, TabIndex=2)
+                                  ForeColor=0x000000, TabIndex=2,
+                                  ToolTipText='An opaque Label (BackStyle = 1, the default): it hides the picture behind it')
+        self.lblTransparent = Label(self.picLogo, Caption='Transparent label', Left=120, Top=8,
+                                    Width=112, Height=20, Alignment=1, BackStyle=0,
+                                    BackColor=0x000000, ForeColor=0xFFFFFF, TabIndex=3,
+                                    ToolTipText='BackStyle = 0 (Transparent): the picture shows through; its BackColor (black) is ignored')
         self.imgThumb = Image(self, Left=270, Top=16, Width=64, Height=48, Stretch=True,
                               BorderStyle=1, Picture='vp6.png',
                               ToolTipText='An Image (a lightweight picture): click it')

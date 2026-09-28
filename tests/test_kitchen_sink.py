@@ -337,6 +337,10 @@ def test_pictures_page(sink):
     assert page.picLogo.Visible
     page.lblOnPicture_Click()  # InputBox: the Tag
     assert page.picLogo.Tag == "Zed" and page.lblOnPicture.Caption == "Zed"
+    # An opaque label (the default) over the picture, and a transparent one
+    assert page.lblOnPicture.BackStyle == vp6.vpOpaque
+    assert page.lblTransparent.BackStyle == vp6.vpTransparent
+    assert not page.lblTransparent._widget.autoFillBackground()
 
 
 def test_z_order_page(sink):

@@ -493,6 +493,20 @@ self.txtName = TextBox(self, TabIndex=2)                     # ...comes here
   access key (e.g. for names like "Tom & Jerry").
 * `AccessKey` is the key's letter ("" for none), read-only.
 
+**Background (`BackStyle`).** `vpOpaque` (1, the default, as in VB) fills
+the label's box with its `BackColor`, or without one with its container's
+color, hiding what is behind it. `vpTransparent` (0) lets what is behind it
+show through, a picture in a PictureBox for example, and ignores
+`BackColor`:
+
+```python
+self.lblTitle = Label(self.picPhoto, Caption="Holidays", BackStyle=vpTransparent,
+                      ForeColor=vpWhite)          # white text on the photo
+```
+
+In a Frame, an opaque label without a `BackColor` keeps the frame's panel
+(which some platforms draw in their own shade) instead of filling its box.
+
 **Formatted captions (`TextFormat`).** VB's Labels were plain text only; a
 VP6 Label can also show rich text:
 
@@ -522,6 +536,7 @@ Default size 97 × 25. Property groups: Position, Colors, Font, Common.
 |---|---|---|---|
 | `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment |
 | `AutoSize` | bool | `False` | Resize to fit the text |
+| `BackStyle` | enum | 1 - Opaque | 0 - Transparent, 1 - Opaque. Opaque: the label fills its box (with BackColor, or its container's color) and hides what is behind it; Transparent: what is behind it (a picture, other controls) shows through, and BackColor is ignored |
 | `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the label |
 | `Caption` | str (multi-line) | `''` | The text; in plain text an & before a letter underlines it, its access key (&& shows a literal &) |
 | `TextFormat` | enum | 0 - Plain | 0 - Plain, 1 - Rich Text, 2 - Markdown. Plain: the Caption as it is. Rich Text: HTML (bold, headings, links, colors). Markdown: bold, headings, lists and links written the Markdown way |
@@ -1629,6 +1644,7 @@ All constants are plain ints or strings.
 | Form.StartUpPosition | `vpStartUpManual`, `vpStartUpOwner`, `vpStartUpScreen`, `vpStartUpWindowsDefault` | 0, 1, 2, 3 |
 | Strings | `vpCr`, `vpLf`, `vpCrLf`, `vpNewLine`, `vpTab`, `vpNullString` | `'\r'`, `'\n'`, `'\r\n'`, `'\n'`, `'\t'`, `''` |
 | Menu.NegotiatePosition | `vpNegotiateNone`, `vpNegotiateLeft`, `vpNegotiateMiddle`, `vpNegotiateRight` | 0, 1, 2, 3 |
+| Label.BackStyle | `vpTransparent`, `vpOpaque` | 0, 1 |
 | Label.TextFormat | `vpPlainText`, `vpRichText`, `vpMarkdown` | 0, 1, 2 |
 | ScrollBars (TextBox, PictureBox) | `vpSBNone`, `vpHorizontal`, `vpVertical`, `vpBoth` | 0, 1, 2, 3 |
 | PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight`, `vpAlignFill` | 0, 1, 2, 3, 4, 5 |

@@ -584,6 +584,10 @@ class Label(Control):
         P("WordWrap", "bool", False, description="Wrap long text onto several lines"),
         P("BorderStyle", "enum", 0, enum_choices("None", "Fixed Single"),
           description="A thin border around the label"),
+        P("BackStyle", "enum", 1, enum_choices("Transparent", "Opaque"),
+          description="Opaque: the label fills its box (with BackColor, or its container's "
+                      "color) and hides what is behind it; Transparent: what is behind it "
+                      "(a picture, other controls) shows through, and BackColor is ignored"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -701,6 +705,32 @@ class Label(Control):
 
     def _apply_BorderStyle(self, v):
         self._widget.setFrameStyle(QFrame.Box | QFrame.Plain if v else QFrame.NoFrame)
+
+    def _apply_colors(self, _=None):
+        """BackStyle decides the background: Opaque fills it (BackColor, or
+        the container's color: the palette it inherits); Transparent leaves
+        it unpainted, whatever BackColor says (as in VB)."""
+        if not self._widget:
+            return
+        opaque = self._values.get("BackStyle", 1) == 1
+        back = self._values.get("BackColor") if opaque else None
+        fore = self._values.get("ForeColor")
+        rules = []
+        if back is not None:
+            rules.append(f"background-color: {colors.to_qcolor(back).name()};")
+        elif not opaque:
+            rules.append("background: transparent;")
+        if fore is not None:
+            rules.append(f"color: {colors.to_qcolor(fore).name()};")
+        self._widget.setStyleSheet(f"QLabel {{ {' '.join(rules)} }}" if rules else "")
+        # (In a Frame the "container's color" is the frame's panel, which the
+        # platform draws in its own shade, e.g. lighter on macOS: there an
+        # opaque Label without a BackColor keeps that panel instead of the
+        # palette's color)
+        in_frame = isinstance(self._widget.parentWidget(), QGroupBox)
+        self._widget.setAutoFillBackground(opaque and back is None and not in_frame)
+
+    _apply_BackColor = _apply_ForeColor = _apply_BackStyle = _apply_colors
 
 
 # --- TextBox ------------------------------------------------------------------------

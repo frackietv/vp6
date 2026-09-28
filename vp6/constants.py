@@ -83,6 +83,10 @@ vpNegotiateLeft = 1
 vpNegotiateMiddle = 2
 vpNegotiateRight = 3
 
+# --- Label.BackStyle -------------------------------------------------------------
+vpTransparent = 0
+vpOpaque = 1
+
 # --- Label.TextFormat -----------------------------------------------------------
 vpPlainText = 0
 vpRichText = 1

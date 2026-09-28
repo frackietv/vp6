@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Label `BackStyle` (Transparent / Opaque)
 - **[Controls]** File system controls: DriveListBox, DirListBox, FileListBox
 - **[Controls]** RichTextBox: text with colors, bold and italic, and appending formatted text (self-hosting: the code editor and the colored Immediate output)
 - **[Controls]** TextBox/RichTextBox editing API: line/column ↔ position, caret screen position, scroll position, undo/redo, a `SelChange` event, and an option for Tab to insert a tab instead of moving focus (self-hosting: completion, combos following the cursor, go-to-line, indentation)

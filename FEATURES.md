@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.4.5
+**Date:** 2026-09-30
+
+## Controls
+
+- Label `BackStyle`, as in VB: Opaque (the default) fills the label's box with its BackColor, or its container's color, hiding what is behind it; Transparent lets a picture or other controls behind it show through, and ignores BackColor. Constants `vpTransparent` and `vpOpaque`
+- The Kitchen Sink's Pictures page has an opaque and a transparent label on its picture
+
+---
+
 **Version:** 0.4.4
 **Date:** 2026-09-30
 
