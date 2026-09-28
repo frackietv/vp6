@@ -12,7 +12,7 @@ import os
 
 from PySide6.QtCore import (QDate, QEvent, QItemSelectionModel, QLocale, QObject, QPoint,
                             QRect, QSize, Qt, QTime, QTimer, QUrl)
-from PySide6.QtGui import (QAction, QActionGroup, QColor, QDesktopServices, QFont, QIcon,
+from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServices, QFont, QIcon,
                            QKeyEvent, QKeySequence, QPainter, QPalette, QPen, QPixmap,
                            QStandardItem, QStandardItemModel)
 from PySide6.QtWidgets import (
@@ -1004,9 +1004,120 @@ class Frame(Control):
 
 # --- ListBox / ComboBox --------------------------------------------------------------------
 
+class _PerItem:
+    """A ListBox's or ComboBox's per-item property, like VB's ItemData:
+    ``List1.ItemData(2)`` (or ``[2]``) reads item 2's, ``List1.ItemData[2] = 42``
+    sets it (VB's ``List1.ItemData(2) = 42``). Indexes start at 0, like
+    ListIndex; a value moves with its item (sorting, removing others)."""
+
+    def __init__(self, control, name: str, read, write):
+        self._control, self._name = control, name
+        self._read, self._write = read, write
+
+    def _check(self, index) -> int:
+        index = int(index)
+        if not 0 <= index < self._control.ListCount:
+            raise IndexError(f"{self._control.TypeName} '{self._control.Name}': no item "
+                             f"{index} for {self._name} (ListCount is "
+                             f"{self._control.ListCount})")
+        return index
+
+    def __call__(self, index):
+        return self[index]
+
+    def __getitem__(self, index):
+        return self._read(self._check(index))
+
+    def __setitem__(self, index, value):
+        self._write(self._check(index), value)
+
+    def __len__(self):
+        return self._control.ListCount
+
+
+# The item roles of ListBox and ComboBox items (Qt's data roles)
+_ITEM_DATA_ROLE = Qt.UserRole
+_ITEM_IMAGE_ROLE = Qt.UserRole + 1
+
+
 class _ListMixin:
     """AddItem / RemoveItem / Clear / ListCount / ListIndex / List shared by
-    ListBox and ComboBox."""
+    ListBox and ComboBox, and their per-item ItemData, ItemImage, ItemBold,
+    ItemItalic and ItemForeColor. The widget-specific part: ``_role(index,
+    role)`` and ``_set_role(index, role, value)``."""
+
+    _IMAGE_LIST_PROPS = ("ImageList",)
+
+    # -- per-item properties ------------------------------------------------------------------
+    @property
+    def ItemData(self) -> _PerItem:
+        """A value kept with each item (any value; VB's was a number), e.g. an
+        id for the item's text: ``List1.ItemData[List1.ListIndex]``."""
+        return _PerItem(self, "ItemData", lambda i: self._role(i, _ITEM_DATA_ROLE),
+                        lambda i, v: self._set_role(i, _ITEM_DATA_ROLE, v))
+
+    @property
+    def ItemImage(self) -> _PerItem:
+        """Each item's picture: a Key or Index in the control's ImageList, or
+        without one a picture file. "" = none."""
+        def write(index, value):
+            value = "" if value is None else value
+            icon = _picture_icon(self, value, strict=True)
+            self._set_role(index, _ITEM_IMAGE_ROLE, value)
+            self._set_role(index, Qt.DecorationRole, icon if not icon.isNull() else None)
+
+        return _PerItem(self, "ItemImage",
+                        lambda i: self._role(i, _ITEM_IMAGE_ROLE) or "", write)
+
+    def _font_part(self, name: str, getter, setter) -> _PerItem:
+        def read(index):
+            font = self._role(index, Qt.FontRole)
+            return bool(font is not None and getter(font))
+
+        def write(index, value):
+            font = self._role(index, Qt.FontRole)
+            font = QFont(font) if font is not None else QFont(self._widget.font())
+            setter(font, bool(value))
+            self._set_role(index, Qt.FontRole, font)
+
+        return _PerItem(self, name, read, write)
+
+    @property
+    def ItemBold(self) -> _PerItem:
+        """Show an item in bold: ``List1.ItemBold[0] = True``."""
+        return self._font_part("ItemBold", QFont.bold, QFont.setBold)
+
+    @property
+    def ItemItalic(self) -> _PerItem:
+        return self._font_part("ItemItalic", QFont.italic, QFont.setItalic)
+
+    @property
+    def ItemForeColor(self) -> _PerItem:
+        """An item's text color (vpRed, RGB(...)); None = the control's."""
+        def read(index):
+            brush = self._role(index, Qt.ForegroundRole)
+            return colors.from_qcolor(brush.color()) if brush is not None else None
+
+        def write(index, value):
+            self._set_role(index, Qt.ForegroundRole,
+                           None if value is None else QBrush(colors.to_qcolor(value)))
+
+        return _PerItem(self, "ItemForeColor", read, write)
+
+    def _image_list(self, prop: str = "ImageList"):
+        return _UsesImageList._image_list(self, prop)
+
+    def _apply_ImageList(self, v):
+        self._refresh_images()
+
+    def _refresh_images(self) -> None:
+        """Show every item's ItemImage again (the ImageList or its pictures changed)."""
+        images = self._image_list()
+        if images is not None and all(images._size()):
+            self._widget.setIconSize(QSize(*images._size()))
+        for index in range(self.ListCount):
+            icon = _picture_icon(self, self._role(index, _ITEM_IMAGE_ROLE) or "")
+            self._set_role(index, Qt.DecorationRole, icon if not icon.isNull() else None)
 
     def AddItem(self, Item, Index: int | None = None) -> None:
         self._insert(len(self._items()) if Index is None else int(Index), str(Item))
@@ -1030,6 +1141,11 @@ class _ListMixin:
             self._insert(len(self._items()), item)
 
 
+_ITEM_IMAGE_LIST = P("ImageList", "str", "",
+                     description="The name of an ImageList on the form: the items' ItemImage "
+                                 "is then a picture's Key or Index in it")
+
+
 class ListBox(_ListMixin, Control):
     TypeName = "ListBox"
     DefaultSize = (121, 97)
@@ -1042,8 +1158,15 @@ class ListBox(_ListMixin, Control):
         P("Sorted", "bool", False, description="Keep the items in alphabetical order"),
         P("MultiSelect", "enum", 0, enum_choices("None", "Simple", "Extended"),
           description="Whether several items can be selected"),
+        _ITEM_IMAGE_LIST,
         *_COLORS, *_FONT, *_COMMON,
     )
+
+    def _role(self, index, role):
+        return self._widget.item(index).data(role)
+
+    def _set_role(self, index, role, value):
+        self._widget.item(index).setData(role, value)
 
     def _create_widget(self, parent):
         return QListWidget(parent)
@@ -1106,11 +1229,18 @@ class ComboBox(_ListMixin, Control):
         P("List", "list", [], description="The items"),
         P("Text", "str", "", always=True, description="The edit text or the selected item"),
         P("Sorted", "bool", False, description="Keep the items in alphabetical order"),
+        _ITEM_IMAGE_LIST,
         *_COLORS, *_FONT, *_COMMON,
     )
 
     def _create_widget(self, parent):
         return QComboBox(parent)
+
+    def _role(self, index, role):
+        return self._widget.itemData(index, role)
+
+    def _set_role(self, index, role, value):
+        self._widget.setItemData(index, value, role)
 
     def _connect_signals(self):
         self._widget.currentIndexChanged.connect(lambda *_: self._fire("Click"))

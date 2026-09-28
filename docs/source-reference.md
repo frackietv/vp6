@@ -148,7 +148,7 @@ VB-compatible constants with a `vp` prefix, grouped by use:
 `__all__` is every global starting with `vp`. The values are listed in
 [api.md](api.md#constants).
 
-### `vp6/controls.py` (≈4760 lines)
+### `vp6/controls.py` (≈4890 lines)
 
 The intrinsic controls.
 
@@ -219,8 +219,8 @@ The intrinsic controls.
 | `CheckBox` | `QCheckBox`, or a checkable `QToolButton` when Graphical (a toggle button: `toggled` fires Click; Grayed shows not pressed) | `Value` 0/1/2 (tri-state for Grayed); Click fires on every change, including from code (VB behavior). |
 | `OptionButton` | `QRadioButton`, or a checkable, auto-exclusive `QToolButton` when Graphical (exclusive with the container's other option buttons of either kind) | Buttons in the same container are mutually exclusive; Click when it becomes checked. |
 | `Frame` | `QGroupBox` | Container; colors via palette. |
-| `ListBox` | `QListWidget` | `_ListMixin` (`AddItem`, `RemoveItem`, `Clear`, `ListCount`, `List`); `ListIndex`, `Text`, `Selected(i)`, `Sorted`, `MultiSelect`. |
-| `ComboBox` | `QComboBox` | `Style` 0 (editable) / 2 (list only); Click on selection change, Change on edit. |
+| `ListBox` | `QListWidget` | `_ListMixin` (`AddItem`, `RemoveItem`, `Clear`, `ListCount`, `List`); `ListIndex`, `Text`, `Selected(i)`, `Sorted`, `MultiSelect`. Per-item properties: see `_PerItem` below. |
+| `ComboBox` | `QComboBox` | `Style` 0 (editable) / 2 (list only); Click on selection change, Change on edit. Per-item properties as for ListBox. |
 | `Timer` | none at run time (`QTimer`) | Stopwatch icon in design mode (`_timer_design_widget`). |
 | `HScrollBar`, `VScrollBar` | `QScrollBar` | `_ScrollBar` base; Change on value change, Scroll while dragging. |
 | `PictureBox` | `QLabel` | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle; `Cls()`. `Align` docks it (`Form._layout_aligned`); changing Align, its size, place or Visible calls `_relayout` (a docked pane's size is left to the layout). `Resize` event when its widget is resized. Always opaque (`autoFillBackground`), with the scheme's window color when BackColor is unset. `ScrollBars` (run time only): `_start_scrolling` puts the controls on a content widget in a `QScrollArea` over the picture (`_stop_scrolling` undoes it), `_container_widget()` is then the content, `_ScrollWatcher` keeps it as large as the visible controls need (`_update_scroll_size`, deferred once per round of changes; the full area when everything fits), `ScrollLeft` / `ScrollTop` (their setters update the size first) and the `Scroll` event; `_fill_widget` / `_fill_rect` make a form shown in it fill the visible area but keep its own size. |
@@ -255,6 +255,17 @@ ImageList may be created after the controls using it.
 `Count`, `Item`/call (an Index, a Key or an item: `_resolve`), iteration,
 `Remove` and `Clear`, and `_insert`/`_reset` for the control; each change
 calls the control's update (`changed`).
+
+`_PerItem` is a ListBox's or ComboBox's per-item property (`_ListMixin`'s
+`ItemData`, `ItemImage`, `ItemBold`, `ItemItalic`, `ItemForeColor`): call or
+`[]` to read, `[i] =` to set, with the index checked against `ListCount`.
+The values are Qt item data roles (`_ITEM_DATA_ROLE`, `_ITEM_IMAGE_ROLE`
+for the Image's Key, `DecorationRole` for its icon, `FontRole`,
+`ForegroundRole`), so they move with their items; each widget provides
+`_role(index, role)` and `_set_role(index, role, value)` (a
+`QListWidgetItem`'s data, a `QComboBox`'s item data). Pictures come from
+the control's `ImageList` like a TreeView's (`_refresh_images`, which the
+ImageList calls through `_IMAGE_LIST_PROPS`).
 
 `_Graphical` is the mixin of CommandButton, CheckBox and OptionButton for
 `Style = Graphical` (`_graphical_props`: Style, Picture, DownPicture,
@@ -1264,8 +1275,10 @@ explorer-style.
     OptionButtons in the Alignment frame): CommandButtons (Value = True clicks), CheckBoxes (also
     grayed), OptionButtons in two Frames (two groups);
   * `pgLists.py`: a sorted ListBox with Add/Remove, Click and DblClick,
-    ComboBoxes (a list with colors from `vpRed`, `RGB` and `QBColor`, and an
-    editable one);
+    pictures from the ImageList `imlLists` (`ItemImage`; added items get a
+    star, italics and their time as `ItemData`), ComboBoxes (a list of colors
+    from `vpRed`, `RGB` and `QBColor` kept in `ItemData`, each name in its
+    color with `ItemForeColor`, and an editable one);
   * `pgScrollBars.py`: HScrollBar and VScrollBar, Change and Scroll;
   * `pgListView.py`: a ListView of pets (a Report view with three columns,
     pictures from two ImageLists), the view chosen in a ComboBox, ColumnClick
@@ -1479,6 +1492,7 @@ All tests run headless. `conftest.py`:
 | `test_treeview.py` | The TreeView: reading outlines (outline images (a key, an Index or a file)); the Nodes collection (key, Index from 1, errors for unknown or duplicate keys); every relationship of `Add`; relatives, FullPath and PathSeparator; removing with children and clearing; node Text/Key/Tag/Bold/ForeColor/Image, EnsureVisible, sorting the tree and a node's children; code changes firing no events; NodeClick on clicks (also on the selected node) and keyboard moves, Expand/Collapse from the keyboard, HitTest; check boxes and NodeCheck; LineStyle, Indentation, Items; the form file; in the designer (Items building an expanded tree, the Properties button, a `Node` handler stub); the Toolbox button, icon and constants. |
 | `test_values.py` | ProgressBar (Value kept inside Min..Max, also when they change; orientation; Click), Slider (Scroll while dragging and one Change after, Change for code and keys, LargeChange, tick styles and frequency, orientation), UpDown (steps, Max without Wrap, Change / UpClick / DownClick, a TextBox buddy shown and read back, typed numbers clamped or ignored, Increment, wrapping, a Label buddy's Caption, BuddyProperty, a missing buddy, SyncBuddy off, horizontal arrows); the form file round trip; creating them in the designer (arrows inactive there); Toolbox, icons, default events and constants. |
 | `test_line.py` | The Line control: its widget following the points, drawing (color, Transparent, Visible, the scheme's text color by default), clicks going through it, ZIndex; the form file; in the designer: drawing from press to release and by a click, selecting near the line (not its box), dragging an end, the move cursor over an end, moving, arrow keys (no resizing), undo, pasting with an offset, the Properties rows, no event stub; the Toolbox button and icon. |
+| `test_list_items.py` | ListBox and ComboBox per-item properties: ItemData read and set (any value, None until set, `IndexError` past the end), values and fonts moving with their items when sorted or another is removed, VB's `ItemData(ListIndex)`, ItemBold, ItemItalic and ItemForeColor (and None again), ItemImage by Key or Index in the ImageList (an unknown one raising, following its changes, cleared), a picture file without one. |
 | `test_listview.py` | The ListView: its designer lines (`parse_column`, `parse_list_item`); ListItems (Index and Key, SubItems read and set, Add at an Index, Text, Key changes, errors, Remove, Clear); ColumnHeaders (labels, widths, alignments of existing and new cells, a new column, HideColumnHeaders); the four views keeping one selection, MultiSelect; sorting by the Text or a SubItem (as text), new and renamed items sorted in; ItemClick, HitTest and ColumnClick from the mouse, ItemCheck from the user but not code, Checkboxes off; Icons in the Icon view and SmallIcons in the others, unknown ones raising, an ImageList's changes; the form file round trip; the designer (the Properties window's Columns and Items); Toolbox, icon and constants. |
 | `test_make.py` | Making executables: the files that go in (not `dist`, `build`, caches or hidden files), the modules their code imports (not the project's own, nor relative imports; files with syntax errors skipped), the launcher, where the result goes on each system (apps, folders, one file, `.exe`), the PyInstaller command (console or windowed, one file, the project's or VP6's icon and none without Pillow, `--add-data` into the same folders with `os.pathsep`, hidden imports, VP6's folder and icons), the message without PyInstaller, `make()` with PyInstaller faked, File > Make Executable… with the process faked (success with the path, failure); with `VP6_TEST_MAKE=1` a real one-file executable made and run (its output, its data file, a module in a subfolder, its exit code). |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
@@ -1492,7 +1506,7 @@ All tests run headless. `conftest.py`:
 | `test_packaging.py` | The package as published: `pyproject.toml`'s version is `vp6.__version__`, the MIT license and its file, the author without an email, the dependencies and the `make` extra; every data file in `vp6/` (not a module of a package) matched by the package data, so the wheel has it; the `vp6`, `vp6-run` and `vp6-make` commands; the source distribution's docs, samples and tests; the release workflow's version check and trusted publishing. |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, sliders, progress bars and spinners, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (the VP6 icon copied into a project, your own copy kept, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |
 
 ## Samples: `samples/`

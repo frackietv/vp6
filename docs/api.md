@@ -651,6 +651,7 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `ImageList` | str | `''` | The name of an ImageList on the form: the items' ItemImage is then a picture's Key or Index in it |
 | `List` | list[str] | `[]` | The items |
 | `Sorted` | bool | `False` | Keep the items in alphabetical order |
 | `Style` | enum | 0 - Dropdown Combo | 0 - Dropdown Combo, 2 - Dropdown List. Dropdown Combo: editable text; Dropdown List: choose an item only |
@@ -664,6 +665,16 @@ Run-time members:
 * `AddItem(Item, Index=None)`, `RemoveItem(Index)`, `Clear()`;
 * `ListCount`;
 * `ListIndex` (-1 = none; setting it selects an item).
+* **Per item** (indexes from 0, like `ListIndex`):
+  * `ItemData`: a value kept with each item, e.g. a record's id for its text:
+    `ItemData(i)` (or `[i]`) reads it, `ItemData[i] = 42` sets it (VB's
+    `ItemData(i) = 42`). Any value (VB's was a number); None until set.
+  * `ItemImage`: a picture before the item: a Key or Index in the control's
+    `ImageList`, or without one a picture file.
+  * `ItemBold`, `ItemItalic` (True or False) and `ItemForeColor` (a color, or
+    None for the control's).
+  * They move with their item when it moves (`Sorted`, removing an item
+    before it); an index past the end raises `IndexError`.
 
 `Change` fires when the text is edited, `Click` when the selection changes.
 
@@ -676,6 +687,7 @@ Default size 121 × 97. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `ImageList` | str | `''` | The name of an ImageList on the form: the items' ItemImage is then a picture's Key or Index in it |
 | `List` | list[str] | `[]` | The items |
 | `MultiSelect` | enum | 0 - None | 0 - None, 1 - Simple, 2 - Extended. Whether several items can be selected |
 | `Sorted` | bool | `False` | Keep the items in alphabetical order |
@@ -689,6 +701,25 @@ Run-time members:
 * `ListCount`, `ListIndex`;
 * `Text` (the selected item);
 * `Selected(Index)` (whether that item is selected).
+* **Per item** (indexes from 0, like `ListIndex`):
+  * `ItemData`: a value kept with each item, e.g. a record's id for its text:
+    `ItemData(i)` (or `[i]`) reads it, `ItemData[i] = 42` sets it (VB's
+    `ItemData(i) = 42`). Any value (VB's was a number); None until set.
+  * `ItemImage`: a picture before the item: a Key or Index in the control's
+    `ImageList`, or without one a picture file.
+  * `ItemBold`, `ItemItalic` (True or False) and `ItemForeColor` (a color, or
+    None for the control's).
+  * They move with their item when it moves (`Sorted`, removing an item
+    before it); an index past the end raises `IndexError`.
+
+```python
+for number, (name, id_) in enumerate(customers):
+    self.lstCustomers.AddItem(name)
+    self.lstCustomers.ItemData[number] = id_
+
+def lstCustomers_Click(self):
+    show_customer(self.lstCustomers.ItemData[self.lstCustomers.ListIndex])
+```
 
 `Click` fires when the selection changes.
 
@@ -1717,6 +1748,9 @@ It goes in the project's `dist` folder:
 * **Style** (Graphical) can be changed at run time (in VB it is read-only
   there); a Graphical button's picture comes from a file, and a Graphical
   CheckBox shows Grayed (`Value = 2`) as not pressed.
+* **ListBox and ComboBox** have `ItemData(i)` like VB's, set with
+  `ItemData[i] = 42`, and per-item `ItemImage`, `ItemBold`, `ItemItalic` and
+  `ItemForeColor` (VB's had none; its ImageCombo had pictures).
 * **ListView** items can't be renamed in place (no `LabelEdit`,
   `BeforeLabelEdit`, `AfterLabelEdit`), there are no `GridLines`,
   `FullRowSelect` (a Report view row is always selected whole), `FindItem`

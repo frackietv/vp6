@@ -1,5 +1,16 @@
 # VP6 features
 
+**Version:** 0.4.1
+**Date:** 2026-09-30
+
+## Controls
+
+- ListBox and ComboBox `ItemData`: a value kept with each item, like VB's (`ItemData(i)` reads it, `ItemData[i] = 42` sets it), moving with its item when the list is sorted or items are removed
+- Per-item pictures and fonts for ListBox and ComboBox: `ItemImage` (a Key or Index in the control's new `ImageList`, or a picture file), `ItemBold`, `ItemItalic` and `ItemForeColor`
+- The Kitchen Sink's Lists page keeps its colors in `ItemData`, shows each color's name in its color, and gives the list pictures, with a star and italics for added items
+
+---
+
 **Version:** 0.4.0
 **Date:** 2026-09-30
 

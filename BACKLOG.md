@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** ListBox/ComboBox `ItemData` plus per-item icons and fonts (self-hosting: Project Explorer items, bold startup object, New Project templates)
 - **[Controls]** ListBox/ComboBox completeness: `NewIndex`, `TopIndex`, `SelCount`, ListBox `Style = Checkbox` with the `ItemCheck` event, ComboBox `Style = 1` (simple combo) and the `DropDown` event
 - **[Controls]** Label access keys: `&` in a Label's Caption underlines the letter and Alt+letter focuses the next control in the tab order, as in VB (today the `&` is just removed), plus `UseMnemonic`
 - **[Controls]** Label `BackStyle` (Transparent / Opaque)

@@ -1,15 +1,13 @@
-"""Kitchen Sink page: ListBoxes and ComboBoxes."""
+"""Kitchen Sink page: ListBoxes and ComboBoxes, with ItemData and per-item pictures,
+fonts and colors."""
+
+import time
 
 from vp6 import *
 
-# Colors: VB's constants, RGB and QBColor (all BGR numbers, like VB)
-SWATCH_COLORS = {
-    "Default": None,
-    "Red": vpRed,
-    "Green": RGB(0, 160, 0),
-    "Blue": vpBlue,
-    "QB Yellow": QBColor(14),
-}
+# Each color's number for the ComboBox items' ItemData: VB's constants, RGB and
+# QBColor (all BGR numbers, like VB), in the order of its List
+SWATCH_COLORS = [None, vpRed, RGB(0, 160, 0), vpBlue, QBColor(14)]
 
 
 class pgLists(Form):
@@ -19,7 +17,8 @@ class pgLists(Form):
         self.Width = 640
         self.Height = 440
         self.lstItems = ListBox(self, Left=16, Top=16, Width=200, Height=180,
-                                List=['Alpha', 'Bravo', 'Charlie'], Sorted=True, TabIndex=1)
+                                List=['Alpha', 'Bravo', 'Charlie'], Sorted=True,
+                                ImageList='imlLists', TabIndex=1)
         self.txtItem = TextBox(self, Text='', Left=230, Top=16, Width=150, Height=25, TabIndex=2,
                                ToolTipText='Type an item, then Add')
         self.cmdAdd = CommandButton(self, Caption='&Add', Left=390, Top=14, Width=90, Height=30,
@@ -37,11 +36,26 @@ class pgLists(Form):
                                 List=['apple', 'banana', 'cherry'], Text='Type or pick',
                                 TabIndex=8)
         self.lblEcho = Label(self, Caption='', Left=190, Top=260, Width=200, Height=25, TabIndex=9)
+        self.imlLists = ImageList(self, Left=580, Top=16, ImageWidth=16, ImageHeight=16,
+                                  ListImages=['images/leaf.png|leaf', 'images/star.png|star'])
     # endregion
 
+    def Form_Load(self):
+        # ItemData: a value kept with each item (here the color each name stands for)
+        for index, color in enumerate(SWATCH_COLORS):
+            self.cboColors.ItemData[index] = color
+            self.cboColors.ItemForeColor[index] = color  # each name in its color
+        self.cboColors.ItemBold[0] = True
+        # Pictures from the ImageList imlLists (the items typed in the designer)
+        for index in range(self.lstItems.ListCount):
+            self.lstItems.ItemImage[index] = "leaf"
+
     def lstItems_Click(self):
+        index = self.lstItems.ListIndex
+        added = self.lstItems.ItemData(index)  # when it was added (None: in the designer)
+        when = f", added at {time.strftime('%H:%M:%S', time.localtime(added))}" if added else ""
         self.lblSelected.Caption = (f"Selected {self.lstItems.Text!r} "
-                                    f"({self.lstItems.ListIndex + 1} of {self.lstItems.ListCount})")
+                                    f"({index + 1} of {self.lstItems.ListCount}{when})")
 
     def lstItems_DblClick(self):
         MsgBox(self.lstItems.Text, vpOKOnly, "You double-clicked")
@@ -50,7 +64,12 @@ class pgLists(Form):
         self.cmdAdd.Enabled = bool(self.txtItem.Text.strip())
 
     def cmdAdd_Click(self):
-        self.lstItems.AddItem(self.txtItem.Text.strip())  # Sorted: it goes in its place
+        text = self.txtItem.Text.strip()
+        self.lstItems.AddItem(text)  # Sorted: it goes in its place
+        index = self.lstItems.List.index(text)
+        self.lstItems.ItemData[index] = time.time()  # VB: List1.ItemData(i) = ...
+        self.lstItems.ItemImage[index] = "star"  # added ones: a star, in italics
+        self.lstItems.ItemItalic[index] = True
         self.txtItem.Text = ""
         self.txtItem.SetFocus()
 
@@ -61,7 +80,7 @@ class pgLists(Form):
         self.lstItems.RemoveItem(self.lstItems.ListIndex)
 
     def cboColors_Click(self):
-        color = SWATCH_COLORS[self.cboColors.Text]
+        color = self.cboColors.ItemData[self.cboColors.ListIndex]
         self.lblSwatch.BackColor = color
         self.lblSwatch.ForeColor = vpWhite if color in (vpRed, vpBlue, RGB(0, 160, 0)) else None
 

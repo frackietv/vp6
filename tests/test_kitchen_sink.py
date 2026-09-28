@@ -274,7 +274,12 @@ def test_lists_page(sink):
     page.cmdRemove._widget.click()
     assert page.lstItems.ListCount == 3
     page.cboColors.ListIndex = page.cboColors.List.index("Red")
-    assert page.lblSwatch.BackColor == vp6.vpRed
+    assert page.lblSwatch.BackColor == vp6.vpRed  # from the item's ItemData
+    assert page.cboColors.ItemForeColor[1] == vp6.vpRed and page.cboColors.ItemBold[0]
+    delta = page.lstItems.List.index("Delta")  # added: a star, in italics, and its time
+    assert page.lstItems.ItemImage[delta] == "star" and page.lstItems.ItemItalic[delta]
+    assert page.lstItems.ItemData[delta] > 0
+    assert page.lstItems.ItemImage[0] == "leaf"
     page.cboFree.Text = "kiwi"
     assert page.lblEcho.Caption == "kiwi"
 
