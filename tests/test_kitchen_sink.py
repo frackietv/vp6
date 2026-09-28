@@ -280,6 +280,17 @@ def test_lists_page(sink):
     assert page.lstItems.ItemImage[delta] == "star" and page.lstItems.ItemItalic[delta]
     assert page.lstItems.ItemData[delta] > 0
     assert page.lstItems.ItemImage[0] == "leaf"
+    assert page.lstItems.TopIndex >= 0
+    toppings = page.lstToppings  # a Checkbox ListBox: ItemCheck, SelCount
+    toppings._widget.item(1).setCheckState(Qt.Checked)  # the user checks Ham
+    assert page.lblToppings.Caption == "1 chosen (Ham checked)" and toppings.Selected(1)
+    page.cboSimple.ListIndex = 2  # a Simple Combo
+    assert page.lblSimple.Caption == "Size: Large"
+    page.cboFree.Text = "mango"
+    page.cboFree._widget.showPopup()  # DropDown: what was typed is added
+    page.cboFree._widget.hidePopup()
+    new = page.cboFree.NewIndex
+    assert page.cboFree.List[new] == "mango" and page.cboFree.ItemBold[new]
     page.cboFree.Text = "kiwi"
     assert page.lblEcho.Caption == "kiwi"
 

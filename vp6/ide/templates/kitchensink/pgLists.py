@@ -34,8 +34,19 @@ class pgLists(Form):
                                Height=25, Alignment=2, BorderStyle=1, TabIndex=7)
         self.cboFree = ComboBox(self, Left=16, Top=260, Width=160, Height=25,
                                 List=['apple', 'banana', 'cherry'], Text='Type or pick',
-                                TabIndex=8)
+                                TabIndex=8,
+                                ToolTipText="Type something new, then open the list: it's added (DropDown)")
         self.lblEcho = Label(self, Caption='', Left=190, Top=260, Width=200, Height=25, TabIndex=9)
+        self.lstToppings = ListBox(self, Style=1, Left=430, Top=150, Width=190, Height=100,
+                                   List=['Cheese', 'Ham', 'Mushrooms', 'Pineapple'], TabIndex=10,
+                                   ToolTipText='A Checkbox ListBox: ItemCheck fires as you check items')
+        self.lblToppings = Label(self, Caption='No toppings', Left=430, Top=256, Width=190,
+                                 Height=25, TabIndex=11)
+        self.cboSimple = ComboBox(self, Style=1, Left=16, Top=300, Width=160, Height=110,
+                                  List=['Small', 'Medium', 'Large'], Text='', TabIndex=12,
+                                  ToolTipText='A Simple Combo: the list is always shown')
+        self.lblSimple = Label(self, Caption='', Left=190, Top=300, Width=220, Height=25,
+                               TabIndex=13)
         self.imlLists = ImageList(self, Left=580, Top=16, ImageWidth=16, ImageHeight=16,
                                   ListImages=['images/leaf.png|leaf', 'images/star.png|star'])
     # endregion
@@ -65,11 +76,12 @@ class pgLists(Form):
 
     def cmdAdd_Click(self):
         text = self.txtItem.Text.strip()
-        self.lstItems.AddItem(text)  # Sorted: it goes in its place
-        index = self.lstItems.List.index(text)
+        self.lstItems.AddItem(text)  # Sorted: it goes in its place...
+        index = self.lstItems.NewIndex  # ...which NewIndex says
         self.lstItems.ItemData[index] = time.time()  # VB: List1.ItemData(i) = ...
         self.lstItems.ItemImage[index] = "star"  # added ones: a star, in italics
         self.lstItems.ItemItalic[index] = True
+        self.lstItems.TopIndex = index  # scrolled to the top of the list
         self.txtItem.Text = ""
         self.txtItem.SetFocus()
 
@@ -86,6 +98,23 @@ class pgLists(Form):
 
     def cboFree_Change(self):
         self.lblEcho.Caption = self.cboFree.Text
+
+    def cboFree_DropDown(self):
+        # The list is about to drop down: add what was typed, if it's new
+        text = self.cboFree.Text.strip()
+        if text and text not in self.cboFree.List:
+            self.cboFree.AddItem(text)
+            self.cboFree.ItemBold[self.cboFree.NewIndex] = True
+            self.lblEcho.Caption = f"Added {text!r} to the list"
+
+    def lstToppings_ItemCheck(self, Item):
+        # Item: the index of the item whose check box the user changed
+        what = "checked" if self.lstToppings.Selected(Item) else "unchecked"
+        self.lblToppings.Caption = (f"{self.lstToppings.SelCount} chosen "
+                                    f"({self.lstToppings.List[Item]} {what})")
+
+    def cboSimple_Click(self):
+        self.lblSimple.Caption = f"Size: {self.cboSimple.Text}"
 
 
 if __name__ == "__main__":

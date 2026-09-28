@@ -113,3 +113,104 @@ def test_item_images(pictures):
     assert not shown(0)
     form.cbo.ItemImage[0] = "b.png"  # without an ImageList: a picture file
     assert not form.cbo._role(0, Qt.DecorationRole).isNull()
+
+
+# --- NewIndex, TopIndex, SelCount, Selected, Checkbox ListBox, Simple Combo, DropDown ---------
+
+class More(Form):
+    def InitializeComponent(self):
+        self.lst = ListBox(self, Left=0, Top=0, Width=120, Height=60,
+                           List=[f"Item {n:02}" for n in range(20)])
+        self.chk = ListBox(self, Style=1, List=["Cheese", "Ham", "Pineapple"])
+        self.cbo = ComboBox(self, List=["b", "c"], Sorted=True)
+        self.simple = ComboBox(self, Style=1, Width=120, Height=100, List=["one", "two"])
+        self.events = []
+
+    def chk_ItemCheck(self, Item):
+        self.events.append(("ItemCheck", Item, self.chk.Selected(Item)))
+
+    def cbo_DropDown(self):
+        self.events.append("DropDown")
+
+    def simple_Click(self):
+        self.events.append(("Click", self.simple.ListIndex))
+
+
+@pytest.fixture
+def more(qapp):
+    form = More()
+    form.Show()
+    yield form
+    form.Unload()
+
+
+def test_new_index(more):
+    for control in (more.lst, more.cbo):
+        assert control.NewIndex == -1  # the designer's List: none added
+    more.lst.AddItem("At 3", 3)
+    assert more.lst.NewIndex == 3 and more.lst.List[3] == "At 3"
+    more.cbo.AddItem("a")  # sorted in at the front
+    assert more.cbo.NewIndex == 0 and more.cbo.List == ["a", "b", "c"]
+    more.cbo.AddItem("bb")
+    assert more.cbo.List[more.cbo.NewIndex] == "bb"
+    assert more.cbo._role(more.cbo.NewIndex, Qt.UserRole + 2) is None  # the mark is gone
+    more.cbo.RemoveItem(0)
+    assert more.cbo.NewIndex == -1
+    more.lst.AddItem("x")
+    more.lst.Clear()
+    assert more.lst.NewIndex == -1
+
+
+def test_top_index_and_selection(more):
+    lst = more.lst
+    assert lst.TopIndex == 0
+    lst.TopIndex = 10  # scrolls
+    assert lst.TopIndex == 10
+    assert lst.SelCount == 0
+    lst.MultiSelect = 2
+    lst.Selected[2] = True  # VB's List1.Selected(2) = True
+    lst.Selected[5] = True
+    assert lst.Selected(2) and lst.SelCount == 2
+    lst.Selected[2] = False
+    assert lst.SelCount == 1
+    more.cbo.TopIndex = 1
+    assert more.cbo.TopIndex == 1  # (the list isn't open: as set)
+
+
+def test_checkbox_list_box(more):
+    chk = more.chk
+    item = chk._widget.item(1)
+    assert item.flags() & Qt.ItemIsUserCheckable and not chk.Selected(1)
+    item.setCheckState(Qt.Checked)  # the user checks Ham
+    assert more.events == [("ItemCheck", 1, True)] and chk.SelCount == 1
+    chk.Selected[2] = True  # code: checked, no ItemCheck
+    chk.ItemBold[0] = True  # nor for other changes of an item
+    assert chk.SelCount == 2 and len(more.events) == 1
+    chk.AddItem("Olives")  # new items get a check box too
+    assert chk._widget.item(chk.NewIndex).flags() & Qt.ItemIsUserCheckable
+    chk.Style = 0  # Standard again: no check boxes; Selected is selected again
+    assert not chk._widget.item(1).flags() & Qt.ItemIsUserCheckable
+    assert chk.SelCount == 0
+
+
+def test_simple_combo(more):
+    simple = more.simple
+    widget = simple._widget
+    assert widget.list.isVisible() and widget.edit.isVisible()  # the list is always shown
+    simple.ListIndex = 1  # choosing an item: its text, and Click
+    assert simple.Text == "two" and more.events[-1] == ("Click", 1)
+    simple.Text = "three"  # free text, as in a Dropdown Combo
+    assert simple.Text == "three" and simple.ListIndex == 1
+    simple.AddItem("three")
+    simple.ItemData[simple.NewIndex] = 3
+    assert simple.List == ["one", "two", "three"] and simple.ItemData(2) == 3
+    count = len(more.events)
+    simple.Style = 0  # a Dropdown Combo now: the items, the text and the choice kept
+    assert simple.List == ["one", "two", "three"] and simple.ListIndex == 1
+    assert len(more.events) == count  # no Click for refilling the new widget
+
+
+def test_drop_down(more):
+    more.cbo._widget.showPopup()
+    more.cbo._widget.hidePopup()
+    assert more.events == ["DropDown"]

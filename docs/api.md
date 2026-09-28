@@ -654,17 +654,26 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | `ImageList` | str | `''` | The name of an ImageList on the form: the items' ItemImage is then a picture's Key or Index in it |
 | `List` | list[str] | `[]` | The items |
 | `Sorted` | bool | `False` | Keep the items in alphabetical order |
-| `Style` | enum | 0 - Dropdown Combo | 0 - Dropdown Combo, 2 - Dropdown List. Dropdown Combo: editable text; Dropdown List: choose an item only |
+| `Style` | enum | 0 - Dropdown Combo | 0 - Dropdown Combo, 1 - Simple Combo, 2 - Dropdown List. Dropdown Combo: editable text and a list that drops down; Simple Combo: editable text above a list that is always shown (make it tall enough); Dropdown List: choose an item only |
 | `Text` | str | `''` | The edit text or the selected item |
 
-Events: `Change`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Click`.
+Events: `Change`, `Click`, `DblClick`, `DropDown`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Run-time members:
 
 * `AddItem(Item, Index=None)`, `RemoveItem(Index)`, `Clear()`;
 * `ListCount`;
-* `ListIndex` (-1 = none; setting it selects an item).
+* `ListIndex` (-1 = none; setting it selects an item);
+* `NewIndex`: where the item `AddItem` added last is (where `Sorted` put it),
+  -1 after `RemoveItem` or `Clear`;
+* `TopIndex`: the item at the top of its list; setting it scrolls the list.
+
+`Style`: **0 - Dropdown Combo** (editable text, a list that drops down),
+**1 - Simple Combo** (editable text above a list that is always shown: make
+it tall enough), **2 - Dropdown List** (choose an item only). `DropDown`
+fires just before the list drops down, so the list can still be filled
+(not for a Simple Combo, whose list is always shown).
 * **Per item** (indexes from 0, like `ListIndex`):
   * `ItemData`: a value kept with each item, e.g. a record's id for its text:
     `ItemData(i)` (or `[i]`) reads it, `ItemData[i] = 42` sets it (VB's
@@ -691,16 +700,25 @@ Default size 121 × 97. Property groups: Position, Colors, Font, Common.
 | `List` | list[str] | `[]` | The items |
 | `MultiSelect` | enum | 0 - None | 0 - None, 1 - Simple, 2 - Extended. Whether several items can be selected |
 | `Sorted` | bool | `False` | Keep the items in alphabetical order |
+| `Style` | enum | 0 - Standard | 0 - Standard, 1 - Checkbox. Checkbox: a check box in front of every item; an item is Selected while it is checked, and ItemCheck fires when the user changes one |
 
-Events: `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `ItemCheck(Item)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Run-time members:
 
 * `AddItem(Item, Index=None)`, `RemoveItem(Index)`, `Clear()`;
-* `ListCount`, `ListIndex`;
+* `ListCount`, `ListIndex`, `NewIndex` (where the item `AddItem` added last
+  is, -1 after `RemoveItem` or `Clear`), `TopIndex` (the item at the top;
+  setting it scrolls);
 * `Text` (the selected item);
-* `Selected(Index)` (whether that item is selected).
+* `Selected(i)` reads whether an item is selected, `Selected[i] = True`
+  selects it (VB's `Selected(i) = True`); `SelCount` is how many are.
+
+**`Style = 1` (Checkbox)** puts a check box in front of every item: an item
+is `Selected` while it is checked (`SelCount` counts them), and
+`ItemCheck(Item)` fires when the user checks or unchecks one (`Item` is its
+index; code setting `Selected[i]` doesn't fire it).
 * **Per item** (indexes from 0, like `ListIndex`):
   * `ItemData`: a value kept with each item, e.g. a record's id for its text:
     `ItemData(i)` (or `[i]`) reads it, `ItemData[i] = 42` sets it (VB's
@@ -1748,8 +1766,9 @@ It goes in the project's `dist` folder:
 * **Style** (Graphical) can be changed at run time (in VB it is read-only
   there); a Graphical button's picture comes from a file, and a Graphical
   CheckBox shows Grayed (`Value = 2`) as not pressed.
-* **ListBox and ComboBox** have `ItemData(i)` like VB's, set with
-  `ItemData[i] = 42`, and per-item `ItemImage`, `ItemBold`, `ItemItalic` and
+* **ListBox and ComboBox** have `ItemData(i)` and `Selected(i)` like VB's,
+  set with `ItemData[i] = 42` and `Selected[i] = True`; a Checkbox ListBox's
+  `ItemCheck` fires for the user only; the Style can change at run time; and per-item `ItemImage`, `ItemBold`, `ItemItalic` and
   `ItemForeColor` (VB's had none; its ImageCombo had pictures).
 * **ListView** items can't be renamed in place (no `LabelEdit`,
   `BeforeLabelEdit`, `AfterLabelEdit`), there are no `GridLines`,

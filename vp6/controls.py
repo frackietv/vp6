@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import (QDate, QEvent, QItemSelectionModel, QLocale, QObject, QPoint,
-                            QRect, QSize, Qt, QTime, QTimer, QUrl)
+                            QRect, QSize, Qt, QTime, QTimer, QUrl, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServices, QFont, QIcon,
                            QKeyEvent, QKeySequence, QPainter, QPalette, QPen, QPixmap,
                            QStandardItem, QStandardItemModel)
@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
     QPushButton, QRadioButton, QScrollArea, QScrollBar, QSlider, QStackedLayout, QStyle,
     QStyleOptionTabWidgetFrame, QTabWidget, QToolBar, QToolButton, QTreeView, QTreeWidget,
-    QTreeWidgetItem, QWidget,
+    QTreeWidgetItem, QListWidgetItem, QVBoxLayout, QWidget,
 )
 
 from . import colors
@@ -1038,6 +1038,8 @@ class _PerItem:
 # The item roles of ListBox and ComboBox items (Qt's data roles)
 _ITEM_DATA_ROLE = Qt.UserRole
 _ITEM_IMAGE_ROLE = Qt.UserRole + 1
+_NEW_ITEM_ROLE = Qt.UserRole + 2  # (AddItem: finding the item again after sorting)
+_CHECKED_ROLE = Qt.UserRole + 3  # (a Checkbox ListBox: the state last seen, for ItemCheck)
 
 
 class _ListMixin:
@@ -1120,13 +1122,30 @@ class _ListMixin:
             self._set_role(index, Qt.DecorationRole, icon if not icon.isNull() else None)
 
     def AddItem(self, Item, Index: int | None = None) -> None:
-        self._insert(len(self._items()) if Index is None else int(Index), str(Item))
+        """Add an item, at the end or at Index (from 0); in a Sorted list, where
+        the order puts it. NewIndex is then where it is."""
+        index = self.ListCount if Index is None else int(Index)
+        sorted_list = bool(self._values.get("Sorted"))
+        self._insert(index, str(Item), mark=sorted_list)
+        if sorted_list:  # sorted in: find it again by its mark
+            self._sort()
+            index = next(i for i in range(self.ListCount) if self._role(i, _NEW_ITEM_ROLE))
+            self._set_role(index, _NEW_ITEM_ROLE, None)
+        self.__dict__["_new_index"] = index
 
     def RemoveItem(self, Index: int) -> None:
         self._remove(int(Index))
+        self.__dict__["_new_index"] = -1
 
     def Clear(self) -> None:
         self._widget.clear()
+        self.__dict__["_new_index"] = -1
+
+    @property
+    def NewIndex(self) -> int:
+        """The index of the item AddItem added last (where sorting put it);
+        -1 after RemoveItem or Clear, and before any AddItem."""
+        return self.__dict__.get("_new_index", -1)
 
     @property
     def ListCount(self) -> int:
@@ -1138,7 +1157,10 @@ class _ListMixin:
     def _apply_List(self, items):
         self._widget.clear()
         for item in items:
-            self._insert(len(self._items()), item)
+            self._insert(self.ListCount, item)
+        if self._values.get("Sorted"):
+            self._sort()
+        self.__dict__["_new_index"] = -1
 
 
 _ITEM_IMAGE_LIST = P("ImageList", "str", "",
@@ -1149,10 +1171,13 @@ _ITEM_IMAGE_LIST = P("ImageList", "str", "",
 class ListBox(_ListMixin, Control):
     TypeName = "ListBox"
     DefaultSize = (121, 97)
-    Events = ("Click", "DblClick", "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp",
-              "MouseDown", "MouseMove", "MouseUp")
+    Events = ("Click", "DblClick", "ItemCheck", "GotFocus", "LostFocus", "KeyDown", "KeyPress",
+              "KeyUp", "MouseDown", "MouseMove", "MouseUp")
     _qss_type = "QListWidget"
     Properties = (
+        P("Style", "enum", 0, enum_choices("Standard", "Checkbox"),
+          description="Checkbox: a check box in front of every item; an item is Selected "
+                      "while it is checked, and ItemCheck fires when the user changes one"),
         *_geometry(*DefaultSize),
         P("List", "list", [], description="The items"),
         P("Sorted", "bool", False, description="Keep the items in alphabetical order"),
@@ -1169,6 +1194,7 @@ class ListBox(_ListMixin, Control):
         self._widget.item(index).setData(role, value)
 
     def _create_widget(self, parent):
+        self.__dict__["_quiet"] = 0  # code changing check boxes: no ItemCheck
         return QListWidget(parent)
 
     def _event_targets(self):
@@ -1176,17 +1202,59 @@ class ListBox(_ListMixin, Control):
 
     def _connect_signals(self):
         self._widget.currentRowChanged.connect(lambda *_: self._fire("Click"))
+        self._widget.itemChanged.connect(self._on_item_changed)
+
+    def _quietly(self) -> "_Quiet":
+        return _Quiet(self)
+
+    @property
+    def _checkboxes(self) -> bool:
+        return self._values.get("Style", 0) == 1
 
     def _items(self):
         return [self._widget.item(i).text() for i in range(self._widget.count())]
 
-    def _insert(self, index, text):
-        self._widget.insertItem(index, text)
-        if self._values.get("Sorted"):
-            self._widget.sortItems()
+    def _insert(self, index, text, mark=False):
+        item = QListWidgetItem(text)
+        if mark:  # before inserting it: a sorted list puts it in its place at once
+            item.setData(_NEW_ITEM_ROLE, True)
+        self._widget.insertItem(index, item)
+        if self._checkboxes:
+            self._make_checkable(item, True)
+
+    def _sort(self):
+        self._widget.sortItems()
 
     def _remove(self, index):
         self._widget.takeItem(index)
+
+    def _make_checkable(self, item, checkable: bool) -> None:
+        with self._quietly():
+            if checkable:
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                state = item.checkState() if item.data(Qt.CheckStateRole) is not None \
+                    else Qt.Unchecked
+                item.setCheckState(state)
+                item.setData(_CHECKED_ROLE, state == Qt.Checked)
+            else:
+                item.setFlags(item.flags() & ~Qt.ItemIsUserCheckable)
+                item.setData(Qt.CheckStateRole, None)
+                item.setData(_CHECKED_ROLE, None)
+
+    def _apply_Style(self, v):
+        for index in range(self._widget.count()):
+            self._make_checkable(self._widget.item(index), v == 1)
+
+    def _on_item_changed(self, item):
+        # Any change of an item (its font, its data...) comes here: only a
+        # check box the user changed is an ItemCheck
+        if self._quiet or not self._checkboxes:
+            return
+        checked = item.checkState() == Qt.Checked
+        if checked != bool(item.data(_CHECKED_ROLE)):
+            with self._quietly():
+                item.setData(_CHECKED_ROLE, checked)
+            self._fire("ItemCheck", self._widget.row(item))
 
     def _apply_Sorted(self, v):
         self._widget.setSortingEnabled(v)
@@ -1211,20 +1279,142 @@ class ListBox(_ListMixin, Control):
         item = self._widget.currentItem()
         return item.text() if item else ""
 
-    def Selected(self, Index: int) -> bool:
-        item = self._widget.item(int(Index))
-        return bool(item and item.isSelected())
+    @property
+    def Selected(self) -> _PerItem:
+        """Whether an item is selected (in Checkbox style: checked):
+        ``List1.Selected(2)`` reads it, ``List1.Selected[2] = True`` sets it
+        (VB's ``List1.Selected(2) = True``; no ItemCheck)."""
+        def read(index):
+            item = self._widget.item(index)
+            return item.checkState() == Qt.Checked if self._checkboxes else item.isSelected()
+
+        def write(index, value):
+            item = self._widget.item(index)
+            if self._checkboxes:
+                with self._quietly():
+                    item.setCheckState(Qt.Checked if value else Qt.Unchecked)
+                    item.setData(_CHECKED_ROLE, bool(value))
+            else:
+                item.setSelected(bool(value))
+
+        return _PerItem(self, "Selected", read, write)
+
+    @property
+    def SelCount(self) -> int:
+        """How many items are selected (in Checkbox style: checked)."""
+        return sum(self.Selected(i) for i in range(self.ListCount))
+
+    @property
+    def TopIndex(self) -> int:
+        """The index of the item at the top of the list (-1 if empty);
+        setting it scrolls the list."""
+        index = self._widget.indexAt(QPoint(1, 1))
+        return index.row() if index.isValid() else (0 if self.ListCount else -1)
+
+    @TopIndex.setter
+    def TopIndex(self, value):
+        item = self._widget.item(int(value))
+        if item is not None:
+            self._widget.scrollToItem(item, QAbstractItemView.PositionAtTop)
+
+
+class _ComboWidget(QComboBox):
+    """A QComboBox telling when its list is about to drop down (DropDown)."""
+
+    aboutToDropDown = Signal()
+
+    def showPopup(self):
+        self.aboutToDropDown.emit()  # (the list can still be filled)
+        super().showPopup()
+
+
+class _SimpleCombo(QWidget):
+    """A Simple Combo (ComboBox Style 1): a text box above a list that is always
+    shown. It offers the part of QComboBox's interface ComboBox uses."""
+
+    currentIndexChanged = Signal(int)
+    editTextChanged = Signal(str)
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        self.edit = QLineEdit(self)
+        self.list = QListWidget(self)
+        layout.addWidget(self.edit)
+        layout.addWidget(self.list, 1)
+        self.list.currentRowChanged.connect(self._on_row_changed)
+        self.edit.textChanged.connect(self.editTextChanged.emit)
+
+    def _on_row_changed(self, row):
+        if row >= 0:
+            self.edit.setText(self.list.item(row).text())  # choosing an item: its text
+        self.currentIndexChanged.emit(row)
+
+    def count(self):
+        return self.list.count()
+
+    def itemText(self, index):
+        return self.list.item(index).text()
+
+    def insertItem(self, index, text):
+        self.list.insertItem(index, text)
+
+    def removeItem(self, index):
+        self.list.takeItem(index)
+
+    def clear(self):
+        self.list.clear()
+
+    def currentIndex(self):
+        return self.list.currentRow()
+
+    def setCurrentIndex(self, index):
+        self.list.setCurrentRow(index)
+
+    def currentText(self):
+        return self.edit.text()
+
+    def setEditText(self, text):
+        self.edit.setText(text)
+
+    def isEditable(self):
+        return True
+
+    def lineEdit(self):
+        return self.edit
+
+    def findText(self, text):
+        return next((i for i in range(self.count()) if self.itemText(i) == text), -1)
+
+    def itemData(self, index, role):
+        return self.list.item(index).data(role)
+
+    def setItemData(self, index, value, role):
+        self.list.item(index).setData(role, value)
+
+    def model(self):
+        return self.list.model()
+
+    def view(self):
+        return self.list
+
+    def setIconSize(self, size):
+        self.list.setIconSize(size)
 
 
 class ComboBox(_ListMixin, Control):
     TypeName = "ComboBox"
     DefaultSize = (121, 25)
-    Events = ("Change", "Click", "DblClick", "GotFocus", "LostFocus", "KeyDown", "KeyPress",
-              "KeyUp")
-    _qss_type = "QComboBox"
+    Events = ("Change", "Click", "DblClick", "DropDown", "GotFocus", "LostFocus", "KeyDown",
+              "KeyPress", "KeyUp")
     Properties = (
-        P("Style", "enum", 0, ((0, "0 - Dropdown Combo"), (2, "2 - Dropdown List")),
-          description="Dropdown Combo: editable text; Dropdown List: choose an item only"),
+        P("Style", "enum", 0,
+          enum_choices("Dropdown Combo", "Simple Combo", "Dropdown List"),
+          description="Dropdown Combo: editable text and a list that drops down; Simple "
+                      "Combo: editable text above a list that is always shown (make it tall "
+                      "enough); Dropdown List: choose an item only"),
         *_geometry(*DefaultSize),
         P("List", "list", [], description="The items"),
         P("Text", "str", "", always=True, description="The edit text or the selected item"),
@@ -1233,8 +1423,28 @@ class ComboBox(_ListMixin, Control):
         *_COLORS, *_FONT, *_COMMON,
     )
 
+    def __init__(self, parent, Name: str = "", **props):
+        # Pick the right widget up front instead of rebuilding it.
+        self.__dict__["_values"] = {"Style": int(props.get("Style") or 0)}
+        super().__init__(parent, Name, **props)
+
+    @property
+    def _simple(self) -> bool:
+        return self._values.get("Style", 0) == 1
+
+    @property
+    def _qss_type(self):
+        return "QLineEdit" if self._simple else "QComboBox"
+
     def _create_widget(self, parent):
-        return QComboBox(parent)
+        if self._simple:
+            return _SimpleCombo(parent)
+        return _ComboWidget(parent)
+
+    def _event_targets(self):
+        if isinstance(self._widget, _SimpleCombo):
+            return [self._widget, self._widget.edit, self._widget.list.viewport()]
+        return [self._widget]
 
     def _role(self, index, role):
         return self._widget.itemData(index, role)
@@ -1245,26 +1455,48 @@ class ComboBox(_ListMixin, Control):
     def _connect_signals(self):
         self._widget.currentIndexChanged.connect(lambda *_: self._fire("Click"))
         self._widget.editTextChanged.connect(lambda *_: self._fire("Change"))
+        if isinstance(self._widget, _ComboWidget):
+            self._widget.aboutToDropDown.connect(lambda: self._fire("DropDown"))
 
     def _items(self):
         return [self._widget.itemText(i) for i in range(self._widget.count())]
 
-    def _insert(self, index, text):
+    def _insert(self, index, text, mark=False):
         self._widget.insertItem(index, text)
-        if self._values.get("Sorted"):
-            self._widget.model().sort(0)
+        if mark:
+            self._set_role(index, _NEW_ITEM_ROLE, True)
+
+    def _sort(self):
+        self._widget.model().sort(0)
+
+    def _fire(self, event: str, *args):
+        if self.__dict__.get("_restyling"):  # (a new widget being filled)
+            return None
+        return super()._fire(event, *args)
 
     def _remove(self, index):
         self._widget.removeItem(index)
 
     def _apply_Style(self, v):
-        self._widget.setEditable(v != 2)
-        if v != 2:
-            self._widget.lineEdit().installEventFilter(self._bridge)
+        if isinstance(self._widget, _SimpleCombo) != (v == 1):
+            # Simple Combo is another widget: keep the items, the text and the choice
+            self._values["List"], self._values["Text"] = self._items(), self.Text
+            index = self.ListIndex
+            self.__dict__["_restyling"] = True  # no Click or Change for the refilling
+            try:
+                self._rebuild_widget()
+                if index >= 0:
+                    self.ListIndex = index
+            finally:
+                self.__dict__["_restyling"] = False
+        if isinstance(self._widget, _ComboWidget):
+            self._widget.setEditable(v != 2)
+            if v != 2:
+                self._widget.lineEdit().installEventFilter(self._bridge)
 
     def _apply_Sorted(self, v):
         if v:
-            self._widget.model().sort(0)
+            self._sort()
 
     def _read_Text(self):
         return self._widget.currentText()
@@ -1284,6 +1516,25 @@ class ComboBox(_ListMixin, Control):
     @ListIndex.setter
     def ListIndex(self, value):
         self._widget.setCurrentIndex(int(value))
+
+    @property
+    def TopIndex(self) -> int:
+        """The index of the item at the top of its list (as it drops down, or
+        a Simple Combo's); setting it scrolls the list."""
+        view = self._widget.view()
+        index = view.indexAt(QPoint(1, 1))
+        if index.isValid() and view.isVisible():
+            return index.row()
+        return self.__dict__.get("_top_index", 0 if self.ListCount else -1)
+
+    @TopIndex.setter
+    def TopIndex(self, value):
+        value = int(value)
+        self.__dict__["_top_index"] = value
+        model = self._widget.model()
+        if 0 <= value < model.rowCount():
+            self._widget.view().scrollTo(model.index(value, 0),
+                                         QAbstractItemView.PositionAtTop)
 
 
 # --- Timer ------------------------------------------------------------------------------------

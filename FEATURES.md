@@ -1,5 +1,18 @@
 # VP6 features
 
+**Version:** 0.4.2
+**Date:** 2026-09-30
+
+## Controls
+
+- ListBox and ComboBox `NewIndex` (where the item AddItem added last is, also when Sorted moved it) and `TopIndex` (the item at the top of the list; setting it scrolls)
+- ListBox `SelCount`, and `Selected` can be set: `List1.Selected[2] = True` (VB's `List1.Selected(2) = True`)
+- ListBox `Style = 1` (Checkbox): a check box in front of every item, `Selected` while checked, and the `ItemCheck(Item)` event when the user checks or unchecks one
+- ComboBox `Style = 1` (Simple Combo): an editable text above a list that is always shown; and the ComboBox `DropDown` event, just before its list drops down
+- The Kitchen Sink's Lists page has a Checkbox ListBox, a Simple Combo, a ComboBox adding what was typed when it drops down, and uses NewIndex and TopIndex
+
+---
+
 **Version:** 0.4.1
 **Date:** 2026-09-30
 
