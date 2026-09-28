@@ -8,13 +8,15 @@ parameters than VB passes (``def Text1_KeyPress(self, KeyAscii)`` or just
 
 from __future__ import annotations
 
+import html
 import os
+import sys
 
 from PySide6.QtCore import (QDate, QEvent, QItemSelectionModel, QLocale, QObject, QPoint,
                             QRect, QSize, Qt, QTime, QTimer, QUrl, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServices, QFont, QIcon,
                            QKeyEvent, QKeySequence, QPainter, QPalette, QPen, QPixmap,
-                           QStandardItem, QStandardItemModel)
+                           QShortcut, QStandardItem, QStandardItemModel)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox, QFrame, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
@@ -91,6 +93,41 @@ def vp_buttons(buttons) -> int:
 def strip_mnemonic(caption: str) -> str:
     """'&File' -> 'File', 'Save && Exit' -> 'Save & Exit'."""
     return caption.replace("&&", "\0").replace("&", "").replace("\0", "&")
+
+
+def parse_mnemonic(caption: str) -> tuple[str, int]:
+    """(the text shown, the index of its access key letter or -1): '&Name' ->
+    ('Name', 0); '&&' is a literal & and a trailing & nothing."""
+    text, index, i = [], -1, 0
+    while i < len(caption):
+        char = caption[i]
+        if char == "&" and i + 1 < len(caption):
+            if caption[i + 1] == "&":
+                text.append("&")
+            elif index < 0 and not caption[i + 1].isspace():
+                index = len(text)
+                text.append(caption[i + 1])
+            else:
+                text.append(caption[i + 1])
+            i += 2
+            continue
+        if char != "&":
+            text.append(char)
+        i += 1
+    return "".join(text), index
+
+
+# The access key's modifiers: Alt (Windows, Linux); on macOS Control+Option, as
+# Option+letter types accented letters there (Qt.META is the Control key on macOS)
+ACCESS_KEY_MODIFIERS = (Qt.META | Qt.ALT) if sys.platform == "darwin" else Qt.ALT
+
+
+def access_key_sequence(letter: str) -> QKeySequence | None:
+    """The key sequence of a Label's access key letter (a letter or digit)."""
+    letter = letter.upper()
+    if not ("A" <= letter <= "Z" or "0" <= letter <= "9"):
+        return None
+    return QKeySequence(ACCESS_KEY_MODIFIERS | Qt.Key(ord(letter)))  # (Qt's key codes: ASCII)
 
 
 def resolve_path(owner, path: str) -> str:
@@ -535,8 +572,13 @@ class Label(Control):
                       "colors). Markdown: bold, headings, lists and links written the "
                       "Markdown way"),
         P("Caption", "text", "", always=True,
-          description="The text; in plain text & marks are hidden (&& shows a literal &)"),
+          description="The text; in plain text an & before a letter underlines it, its "
+                      "access key (&& shows a literal &)"),
         *_geometry(*DefaultSize),
+        P("UseMnemonic", "bool", True,
+          description="An & in the Caption marks an access key: Alt+the letter (on macOS "
+                      "Control+Option+the letter) focuses the next control in the tab "
+                      "order. False: the & is shown as it is"),
         P("Alignment", "enum", 0, _ALIGNMENT, description="Horizontal text alignment"),
         P("AutoSize", "bool", False, description="Resize to fit the text"),
         P("WordWrap", "bool", False, description="Wrap long text onto several lines"),
@@ -568,9 +610,76 @@ class Label(Control):
             self._apply_Caption(self._values["Caption"])
 
     def _apply_Caption(self, v):
-        self._widget.setText(v if self._formatted() else strip_mnemonic(v))
+        key = None
+        if self._formatted():
+            self._widget.setText(v)
+        elif not self._values.get("UseMnemonic", True):  # the & as it is
+            self._widget.setTextFormat(Qt.PlainText)
+            self._widget.setText(v)
+        else:
+            text, index = parse_mnemonic(v)
+            if index < 0:
+                self._widget.setTextFormat(Qt.PlainText)
+                self._widget.setText(text)
+            else:  # the access key letter underlined (drawn as rich text)
+                self._widget.setTextFormat(Qt.RichText)
+                self._widget.setText(
+                    '<span style="white-space: pre-wrap">' + html.escape(text[:index]) +
+                    f"<u>{html.escape(text[index])}</u>" + html.escape(text[index + 1:]) +
+                    "</span>")
+                key = access_key_sequence(text[index])
+        self._set_access_key(key)
         if self._values.get("AutoSize"):
             self._widget.adjustSize()
+
+    def _apply_UseMnemonic(self, v):
+        if "Caption" in self._values:
+            self._apply_Caption(self._values["Caption"])
+
+    # -- the access key --------------------------------------------------------------------------
+    @property
+    def AccessKey(self) -> str:
+        """The access key letter of the Caption ("" for none), read-only."""
+        if self._formatted() or not self._values.get("UseMnemonic", True):
+            return ""
+        text, index = parse_mnemonic(self._values.get("Caption", ""))
+        return text[index] if index >= 0 else ""
+
+    def _set_access_key(self, sequence) -> None:
+        old = self.__dict__.get("_shortcut")
+        if old is not None:
+            old.setEnabled(False)
+            old.setParent(None)
+            old.deleteLater()
+        self.__dict__["_shortcut"] = None
+        if sequence is None or self._design_mode:
+            return
+        shortcut = QShortcut(sequence, self._form._widget)
+        shortcut.setContext(Qt.WindowShortcut)
+        shortcut.activated.connect(self._on_access_key)
+        self.__dict__["_shortcut"] = shortcut
+
+    def _on_access_key(self) -> None:
+        """The access key was pressed: focus the next control in the tab order
+        that can take the focus (going round), as in VB."""
+        if not (self._widget.isVisible() and self._widget.isEnabled()):
+            return
+        mine = self._values.get("TabIndex", 0)
+        ordered = sorted((c for c in self._form._controls
+                          if c is not self and "TabIndex" in c._specs and c._widget is not None),
+                         key=lambda c: c._values.get("TabIndex", 0))
+        after = [c for c in ordered if c._values.get("TabIndex", 0) > mine]
+        before = [c for c in ordered if c._values.get("TabIndex", 0) <= mine]
+        for control in after + before:
+            widget = control._widget
+            if widget.isVisible() and widget.isEnabled() and \
+                    widget.focusPolicy() & Qt.TabFocus:
+                control.SetFocus()
+                return
+
+    def _dispose(self) -> None:
+        self._set_access_key(None)
+        super()._dispose()
 
     def _on_link(self, url: str) -> None:
         """A link was clicked: LinkClick(URL), or without a handler, the

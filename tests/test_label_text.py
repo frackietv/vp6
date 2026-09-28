@@ -7,7 +7,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QToolButton
 
-from vp6 import Form, Label, formfile, vpMarkdown, vpPlainText, vpRichText
+from vp6 import CommandButton, Form, Label, TextBox, formfile, vpMarkdown, vpPlainText, vpRichText
 from vp6.ide.designer import FormDesigner
 from vp6.ide.documents import FormDocument
 from vp6.ide.properties import PropertiesWindow
@@ -40,9 +40,11 @@ def about(qapp):
     form.Unload()
 
 
-def test_plain_text_hides_access_keys(about):
-    assert about.lblPlain._widget.text() == "Name & more"
-    assert about.lblPlain._widget.textFormat() == Qt.PlainText
+def test_plain_text_underlines_access_keys(about):
+    # (drawn as rich text, the access key letter underlined; still plain text to VB code)
+    assert about.lblPlain._widget.text() == \
+        '<span style="white-space: pre-wrap"><u>N</u>ame &amp; more</span>'
+    assert about.lblPlain.AccessKey == "N"
     assert about.lblPlain.TextFormat == vpPlainText
 
 
@@ -99,3 +101,97 @@ def test_file_and_designer(qapp, tmp_path):
 
 def test_constants():
     assert (vpPlainText, vpRichText, vpMarkdown) == (0, 1, 2)
+
+
+# --- access keys (& in a Caption) and UseMnemonic ----------------------------------------------
+
+def test_parse_mnemonic():
+    from vp6.controls import parse_mnemonic
+    assert parse_mnemonic("&Name:") == ("Name:", 0)
+    assert parse_mnemonic("N&otes") == ("Notes", 1)
+    assert parse_mnemonic("Save && E&xit") == ("Save & Exit", 8)  # && is a literal &
+    assert parse_mnemonic("Tom &&Jerry") == ("Tom &Jerry", -1)
+    assert parse_mnemonic("&One &Two") == ("One Two", 0)  # the first & only
+    assert parse_mnemonic("end&") == ("end", -1) and parse_mnemonic("") == ("", -1)
+
+
+def test_access_key_sequence():
+    import sys
+
+    from vp6.controls import access_key_sequence
+    expected = "Meta+Alt+N" if sys.platform == "darwin" else "Alt+N"  # Control+Option on macOS
+    assert access_key_sequence("n").toString() == expected
+    assert access_key_sequence("7").toString().endswith("+7")
+    assert access_key_sequence("é") is None and access_key_sequence("-") is None
+
+
+class Keys(Form):
+    def InitializeComponent(self):
+        self.lblName = Label(self, Caption="&Name:", TabIndex=1)
+        self.txtName = TextBox(self, Top=0, Left=100, TabIndex=2)
+        self.lblHidden = Label(self, Caption="&Hidden:", Top=40, TabIndex=3)
+        self.txtHidden = TextBox(self, Top=40, Left=100, Visible=False, TabIndex=4)
+        self.txtOff = TextBox(self, Top=40, Left=200, Enabled=False, TabIndex=5)
+        self.lblInfo = Label(self, Caption="no key", Top=80, TabIndex=6)
+        self.cmdLast = CommandButton(self, Caption="Last", Top=120, TabIndex=7)
+        self.lblLoop = Label(self, Caption="&Loop", Top=160, TabIndex=8)
+
+
+@pytest.fixture
+def keys(qapp):
+    form = Keys()
+    form.Show()
+    yield form
+    form.Unload()
+
+
+def _focused(form):
+    return form._widget.window().focusWidget()
+
+
+def test_access_keys_focus_the_next_control(keys):
+    name = keys.lblName
+    assert name.AccessKey == "N" and "<u>N</u>ame:" in name._widget.text()
+    assert name._widget.textFormat() == Qt.RichText and name._shortcut is not None
+    name._shortcut.activated.emit()
+    assert _focused(keys) is keys.txtName._widget  # the next control in the tab order
+    keys.lblHidden._shortcut.activated.emit()  # skipping a hidden and a disabled box,
+    assert _focused(keys) is keys.cmdLast._widget  # and a Label (it takes no focus)
+    keys.lblLoop._shortcut.activated.emit()  # the last one: round to the first
+    assert _focused(keys) is keys.txtName._widget
+    assert keys.lblInfo.AccessKey == "" and keys.lblInfo._shortcut is None
+    keys.lblName.Enabled = False  # a disabled label's key does nothing
+    keys.cmdLast.SetFocus()
+    keys.lblName._shortcut.activated.emit()
+    assert _focused(keys) is keys.cmdLast._widget
+
+
+def test_changing_the_caption_and_use_mnemonic(keys):
+    name = keys.lblName
+    old = name._shortcut
+    name.Caption = "Na&me:"  # a new key replaces the old one
+    assert name.AccessKey == "m" and name._shortcut is not old and not old.isEnabled()
+    name.UseMnemonic = False  # the & as it is, no key
+    assert name._widget.text() == "Na&me:" and name._widget.textFormat() == Qt.PlainText
+    assert name.AccessKey == "" and name._shortcut is None
+    name.UseMnemonic = True
+    name.Caption = "Rock && Roll"  # && is a literal &
+    assert name._widget.text() == "Rock & Roll" and name._shortcut is None
+    name.TextFormat = vpRichText  # formatted captions have no access keys
+    name.Caption = "<b>&amp;Bold</b>"
+    assert name.AccessKey == "" and name._shortcut is None
+
+
+def test_no_access_keys_while_designing(qapp, tmp_path):
+    path = tmp_path / "Form1.py"
+    path.write_text(formfile.new_form_source("Form1"))
+    d = FormDesigner(FormDocument(str(path)), str(tmp_path))
+    from PySide6.QtCore import QRect
+    origin = d.form_canvas_rect().topLeft()
+    name = d.create_control("Label", QRect(origin + QPoint(16, 16), origin + QPoint(120, 40)),
+                            None)
+    d.select([name])
+    assert d.set_property("Caption", "&Name:") is None
+    label = d.controls[name]
+    assert "<u>N</u>" in label._widget.text() and label._shortcut is None  # shown, not active
+    d.close()

@@ -474,15 +474,31 @@ Methods: `Cls()` clears the picture.
 
 ### Label
 
-Read-only text. In plain text, `&` in the Caption is hidden (`&&` shows a
-literal `&`).
+Read-only text.
+
+**Access keys.** In plain text, an `&` before a letter in the Caption
+underlines it: its access key. Pressing **Alt+the letter** (on macOS
+**Control+Option+the letter**, as Option+letter types accented letters
+there) moves the focus to the next control in the tab order that can take
+it (after the Label's `TabIndex`, going round), as in VB: give a TextBox the
+`TabIndex` after its Label's.
+
+```python
+self.lblName = Label(self, Caption="&Name:", TabIndex=1)   # Alt+N...
+self.txtName = TextBox(self, TabIndex=2)                     # ...comes here
+```
+
+* `&&` shows a literal `&`; only the first single `&` marks a key.
+* `UseMnemonic = False` shows the Caption as it is, `&` included, with no
+  access key (e.g. for names like "Tom & Jerry").
+* `AccessKey` is the key's letter ("" for none), read-only.
 
 **Formatted captions (`TextFormat`).** VB's Labels were plain text only; a
 VP6 Label can also show rich text:
 
 | `TextFormat` | Caption |
 |---|---|
-| `vpPlainText` (0, the default) | shown as it is (without the `&` marks) |
+| `vpPlainText` (0, the default) | shown as it is, an `&` marking the access key |
 | `vpRichText` (1) | HTML: `<b>bold</b>`, `<i>`, `<h2>heading</h2>`, `<br>`, `<a href="...">links</a>`, colors with `<span style="color:red">` |
 | `vpMarkdown` (2) | Markdown: `**bold**`, `*italic*`, `# heading`, lists, `` `code` ``, `[text](link)` |
 
@@ -507,8 +523,9 @@ Default size 97 × 25. Property groups: Position, Colors, Font, Common.
 | `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment |
 | `AutoSize` | bool | `False` | Resize to fit the text |
 | `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the label |
-| `Caption` | str (multi-line) | `''` | The text; in plain text & marks are hidden (&& shows a literal &) |
+| `Caption` | str (multi-line) | `''` | The text; in plain text an & before a letter underlines it, its access key (&& shows a literal &) |
 | `TextFormat` | enum | 0 - Plain | 0 - Plain, 1 - Rich Text, 2 - Markdown. Plain: the Caption as it is. Rich Text: HTML (bold, headings, links, colors). Markdown: bold, headings, lists and links written the Markdown way |
+| `UseMnemonic` | bool | `True` | An & in the Caption marks an access key: Alt+the letter (on macOS Control+Option+the letter) focuses the next control in the tab order. False: the & is shown as it is |
 | `WordWrap` | bool | `False` | Wrap long text onto several lines |
 
 Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `LinkClick(URL)`. Default event (double-click in the designer): `Click`.
@@ -1766,6 +1783,8 @@ It goes in the project's `dist` folder:
 * **Style** (Graphical) can be changed at run time (in VB it is read-only
   there); a Graphical button's picture comes from a file, and a Graphical
   CheckBox shows Grayed (`Value = 2`) as not pressed.
+* **Label access keys** are Control+Option+letter on macOS (Alt+letter
+  elsewhere), and the letter is always underlined.
 * **ListBox and ComboBox** have `ItemData(i)` and `Selected(i)` like VB's,
   set with `ItemData[i] = 42` and `Selected[i] = True`; a Checkbox ListBox's
   `ItemCheck` fires for the user only; the Style can change at run time; and per-item `ItemImage`, `ItemBold`, `ItemItalic` and

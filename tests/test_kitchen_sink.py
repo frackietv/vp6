@@ -242,6 +242,11 @@ def test_text_page(sink):
     page.fraAlign_Click()
     assert "containers" in page.lblInfo.Caption
     assert page.lblAuto.Width < 150  # AutoSize fits the text
+    # Access keys: the label's letter underlined; the key focuses the box after it
+    assert page.lblPassword.AccessKey == "P" and "<u>P</u>" in page.lblPassword._widget.text()
+    page.lblPassword._shortcut.activated.emit()
+    assert page._widget.window().focusWidget() is page.txtPassword._widget
+    assert page.lblKeys.AccessKey == "" and "Rock & Roll" in page.lblKeys._widget.text()
 
 
 def test_buttons_page(sink):

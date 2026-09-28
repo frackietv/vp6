@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Label access keys: `&` in a Label's Caption underlines the letter and Alt+letter focuses the next control in the tab order, as in VB (today the `&` is just removed), plus `UseMnemonic`
 - **[Controls]** Label `BackStyle` (Transparent / Opaque)
 - **[Controls]** File system controls: DriveListBox, DirListBox, FileListBox
 - **[Controls]** RichTextBox: text with colors, bold and italic, and appending formatted text (self-hosting: the code editor and the colored Immediate output)

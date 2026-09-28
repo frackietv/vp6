@@ -1,5 +1,16 @@
 # VP6 features
 
+**Version:** 0.4.4
+**Date:** 2026-09-30
+
+## Controls
+
+- Label access keys, as in VB: an `&` before a letter in a Label's Caption underlines it, and Alt+the letter (on macOS Control+Option+the letter, which leaves Option+letter for typing accented letters) moves the focus to the next control in the tab order (going round, skipping hidden and disabled ones)
+- Label `UseMnemonic`: False shows the `&` as it is, with no access key; `AccessKey` gives the key's letter
+- The Kitchen Sink's Text page has access keys on its labels, and a label with UseMnemonic = False
+
+---
+
 **Version:** 0.4.3
 **Date:** 2026-09-30
 

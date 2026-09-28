@@ -1,4 +1,4 @@
-"""Kitchen Sink page: Labels and TextBoxes."""
+"""Kitchen Sink page: Labels (with access keys) and TextBoxes."""
 
 from vp6 import *
 
@@ -16,16 +16,16 @@ class pgText(Form):
         self.cmdGreet = CommandButton(self, Caption='&Greet', Left=300, Top=14, Width=90,
                                       Height=30, Default=True, TabIndex=3,
                                       ToolTipText='The Default button: Enter clicks it')
-        self.lblNotes = Label(self, Caption='Notes:', Left=16, Top=60, Width=70, Height=25,
+        self.lblNotes = Label(self, Caption='N&otes:', Left=16, Top=60, Width=70, Height=25,
                               TabIndex=4)
         self.txtNotes = TextBox(self, MultiLine=True,
                                 Text='A multi-line\nTextBox with\na vertical scroll bar', Left=90,
                                 Top=56, Width=300, Height=90, ScrollBars=2, TabIndex=5)
-        self.lblPassword = Label(self, Caption='Password:', Left=16, Top=164, Width=70, Height=25,
+        self.lblPassword = Label(self, Caption='&Password:', Left=16, Top=164, Width=70, Height=25,
                                  TabIndex=6)
         self.txtPassword = TextBox(self, Text='', Left=90, Top=160, Width=200, Height=25,
                                    PasswordChar='*', TabIndex=7)
-        self.lblUpper = Label(self, Caption='UPPER:', Left=16, Top=200, Width=70, Height=25,
+        self.lblUpper = Label(self, Caption='&UPPER:', Left=16, Top=200, Width=70, Height=25,
                               TabIndex=8)
         self.txtUpper = TextBox(self, Text='', Left=90, Top=196, Width=200, Height=25, TabIndex=9,
                                 ToolTipText='KeyPress turns what you type into upper case')
@@ -42,6 +42,10 @@ class pgText(Form):
         self.lblAuto = Label(self.fraAlign, Caption='AutoSize fits me', Left=12, Top=128, Width=60,
                              Height=25, AutoSize=True, BackColor=0xC0FFFF, ForeColor=0x000000,
                              TabIndex=15)
+        self.lblKeys = Label(self,
+                             Caption='The underlined letters are access keys: Alt+the letter (on macOS Control+Option+the letter) goes to the box after the label. Rock & Roll: this label has UseMnemonic = False, so its & is shown.',
+                             Left=16, Top=300, Width=600, Height=50, UseMnemonic=False,
+                             WordWrap=True, TabIndex=16)
     # endregion
 
     def fraAlign_Click(self):
