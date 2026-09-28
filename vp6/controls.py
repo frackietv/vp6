@@ -732,20 +732,144 @@ class TextBox(Control):
 
 # --- CommandButton ------------------------------------------------------------------
 
-class CommandButton(Control):
+_STYLE_DESCRIPTION = {
+    "CommandButton": "Graphical: a button showing its Picture above the Caption",
+    "CheckBox": "Graphical: a toggle button, pressed while Value is vpChecked, showing its "
+                "Picture above the Caption",
+    "OptionButton": "Graphical: a toggle button, pressed while Value is True (one of its "
+                    "container's option buttons), showing its Picture above the Caption",
+}
+
+
+def _graphical_props(type_name: str) -> tuple:
+    """Style and the pictures of a Graphical CommandButton, CheckBox or OptionButton."""
+    return (
+        P("Style", "enum", 0, enum_choices("Standard", "Graphical"),
+          description=_STYLE_DESCRIPTION[type_name]),
+        P("Picture", "file", "",
+          description="A Graphical button's picture (relative to the form's folder)"),
+        P("DownPicture", "file", "",
+          description="A Graphical button's picture while it is pressed (or set); "
+                      "empty = Picture"),
+        P("DisabledPicture", "file", "",
+          description="A Graphical button's picture while it is disabled; empty = Picture, "
+                      "grayed"),
+    )
+
+
+class _Graphical:
+    """Style = Graphical for CommandButton, CheckBox and OptionButton, as in VB:
+    a button (a QToolButton) with its Picture above its Caption, DownPicture
+    while pressed or set, DisabledPicture while disabled. A CheckBox or
+    OptionButton becomes a toggle button, pressed while its Value is set
+    (the option buttons of a container stay exclusive)."""
+
+    _standard_qss = "QPushButton"
+    _checkable = False  # (a toggle button: CheckBox, OptionButton)
+
+    def __init__(self, parent, Name: str = "", **props):
+        # Pick the right widget up front instead of rebuilding it.
+        self.__dict__["_values"] = {"Style": int(props.get("Style") or 0)}
+        super().__init__(parent, Name, **props)
+
+    @property
+    def _graphical(self) -> bool:
+        return self._values.get("Style", 0) == 1
+
+    @property
+    def _qss_type(self):
+        return "QToolButton" if self._graphical else self._standard_qss
+
+    def _graphical_widget(self, parent) -> QToolButton:
+        button = QToolButton(parent)
+        button.setCheckable(self._checkable)
+        button.setFocusPolicy(Qt.StrongFocus)
+        for signal in (button.pressed, button.released, button.toggled):
+            signal.connect(self._update_picture)
+        return button
+
+    def _apply_Style(self, v):
+        if isinstance(self._widget, QToolButton) != (v == 1):
+            self._before_rebuild()
+            self.__dict__["_restyling"] = True  # the new widget gets the Value: no Click
+            try:
+                self._rebuild_widget()
+            finally:
+                self.__dict__["_restyling"] = False
+        self._update_picture()
+
+    def _fire(self, event: str, *args):
+        if self.__dict__.get("_restyling"):
+            return None
+        return super()._fire(event, *args)
+
+    def _before_rebuild(self) -> None:
+        """Keep what the widget knows (e.g. a checked state) for the new one."""
+
+    def _update_picture(self, *_) -> None:
+        """Show the picture for the button's state (Graphical only)."""
+        button = self._widget
+        if not isinstance(button, QToolButton):
+            return
+        values = self._values
+        name = "Picture"
+        if not button.isEnabled() and values.get("DisabledPicture"):
+            name = "DisabledPicture"
+        elif (button.isDown() or button.isChecked()) and values.get("DownPicture"):
+            name = "DownPicture"
+        path = resolve_path(self, values.get(name, ""))
+        pixmap = QPixmap(path) if path else QPixmap()
+        if pixmap.isNull():
+            button.setIcon(QIcon())
+            button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+            return
+        button.setIcon(QIcon(pixmap))
+        button.setIconSize(pixmap.deviceIndependentSize().toSize())
+        button.setToolButtonStyle(Qt.ToolButtonTextUnderIcon if button.text()
+                                  else Qt.ToolButtonIconOnly)
+
+    def _apply_Picture(self, v):
+        self._update_picture()
+
+    _apply_DownPicture = _apply_DisabledPicture = _apply_Picture
+
+    def _apply_Caption(self, v):
+        self._widget.setText(v)
+        self._update_picture()  # (picture and text, or just the picture)
+
+    def _apply_Enabled(self, v):
+        super()._apply_Enabled(v)
+        self._update_picture()
+
+    def _apply_font(self, _=None):
+        super()._apply_font()
+        if isinstance(self._widget, QToolButton) and not self._values.get("FontSize"):
+            # Some platforms (macOS) give tool buttons a smaller font: a Graphical
+            # button's Caption is the size of an ordinary button's
+            font = self._widget.font()
+            font.setPointSizeF(QApplication.font("QPushButton").pointSizeF())
+            self._widget.setFont(font)
+
+    _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
+        _apply_FontUnderline = _apply_font
+
+
+class CommandButton(_Graphical, Control):
     TypeName = "CommandButton"
     Events = ("Click", "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp",
               "MouseDown", "MouseMove", "MouseUp")
-    _qss_type = "QPushButton"
     Properties = (
         P("Caption", "str", "", always=True, description="The text; & marks the access key"),
         *_geometry(*Control.DefaultSize),
         P("Default", "bool", False, description="Clicked when Enter is pressed on the form"),
         P("Cancel", "bool", False, description="Clicked when Esc is pressed on the form"),
+        *_graphical_props("CommandButton"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
     def _create_widget(self, parent):
+        if self._graphical:
+            return self._graphical_widget(parent)
         button = QPushButton(parent)
         button.setAutoDefault(False)
         return button
@@ -753,11 +877,9 @@ class CommandButton(Control):
     def _connect_signals(self):
         self._widget.clicked.connect(lambda *_: self._fire("Click"))
 
-    def _apply_Caption(self, v):
-        self._widget.setText(v)
-
     def _apply_Default(self, v):
-        self._widget.setDefault(v)
+        if isinstance(self._widget, QPushButton):  # (a Graphical one looks the same)
+            self._widget.setDefault(v)
 
     @property
     def Value(self) -> bool:
@@ -772,62 +894,80 @@ class CommandButton(Control):
 
 # --- CheckBox / OptionButton ---------------------------------------------------------
 
-class CheckBox(Control):
+class CheckBox(_Graphical, Control):
     TypeName = "CheckBox"
     Events = ("Click", "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp",
               "MouseDown", "MouseMove", "MouseUp")
-    _qss_type = "QCheckBox"
+    _standard_qss = "QCheckBox"
+    _checkable = True
     Properties = (
         P("Caption", "str", "", always=True, description="The text; & marks the access key"),
         *_geometry(121, 25),
         P("Value", "enum", 0, enum_choices("Unchecked", "Checked", "Grayed"),
           description="vpUnchecked, vpChecked or vpGrayed; changing it fires Click"),
+        *_graphical_props("CheckBox"),
         *_COLORS, *_FONT, *_COMMON,
     )
     DefaultSize = (121, 25)
 
     def _create_widget(self, parent):
+        if self._graphical:
+            return self._graphical_widget(parent)
         box = QCheckBox(parent)
         box.setTristate(False)
         return box
 
     def _connect_signals(self):
-        self._widget.stateChanged.connect(lambda *_: self._fire("Click"))
+        if isinstance(self._widget, QToolButton):
+            self._widget.toggled.connect(lambda *_: self._fire("Click"))
+        else:
+            self._widget.stateChanged.connect(lambda *_: self._fire("Click"))
 
-    def _apply_Caption(self, v):
-        self._widget.setText(v)
+    def _before_rebuild(self):
+        self._values["Value"] = self._read_Value()
 
     def _read_Value(self):
+        if isinstance(self._widget, QToolButton):
+            return 1 if self._widget.isChecked() else 0
         state = self._widget.checkState()
         return {Qt.Unchecked: 0, Qt.Checked: 1}.get(state, 2)
 
     def _apply_Value(self, v):
+        if isinstance(self._widget, QToolButton):  # (Grayed: not pressed)
+            self._widget.setChecked(v == 1)
+            return
         if v == 2:
             self._widget.setTristate(True)
         self._widget.setCheckState({0: Qt.Unchecked, 1: Qt.Checked}.get(v, Qt.PartiallyChecked))
 
 
-class OptionButton(Control):
+class OptionButton(_Graphical, Control):
     TypeName = "OptionButton"
     Events = CheckBox.Events
-    _qss_type = "QRadioButton"
+    _standard_qss = "QRadioButton"
+    _checkable = True
     DefaultSize = (121, 25)
     Properties = (
         P("Caption", "str", "", always=True, description="The text; & marks the access key"),
         *_geometry(121, 25),
         P("Value", "bool", False,
           description="Selected; option buttons in the same container are exclusive"),
+        *_graphical_props("OptionButton"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
     def _create_widget(self, parent):
+        if self._graphical:
+            button = self._graphical_widget(parent)
+            button.setAutoExclusive(True)  # with the container's other option buttons
+            return button
         return QRadioButton(parent)
 
     def _connect_signals(self):
         self._widget.toggled.connect(lambda checked: checked and self._fire("Click"))
 
-    def _apply_Caption(self, v):
-        self._widget.setText(v)
+    def _before_rebuild(self):
+        self._values["Value"] = self._read_Value()
 
     def _read_Value(self):
         return self._widget.isChecked()

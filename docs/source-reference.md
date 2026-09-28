@@ -148,7 +148,7 @@ VB-compatible constants with a `vp` prefix, grouped by use:
 `__all__` is every global starting with `vp`. The values are listed in
 [api.md](api.md#constants).
 
-### `vp6/controls.py` (≈4620 lines)
+### `vp6/controls.py` (≈4760 lines)
 
 The intrinsic controls.
 
@@ -215,9 +215,9 @@ The intrinsic controls.
 |---|---|---|
 | `Label` | `QLabel` | Click synthesized from the mouse; `Caption` (multi-line) has mnemonics stripped in plain text; `TextFormat` (before Caption in `Properties`) picks plain, rich or Markdown (`_TEXT_FORMATS`) and makes links clickable at run time; `_on_link` fires `LinkClick(URL)`, or opens the URL (`QDesktopServices`) without a handler; AutoSize/WordWrap/BorderStyle. |
 | `TextBox` | `QLineEdit` or `QPlainTextEdit` | `MultiLine` picks the widget (rebuilt when changed); `SelStart`/`SelLength`/`SelText`; Change on every edit. |
-| `CommandButton` | `QPushButton` | `Default`/`Cancel`; setting `Value = True` clicks it. |
-| `CheckBox` | `QCheckBox` | `Value` 0/1/2 (tri-state for Grayed); Click fires on every change, including from code (VB behavior). |
-| `OptionButton` | `QRadioButton` | Buttons in the same container are mutually exclusive; Click when it becomes checked. |
+| `CommandButton` | `QPushButton`, or a `QToolButton` when Graphical (`_Graphical`) | `Default`/`Cancel`; setting `Value = True` clicks it. |
+| `CheckBox` | `QCheckBox`, or a checkable `QToolButton` when Graphical (a toggle button: `toggled` fires Click; Grayed shows not pressed) | `Value` 0/1/2 (tri-state for Grayed); Click fires on every change, including from code (VB behavior). |
+| `OptionButton` | `QRadioButton`, or a checkable, auto-exclusive `QToolButton` when Graphical (exclusive with the container's other option buttons of either kind) | Buttons in the same container are mutually exclusive; Click when it becomes checked. |
 | `Frame` | `QGroupBox` | Container; colors via palette. |
 | `ListBox` | `QListWidget` | `_ListMixin` (`AddItem`, `RemoveItem`, `Clear`, `ListCount`, `List`); `ListIndex`, `Text`, `Selected(i)`, `Sorted`, `MultiSelect`. |
 | `ComboBox` | `QComboBox` | `Style` 0 (editable) / 2 (list only); Click on selection change, Change on edit. |
@@ -255,6 +255,19 @@ ImageList may be created after the controls using it.
 `Count`, `Item`/call (an Index, a Key or an item: `_resolve`), iteration,
 `Remove` and `Clear`, and `_insert`/`_reset` for the control; each change
 calls the control's update (`changed`).
+
+`_Graphical` is the mixin of CommandButton, CheckBox and OptionButton for
+`Style = Graphical` (`_graphical_props`: Style, Picture, DownPicture,
+DisabledPicture). Their `__init__` seeds `_values` with the Style so the
+right widget is built up front (`_graphical_widget`: a `QToolButton`); a
+later change rebuilds it (`_rebuild_widget`, after `_before_rebuild` keeps
+a CheckBox's or OptionButton's checked state, with no Click: `_restyling`).
+`_update_picture` (on pressed, released, toggled, Enabled and the picture
+properties) shows Picture, DownPicture while down or checked, or
+DisabledPicture while disabled, above the Caption (`ToolButtonTextUnderIcon`;
+text or picture only when the other is missing); `_qss_type` follows the
+widget; `_apply_font` gives a tool button an ordinary button's font size
+unless FontSize is set.
 
 `_Docked` is the mixin of the controls with an `Align` property (PictureBox,
 Splitter, StatusBar, Toolbar): while docked, changing their Align, size, place or
@@ -1200,7 +1213,9 @@ explorer-style.
   * `pgText.py`: Labels (alignment, AutoSize, access keys) and TextBoxes
     (multi-line, password, upper-casing KeyPress), GotFocus/LostFocus,
     Change, a Default button with InputBox/MsgBox, a Frame's Click;
-  * `pgButtons.py`: CommandButtons (Value = True clicks), CheckBoxes (also
+  * `pgButtons.py` (with Graphical buttons: `cmdStar`, a picture button with
+    a DownPicture; `chkUnderline`, a toggle CheckBox; `optAlign`, toggle
+    OptionButtons in the Alignment frame): CommandButtons (Value = True clicks), CheckBoxes (also
     grayed), OptionButtons in two Frames (two groups);
   * `pgLists.py`: a sorted ListBox with Add/Remove, Click and DblClick,
     ComboBoxes (a list with colors from `vpRed`, `RGB` and `QBColor`, and an
@@ -1398,6 +1413,7 @@ All tests run headless. `conftest.py`:
 |---|---|
 | `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results, `End()` ending a program (in a process of its own) without Form_Unload. |
 | `test_formfile.py` | Region round trips, default elision, line wrapping, invalid regions, renames (controls, form classes, class and module references in other files), the console template. |
+| `test_graphical_buttons.py` | Style = Graphical: a picture button (the picture above the Caption, DownPicture while pressed, DisabledPicture, no picture on a Standard button, Value = True and Default still working, picture-only and text-only), CheckBox toggle buttons (pressed while checked, Click from the user and code, Grayed not pressed), OptionButton toggle buttons exclusive with the container's ordinary ones (a pressed one staying pressed), changing Style keeping the Value without Click, the font size; the form file round trip and the designer. |
 | `test_control_arrays.py` | Control arrays: elements, `[i]` / `(i)` / `Item`, iteration, bounds, read-only `Index`, handlers getting `Index` first, `Load`/`Unload` of run-time elements (copied properties, hidden, last in the tab order; designer elements can't be unloaded), one type per array; the form file round trip (elements as containers too) and invalid arrays; adding/removing the `Index` parameter and stubs; in the designer: paste asking to create an array, renaming into an array (and out, and into another type's name), the Index property (one-element arrays, moving, clearing, undo), containers that are elements; the Properties window's `(Name)`, `Index` row and object list; the code window's Object list, new handlers with `Index`, completion. |
 | `test_menus.py` | Menus at run time: the menu bar and items, separators, shortcuts; an in-window menu bar keeping `Height`, `ScaleHeight` and control positions for the area below it (the window grows), form mouse events there; Click on choosing an item and before a menu opens; `Checked` changing only in code; Enabled, Visible, Caption and Shortcut changes; menu control arrays loading after their last element and unloading; the parent check; the form file round trip; the Menu Editor's entries and ControlDefs, validation messages and dialog editing (Next, indent, shortcut, Insert, Delete, moving, outdent); menu negotiation (merged by NegotiatePosition, left out for None, the inner handlers, leaving when hidden or replaced, popped out with its own bar, NegotiateMenus off, a position changed and a menu added while merged, a window without menus, the Menu Editor's NegotiatePosition); the designer's menu bar (layout, hit testing, the drop-down opening Click code), menus kept off the canvas and edited in the Properties window, deleting a menu with its items, renames and arrays updating handlers, undo; the IDE's Tools > Menu Editor (Ctrl+E). |
 | `test_image.py` | The Image control: taking the picture's size without Stretch (and with a border), filling the control with Stretch, switching back, clearing the picture; mouse events, no focus or Tab stop, not grayed but silent when disabled, transparent; its properties in order and the form file; in the designer: sized by a new picture, resized with Stretch, the Properties rows; the Toolbox button and icon. |
@@ -1425,7 +1441,7 @@ All tests run headless. `conftest.py`:
 | `test_outline.py` | The Outline replacing the Properties panel (in the same place) while a code window is active and giving it back for designers, View > Outline Window and F4, a closed panel staying closed, closing the last window, the default layout; the outline of the Kitchen Sink's Form1; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: following the Project panel or active window, clicking items goes to the line (unfolding the designer region); the items at a line (a method inside its class, from the first decorator, blank lines and imports at none), and the Outline highlighting the item at the code window's cursor (in a body, none on an import, after re-sorting and edits, another code window's cursor, none for a designer). |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, sliders, progress bars and spinners, the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text, buttons, lists, scroll bars, sliders, progress bars and spinners, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures, z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (the VP6 icon copied into a project, your own copy kept, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |
 
 ## Samples: `samples/`

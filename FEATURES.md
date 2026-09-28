@@ -1,5 +1,17 @@
 # VP6 features
 
+**Version:** 0.3.35
+**Date:** 2026-09-30
+
+## Controls
+
+- Graphical buttons (`Style = 1`, as in VB): a CommandButton shows its `Picture` above its Caption, its `DownPicture` while pressed and its `DisabledPicture` while disabled (else the Picture grayed)
+- Toggle buttons: a Graphical CheckBox stays pressed while its Value is `vpChecked`; Graphical OptionButtons are pressed one at a time, like a toolbar's group (exclusive with the container's ordinary option buttons too); both show pictures like a Graphical CommandButton
+- A Graphical button's Caption is as large as an ordinary button's; changing Style keeps a CheckBox's or OptionButton's Value without a Click
+- The Kitchen Sink's Buttons page has a picture button, a toggle CheckBox (Underline) and toggle OptionButtons (Alignment)
+
+---
+
 **Version:** 0.3.34
 **Date:** 2026-09-30
 

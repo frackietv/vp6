@@ -254,6 +254,13 @@ def test_buttons_page(sink):
     assert page.lblSample.FontSize == 20 and page.optBlack.Value  # another group: unchanged
     page.optBlue.Value = True
     assert page.lblSample.ForeColor == vp6.vpBlue and page.optLarge.Value
+    page.chkUnderline._widget.click()  # a Graphical CheckBox: a toggle button
+    assert page.chkUnderline.Value == vp6.vpChecked and page.lblSample.FontUnderline
+    page.optAlign[2]._widget.click()  # Graphical OptionButtons: one of them pressed
+    assert page.lblSample.Alignment == vp6.vpRightJustify and not page.optAlign[0].Value
+    assert not page.cmdStar._widget.icon().isNull()  # a picture button
+    page.cmdStar._widget.click()
+    assert "picture button" in page.lblClicks.Caption
 
 
 def test_lists_page(sink):

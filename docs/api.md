@@ -552,7 +552,19 @@ Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button
 
 ### CommandButton
 
-A push button.
+A push button. With `Style = 1` (Graphical) it shows a picture above its
+Caption, as VB's graphical buttons do:
+
+```python
+self.cmdSave = CommandButton(self, Caption="&Save", Style=1, Picture="images/save.png",
+                             DownPicture="images/save_down.png", Width=64, Height=64)
+```
+
+* `Picture` is shown normally, `DownPicture` while the button is pressed,
+  and `DisabledPicture` while it is disabled (without one, `Picture`
+  grayed). A Standard button shows no picture, as in VB.
+* A Graphical button is still a CommandButton: `Click`, `Default`, `Cancel`,
+  `Value = True`.
 
 <!-- BEGIN GENERATED: control CommandButton -->
 Default size 97 × 33. Property groups: Position, Colors, Font, Common.
@@ -562,6 +574,10 @@ Default size 97 × 33. Property groups: Position, Colors, Font, Common.
 | `Cancel` | bool | `False` | Clicked when Esc is pressed on the form |
 | `Caption` | str | `''` | The text; & marks the access key |
 | `Default` | bool | `False` | Clicked when Enter is pressed on the form |
+| `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
+| `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
+| `Picture` | file path | `''` | A Graphical button's picture (relative to the form's folder) |
+| `Style` | enum | 0 - Standard | 0 - Standard, 1 - Graphical. Graphical: a button showing its Picture above the Caption |
 
 Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
@@ -570,7 +586,18 @@ Run-time: setting `Value = True` clicks the button.
 
 ### CheckBox
 
-A check box.
+A check box. With `Style = 1` (Graphical) it's a **toggle button**: a
+button that stays pressed while its `Value` is `vpChecked`, showing its
+`Picture` (and `DownPicture` while pressed, `DisabledPicture` while
+disabled) above its Caption, like a [Graphical
+CommandButton](#commandbutton).
+
+```python
+self.chkBold = CheckBox(self, Caption="&Bold", Style=1, Picture="images/bold.png")
+
+def chkBold_Click(self):
+    self.txtText.FontBold = self.chkBold.Value == vpChecked
+```
 
 <!-- BEGIN GENERATED: control CheckBox -->
 Default size 121 × 25. Property groups: Position, Colors, Font, Common.
@@ -578,6 +605,10 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Caption` | str | `''` | The text; & marks the access key |
+| `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
+| `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
+| `Picture` | file path | `''` | A Graphical button's picture (relative to the form's folder) |
+| `Style` | enum | 0 - Standard | 0 - Standard, 1 - Graphical. Graphical: a toggle button, pressed while Value is vpChecked, showing its Picture above the Caption |
 | `Value` | enum | 0 - Unchecked | 0 - Unchecked, 1 - Checked, 2 - Grayed. vpUnchecked, vpChecked or vpGrayed; changing it fires Click |
 
 Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
@@ -587,7 +618,12 @@ Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(K
 
 ### OptionButton
 
-A radio button. Buttons in the same container are mutually exclusive.
+A radio button. Buttons in the same container are mutually exclusive. With
+`Style = 1` (Graphical) it's a toggle button, pressed while its `Value` is
+True: a container's Graphical option buttons work like a toolbar's group of
+buttons, one of them pressed (with ordinary option buttons in the same
+container, they are all one group). Pictures as for a [Graphical
+CommandButton](#commandbutton).
 
 <!-- BEGIN GENERATED: control OptionButton -->
 Default size 121 × 25. Property groups: Position, Colors, Font, Common.
@@ -595,6 +631,10 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Caption` | str | `''` | The text; & marks the access key |
+| `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
+| `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
+| `Picture` | file path | `''` | A Graphical button's picture (relative to the form's folder) |
+| `Style` | enum | 0 - Standard | 0 - Standard, 1 - Graphical. Graphical: a toggle button, pressed while Value is True (one of its container's option buttons), showing its Picture above the Caption |
 | `Value` | bool | `False` | Selected; option buttons in the same container are exclusive |
 
 Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
@@ -1631,6 +1671,9 @@ format.
 * **Toolbar** buttons have no `tbrDropdown` menus or `tbrPlaceholder`
   controls, and the toolbar has no `Wrappable`, `ShowTips` or
   customization dialog.
+* **Style** (Graphical) can be changed at run time (in VB it is read-only
+  there); a Graphical button's picture comes from a file, and a Graphical
+  CheckBox shows Grayed (`Value = 2`) as not pressed.
 * **ListView** items can't be renamed in place (no `LabelEdit`,
   `BeforeLabelEdit`, `AfterLabelEdit`), there are no `GridLines`,
   `FullRowSelect` (a Report view row is always selected whole), `FindItem`

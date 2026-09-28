@@ -1,4 +1,5 @@
-"""Kitchen Sink page: CommandButtons, CheckBoxes, OptionButtons and Frames."""
+"""Kitchen Sink page: CommandButtons, CheckBoxes, OptionButtons (also Graphical ones: a
+picture button and toggle buttons) and Frames."""
 
 from vp6 import *
 
@@ -36,6 +37,25 @@ class pgButtons(Form):
                                      Height=25, Value=True, TabIndex=12)
         self.optBlue = OptionButton(self.fraColor, Caption='Bl&ue', Left=12, Top=56, Width=150,
                                     Height=25, TabIndex=13)
+        self.cmdStar = CommandButton(self, Caption='&Star', Left=16, Top=290, Width=90, Height=70,
+                                     Style=1, Picture='images/star.png',
+                                     DownPicture='images/sun.png', TabIndex=14,
+                                     ToolTipText='A Graphical CommandButton: its Picture, and its DownPicture while pressed')
+        self.chkUnderline = CheckBox(self, Caption='&Underline', Left=120, Top=290, Width=110,
+                                     Height=32, Style=1, TabIndex=15,
+                                     ToolTipText='A Graphical CheckBox: a toggle button')
+        self.fraAlign = Frame(self, Caption='Alignment', Left=400, Top=170, Width=220, Height=100,
+                              TabIndex=16)
+        self.optAlign = ControlArray()
+        self.optAlign[0] = OptionButton(self.fraAlign, Caption='Left', Left=12, Top=36, Width=62,
+                                        Height=32, Value=True, Style=1, TabIndex=17,
+                                        ToolTipText='Graphical OptionButtons: toggle buttons, one of them pressed')
+        self.optAlign[1] = OptionButton(self.fraAlign, Caption='Center', Left=78, Top=36, Width=62,
+                                        Height=32, Style=1, TabIndex=18,
+                                        ToolTipText='Graphical OptionButtons: toggle buttons, one of them pressed')
+        self.optAlign[2] = OptionButton(self.fraAlign, Caption='Right', Left=144, Top=36, Width=62,
+                                        Height=32, Style=1, TabIndex=19,
+                                        ToolTipText='Graphical OptionButtons: toggle buttons, one of them pressed')
     # endregion
 
     def Form_Load(self):
@@ -72,6 +92,18 @@ class pgButtons(Form):
 
     def optBlue_Click(self):
         self.lblSample.ForeColor = vpBlue
+
+    # --- Style = Graphical ----------------------------------------------------------------
+    def cmdStar_Click(self):
+        self.lblClicks.Caption = "The picture button was clicked (a sun while pressed)"
+
+    def chkUnderline_Click(self):
+        # A Graphical CheckBox is a toggle button: pressed while its Value is vpChecked
+        self.lblSample.FontUnderline = self.chkUnderline.Value == vpChecked
+
+    def optAlign_Click(self, Index):
+        # Graphical OptionButtons: one of the Frame's is pressed
+        self.lblSample.Alignment = (vpLeftJustify, vpCenter, vpRightJustify)[Index]
 
 
 if __name__ == "__main__":
