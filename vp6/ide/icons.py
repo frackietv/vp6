@@ -254,6 +254,18 @@ def _toolbar(p):
         p.drawRect(QRectF(x, 8.5, 4, 6))
 
 
+def _listview(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 3, 20, 18))
+    p.setBrush(C.face)
+    p.drawRect(QRectF(2, 3, 20, 4))  # the column titles
+    for y, color in ((9.5, "#9ec5fe"), (13.5, "#ffe08a"), (17.5, "#a3e4a8")):  # three rows
+        p.setBrush(QColor(color))
+        p.drawRect(QRectF(4, y - 1, 2.5, 2.5))
+        p.drawLine(QPointF(8, y), QPointF(13, y))
+        p.drawLine(QPointF(15, y), QPointF(20, y))
+
+
 def _line(p):
     p.setPen(QPen(C.ink, 2))
     p.drawLine(QPointF(5, 19), QPointF(19, 5))
@@ -391,6 +403,7 @@ _DRAWERS = {
     "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image, "TreeView": _treeview, "Splitter": _splitter,
     "ProgressBar": _progressbar, "Slider": _slider, "UpDown": _updown, "StatusBar": _statusbar,
     "TabStrip": _tabstrip, "ImageList": _imagelist, "Toolbar": _toolbar,
+    "ListView": _listview,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

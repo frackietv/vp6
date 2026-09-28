@@ -166,6 +166,21 @@ vpTbrPressed = 1
 vpTbrTextAlignBottom = 0
 vpTbrTextAlignRight = 1
 
+# --- ListView.View ---------------------------------------------------------------
+vpLvwIcon = 0
+vpLvwSmallIcon = 1
+vpLvwList = 2
+vpLvwReport = 3
+
+# --- ColumnHeader.Alignment (ListView) ------------------------------------------
+vpLvwColumnLeft = 0
+vpLvwColumnRight = 1
+vpLvwColumnCenter = 2
+
+# --- ListView.SortOrder ---------------------------------------------------------
+vpLvwAscending = 0
+vpLvwDescending = 1
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

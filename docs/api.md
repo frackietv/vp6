@@ -153,6 +153,9 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `PanelDblClick` | Panel |
 | `BeforeClick` | none |
 | `ButtonClick` | Button |
+| `ItemClick` | Item |
+| `ColumnClick` | ColumnHeader |
+| `ItemCheck` | Item |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -1013,7 +1016,8 @@ Events: `Change`, `UpClick`, `DownClick`, `MouseDown(Button, Shift, X, Y)`, `Mou
 A collection of pictures for other controls (VB's ImageList, from the Windows
 Common Controls). A [TreeView](#treeview)'s, [TabStrip](#tabstrip)'s or
 [Toolbar](#toolbar)'s `ImageList` property names it; their nodes', tabs' and
-buttons' `Image` is then a picture's Key or Index (from 1). It's invisible at run time; the designer
+buttons' `Image` is then a picture's Key or Index (from 1). A
+[ListView](#listview) has two: `Icons` and `SmallIcons`. It's invisible at run time; the designer
 shows it as an icon.
 
 ```python
@@ -1114,6 +1118,81 @@ Default size 400 × 40. Property groups: Position, Font.
 | `Visible` | bool | `True` | Whether the control is shown at run time |
 
 Events: `ButtonClick(Button)`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `ButtonClick`.
+<!-- END GENERATED -->
+
+### ListView
+
+A list of items shown as large icons, small icons, a list, or a report with
+columns (VB's ListView, from the Windows Common Controls).
+
+```python
+self.lvwPlanets = ListView(self, View=vpLvwReport, SmallIcons="imlSmall",
+                           ColumnHeaders=["Name|name|120", "Diameter|size|90|right"],
+                           ListItems=["Earth|earth||planet|12756 km",
+                                      "Mars|mars||planet|6792 km"])
+
+item = self.lvwPlanets.ListItems.Add(Key="venus", Text="Venus", SmallIcon="planet")
+item.SubItems[1] = "12104 km"                     # VB's item.SubItems(1) = "12104 km"
+
+def lvwPlanets_ColumnClick(self, ColumnHeader):
+    self.lvwPlanets.SortKey = ColumnHeader.SubItemIndex  # sort by the clicked column
+    self.lvwPlanets.Sorted = True
+
+def lvwPlanets_ItemClick(self, Item):
+    self.lblInfo.Caption = f"{Item.Text}: {Item.SubItems(1)}"
+```
+
+* `View`: `vpLvwIcon` (large icons), `vpLvwSmallIcon`, `vpLvwList` (in
+  columns) or `vpLvwReport` (a row per item, a column per ColumnHeader). The
+  selection is kept when the view changes.
+* **Items in the designer.** `ListItems` lists them, one per line:
+  `Text|Key|Icon|SmallIcon|SubItem 1|SubItem 2...`.
+* **Items in code.** At run time `ListItems` is the collection:
+  `ListItems(Index)` (from 1, in the order shown) or `ListItems(Key)`,
+  `Count`, `key in ListItems`, `Add(Index, Key, Text, Icon, SmallIcon)`,
+  `Remove` and `Clear`. A **ListItem** has `Text`, `Key`, `Index`, `Icon`,
+  `SmallIcon`, `SubItems`, `Selected`, `Checked`, `ToolTipText`, `Tag` and
+  `EnsureVisible()`.
+* **SubItems** are its texts in the Report view's other columns:
+  `item.SubItems(1)` (or `[1]`) reads the first, `item.SubItems[1] = "x"`
+  sets it (VB's `item.SubItems(1) = "x"`).
+* **Columns.** `ColumnHeaders` (in the designer `Text|Key|Width|alignment`
+  lines; in code `ColumnHeaders.Add(Index, Key, Text, Width, Alignment)`): a
+  **ColumnHeader** has `Text`, `Key`, `Index`, `Width`, `Alignment`
+  (`vpLvwColumnLeft`, `vpLvwColumnRight`, `vpLvwColumnCenter`; the first is
+  always left), `SubItemIndex` (0 for the first: the Text) and `Tag`.
+  `HideColumnHeaders` hides their titles.
+* **Pictures.** `Icons` names the [ImageList](#imagelist) of the items'
+  `Icon` (the Icon view), `SmallIcons` the one of their `SmallIcon` (the other
+  views); each is a Key or Index in it.
+* **Sorting.** With `Sorted`, the items stay sorted by the `SortKey` column
+  (0 = the Text, 1 = the first SubItem...), `SortOrder` `vpLvwAscending` or
+  `vpLvwDescending`, as text (as in VB); sorting changes their Index.
+* `MultiSelect` lets several items be selected (each item's `Selected`);
+  `SelectedItem` is the current one, or None; `Checkboxes` puts a check box
+  before each item (`Checked`). `HitTest(X, Y)` is the item at a point.
+* `ItemClick` gets the ListItem the user clicked, `ColumnClick` the
+  ColumnHeader whose title was clicked, `ItemCheck` the ListItem whose check
+  box the user changed.
+
+<!-- BEGIN GENERATED: control ListView -->
+Default size 257 × 177. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Checkboxes` | bool | `False` | A check box in front of every item |
+| `ColumnHeaders` | columns | `[]` | The Report view's columns, set in the designer: one per line, Text|Key|Width|alignment (left, right or center); the first shows the items' Text, the others their SubItems |
+| `HideColumnHeaders` | bool | `False` | Hide the Report view's column titles |
+| `Icons` | str | `''` | The name of the ImageList with the items' Icons (the Icon view) |
+| `ListItems` | listitems | `[]` | The items, set in the designer: one per line, Text|Key|Icon|SmallIcon|SubItem 1|SubItem 2... |
+| `MultiSelect` | bool | `False` | Several items can be selected (Ctrl/Cmd- and Shift-click) |
+| `SmallIcons` | str | `''` | The name of the ImageList with the items' SmallIcons (the other views) |
+| `SortKey` | int | `0` | The column to sort by: 0 = the items' Text, 1 = the first SubItem... |
+| `SortOrder` | enum | 0 - Ascending | 0 - Ascending, 1 - Descending. A to Z, or Z to A |
+| `Sorted` | bool | `False` | Keep the items sorted by the SortKey column |
+| `View` | enum | 0 - Icon | 0 - Icon, 1 - SmallIcon, 2 - List, 3 - Report. How the items are shown: large icons, small icons, a list, or a report with a column per ColumnHeader |
+
+Events: `ItemClick(Item)`, `ColumnClick(ColumnHeader)`, `ItemCheck(Item)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `ItemClick`.
 <!-- END GENERATED -->
 
 ### StatusBar
@@ -1366,6 +1445,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`Toolbar`](#toolbar) (and its `Button`),
+[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`),
 [`StatusBar`](#statusbar) (and its
 `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
 [`Menu`](#menu), and
@@ -1458,6 +1538,9 @@ All constants are plain ints or strings.
 | Button.Style (Toolbar) | `vpTbrDefault`, `vpTbrCheck`, `vpTbrButtonGroup`, `vpTbrSeparator` | 0, 1, 2, 3 |
 | Button.Value (Toolbar) | `vpTbrUnpressed`, `vpTbrPressed` | 0, 1 |
 | Toolbar.TextAlignment | `vpTbrTextAlignBottom`, `vpTbrTextAlignRight` | 0, 1 |
+| ListView.View | `vpLvwIcon`, `vpLvwSmallIcon`, `vpLvwList`, `vpLvwReport` | 0, 1, 2, 3 |
+| ColumnHeader.Alignment (ListView) | `vpLvwColumnLeft`, `vpLvwColumnRight`, `vpLvwColumnCenter` | 0, 1, 2 |
+| ListView.SortOrder | `vpLvwAscending`, `vpLvwDescending` | 0, 1 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -1548,6 +1631,12 @@ format.
 * **Toolbar** buttons have no `tbrDropdown` menus or `tbrPlaceholder`
   controls, and the toolbar has no `Wrappable`, `ShowTips` or
   customization dialog.
+* **ListView** items can't be renamed in place (no `LabelEdit`,
+  `BeforeLabelEdit`, `AfterLabelEdit`), there are no `GridLines`,
+  `FullRowSelect` (a Report view row is always selected whole), `FindItem`
+  or column header pictures, and `SubItems(1) = "x"` is written
+  `SubItems[1] = "x"`. Its default event is `ItemClick` (VB's was
+  `BeforeLabelEdit`).
 * **ImageList** has no `MaskColor`/`UseMaskColor` (use pictures with
   transparency), `Overlay` or `ExtractIcon`; a ListImage's `Picture` is its
   file's path. Without an ImageList, a TreeView node's `Image` can be a

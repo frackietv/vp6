@@ -10,16 +10,17 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import (QDate, QEvent, QLocale, QObject, QRect, QSize, Qt, QTime,
-                            QTimer, QUrl)
+from PySide6.QtCore import (QDate, QEvent, QItemSelectionModel, QLocale, QObject, QPoint,
+                            QRect, QSize, Qt, QTime, QTimer, QUrl)
 from PySide6.QtGui import (QAction, QActionGroup, QColor, QDesktopServices, QFont, QIcon,
-                           QKeyEvent, QKeySequence, QPainter, QPalette, QPen, QPixmap)
+                           QKeyEvent, QKeySequence, QPainter, QPalette, QPen, QPixmap,
+                           QStandardItem, QStandardItemModel)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox, QFrame, QGroupBox,
-    QHBoxLayout, QLabel, QLineEdit, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
-    QPushButton, QRadioButton, QScrollArea, QScrollBar, QSlider, QStyle,
-    QStyleOptionTabWidgetFrame, QTabWidget, QToolBar, QToolButton, QTreeWidget, QTreeWidgetItem,
-    QWidget,
+    QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
+    QPushButton, QRadioButton, QScrollArea, QScrollBar, QSlider, QStackedLayout, QStyle,
+    QStyleOptionTabWidgetFrame, QTabWidget, QToolBar, QToolButton, QTreeView, QTreeWidget,
+    QTreeWidgetItem, QWidget,
 )
 
 from . import colors
@@ -38,6 +39,7 @@ EVENT_ARGS = {
     "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
     "UpClick": "", "DownClick": "", "PanelClick": "Panel", "PanelDblClick": "Panel",
     "BeforeClick": "", "ButtonClick": "Button",
+    "ItemClick": "Item", "ColumnClick": "ColumnHeader", "ItemCheck": "Item",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -2038,13 +2040,19 @@ class ListImage(_KeyedItem):
         self._changed()
 
     def _pixmap(self) -> QPixmap:
-        """The picture, at the ImageList's size (ImageWidth, ImageHeight)."""
+        """The picture, at the ImageList's size (ImageWidth, ImageHeight) in
+        logical pixels: on a high-DPI screen it keeps that many more pixels,
+        so a 32-pixel picture shown at 16 stays sharp."""
         path = resolve_path(self._images, self._picture)
         pixmap = QPixmap(path) if path else QPixmap()
         width, height = self._images._size()
-        if not pixmap.isNull() and (width, height) != (pixmap.width(), pixmap.height()):
-            pixmap = pixmap.scaled(width, height, Qt.IgnoreAspectRatio,
-                                   Qt.SmoothTransformation)
+        if pixmap.isNull() or (width, height) == (pixmap.width(), pixmap.height()):
+            return pixmap
+        app = QApplication.instance()
+        ratio = app.devicePixelRatio() if app is not None else 1.0
+        pixmap = pixmap.scaled(round(width * ratio), round(height * ratio),
+                               Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        pixmap.setDevicePixelRatio(ratio)
         return pixmap
 
     def _icon(self) -> QIcon:
@@ -2151,7 +2159,8 @@ class ImageList(Control):
         if self._images is None or not self._name or self not in self._form._controls:
             return
         for control in self._form._controls:
-            if control._values.get("ImageList") == self._name:
+            if any(control._values.get(prop) == self._name
+                   for prop in getattr(control, "_IMAGE_LIST_PROPS", ())):
                 control._refresh_images()
 
 
@@ -2175,12 +2184,15 @@ def _imagelist_design_widget(parent: QWidget) -> QLabel:
 
 
 class _UsesImageList:
-    """For controls whose items show pictures (TreeView, TabStrip): their
-    ImageList property names an ImageList on the form, and an item's Image
-    is then a picture's Key or Index in it (without one, a picture file)."""
+    """For controls whose items show pictures (TreeView, TabStrip, Toolbar,
+    ListView): their ImageList property (a ListView has two: Icons and
+    SmallIcons) names an ImageList on the form, and an item's Image is then
+    a picture's Key or Index in it (without one, a picture file)."""
 
-    def _image_list(self) -> "ImageList | None":
-        name = self._values.get("ImageList", "")
+    _IMAGE_LIST_PROPS = ("ImageList",)  # the properties naming ImageLists
+
+    def _image_list(self, prop: str = "ImageList") -> "ImageList | None":
+        name = self._values.get(prop, "")
         if not name:
             return None
         return next((c for c in self._form._controls
@@ -2193,14 +2205,15 @@ class _UsesImageList:
         """Show every item's Image again (the ImageList or its pictures changed)."""
 
 
-def _picture_icon(control, ref, strict: bool = False) -> QIcon:
+def _picture_icon(control, ref, strict: bool = False, prop: str = "ImageList") -> QIcon:
     """The icon of an item's Image: with the control's ImageList, the picture
     with that Key or Index (from 1); without one, a picture file (relative to
     the form's folder). ``strict``: an unknown Key or Index raises KeyError /
-    IndexError (code setting an Image) instead of showing none."""
+    IndexError (code setting an Image) instead of showing none. ``prop``: the
+    property naming the ImageList (a ListView's Icons or SmallIcons)."""
     if ref is None or ref == "":
         return QIcon()
-    images = control._image_list()
+    images = control._image_list(prop)
     if images is not None:
         try:
             return images.ListImages(ref)._icon()
@@ -3116,6 +3129,640 @@ class Toolbar(_Docked, _UsesImageList, Control):
         _apply_FontUnderline = _apply_font
 
 
+# --- ListView ----------------------------------------------------------------------------------
+
+_LVW_ALIGNMENT = ("left", "right", "center")  # ColumnHeader.Alignment, by value
+_QT_COLUMN_ALIGN = {0: Qt.AlignLeft, 1: Qt.AlignRight, 2: Qt.AlignHCenter}
+
+
+def parse_column(line: str) -> dict:
+    """A column as the designer writes it (ListView.ColumnHeaders):
+    ``Text|Key|Width|alignment``, the alignment left, right or center, e.g.
+    ``Size|size|80|right``."""
+    text, key, width, align = ([part.strip() for part in str(line).split("|", 3)] +
+                               [""] * 4)[:4]
+    return {"Text": text, "Key": key, "Width": int(width) if width.isdigit() else 100,
+            "Alignment": _LVW_ALIGNMENT.index(align.lower())
+            if align.lower() in _LVW_ALIGNMENT else 0}
+
+
+def parse_list_item(line: str) -> dict:
+    """An item as the designer writes it (ListView.ListItems):
+    ``Text|Key|Icon|SmallIcon|SubItem 1|SubItem 2...``, the icons Keys or
+    Indexes in the Icons and SmallIcons ImageLists, e.g.
+    ``Earth|earth|planet|planet|12756 km|1 moon``."""
+    parts = [part.strip() for part in str(line).split("|")]
+    text, key, icon, small = (parts + [""] * 4)[:4]
+    return {"Text": text, "Key": key, "Icon": _image_ref(icon) if icon else "",
+            "SmallIcon": _image_ref(small) if small else "", "SubItems": parts[4:]}
+
+
+class ColumnHeader(_KeyedItem):
+    """One column of a ListView's Report view (``ListView1.ColumnHeaders(1)`` or
+    by Key): the first shows the items' Text, the others their SubItems."""
+
+    def __init__(self, view: "ListView", key: str = "", text: str = "", width: int = 100,
+                 alignment: int = 0):
+        self._view = view
+        self._key = key
+        self._text = text
+        self._width = int(width)
+        self._alignment = int(alignment)
+        self.Tag = ""
+
+    def __repr__(self):
+        return f"<ColumnHeader {self.Index} {self._key or self._text!r}>"
+
+    @property
+    def Text(self) -> str:
+        return self._text
+
+    @Text.setter
+    def Text(self, value):
+        self._text = str(value)
+        self._changed()
+
+    @property
+    def Width(self) -> int:
+        """Its width in pixels (the user can drag it too)."""
+        if self._view._columns_shown():
+            return self._view._tree.columnWidth(self.Index - 1)
+        return self._width
+
+    @Width.setter
+    def Width(self, value):
+        self._width = max(0, int(value))
+        self._changed()
+
+    @property
+    def Alignment(self) -> int:
+        """vpLvwColumnLeft, vpLvwColumnRight or vpLvwColumnCenter (the first
+        column is always left-aligned, as in VB)."""
+        return self._alignment
+
+    @Alignment.setter
+    def Alignment(self, value):
+        self._alignment = int(value)
+        self._changed()
+
+    @property
+    def SubItemIndex(self) -> int:
+        """Which SubItem it shows: 0 for the first column (the Text)."""
+        return self.Index - 1
+
+
+class _ColumnHeaders(_KeyedCollection):
+    """ListView.ColumnHeaders: its columns in order, by Index (from 1) or Key."""
+
+    _noun = "column"
+
+    def Add(self, Index=None, Key: str = "", Text: str = "", Width: int = 100,
+            Alignment: int = 0) -> ColumnHeader:
+        """A new column, at the end or at Index (from 1)."""
+        column = self._insert(ColumnHeader(self._owner, str(Key or ""), str(Text), Width,
+                                           Alignment), Index)
+        self._changed()
+        return column
+
+
+class _SubItems:
+    """A ListItem's SubItems, its texts in the Report view's other columns:
+    ``item.SubItems(1)`` (or ``[1]``) reads one, ``item.SubItems[1] = "x"``
+    sets one (VB's ``Item.SubItems(1) = "x"``)."""
+
+    def __init__(self, item: "ListItem"):
+        self._item = item
+
+    def __call__(self, index: int) -> str:
+        return self[index]
+
+    def __getitem__(self, index: int) -> str:
+        cell = self._item._cell(int(index))
+        return cell.text() if cell is not None else ""
+
+    def __setitem__(self, index: int, value) -> None:
+        index = int(index)
+        if index < 1:
+            raise IndexError("SubItems start at 1 (0 is the item's Text)")
+        self._item._set_cell(index, str(value))
+
+    def __len__(self):
+        return max(self._item._view._model.columnCount() - 1, 0)
+
+
+class ListItem:
+    """One item of a ListView (``ListView1.ListItems(1)`` or by Key): its Text,
+    pictures (Icon for the Icon view, SmallIcon for the others) and, in the
+    Report view, its SubItems."""
+
+    def __init__(self, view: "ListView", cell: QStandardItem, key: str):
+        self._view = view
+        self._cell0 = cell  # its first column; the row is where it is
+        self._key = key
+        self._icon = ""
+        self._small_icon = ""
+        self._check = Qt.Unchecked
+        self.Tag = ""
+        cell.setData(self, Qt.UserRole)
+
+    def __repr__(self):
+        return f"<ListItem {self.Index} {self._key or self.Text!r}>"
+
+    def _row(self) -> int:
+        return self._cell0.row()
+
+    def _cell(self, column: int):
+        return self._view._model.item(self._row(), column)
+
+    def _set_cell(self, column: int, text: str) -> None:
+        model = self._view._model
+        if column >= model.columnCount():
+            model.setColumnCount(column + 1)
+        cell = model.item(self._row(), column)
+        if cell is None:
+            cell = QStandardItem()
+            cell.setEditable(False)
+            cell.setTextAlignment(self._view._column_alignment(column))
+            model.setItem(self._row(), column, cell)
+        cell.setText(text)
+        self._view._keep_sorted()
+
+    @property
+    def Index(self) -> int:
+        """Its position in the list, from 1 (sorting changes it, as in VB)."""
+        return self._row() + 1
+
+    @property
+    def Key(self) -> str:
+        return self._key
+
+    @Key.setter
+    def Key(self, value):
+        value = str(value)
+        by_key = self._view._items._by_key
+        if value and value != self._key and value in by_key:
+            raise KeyError(f"Key '{value}' is not unique in the collection")
+        by_key.pop(self._key, None)
+        self._key = value
+        if value:
+            by_key[value] = self
+
+    @property
+    def Text(self) -> str:
+        return self._cell0.text()
+
+    @Text.setter
+    def Text(self, value):
+        with self._view._quietly():
+            self._cell0.setText(str(value))
+        self._view._keep_sorted()
+
+    @property
+    def SubItems(self) -> _SubItems:
+        return _SubItems(self)
+
+    @property
+    def Icon(self):
+        """Its picture in the Icon view: a Key or Index in the Icons ImageList."""
+        return self._icon
+
+    @Icon.setter
+    def Icon(self, value):
+        value = "" if value is None else value
+        _picture_icon(self._view, value, strict=True, prop="Icons")
+        self._icon = value
+        self._view._show_icon(self)
+
+    @property
+    def SmallIcon(self):
+        """Its picture in the other views: a Key or Index in the SmallIcons
+        ImageList."""
+        return self._small_icon
+
+    @SmallIcon.setter
+    def SmallIcon(self, value):
+        value = "" if value is None else value
+        _picture_icon(self._view, value, strict=True, prop="SmallIcons")
+        self._small_icon = value
+        self._view._show_icon(self)
+
+    @property
+    def ToolTipText(self) -> str:
+        return self._cell0.toolTip()
+
+    @ToolTipText.setter
+    def ToolTipText(self, value):
+        self._cell0.setToolTip(str(value))
+
+    @property
+    def Selected(self) -> bool:
+        return self._view._selection().isSelected(self._cell0.index())
+
+    @Selected.setter
+    def Selected(self, value):
+        flags = QItemSelectionModel.Select if value else QItemSelectionModel.Deselect
+        with self._view._quietly():
+            if value and not self._view._values.get("MultiSelect"):
+                self._view._selection().clear()
+            self._view._selection().select(
+                self._cell0.index(), flags | QItemSelectionModel.Rows)
+
+    @property
+    def Checked(self) -> bool:
+        """Its check box (with the ListView's Checkboxes)."""
+        return self._cell0.checkState() == Qt.Checked
+
+    @Checked.setter
+    def Checked(self, value):
+        with self._view._quietly():
+            self._check = Qt.Checked if value else Qt.Unchecked
+            if self._view._values.get("Checkboxes"):
+                self._cell0.setCheckState(self._check)
+
+    def EnsureVisible(self) -> None:
+        """Scroll so the item can be seen."""
+        self._view._current_view().scrollTo(self._cell0.index())
+
+
+class _ListItems:
+    """ListView.ListItems: its items in the order shown, by Index (from 1) or
+    Key."""
+
+    def __init__(self, view: "ListView"):
+        self._view = view
+        self._by_key: dict[str, ListItem] = {}
+
+    def _list(self) -> list[ListItem]:
+        model = self._view._model
+        return [model.item(row, 0).data(Qt.UserRole) for row in range(model.rowCount())]
+
+    def __len__(self):
+        return self._view._model.rowCount()
+
+    def __iter__(self):
+        return iter(self._list())
+
+    def __contains__(self, key) -> bool:
+        return key in self._by_key
+
+    @property
+    def Count(self) -> int:
+        return len(self)
+
+    def _resolve(self, index) -> ListItem:
+        if isinstance(index, ListItem):
+            return index
+        if isinstance(index, str):
+            if index not in self._by_key:
+                raise KeyError(f"No item with the key '{index}'")
+            return self._by_key[index]
+        index = int(index)
+        if not 1 <= index <= len(self):
+            raise IndexError(f"No item {index} (there are {len(self)})")
+        return self._view._model.item(index - 1, 0).data(Qt.UserRole)
+
+    def __call__(self, index) -> ListItem:
+        return self._resolve(index)
+
+    Item = __call__
+
+    def Add(self, Index=None, Key: str = "", Text: str = "", Icon="",
+            SmallIcon="") -> ListItem:
+        """A new item, at the end or at Index (from 1); in a Sorted ListView,
+        where the order puts it."""
+        Key = str(Key or "")
+        if Key and Key in self._by_key:
+            raise KeyError(f"Key '{Key}' is not unique in the collection")
+        view = self._view
+        cell = QStandardItem(str(Text))
+        cell.setEditable(False)
+        item = ListItem(view, cell, Key)
+        with view._quietly():
+            row = view._model.rowCount() if Index is None else \
+                max(0, min(int(Index) - 1, view._model.rowCount()))
+            view._model.insertRow(row, [cell])
+            if view._values.get("Checkboxes"):
+                cell.setCheckable(True)
+                cell.setCheckState(Qt.Unchecked)
+        if Key:
+            self._by_key[Key] = item
+        if Icon not in (None, ""):
+            item.Icon = Icon
+        if SmallIcon not in (None, ""):
+            item.SmallIcon = SmallIcon
+        view._keep_sorted()
+        return item
+
+    def Remove(self, index) -> None:
+        item = self._resolve(index)
+        self._by_key.pop(item._key, None)
+        with self._view._quietly():
+            self._view._model.removeRow(item._row())
+
+    def Clear(self) -> None:
+        self._by_key.clear()
+        with self._view._quietly():
+            self._view._model.removeRows(0, self._view._model.rowCount())
+
+
+class ListView(_UsesImageList, Control):
+    """A list of items shown as large icons, small icons, a list, or a report
+    with columns, like VB's ListView (Windows Common Controls). Fill it in
+    the designer (ListItems, ColumnHeaders) or in code (ListItems.Add,
+    ColumnHeaders.Add). ItemClick gets the ListItem, ColumnClick the
+    ColumnHeader (sort by it with SortKey and Sorted)."""
+
+    TypeName = "ListView"
+    DefaultEvent = "ItemClick"
+    DefaultSize = (257, 177)
+    Events = ("ItemClick", "ColumnClick", "ItemCheck", "Click", "DblClick", "GotFocus",
+              "LostFocus", "KeyDown", "KeyPress", "KeyUp", "MouseDown", "MouseMove", "MouseUp")
+    _synthesize_click = True
+    _qss_type = "QAbstractItemView"
+    _IMAGE_LIST_PROPS = ("Icons", "SmallIcons")
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("View", "enum", 0, enum_choices("Icon", "SmallIcon", "List", "Report"),
+          description="How the items are shown: large icons, small icons, a list, or a "
+                      "report with a column per ColumnHeader"),
+        P("ColumnHeaders", "columns", [],
+          description="The Report view's columns, set in the designer: one per line, "
+                      "Text|Key|Width|alignment (left, right or center); the first shows the "
+                      "items' Text, the others their SubItems"),
+        P("ListItems", "listitems", [],
+          description="The items, set in the designer: one per line, "
+                      "Text|Key|Icon|SmallIcon|SubItem 1|SubItem 2..."),
+        P("Icons", "str", "",
+          description="The name of the ImageList with the items' Icons (the Icon view)"),
+        P("SmallIcons", "str", "",
+          description="The name of the ImageList with the items' SmallIcons (the other "
+                      "views)"),
+        P("Sorted", "bool", False, description="Keep the items sorted by the SortKey column"),
+        P("SortKey", "int", 0,
+          description="The column to sort by: 0 = the items' Text, 1 = the first SubItem..."),
+        P("SortOrder", "enum", 0, enum_choices("Ascending", "Descending"),
+          description="A to Z, or Z to A"),
+        P("MultiSelect", "bool", False,
+          description="Several items can be selected (Ctrl/Cmd- and Shift-click)"),
+        P("Checkboxes", "bool", False, description="A check box in front of every item"),
+        P("HideColumnHeaders", "bool", False,
+          description="Hide the Report view's column titles"),
+        *_COLORS, *_FONT, *_COMMON,
+    )
+    _QT_VIEWS = {  # View -> (QListView mode, flow): Report is the QTreeView
+        0: (QListView.IconMode, QListView.LeftToRight),
+        1: (QListView.ListMode, QListView.LeftToRight),
+        2: (QListView.ListMode, QListView.TopToBottom),
+    }
+
+    def _create_widget(self, parent):
+        self.__dict__["_quiet"] = 0
+        self.__dict__["_columns"] = _ColumnHeaders(self, self._update_columns)
+        model = QStandardItemModel()
+        self.__dict__["_model"] = model
+        self.__dict__["_items"] = _ListItems(self)
+        widget = QWidget(parent)
+        stack = QStackedLayout(widget)
+        stack.setContentsMargins(0, 0, 0, 0)
+        icons = QListView()
+        icons.setModel(model)
+        icons.setResizeMode(QListView.Adjust)
+        icons.setWrapping(True)
+        icons.setUniformItemSizes(False)
+        icons.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        report = QTreeView()
+        report.setModel(model)
+        report.setSelectionModel(icons.selectionModel())  # one selection for every view
+        report.setRootIsDecorated(False)
+        report.setItemsExpandable(False)
+        report.setUniformRowHeights(True)
+        report.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        report.setSelectionBehavior(QAbstractItemView.SelectRows)
+        report.header().setSectionsClickable(True)
+        report.header().setStretchLastSection(False)
+        stack.addWidget(icons)
+        stack.addWidget(report)
+        self.__dict__["_icons"], self.__dict__["_tree"] = icons, report
+        self.__dict__["_stack"] = stack
+        return widget
+
+    def _event_targets(self):
+        return [self._icons, self._icons.viewport(), self._tree, self._tree.viewport()]
+
+    def _connect_signals(self):
+        for view in (self._icons, self._tree):
+            view.clicked.connect(self._on_clicked)
+        self._tree.header().sectionClicked.connect(self._on_header_clicked)
+        self._model.itemChanged.connect(self._on_item_changed)
+
+    def _quietly(self) -> _Quiet:
+        return _Quiet(self)
+
+    # -- the collections -----------------------------------------------------------------------
+    @property
+    def ListItems(self) -> _ListItems:
+        return self._items
+
+    @ListItems.setter
+    def ListItems(self, lines):
+        """In the designer (and InitializeComponent): the items as lines of
+        text, see parse_list_item."""
+        self._set_prop("ListItems", lines)
+
+    @property
+    def ColumnHeaders(self) -> _ColumnHeaders:
+        return self._columns
+
+    @ColumnHeaders.setter
+    def ColumnHeaders(self, lines):
+        """In the designer: the columns as lines of text, see parse_column."""
+        self._set_prop("ColumnHeaders", lines)
+
+    def _apply_ListItems(self, lines):
+        self._items.Clear()
+        for line in lines or []:
+            spec = parse_list_item(line)
+            item = self._items.Add(Key=spec["Key"], Text=spec["Text"])
+            item._icon, item._small_icon = spec["Icon"], spec["SmallIcon"]
+            for number, text in enumerate(spec["SubItems"], 1):
+                item.SubItems[number] = text
+        self._refresh_images()  # (the ImageLists may come later)
+
+    def _apply_ColumnHeaders(self, lines):
+        self._columns._reset()
+        for line in lines or []:
+            spec = parse_column(line)
+            self._columns._insert(ColumnHeader(self, spec["Key"], spec["Text"], spec["Width"],
+                                               spec["Alignment"]))
+        self._update_columns()
+
+    def _columns_shown(self) -> bool:
+        return len(self._columns) > 0
+
+    def _column_alignment(self, number: int):
+        """A column's cells' alignment (the first column is always left)."""
+        column = self._columns._list[number] if 0 < number < len(self._columns) else None
+        align = _QT_COLUMN_ALIGN.get(column._alignment, Qt.AlignLeft) if column else Qt.AlignLeft
+        return align | Qt.AlignVCenter
+
+    def _update_columns(self) -> None:
+        model, tree = self._model, self._tree
+        count = max(len(self._columns), 1, model.columnCount())
+        model.setColumnCount(count)
+        model.setHorizontalHeaderLabels(
+            [c._text for c in self._columns._list] +
+            [""] * (count - len(self._columns)))
+        for number, column in enumerate(self._columns._list):
+            tree.setColumnWidth(number, column._width)
+            align = self._column_alignment(number)
+            model.setHeaderData(number, Qt.Horizontal, int(align), Qt.TextAlignmentRole)
+            for row in range(model.rowCount()):
+                cell = model.item(row, number)
+                if cell is not None:
+                    cell.setTextAlignment(align)
+        for number in range(model.columnCount()):  # only the ColumnHeaders' columns show
+            tree.setColumnHidden(number, self._columns_shown() and
+                                 number >= len(self._columns))
+        self._apply_HideColumnHeaders(self._values.get("HideColumnHeaders", False))
+
+    # -- views ---------------------------------------------------------------------------------
+    def _current_view(self):
+        return self._tree if self._values.get("View", 0) == 3 else self._icons
+
+    def _selection(self) -> QItemSelectionModel:
+        return self._icons.selectionModel()
+
+    def _apply_View(self, v):
+        if v == 3:
+            self._stack.setCurrentWidget(self._tree)
+        else:
+            mode, flow = self._QT_VIEWS.get(v, self._QT_VIEWS[0])
+            self._icons.setViewMode(mode)
+            self._icons.setFlow(flow)
+            self._icons.setWrapping(True)
+            self._icons.setResizeMode(QListView.Adjust)
+            self._icons.setSpacing(8 if v == 0 else 2)
+            self._stack.setCurrentWidget(self._icons)
+        self._refresh_images()  # Icons in the Icon view, SmallIcons in the others
+
+    def _show_icon(self, item: ListItem) -> None:
+        large = self._values.get("View", 0) == 0
+        ref, prop = (item._icon, "Icons") if large else (item._small_icon, "SmallIcons")
+        with self._quietly():
+            item._cell0.setIcon(_picture_icon(self, ref, prop=prop))
+
+    def _refresh_images(self) -> None:
+        large = self._image_list("Icons") if self._values.get("View", 0) == 0 else \
+            self._image_list("SmallIcons")
+        if large is not None and all(large._size()):
+            self._icons.setIconSize(QSize(*large._size()))
+            self._tree.setIconSize(QSize(*large._size()))
+        for item in self._items:
+            self._show_icon(item)
+
+    def _apply_Icons(self, v):
+        self._refresh_images()
+
+    _apply_SmallIcons = _apply_Icons
+
+    # -- sorting -------------------------------------------------------------------------------
+    def _keep_sorted(self) -> None:
+        if self._values.get("Sorted"):
+            order = Qt.DescendingOrder if self._values.get("SortOrder") == 1 else \
+                Qt.AscendingOrder
+            column = max(0, int(self._values.get("SortKey", 0)))
+            if column < self._model.columnCount():
+                with self._quietly():
+                    self._model.sort(column, order)
+
+    def _apply_Sorted(self, v):
+        self._keep_sorted()
+
+    _apply_SortKey = _apply_SortOrder = _apply_Sorted
+
+    # -- other properties -----------------------------------------------------------------------
+    def _apply_MultiSelect(self, v):
+        mode = QAbstractItemView.ExtendedSelection if v else QAbstractItemView.SingleSelection
+        self._icons.setSelectionMode(mode)
+        self._tree.setSelectionMode(mode)
+
+    def _apply_Checkboxes(self, v):
+        with self._quietly():
+            for item in self._items:
+                item._cell0.setCheckable(bool(v))
+                if v:
+                    item._cell0.setCheckState(item._check)
+                else:
+                    item._cell0.setData(None, Qt.CheckStateRole)
+
+    def _apply_HideColumnHeaders(self, v):
+        self._tree.setHeaderHidden(bool(v) or not self._columns_shown())
+
+    def _apply_font(self, _=None):
+        super()._apply_font()
+        if self._widget is not None:
+            for view in (self._icons, self._tree):
+                view.setFont(self._widget.font())
+
+    _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
+        _apply_FontUnderline = _apply_font
+
+    def _apply_colors(self, _=None):
+        super()._apply_colors()
+        if self._widget is not None:
+            sheet = self._widget.styleSheet()
+            for view in (self._icons, self._tree):
+                view.setStyleSheet(sheet)
+
+    _apply_BackColor = _apply_ForeColor = _apply_colors
+
+    # -- the selected item, and finding items -------------------------------------------------
+    @property
+    def SelectedItem(self) -> "ListItem | None":
+        index = self._selection().currentIndex()
+        if not index.isValid() or not self._selection().isSelected(index.siblingAtColumn(0)):
+            return None
+        return self._model.item(index.row(), 0).data(Qt.UserRole)
+
+    @SelectedItem.setter
+    def SelectedItem(self, item):
+        with self._quietly():
+            if item is None:
+                self._selection().clear()
+                return
+            item = self._items._resolve(item)
+            self._selection().setCurrentIndex(
+                item._cell0.index(), QItemSelectionModel.ClearAndSelect |
+                QItemSelectionModel.Rows)
+
+    def HitTest(self, X: int, Y: int) -> "ListItem | None":
+        """The item at a position (as the mouse events give it), or None."""
+        view = self._current_view()
+        point = view.viewport().mapFrom(self._widget, QPoint(int(X), int(Y)))
+        index = view.indexAt(point)
+        return self._model.item(index.row(), 0).data(Qt.UserRole) if index.isValid() else None
+
+    # -- events --------------------------------------------------------------------------------
+    def _on_clicked(self, index):
+        if not self._quiet and index.isValid():
+            self._fire("ItemClick", self._model.item(index.row(), 0).data(Qt.UserRole))
+
+    def _on_header_clicked(self, section):
+        if not self._quiet and 0 <= section < len(self._columns):
+            self._fire("ColumnClick", self._columns._list[section])
+
+    def _on_item_changed(self, cell):
+        if self._quiet or cell.column() != 0:
+            return
+        item = cell.data(Qt.UserRole)
+        if item is None or not cell.isCheckable():
+            return
+        state = cell.checkState()
+        if state != item._check:
+            item._check = state
+            self._fire("ItemCheck", item)
+
+
 # Controls in toolbox order.
 _PEN_STYLES = {1: Qt.SolidLine, 2: Qt.DashLine, 3: Qt.DotLine, 4: Qt.DashDotLine,
                5: Qt.DashDotDotLine, 6: Qt.SolidLine}
@@ -3840,7 +4487,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Splitter,
-        ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, Menu,
+        ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView, Menu,
     )
 }
 

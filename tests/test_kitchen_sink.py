@@ -346,6 +346,31 @@ def test_tree_page(sink):
     assert "cats" not in tree.Nodes and tree.Nodes.Count == 2
 
 
+def test_listview_page(sink):
+    page = _page(sink, "listview")
+    pets = page.lvwPets
+    assert pets.View == vp6.vpLvwReport and pets.ListItems.Count == 5
+    assert not pets.ListItems("rex")._cell0.icon().isNull()  # from imlSmall
+    page.lvwPets_ItemClick(pets.ListItems("polly"))
+    assert page.lblEvent.Caption == "Polly: Parrot, 2 legs (item 3 of 5)"
+    kind = pets.ColumnHeaders("kind")
+    page.lvwPets_ColumnClick(kind)  # sorted by Kind
+    assert [i.Key for i in pets.ListItems][:2] == ["tom", "rex"]  # Cat before Dog
+    page.lvwPets_ColumnClick(kind)  # again: reversed
+    assert pets.SortOrder == vp6.vpLvwDescending and "Z to A" in page.lblEvent.Caption
+    page.cboView.ListIndex = 0  # the Icon view
+    assert pets.View == vp6.vpLvwIcon
+    page.chkChecks.Value = vp6.vpChecked
+    page.chkMulti.Value = vp6.vpChecked
+    assert pets.Checkboxes and pets.MultiSelect
+    page.txtName.Text = "Nemo"
+    page.cmdAdd._widget.click()
+    nemo = pets.SelectedItem
+    assert nemo.Text == "Nemo" and nemo.SubItems(1) == "Fish" and pets.ListItems.Count == 6
+    page.cmdRemove._widget.click()
+    assert pets.ListItems.Count == 5 and page.lblEvent.Caption == "Removed Nemo"
+
+
 def test_tabs_page(sink):
     page = _page(sink, "tabs")
     strip = page.tbsOptions

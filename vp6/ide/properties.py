@@ -26,9 +26,10 @@ INDEX_SPEC = PropSpec(
 
 
 # Properties that are, at run time, a collection (StatusBar.Panels,
-# TabStrip.Tabs, ImageList.ListImages, Toolbar.Buttons): lines of text in the
+# TabStrip.Tabs, ImageList.ListImages, Toolbar.Buttons, ListView.ColumnHeaders and
+# ListItems): lines of text in the
 # designer, read from the object's _values
-COLLECTION_KINDS = ("panels", "tabs", "images", "buttons")
+COLLECTION_KINDS = ("panels", "tabs", "images", "buttons", "columns", "listitems")
 
 
 class TextListDialog(QDialog):
@@ -238,7 +239,8 @@ class PropertiesWindow(QWidget):
             if kind == "list":
                 text = f"(List: {len(value)} items)"
             elif kind in COLLECTION_KINDS:
-                text = f"({kind.title()}: {len(value)})"
+                title = {"columns": "Columns", "listitems": "Items"}.get(kind, kind.title())
+                text = f"({title}: {len(value)})"
             else:
                 text = f"(Tree: {sum(1 for line in value if str(line).strip())} nodes)"
             button = QPushButton("" if mixed else text)
@@ -343,12 +345,19 @@ class PropertiesWindow(QWidget):
                        "or group (a button of a group, one of which is pressed), pressed, "
                        "disabled, hidden. A line of just - is a separator. E.g. "
                        "\"Open|open|open|Open a file\" or \"|bold|bold|Bold|check\".",
+            "columns": "One column per line: Text|Key|Width|alignment, the alignment left, "
+                       "right or center, e.g. \"Size|size|80|right\". The first column shows "
+                       "the items' Text, the next ones their SubItems.",
+            "listitems": "One item per line: Text|Key|Icon|SmallIcon|SubItem 1|SubItem 2..., "
+                         "the icons Keys or Indexes in the Icons and SmallIcons ImageLists, "
+                         "e.g. \"Earth|earth|planet|planet|12756 km|1 moon\".",
         }.get(kind)
         if kind == "outline":
             hint += (" A third part is the node's Image: a Key or Index in the TreeView's "
                      "ImageList, e.g. \"Cats|cats|cat\".")
         title = {"list": "List", "outline": "Tree", "panels": "Panels", "tabs": "Tabs",
-                 "images": "Pictures", "buttons": "Buttons"}[kind]
+                 "images": "Pictures", "buttons": "Buttons", "columns": "Columns",
+                 "listitems": "Items"}[kind]
         base = self.designer.base_dir if kind == "images" and self.designer else None
         dialog = TextListDialog(f"{prop} ({title})",
                                 "\n".join(value or []), self, hint, pictures_dir=base)

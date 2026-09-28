@@ -10,22 +10,23 @@ from .colors import (RGB, QBColor, vpBlack, vpBlue, vpCyan, vpGreen, vpMagenta, 
                      vpWhite, vpYellow)
 from .constants import *  # noqa: F403
 from .constants import __all__ as _constants_all
-from .controls import (Button, CheckBox, ComboBox, CommandButton, Control, ControlArray, Frame,
-                       HScrollBar, Image, ImageList, Label, Line, ListBox, ListImage, Menu,
-                       Node, OptionButton,
+from .controls import (Button, CheckBox, ColumnHeader, ComboBox, CommandButton, Control,
+                       ControlArray, Frame, HScrollBar, Image, ImageList, Label, Line, ListBox,
+                       ListImage, ListItem, ListView, Menu, Node, OptionButton,
                        Panel, PictureBox, ProgressBar, Slider, Splitter, StatusBar, Tab,
                        TabStrip, TextBox, Timer, Toolbar, TreeView, UpDown, VScrollBar)
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
 
-__version__ = "0.3.33"
+__version__ = "0.3.34"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen",
     "RGB", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",
-    "Button", "CheckBox", "ComboBox", "CommandButton", "Control", "ControlArray", "Frame", "HScrollBar",
-    "Image", "ImageList", "Label", "Line", "ListBox", "ListImage", "Menu", "Node",
+    "Button", "CheckBox", "ColumnHeader", "ComboBox", "CommandButton", "Control", "ControlArray", "Frame", "HScrollBar",
+    "Image", "ImageList", "Label", "Line", "ListBox", "ListImage", "ListItem", "ListView",
+    "Menu", "Node",
     "OptionButton", "PictureBox",
     "Panel", "ProgressBar", "Slider", "Splitter", "StatusBar", "Tab", "TabStrip", "TextBox",
     "Timer", "Toolbar", "TreeView", "UpDown", "VScrollBar",

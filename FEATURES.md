@@ -1,5 +1,23 @@
 # VP6 features
 
+**Version:** 0.3.34
+**Date:** 2026-09-30
+
+## Controls
+
+- ListView: items shown as large icons, small icons, a list, or a report with columns (`View`), keeping the selection when the view changes. Items have a Text, pictures from two ImageLists (`Icon` for the Icon view, `SmallIcon` for the others) and SubItems, their texts in the Report view's other columns; columns have a title, a width and an alignment. With `Sorted` the items stay sorted by the `SortKey` column, A to Z or Z to A (`SortOrder`). `MultiSelect`, `Checkboxes`, `HideColumnHeaders`, `SelectedItem`, `HitTest`. `ItemClick` gets the ListItem, `ColumnClick` the ColumnHeader, `ItemCheck` the ListItem
+- The ListItems collection (`ListItems(Index)` or `ListItems(Key)`, `Count`, `Add`, `Remove`, `Clear`) and ListItem objects (`Text`, `Key`, `Index`, `Icon`, `SmallIcon`, `SubItems`, `Selected`, `Checked`, `ToolTipText`, `Tag`, `EnsureVisible`); `item.SubItems(1)` reads and `item.SubItems[1] = "x"` sets a SubItem
+- The ColumnHeaders collection and ColumnHeader objects (`Text`, `Key`, `Index`, `Width`, `Alignment`, `SubItemIndex`, `Tag`)
+- In the designer, `ColumnHeaders` and `ListItems` are lists of lines: `Text|Key|Width|alignment` and `Text|Key|Icon|SmallIcon|SubItem 1|SubItem 2...`
+- Constants `vpLvwIcon`, `vpLvwSmallIcon`, `vpLvwList`, `vpLvwReport`, `vpLvwColumnLeft`, `vpLvwColumnRight`, `vpLvwColumnCenter`, `vpLvwAscending`, `vpLvwDescending`
+- A new Kitchen Sink page, "ListView"
+
+## Fixes
+
+- Pictures from an ImageList shown smaller than they are (e.g. 32-pixel pictures in a 16-pixel ImageList) are sharp on high-DPI screens
+
+---
+
 **Version:** 0.3.33
 **Date:** 2026-09-30
 
