@@ -45,6 +45,15 @@ def _no_user_controls_left():
 
 
 @pytest.fixture(autouse=True)
+def _program_settings_in_a_temporary_folder(tmp_path_factory, monkeypatch):
+    """SaveSetting and GetSetting use INI files of the test's own, never the
+    user's real settings."""
+    from vp6 import app
+
+    monkeypatch.setattr(app, "SETTINGS_DIR", str(tmp_path_factory.mktemp("settings")))
+
+
+@pytest.fixture(autouse=True)
 def _fail_on_errors_in_qt_callbacks(monkeypatch):
     """An exception raised in Python code that Qt calls (an event handler
     override like mouseMoveEvent, a slot) doesn't reach the test: PySide

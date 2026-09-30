@@ -57,6 +57,26 @@ class _ProjectObject:
         return self._target.project.color_scheme
 
     @property
+    def Version(self) -> str:
+        return self._target.project.version
+
+    @property
+    def ProductName(self) -> str:
+        return self._target.project.product_name
+
+    @property
+    def CompanyName(self) -> str:
+        return self._target.project.company_name
+
+    @property
+    def Description(self) -> str:
+        return self._target.project.description
+
+    @property
+    def Arguments(self) -> str:
+        return self._target.project.arguments
+
+    @property
     def Icon(self) -> str:
         """The icon's last file: the largest size, as new projects list them."""
         icon = self._target.project.icon
@@ -86,19 +106,29 @@ class ProjectTarget(QObject):
     def specs(self) -> list[PropSpec]:
         startup = [(name, name) for name in self._get_form_names()] + [(SUB_MAIN, SUB_MAIN)]
         return [
+            P("Arguments", "str", "",
+              description="The command line the program gets when the IDE runs it "
+                          "(Command(), sys.argv[1:]), e.g. --verbose \"a file.txt\"."),
+            P("ColorScheme", "enum", "system", COLOR_SCHEME_CHOICES,
+              description="Light or dark appearance of every form whose ColorScheme is "
+                          "'0 - Project Default'."),
+            P("CompanyName", "str", "", description="App.CompanyName."),
+            P("Description", "str", "", description="App.FileDescription: what the "
+                                                    "program is."),
             P("Icon", "file", "",
               description="The program's icon (its windows, and the Dock or taskbar): an "
                           "image file in the project's folder, square, e.g. 256 x 256 "
                           "pixels. Empty (as in new projects): the VP6 icon, from the VP6 "
                           "installation."),
-            P("ColorScheme", "enum", "system", COLOR_SCHEME_CHOICES,
-              description="Light or dark appearance of every form whose ColorScheme is "
-                          "'0 - Project Default'."),
+            P("ProductName", "str", "",
+              description="App.ProductName; empty: the project's name."),
             P("StartupObject", "enum", "Form1", startup,
               description="The form shown when the program starts, or Sub Main to call "
                           "Main() in a module."),
             P("Type", "enum", "exe", TYPE_CHOICES,
               description="Standard EXE (windowed) or Console Application."),
+            P("Version", "str", "1.0.0",
+              description="Major.Minor.Revision: App.Major, App.Minor and App.Revision."),
         ]
 
     # -- the Properties window's interface --------------------------------------------
@@ -128,6 +158,15 @@ class ProjectTarget(QObject):
             project.startup = value
         elif prop == "ColorScheme":
             project.color_scheme = value
+        elif prop == "Version":
+            parts = str(value).strip().split(".")
+            if not (1 <= len(parts) <= 3 and all(part.isdigit() for part in parts)):
+                return f"'{value}' is not a version: Major.Minor.Revision, e.g. 1.2.0"
+            project.version = ".".join(str(int(part)) for part in parts + ["0"] * (3 - len(parts)))
+        elif prop in ("ProductName", "CompanyName", "Description", "Arguments"):
+            setattr(project, {"ProductName": "product_name", "CompanyName": "company_name",
+                              "Description": "description", "Arguments": "arguments"}[prop],
+                    str(value).strip())
         elif prop == "Icon":  # one file now, whatever sizes it had
             value = str(value or "").strip().replace(os.sep, "/")
             project.icon = [value] if value else []

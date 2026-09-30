@@ -1062,6 +1062,39 @@ def test_globals_page(sink, capsys):
     assert page.cmdCount.Caption == "Count to &100"
     page.cmdDebug._widget.click()
     assert "Hello from the Kitchen Sink" in capsys.readouterr().out
+    assert "Version 1.0.0" in page.lblInfo.Caption and "App.PrevInstance" in page.lblInfo.Caption
+    # Settings: the text saved, there when the page loads again
+    assert page.lblSettings.Caption == "Settings: none saved"
+    page.txtClip.Text = "remember me"
+    page.cmdSave._widget.click()
+    assert "Text='remember me'" in page.lblSettings.Caption and "Saved=" in page.lblSettings.Caption
+    page.txtClip.Text = ""
+    page.Form_Load()
+    assert page.txtClip.Text == "remember me"
+    assert vp6.GetSetting(vp6.App.Title, "Globals", "Text") == "remember me"
+    page.cmdForget._widget.click()
+    assert page.lblSettings.Caption == "Settings: none saved"
+    # Fonts
+    assert page.cboFont.ListCount == vp6.Screen.FontCount
+    page.cboFont.ListIndex = 0
+    assert page.lblFont.FontName == vp6.Screen.Fonts[0]
+
+
+def test_the_command_line_names_the_first_page(qapp, tmp_path, monkeypatch):
+    project = create_project(str(tmp_path), "Sink", "kitchensink")
+    assert Project.load(project).arguments == "--page intro"
+    monkeypatch.setattr(sys, "argv", ["Sink.vp6p", "--page", "globals"])
+    folder = str(tmp_path / "Sink")
+    sys.path.insert(0, folder)
+    try:
+        window = importlib.import_module("Form1").Form1()
+        window.Show()
+        assert window.current == "globals"
+        window.Unload()
+    finally:
+        sys.path.remove(folder)
+        for name in [n[:-3] for n in kitchensink.FORMS] + ["Module1", "ctlRating"]:
+            sys.modules.pop(name, None)
 
 
 def test_closing_unloads_the_pages(sink):

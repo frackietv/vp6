@@ -9,7 +9,8 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QListWidgetItem, QPushButton, QTabWidget, QVBoxLayout, QWidget,
+    QLineEdit, QListWidget, QListWidgetItem, QPushButton, QSpinBox, QTabWidget, QVBoxLayout,
+    QWidget,
 )
 
 import vp6
@@ -208,11 +209,33 @@ class ProjectPropertiesDialog(QDialog):
             max(self.color_scheme.findData(project.color_scheme), 0))
         self.color_scheme.setToolTip("Used by every form whose ColorScheme property is "
                                      "'0 - Project Default'.")
+        # VB's Make tab: the version and descriptions App reports, and the command line
+        self.version = []
+        version = QHBoxLayout()
+        for label, number in zip(("Major", "Minor", "Revision"), project.version_numbers()):
+            box = QSpinBox()
+            box.setRange(0, 9999)
+            box.setValue(number)
+            box.setToolTip(f"App.{label}")
+            self.version.append(box)
+            version.addWidget(box)
+        self.product_name = QLineEdit(project.product_name)
+        self.product_name.setPlaceholderText(project.name)
+        self.company_name = QLineEdit(project.company_name)
+        self.description = QLineEdit(project.description)
+        self.arguments = QLineEdit(project.arguments)
+        self.arguments.setToolTip("What the program gets when the IDE runs it: Command(), "
+                                  "sys.argv[1:].")
         form = QFormLayout()
         form.addRow("Project Name:", self.name)
         form.addRow("Project Type:", self.type)
         form.addRow("Startup Object:", self.startup)
         form.addRow("Color Scheme:", self.color_scheme)
+        form.addRow("Version:", version)
+        form.addRow("Product Name:", self.product_name)
+        form.addRow("Company Name:", self.company_name)
+        form.addRow("Description:", self.description)
+        form.addRow("Command Line Arguments:", self.arguments)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -226,6 +249,11 @@ class ProjectPropertiesDialog(QDialog):
         project.type = self.type.currentData()
         project.startup = self.startup.currentText()
         project.color_scheme = self.color_scheme.currentData()
+        project.version = ".".join(str(box.value()) for box in self.version)
+        project.product_name = self.product_name.text().strip()
+        project.company_name = self.company_name.text().strip()
+        project.description = self.description.text().strip()
+        project.arguments = self.arguments.text().strip()
 
 
 ABOUT_HTML = f"""

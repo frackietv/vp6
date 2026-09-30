@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** App, Screen and settings: `SaveSetting` / `GetSetting` / `DeleteSetting` for per-user settings; more of VB's `App` object (`Major` / `Minor` / `Revision`, `PrevInstance`, `ProductName`) and the command line (VB's `Command()`); font enumeration, `Screen.Fonts` / `Screen.FontCount` (self-hosting: recent projects, themes, window layout, the Options font list, the FontName editor)
 - **[Language and runtime]** Drawing on forms and PictureBoxes: the graphics methods `Line`, `Circle`, `PSet`, `Print` and `Cls` (today `PictureBox.Cls()` only clears the picture), drawing properties (`DrawWidth`, `DrawStyle`, `FillStyle`, `FillColor`, `CurrentX` / `CurrentY`), the `Paint` event and `AutoRedraw`, and text measurement with `TextWidth` / `TextHeight` (self-hosting: the designer's window frame, grid dots and selection handles, the code editor's gutter width, eliding captions)
 - **[Language and runtime]** Picture objects: `LoadPicture`, drawing into an image in memory, using it as a `Picture` or icon, and saving it (`SavePicture`); a form `Picture` (a background picture on the form); clipboard pictures and formats, `Clipboard.GetData` / `SetData` / `GetFormat` (today `Picture` is only a file path and the clipboard text only) (self-hosting: the IDE's drawn icons and the Kitchen Sink image)
 - **[Language and runtime]** `Printer` object and `Printers` collection: printing text and graphics (with the drawing methods above)
@@ -18,5 +17,6 @@
 - **[Controls]** Data-bound controls
 - **[IDE]** Designer window frames with rounded bottom corners on macOS
 - **[Appearance]** Per-window title bar color: a forced Light or Dark form still gets a title bar in the OS appearance, since Qt can't set it per window on macOS
+- **[IDE - Help]** IDE needs a help system that works like the old .chm help.  The help should contain all documentation for VB6, including api and development guides, and should support table of contents, index, and search. 
 - **[IDE - Term]** Add a terminal emulator panel (default position same as immediate panel) to allow a shell to be opened in the IDE.
 - **[AI]** Add Claude integration to allow use of Claude straight from the IDE

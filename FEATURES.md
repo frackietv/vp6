@@ -1,5 +1,26 @@
 # VP6 features
 
+**Version:** 0.4.24
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- Per-user settings as in VB: `SaveSetting`, `GetSetting` (with a default), `GetAllSettings` and `DeleteSetting` (a setting, a section or all of a program's), kept where the system keeps settings (the registry on Windows, a preferences file on macOS, ~/.config on Linux)
+- More of VB's `App`: `Major`, `Minor`, `Revision`, `ProductName`, `CompanyName`, `FileDescription` from the project's new Version, ProductName, CompanyName and Description properties, and `PrevInstance`; `App.Title` without a project is the program's name
+- `Command()`: the program's command line arguments; the project's Arguments property is what the IDE runs it with (`python -m vp6.runner` passes arguments on too)
+- `Screen.Fonts` (also `Screen.Fonts(i)`) and `Screen.FontCount`: the installed fonts
+- ComboBox: adding items no longer chooses the first one or fires Click, as in VB (ListIndex stays -1)
+
+## IDE
+
+- Project Properties: Version (Major, Minor, Revision), Product Name, Company Name, Description and Command Line Arguments, also in the Properties window
+
+## Kitchen Sink
+
+- The App, Screen, settings page shows the App information, PrevInstance and Command(), remembers its text with SaveSetting, and lists the fonts; the project has a version and descriptions, and `--page NAME` on its command line opens that page
+
+---
+
 **Version:** 0.4.23
 **Date:** 2026-10-01
 

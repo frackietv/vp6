@@ -2542,12 +2542,38 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 | `Beep()` | system beep |
 | `SendKeys(Keys, Wait=False)` | types keys into the control with the focus, as if pressed (VB's syntax): text as it is; `+` Shift, `^` Ctrl, `%` Alt for the next key or a `(group)`; `~` Enter; `{ENTER}`, `{TAB}`, `{ESC}`, `{BS}`, `{DEL}`, `{HOME}`, `{END}`, `{LEFT}`, `{RIGHT}`, `{UP}`, `{DOWN}`, `{PGUP}`, `{PGDN}`, `{INS}`, `{F1}`..`{F16}` and VB's others; `{LEFT 3}` repeats; `{+}`, `{^}`, `{%}`, `{~}`, `{(}`, `{)}`, `{{}`, `{}}` are those characters. Each key goes to what has the focus when it arrives (`{TAB}` moves on, Enter clicks the Default button), menu shortcuts and Label access keys included. They arrive once the calling code is done; `Wait=True` sends them before returning. |
 
+### The command line and settings
+
+| Name | Description |
+|---|---|
+| `Command()` | the program's command line arguments as one string (`sys.argv[1:]` has them as a list). The IDE runs a program with the project's `Arguments` property. |
+| `SaveSetting(AppName, Section, Key, Setting)` | stores a per-user setting, as text |
+| `GetSetting(AppName, Section, Key, Default="")` | a setting stored with `SaveSetting`, or `Default` |
+| `GetAllSettings(AppName, Section)` | the section's settings as `(key, setting)` pairs; `[]` when none |
+| `DeleteSetting(AppName, Section=None, Key=None)` | deletes a setting, a whole section (no `Key`) or all of the program's settings (no `Section`) |
+
+```python
+def Form_Load(self):
+    self.Left = int(GetSetting(App.Title, "Window", "Left", self.Left))
+    if App.PrevInstance:
+        MsgBox(f"{App.Title} is already running")
+
+def Form_Unload(self):
+    SaveSetting(App.Title, "Window", "Left", self.Left)
+```
+
+Settings are kept where the system keeps per-user settings: on Windows the
+registry, under `HKEY_CURRENT_USER\Software\VP6 Program Settings\AppName\Section`
+(like VB's `VB and VBA Program Settings`); on macOS a preferences file,
+`~/Library/Preferences/com.vp6-program-settings.AppName.plist`; on Linux
+`~/.config/VP6 Program Settings/AppName.conf`.
+
 ### Global objects
 
 | Object | Members |
 |---|---|
-| `App` | `Title` (set from the project name), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName` |
-| `Screen` | `Width`, `Height` (primary screen, pixels), `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
+| `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started) |
+| `Screen` | `Width`, `Height` (primary screen, pixels), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
 | `Clipboard` | `GetText()`, `SetText(text)`, `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
 
@@ -2727,6 +2753,9 @@ Its `PROJECT` dict:
 | `forms`, `modules` | file names relative to the project folder |
 | `user_controls` | the files of its [user controls](#user-controls), relative to the project folder |
 | `color_scheme` | `"system"`, `"light"`, `"dark"` or `"ide"` |
+| `version` | `"major.minor.revision"`: `App.Major`, `App.Minor`, `App.Revision` (`Version` in the Properties window) |
+| `product_name`, `company_name`, `description` | `App.ProductName` (`""`: the project's name), `App.CompanyName`, `App.FileDescription` |
+| `arguments` | the command line the IDE gives the program when it runs it (`Command()`); a program started from a shell gets the shell's: `./Calculator.vp6p --open "a file.txt"` |
 | `icon` | the program's icon (its windows, and the Dock or taskbar): image files relative to the project folder, sizes of one picture; `[]` (new projects) = the VP6 icon, from the VP6 installation (nothing is copied into the project); set your own with the project's `Icon` in the Properties window |
 | `groups` | how the IDE's Project panel groups the forms and modules (not folders on disk) |
 
@@ -2793,6 +2822,11 @@ It goes in the project's `dist` folder:
 * **Control arrays are `ControlArray` objects.** Elements are `self.cmd[i]`
   (or VB's `self.cmd(i)`); `Load` and `Unload` take the array and the Index
   (`Load(self.cmd, 5)` for `Load cmd(5)`).
+* **Settings** (`SaveSetting` and the others) are kept under "VP6 Program
+  Settings", not VB's "VB and VBA Program Settings", and on macOS and Linux
+  where those systems keep them; `GetAllSettings` returns `(key, setting)`
+  pairs instead of a two-dimensional array, `[]` instead of Empty.
+  `Screen.Fonts` is a list (`Screen.Fonts(i)` works too).
 * **Menus on macOS** are in the macOS menu bar at the top of the screen, not
   in the window.
 * **ProgressBar, Slider and UpDown** share one set of orientation

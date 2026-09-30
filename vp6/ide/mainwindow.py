@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import sys
 
@@ -1634,10 +1635,18 @@ class MainWindow(QMainWindow):
         process.errorOccurred.connect(self._on_process_error)
         self.process = process
         # The project file is itself the program's launcher script
-        process.start(sys.executable, ["-u", self.project.path])
+        process.start(sys.executable, ["-u", self.project.path] + self.run_arguments())
         self.immediate.set_running(self.project.type == "console")
         self._update_title()
         self._update_actions()
+
+    def run_arguments(self) -> list[str]:
+        """The project's Arguments property, split as a shell would (Windows: as
+        its command lines are)."""
+        try:
+            return shlex.split(self.project.arguments, posix=os.name != "nt")
+        except ValueError:  # (an unclosed quote: the rest is one argument)
+            return self.project.arguments.split()
 
     # -- File > Make Executable… (vp6.make, in a process of its own) ----------------------------
     def make_executable(self):

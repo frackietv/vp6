@@ -58,7 +58,9 @@ def create(directory: str, name: str) -> Project:
     ]
     return Project(name=name, type="exe", startup=SUB_MAIN, forms=list(FORMS), groups=groups,
                    modules=list(MODULES), user_controls=list(USER_CONTROLS),
-                   color_scheme="system")
+                   color_scheme="system", product_name="VP6 Kitchen Sink",
+                   company_name="VP6", description="Every feature of VP6, on one window",
+                   arguments="--page intro")  # (Form1 shows the page named by --page)
 
 
 def draw_icons(folder: str) -> None:

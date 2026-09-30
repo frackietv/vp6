@@ -72,7 +72,7 @@ class Form1(Form):
         self.picNav = PictureBox(self, Left=0, Top=0, Width=220, Height=572, BorderStyle=0,
                                  Align=3, TabIndex=3)
         self.tvwIndex = TreeView(self.picNav, Left=0, Top=0, Width=220, Height=572,
-                                 Items=['Introduction|intro', 'Controls|controls', '    Text and labels|text', '    RichTextBox|richtext', '    Editing text|editing', '    CodeBox|code', '    Buttons and options|buttons', '    Lists|lists', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    Pictures|pictures', '    Lines, shapes and z-order|zorder', '    TreeView|tree', '    ListView|listview', '    FlexGrid|grid', '    Web pages|web', '    TabStrip|tabs', '    Drives, folders and files|files', '    Timer|timer', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Docking panels|docking', '    Scrolling|scrolling', '    Forms inside forms|embedded', 'Forms and dialogs|forms_section', '    Dialogs|dialogs', '    Color schemes|schemes', '    Keyboard|keyboard', '    Mouse|mouse', 'Programming|programming', '    Control arrays|arrays', '    Menus|menus', '    Your own controls|usercontrol', '    App, Screen, Clipboard...|globals'],
+                                 Items=['Introduction|intro', 'Controls|controls', '    Text and labels|text', '    RichTextBox|richtext', '    Editing text|editing', '    CodeBox|code', '    Buttons and options|buttons', '    Lists|lists', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    Pictures|pictures', '    Lines, shapes and z-order|zorder', '    TreeView|tree', '    ListView|listview', '    FlexGrid|grid', '    Web pages|web', '    TabStrip|tabs', '    Drives, folders and files|files', '    Timer|timer', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Docking panels|docking', '    Scrolling|scrolling', '    Forms inside forms|embedded', 'Forms and dialogs|forms_section', '    Dialogs|dialogs', '    Color schemes|schemes', '    Keyboard|keyboard', '    Mouse|mouse', 'Programming|programming', '    Control arrays|arrays', '    Menus|menus', '    Your own controls|usercontrol', '    App, Screen, settings...|globals'],
                                  TabIndex=4,
                                  ToolTipText='The topics: its nodes were typed in the designer (Items)')
         self.splNav = Splitter(self, Left=220, Top=0, Width=6, Height=572, MinSize=150,
@@ -112,7 +112,11 @@ class Form1(Form):
         self.scheme = 0  # the index of the color scheme in SCHEMES
         for node in self.tvwIndex.Nodes:
             node.Expanded = True
-        self.show_page("intro")
+        # The command line can name the first page, e.g. --page globals (the project's
+        # Arguments property gives it when the IDE runs the program)
+        words = Command().split()
+        start = words[1] if len(words) == 2 and words[0] == "--page" else "intro"
+        self.show_page(start if start in PAGES else "intro")
         Debug.Print("Form_Load:", App.Title, "- screen", Screen.Width, "x", Screen.Height)
 
     def Form_Unload(self):

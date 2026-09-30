@@ -44,13 +44,14 @@ The declarative property system shared by forms and controls.
 Hooks a subclass may define per property: `_apply_<Name>(value)` pushes the
 value to the widget; `_read_<Name>()` returns the live value.
 
-### `vp6/app.py` (≈300 lines)
+### `vp6/app.py` (≈520 lines)
 
 Application-level services.
 
 * `ensure_app()` creates the `QApplication` on first use. Every entry point
   that needs Qt calls it. When it creates the application (a VP6 program), it
-  also installs the Ctrl+C handler and gives it the VP6 icon.
+  also installs the Ctrl+C handler, gives it the VP6 icon and claims the
+  program's instance lock (`App._claim_instance`, for PrevInstance).
 * **Icons:** `icon_from(paths)` is a `QIcon` of image files (sizes of one
   picture; missing files skipped); `vp6_icon()` is the VP6 icon
   (`project.VP6_ICON_FILES`), also the IDE's; `set_program_icon(paths)` makes
@@ -79,15 +80,31 @@ Application-level services.
   `os._exit(0)`, like VB's `End`, without running `Form_Unload` handlers:
   it doesn't close the windows first, since closing them would run them.
 * Singleton objects:
-  * `App`: `Title`, `Path` (folder of `__main__`), `EXEName`;
+  * `App`: `Title` (`_title`, else `EXEName`), `Path` (folder of
+    `__main__`), `EXEName`; `Major`, `Minor`, `Revision`, `ProductName`,
+    `CompanyName` and `FileDescription`, which `_set_project(project)` (the
+    runner) fills in; `PrevInstance` is `_claim_instance()`: a `QLockFile` in
+    the temporary folder named by a hash of Path and EXEName, taken once
+    (`ensure_app`, or the first PrevInstance), held while the program runs;
+    True when another process holds it;
   * `Screen`: `MousePointer` (`QApplication.setOverrideCursor`, all
-    overrides restored first), `MouseIcon`, `Width`, `Height`, `ActiveForm`,
+    overrides restored first), `MouseIcon`, `Width`, `Height`, `Fonts`
+    (`_font_families()`: `QFontDatabase.families()` without private ones,
+    sorted, as a `_Fonts` list, which can be called with an index too),
+    `FontCount`, `ActiveForm`,
     `ActiveControl`
     (`control_of_widget` of the focus widget, `outer_control` for user
     controls);
   * `Clipboard`: `GetText`, `SetText`, `Clear`;
   * `Debug`: `Debug.Print` prints to stdout, which the IDE shows in the
     Immediate window.
+* `Command()` joins `sys.argv[1:]` (`shlex.join`; `list2cmdline` on
+  Windows).
+* **Settings:** `SaveSetting`, `GetSetting`, `GetAllSettings`, `DeleteSetting`
+  use `_settings(AppName)`, a `QSettings` in the native format under the
+  organization `SETTINGS_ORGANIZATION` ("VP6 Program Settings"), or, when
+  `SETTINGS_DIR` is set (the tests' conftest does), `AppName.ini` in that
+  folder. Sections are QSettings groups; values are stored as text.
 * `call_handler(handler, *args)` calls an event handler with only as many
   positional arguments as it declares (the count is cached per function).
   Exceptions go to `report_runtime_error`.
@@ -263,7 +280,7 @@ The intrinsic controls.
 | `OptionButton` | `QRadioButton`, or a checkable, auto-exclusive `QToolButton` when Graphical (exclusive with the container's other option buttons of either kind) | Buttons in the same container are mutually exclusive; Click when it becomes checked. |
 | `Frame` | `QGroupBox` | Container; colors via palette. |
 | `ListBox` | `QListWidget` | `_ListMixin` (`AddItem`, `RemoveItem`, `Clear`, `ListCount`, `List`); `ListIndex`, `Text`, `Selected(i)`, `Sorted`, `MultiSelect`. Per-item properties: see `_PerItem` below. `Style` 1 (Checkbox): checkable items (`_make_checkable`, also for new ones); `itemChanged` fires `ItemCheck` only when the check state differs from the one last seen (`_CHECKED_ROLE`: other changes of an item come there too) and not for code (`_quietly`); `Selected` (a `_PerItem`: the check state or the selection), `SelCount`, `TopIndex` (`indexAt` the top / `scrollToItem`). |
-| `ComboBox` | `_ComboWidget` (a `QComboBox` whose `showPopup` emits `aboutToDropDown` first: `DropDown`), or `_SimpleCombo` for Style 1 (a `QLineEdit` above a `QListWidget`, with the part of `QComboBox`'s interface ComboBox uses) | `Style` 0 (editable) / 2 (list only); Click on selection change, Change on edit. Per-item properties as for ListBox. The Style is seeded in `__init__` to build the right widget; changing to or from Simple rebuilds it, keeping the List, Text and ListIndex, without Click or Change (`_restyling`). `TopIndex` scrolls `view()`. |
+| `ComboBox` | `_ComboWidget` (a `QComboBox` whose `showPopup` emits `aboutToDropDown` first: `DropDown`), or `_SimpleCombo` for Style 1 (a `QLineEdit` above a `QListWidget`, with the part of `QComboBox`'s interface ComboBox uses) | `Style` 0 (editable) / 2 (list only); Click on selection change, Change on edit. Per-item properties as for ListBox. The Style is seeded in `__init__` to build the right widget; changing to or from Simple rebuilds it, keeping the List, Text and ListIndex, without Click or Change (`_restyling`). `_insert` adds items with the combo's signals blocked: no Click when an item moves the choice, and none chosen when the first ones are added (Qt would choose the first; VB's ListIndex stays -1, and an edit text stays). `TopIndex` scrolls `view()`. |
 | `DriveListBox` | `QComboBox` (the label shown, the root path as item data) | `user_drives()` lists the drives with `QStorageInfo.mountedVolumes()`: every drive letter on Windows; elsewhere `/` and volumes under `/Volumes`, `/media`, `/mnt` and `/run/media`. `Drive` is the current item's root; setting it picks `_drive_index(path)`, the drive with the longest matching root. `currentIndexChanged` fires `Change` (not while it fills: `_quiet`). |
 | `DirListBox` | `_DirTree` (a `QTreeWidget` that draws no branch arrows; header hidden, not expandable) | `_show(path)` puts the chain of ancestors (`_ancestors`, open-folder icons, each a child of the one before) and the subfolders (`_subfolders`, closed-folder icons) under it; each item keeps its full path (`UserRole`). `List` is a `_DirList` view: negative indexes are ancestors (`-1` = Path), others subfolders. Double-click sets `Path` (`Change` if it differs); `currentItemChanged` fires `Click` except while filling. `_is_hidden_entry` hides dot files and hidden ones unless `ShowHidden`. `_walk_tree` finds items by recursion (no `QTreeWidgetItemIterator`). |
 | `FileListBox` | `QListWidget` (it subclasses `ListBox`) | `_fill` lists `Path`'s files matching `Pattern` (`file_matches`: `fnmatch` on lower-case names, `;`-separated, `*.*` matching everything) with signals blocked; `_apply_Pattern` fires `PatternChange` once the control is made (`_ready`, set after `__init__`); `Path` fires `PathChange`. `FileName` reads the current item and, set, changes Path, Pattern or the selection. `AddItem`, `RemoveItem` and `Clear` raise. |
@@ -541,7 +558,9 @@ architecture §6.2).
 * `Project` dataclass:
   * fields `name`, `type` (`"exe"` / `"console"`), `startup` (a form class
     name or `SUB_MAIN = "Sub Main"`), `forms`, `modules`, `color_scheme`,
-    `icon`, `path`;
+    `icon`, `version`, `product_name`, `company_name`, `description`,
+    `arguments`, `path` (the ones missing from older projects get their
+    defaults); `version_numbers()` is `version` as (major, minor, revision);
   * **the icon:** `icon` lists image files relative to the project (`load`
     turns a single string into a list); `icon_paths()` gives them as absolute
     paths. An empty `icon` (new projects) means the VP6 icon,
@@ -666,7 +685,8 @@ Starts a project. `run_project(path)`:
 2. puts `import_folders(project)` on `sys.path` (the project's folder, then
    every folder holding a form or module, so files in subfolders import each
    other by name) and `chdir`s into the project's folder;
-3. sets `App.Title` and `appearance.project_scheme`, and for a windowed
+3. sets `App`'s title, version and descriptions (`App._set_project`) and
+   `appearance.project_scheme`, and for a windowed
    project with an `icon`, the application's icon (`app.set_program_icon`;
    otherwise the VP6 icon `ensure_app` gives it);
 4. starts the program:
@@ -678,8 +698,10 @@ Starts a project. `run_project(path)`:
    * **A form:** calls `run(find_form_class(project, startup))`. Modules are
      imported by file name (`_import_file`).
 
-`main(argv)` implements `python -m vp6.runner PROJECT.vp6p` and the `vp6-run`
-console script.
+`main(argv)` implements `python -m vp6.runner PROJECT.vp6p [ARGUMENTS...]`
+and the `vp6-run` console script. It makes `sys.argv` the project and its
+arguments, as when the project file runs itself, so `sys.argv[1:]` (and
+`Command()`) are the program's arguments either way.
 
 ---
 
@@ -837,7 +859,9 @@ prepended to `PYTHONPATH` for programs started with F5.
     focused text field outside the MDI area;
   * `_view_current`.
 * **Running:**
-  * `run_project` (F5, ⌘/Ctrl+Enter), `stop_project`, `restart_project`;
+  * `run_project` (F5, ⌘/Ctrl+Enter: the project file, with
+    `run_arguments()`, the project's `arguments` split as a shell would),
+    `stop_project`, `restart_project`;
   * `_send_input` (stdin), `_on_process_finished` / `_on_process_error`;
   * `running`, `_update_title`, `_update_actions`.
 * **`closeEvent`** asks to save, then stores `geometry` and `state`.
@@ -1076,7 +1100,9 @@ of the Properties window.
   `set_property`, `base_dir`, signals `selectionChanged` / `designChanged`).
   The Properties window therefore edits the project without special cases.
 * It exposes the project's `(Name)`, `Type`, `StartupObject` and
-  `ColorScheme` as `enum` specs. `StartupObject`'s choices are the project's
+  `ColorScheme` as `enum` specs, and `Version` (validated as up to three
+  numbers, stored as major.minor.revision), `ProductName`, `CompanyName`,
+  `Description` and `Arguments` as text. `StartupObject`'s choices are the project's
   forms plus `Sub Main`. `Icon` is a `file`: the icon's last file (the
   largest size, as new projects list them); setting it makes that one file
   the icon, and an empty value none (the VP6 icon).
@@ -1512,8 +1538,11 @@ explorer-style.
     Right too, so it stays last), and an invisible Popup menu shown by
     PopupMenu on a label's right-click (MouseUp, a bold DefaultMenu, None when
     closed without a choice) and centered under a button;
-  * `pgGlobals.py`: App, Screen, Forms, Clipboard, DoEvents, Debug.Print and
-    End;
+  * `pgGlobals.py`: App (its version and descriptions, from the project,
+    and PrevInstance), Command(), Screen (and its Fonts in a ComboBox
+    changing a label's font), Forms, Clipboard, settings (the text box's text
+    saved with SaveSetting and read back in Form_Load, GetAllSettings shown,
+    DeleteSetting), DoEvents, Debug.Print and End;
   * `pgUserControl.py`: three `ctlRating`s with different Value, Max,
     StarColor and Locked, their Change and Hover events, an average, and a
     Value set from code;
@@ -1540,7 +1569,9 @@ explorer-style.
   Also `DEFAULT_LOCATION` (`~/VP6 Projects`), `TEMPLATES` and
   `next_free_name`.
 * `ProjectPropertiesDialog` edits the name, type, startup object and color
-  scheme (System / Light / Dark / Follow the IDE); `apply(project)`.
+  scheme (System / Light / Dark / Follow the IDE), and as VB's Make tab the
+  version (three spin boxes, `version`), product name, company name,
+  description and command line arguments; `apply(project)`.
 * `MakeDialog(project)`: File > Make Executable…: what will be made and
   where (`make.output_path`), and a "One file" check box, disabled where it
   can't apply (`make.can_be_one_file`).
@@ -1711,6 +1742,7 @@ All tests run headless. `conftest.py`:
 | `test_make.py` | Making executables: the files that go in (not `dist`, `build`, caches or hidden files), the modules their code imports (not the project's own, nor relative imports; files with syntax errors skipped), the launcher, where the result goes on each system (apps, folders, one file, `.exe`), the PyInstaller command (console or windowed, one file, the project's or VP6's icon and none without Pillow, `--add-data` into the same folders with `os.pathsep`, hidden imports, VP6's folder and icons), the message without PyInstaller, `make()` with PyInstaller faked, File > Make Executable… with the process faked (success with the path, failure); with `VP6_TEST_MAKE=1` a real one-file executable made and run (its output, its data file, a module in a subfolder, its exit code). |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
+| `test_app_settings.py` | SaveSetting, GetSetting (its Default), GetAllSettings, DeleteSetting of a setting, a section or everything (in INI files of the test's own); App's title, version and descriptions from a project; the new project fields saved and loaded, and older projects' defaults; Command(); Screen.Fonts and FontCount; the Project Properties dialog's version and text fields; PrevInstance in real programs (a second copy sees the first, a third after it ends doesn't); a project's arguments reaching Command() and `sys.argv` from the project file and from `vp6.runner`. |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |

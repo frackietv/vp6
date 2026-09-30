@@ -65,7 +65,7 @@ def run_project(path: str) -> int:
     from . import appearance
     from .app import App
 
-    App.Title = project.name
+    App._set_project(project)
     appearance.project_scheme = appearance.scheme_from_name(project.color_scheme)
     if project.icon and project.type != "console":  # (a console program has no windows)
         from .app import set_program_icon
@@ -90,9 +90,10 @@ def run_project(path: str) -> int:
 
 def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
-    if len(argv) != 1:
-        raise SystemExit("usage: python -m vp6.runner PROJECT.vp6p")
-    sys.exit(run_project(argv[0]))
+    if not argv:
+        raise SystemExit("usage: python -m vp6.runner PROJECT.vp6p [ARGUMENTS...]")
+    sys.argv = argv[:]  # the program's arguments in sys.argv[1:] (Command()), as when
+    sys.exit(run_project(argv[0]))  # the project file runs itself
 
 
 if __name__ == "__main__":

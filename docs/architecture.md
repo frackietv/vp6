@@ -636,6 +636,11 @@ PROJECT = {
     "user_controls": [],                # your own controls (UserControl classes)
     "color_scheme": "system",           # "system", "light", "dark" or "ide"; forms inherit it
     "icon": ["art/calc-32.png", "art/calc-256.png"],   # the program's icon; [] = VP6's
+    "version": "1.2.0",                 # App.Major, App.Minor and App.Revision
+    "product_name": "",                 # App.ProductName ("": the project's name)
+    "company_name": "",
+    "description": "A calculator",      # App.FileDescription
+    "arguments": "",                    # the command line the IDE runs it with (Command())
     "groups": [                         # how the Project panel shows them (not folders)
         {"group": "Forms", "items": ["frmCalculator.py"]},
         {"group": "Modules", "items": []}

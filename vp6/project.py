@@ -16,6 +16,11 @@ A project file is an executable Python script that starts the program::
         "user_controls": [],          # your own controls (UserControl classes)
         "color_scheme": "system",     # "system", "light", "dark" or "ide"
         "icon": [],                   # the program's icon; [] = the VP6 icon
+        "version": "1.0.0",           # App.Major, App.Minor, App.Revision
+        "product_name": "",           # App.ProductName (""= the project's name)
+        "company_name": "",           # App.CompanyName
+        "description": "",            # App.FileDescription
+        "arguments": "",              # the command line when the IDE runs it
         "groups": [                   # how the Project panel shows them
             {"group": "Forms", "items": ["Form1.py"]},
             {"group": "Modules", "items": ["Module1.py"]},
@@ -45,6 +50,11 @@ independently of where the files are on disk: a list of entries, each a file
 [entries]}``, so groups can hold files and other groups, and files can also
 be at the top level. Without ``groups`` (older projects) there are two
 groups, "Forms" and "Modules", holding the forms and the modules.
+
+``version`` ("major.minor.revision"), ``product_name``, ``company_name`` and
+``description`` are what the program's ``App`` object reports;
+``arguments`` is the command line the IDE gives the program when it runs it
+(``Command()``). Older projects without them get the defaults.
 """
 
 from __future__ import annotations
@@ -65,7 +75,7 @@ _START_RE = re.compile(r"^# region VP6 Project\b.*$", re.M)
 _END_RE = re.compile(r"^# endregion\b.*$", re.M)
 
 _FIELDS = ("name", "type", "startup", "forms", "modules", "user_controls", "color_scheme", "icon",
-           "groups")
+           "version", "product_name", "company_name", "description", "arguments", "groups")
 _COMMENTS = {
     "icon": "the program's icon: image files (sizes of it), or []",
     "type": '"exe" (GUI) or "console"',
@@ -73,6 +83,9 @@ _COMMENTS = {
     "color_scheme": '"system", "light", "dark" or "ide"; forms inherit it',
     "groups": "how the Project panel shows them (not where they are on disk)",
     "user_controls": "your own controls (UserControl classes), placed on forms",
+    "version": "App.Major, App.Minor and App.Revision",
+    "product_name": 'App.ProductName ("": the project\'s name)',
+    "arguments": "the command line the IDE runs it with (Command())",
 }
 
 _TEMPLATE = '''#!/bin/sh
@@ -121,6 +134,11 @@ class Project:
     # The program's icon: image files relative to the project (one picture in
     # several sizes; one file is enough). [] = the VP6 icon.
     icon: list[str] = field(default_factory=list)
+    version: str = "1.0.0"  # "major.minor.revision": App.Major, Minor, Revision
+    product_name: str = ""  # App.ProductName; "" = the project's name
+    company_name: str = ""  # App.CompanyName
+    description: str = ""  # App.FileDescription
+    arguments: str = ""  # the command line when the IDE runs the program (Command())
     # The Project panel's tree (None: Forms and Modules groups); compared by tree()
     groups: list | None = field(default=None, compare=False)
     path: str = field(default="", compare=False)  # the .vp6p file
@@ -145,6 +163,11 @@ class Project:
         return self.forms + self.user_controls + self.modules
 
     # -- the icon -------------------------------------------------------------------------------
+    def version_numbers(self) -> tuple[int, int, int]:
+        """``version`` as (major, minor, revision); what isn't a number is 0."""
+        parts = (str(self.version).split(".") + ["0", "0", "0"])[:3]
+        return tuple(int(part) if part.strip().isdigit() else 0 for part in parts)
+
     def icon_paths(self) -> list[str]:
         """The icon's files, as absolute paths."""
         return [self.abspath(relative) for relative in self.icon]

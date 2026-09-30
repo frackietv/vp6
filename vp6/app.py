@@ -3,17 +3,20 @@ objects, DoEvents, End and the VB style run-time error handling."""
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 import os
+import shlex
 import signal
 import socket
 import sys
 import threading
 import traceback
 
-from PySide6.QtCore import (QEvent, QEventLoop, QKeyCombination, QObject, QSocketNotifier, Qt,
-                            QTimer)
-from PySide6.QtGui import QAction, QGuiApplication, QIcon, QKeyEvent, QKeySequence, QShortcut
+from PySide6.QtCore import (QDir, QEvent, QEventLoop, QKeyCombination, QLockFile, QObject,
+                            QSettings, QSocketNotifier, Qt, QTimer)
+from PySide6.QtGui import (QAction, QFontDatabase, QGuiApplication, QIcon, QKeyEvent,
+                           QKeySequence, QShortcut)
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 _interrupt_handler = None  # installed by ensure_app() for VP6 programs
@@ -33,6 +36,7 @@ def ensure_app() -> QApplication:
         app = QApplication(sys.argv[:1])
         _interrupt_handler = install_interrupt_handler(close_all_windows)
         app.setWindowIcon(vp6_icon())
+        App._claim_instance()  # (App.PrevInstance: the next one started sees this one)
     return app
 
 
@@ -299,9 +303,49 @@ def End() -> None:
 
 
 class _App:
-    """The VB ``App`` object."""
+    """The VB ``App`` object. The runner fills in the project's name, version
+    and descriptions (the project's properties)."""
 
-    Title = ""
+    _title = ""
+    Major, Minor, Revision = 1, 0, 0
+    ProductName = ""
+    CompanyName = ""
+    FileDescription = ""
+    _lock = None  # the QLockFile this instance holds (PrevInstance)
+    _prev_instance = None
+
+    def _set_project(self, project) -> None:
+        cls = type(self)
+        cls._title = project.name
+        cls.Major, cls.Minor, cls.Revision = project.version_numbers()
+        cls.ProductName = project.product_name or project.name
+        cls.CompanyName = project.company_name
+        cls.FileDescription = project.description
+
+    @property
+    def PrevInstance(self) -> bool:
+        """True when another copy of this program (the same program in the same
+        folder) was already running when this one started."""
+        return self._claim_instance()
+
+    @classmethod
+    def _instance_lock_path(cls) -> str:
+        key = os.path.join(cls().Path, cls().EXEName).encode("utf-8", "surrogateescape")
+        return os.path.join(QDir.tempPath(),
+                            f"vp6-instance-{hashlib.sha1(key).hexdigest()[:16]}.lock")
+
+    @classmethod
+    def _claim_instance(cls) -> bool:
+        """Hold this program's instance lock if no other copy does (once:
+        later calls give the first answer)."""
+        if cls._prev_instance is None:
+            lock = QLockFile(cls._instance_lock_path())
+            lock.setStaleLockTime(0)  # (only a running process holds it)
+            if lock.tryLock(0):
+                cls._lock, cls._prev_instance = lock, False
+            else:
+                cls._prev_instance = True
+        return cls._prev_instance
 
     @property
     def Path(self) -> str:
@@ -310,8 +354,18 @@ class _App:
         return os.path.dirname(os.path.abspath(path)) if path else os.getcwd()
 
     @property
+    def Title(self) -> str:
+        """The program's name: the project's (the runner sets it), else EXEName."""
+        return type(self)._title or self.EXEName
+
+    @Title.setter
+    def Title(self, value):
+        type(self)._title = str(value)
+
+    @property
     def EXEName(self) -> str:
-        return self.Title or os.path.splitext(os.path.basename(sys.argv[0] or "app"))[0]
+        return type(self)._title or \
+            os.path.splitext(os.path.basename(sys.argv[0] or "app"))[0]
 
 
 class _Screen:
@@ -326,6 +380,18 @@ class _Screen:
     def Height(self) -> int:
         ensure_app()
         return QGuiApplication.primaryScreen().size().height()
+
+    @property
+    def Fonts(self) -> "_Fonts":
+        """The names of the fonts installed, sorted: ``Screen.Fonts[i]`` or,
+        as in VB, ``Screen.Fonts(i)``; ``len(Screen.Fonts)`` is FontCount."""
+        ensure_app()
+        return _Fonts(sorted(_font_families(), key=str.casefold))
+
+    @property
+    def FontCount(self) -> int:
+        ensure_app()
+        return len(_font_families())
 
     @property
     def ActiveForm(self):
@@ -360,6 +426,88 @@ class _Screen:
         from .controls import control_of_widget, outer_control
 
         return outer_control(control_of_widget(QApplication.focusWidget()))
+
+
+def _font_families() -> list[str]:
+    """The installed font families, without the system's private ones (macOS's
+    ".SF NS" and such, which programs aren't meant to use by name)."""
+    return [family for family in QFontDatabase.families()
+            if not QFontDatabase.isPrivateFamily(family)]
+
+
+class _Fonts(list):
+    """Screen.Fonts: a list that can also be called with an index, as in VB."""
+
+    def __call__(self, index: int) -> str:
+        return self[index]
+
+
+# --- the command line and settings -----------------------------------------------------------
+
+def Command() -> str:
+    """The program's command line arguments, as one string (VB's ``Command()``);
+    ``sys.argv[1:]`` has them as a list. The IDE runs a program with the
+    project's Arguments property."""
+    if os.name == "nt":
+        import subprocess
+
+        return subprocess.list2cmdline(sys.argv[1:])
+    return shlex.join(sys.argv[1:])
+
+
+# Settings live where the system keeps per-user settings (the registry under
+# HKEY_CURRENT_USER\Software\VP6 Program Settings on Windows, like VB's "VB and
+# VBA Program Settings"; a preferences file on macOS; ~/.config/VP6 Program
+# Settings on Linux). SETTINGS_DIR, when set, keeps them in <AppName>.ini files
+# in that folder instead (the tests use it).
+SETTINGS_ORGANIZATION = "VP6 Program Settings"
+SETTINGS_DIR: str | None = None
+
+
+def _settings(app_name) -> QSettings:
+    app_name = str(app_name)
+    if not app_name:
+        raise ValueError("A setting needs an AppName")
+    if SETTINGS_DIR:
+        return QSettings(os.path.join(SETTINGS_DIR, f"{app_name}.ini"), QSettings.IniFormat)
+    return QSettings(QSettings.NativeFormat, QSettings.UserScope, SETTINGS_ORGANIZATION,
+                     app_name)
+
+
+def SaveSetting(AppName, Section, Key, Setting) -> None:
+    """Store a per-user setting (a string), like VB's SaveSetting:
+    ``SaveSetting(App.Title, "Startup", "Left", self.Left)``."""
+    settings = _settings(AppName)
+    settings.setValue(f"{Section}/{Key}", str(Setting))
+    settings.sync()
+
+
+def GetSetting(AppName, Section, Key, Default: str = "") -> str:
+    """A setting stored with SaveSetting, or Default when there is none."""
+    value = _settings(AppName).value(f"{Section}/{Key}")
+    return Default if value is None else str(value)
+
+
+def GetAllSettings(AppName, Section) -> list[tuple[str, str]]:
+    """The keys and settings of a section, as (key, setting) pairs ([] if none)."""
+    settings = _settings(AppName)
+    settings.beginGroup(str(Section))
+    pairs = [(key, str(settings.value(key))) for key in settings.childKeys()]
+    settings.endGroup()
+    return pairs
+
+
+def DeleteSetting(AppName, Section=None, Key=None) -> None:
+    """Delete a setting, a whole section (no Key), or all of the program's
+    settings (no Section)."""
+    settings = _settings(AppName)
+    if Section is None:
+        settings.clear()
+    elif Key is None:
+        settings.remove(str(Section))
+    else:
+        settings.remove(f"{Section}/{Key}")
+    settings.sync()
 
 
 class _Clipboard:

@@ -214,3 +214,25 @@ def test_drop_down(more):
     more.cbo._widget.showPopup()
     more.cbo._widget.hidePopup()
     assert more.events == ["DropDown"]
+
+
+@pytest.mark.parametrize("style", [0, 2])
+def test_adding_items_selects_none(qapp, style):
+    # As in VB: AddItem leaves ListIndex at -1 (Qt would select the first item), no Click
+    class Picker(Form):
+        def InitializeComponent(self):
+            self.clicks = []
+            self.cbo = ComboBox(self, Style=style, Text="typed" if style == 0 else "")
+
+        def cbo_Click(self):
+            self.clicks.append(self.cbo.ListIndex)
+
+    form = Picker()
+    form.cbo.AddItem("a")
+    form.cbo.AddItem("b", 0)
+    assert form.cbo.ListIndex == -1 and form.clicks == []
+    assert form.cbo.Text == ("typed" if style == 0 else "")  # (an edit text stays)
+    form.cbo.ListIndex = 1
+    form.cbo.AddItem("c", 0)  # a choice made stays with its item
+    assert form.cbo.Text == "a" and form.clicks == [1]
+    form.Unload()

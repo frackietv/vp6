@@ -3073,7 +3073,23 @@ class ComboBox(_ListMixin, Control):
         return [self._widget.itemText(i) for i in range(self._widget.count())]
 
     def _insert(self, index, text, mark=False):
-        self._widget.insertItem(index, text)
+        widget = self._widget
+        if isinstance(widget, _ComboWidget):
+            # No Click as in VB: Qt selects the first item added (VB: ListIndex stays -1
+            # and the text as it is), and an item added before the choice moves it
+            unselected = widget.currentIndex() < 0
+            edit_text = widget.currentText() if widget.isEditable() else None
+            blocked = widget.blockSignals(True)
+            try:
+                widget.insertItem(index, text)
+                if unselected:
+                    widget.setCurrentIndex(-1)
+                    if edit_text is not None:
+                        widget.setEditText(edit_text)
+            finally:
+                widget.blockSignals(blocked)
+        else:
+            widget.insertItem(index, text)
         if mark:
             self._set_role(index, _NEW_ITEM_ROLE, True)
 

@@ -205,7 +205,8 @@ def test_project_properties_in_properties_window(window, tmp_path):
     assert window.properties.designer is window.project_target
     assert window.properties.object_combo.currentText() == "Demo  Project"
     rows = _property_rows(window)
-    assert list(rows) == ["(Name)", "ColorScheme", "Icon", "StartupObject", "Type"]
+    assert list(rows) == ["(Name)", "Arguments", "ColorScheme", "CompanyName", "Description",
+                          "Icon", "ProductName", "StartupObject", "Type", "Version"]
     assert rows["Type"].currentData() == "exe"
     assert [rows["StartupObject"].itemText(i) for i in range(rows["StartupObject"].count())] \
         == ["Form1", "Sub Main"]
@@ -223,6 +224,17 @@ def test_project_properties_in_properties_window(window, tmp_path):
     assert target.set_property("Name", "Renamed") is None
     assert window.windowTitle().startswith("Renamed - VP6")
     assert Project.load(window.project.path).name == "Renamed"
+
+    # App's version and descriptions, and the command line F5 runs it with
+    assert target.set_property("Version", "2.x") is not None
+    assert target.set_property("Version", "2.5") is None
+    assert target.set_property("ProductName", " Demo Pro ") is None
+    assert target.set_property("Arguments", '--open "a file.txt"') is None
+    saved = Project.load(window.project.path)
+    assert (saved.version, saved.product_name, saved.arguments) == \
+        ("2.5.0", "Demo Pro", '--open "a file.txt"')
+    assert saved.version_numbers() == (2, 5, 0)
+    assert window.run_arguments() == ["--open", "a file.txt"]
 
 
 def test_selecting_a_form_or_designer_shows_its_properties_again(window, tmp_path):
