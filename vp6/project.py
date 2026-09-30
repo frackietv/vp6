@@ -13,6 +13,7 @@ A project file is an executable Python script that starts the program::
         "startup": "Form1",           # a form class name, or "Sub Main"
         "forms": ["Form1.py"],
         "modules": ["Module1.py"],
+        "user_controls": [],          # your own controls (UserControl classes)
         "color_scheme": "system",     # "system", "light", "dark" or "ide"
         "icon": [],                   # the program's icon; [] = the VP6 icon
         "groups": [                   # how the Project panel shows them
@@ -63,13 +64,15 @@ REGION_END = "# endregion"
 _START_RE = re.compile(r"^# region VP6 Project\b.*$", re.M)
 _END_RE = re.compile(r"^# endregion\b.*$", re.M)
 
-_FIELDS = ("name", "type", "startup", "forms", "modules", "color_scheme", "icon", "groups")
+_FIELDS = ("name", "type", "startup", "forms", "modules", "user_controls", "color_scheme", "icon",
+           "groups")
 _COMMENTS = {
     "icon": "the program's icon: image files (sizes of it), or []",
     "type": '"exe" (GUI) or "console"',
     "startup": 'a form class name, or "Sub Main"',
     "color_scheme": '"system", "light", "dark" or "ide"; forms inherit it',
     "groups": "how the Project panel shows them (not where they are on disk)",
+    "user_controls": "your own controls (UserControl classes), placed on forms",
 }
 
 _TEMPLATE = '''#!/bin/sh
@@ -112,6 +115,8 @@ class Project:
     startup: str = "Form1"
     forms: list[str] = field(default_factory=list)
     modules: list[str] = field(default_factory=list)
+    # Your own controls: files with a UserControl class, designed like forms
+    user_controls: list[str] = field(default_factory=list)
     color_scheme: str = "system"  # system, light, dark or ide; forms inherit it
     # The program's icon: image files relative to the project (one picture in
     # several sizes; one file is enough). [] = the VP6 icon.
@@ -123,7 +128,8 @@ class Project:
     def __eq__(self, other):
         if not isinstance(other, Project):
             return NotImplemented
-        fields = ("name", "type", "startup", "forms", "modules", "color_scheme", "icon")
+        fields = ("name", "type", "startup", "forms", "modules", "user_controls", "color_scheme",
+                  "icon")
         return all(getattr(self, f) == getattr(other, f) for f in fields) and \
             self.tree() == other.tree()
 
@@ -133,6 +139,10 @@ class Project:
 
     def abspath(self, relative: str) -> str:
         return os.path.join(self.directory, relative)
+
+    def files(self) -> list[str]:
+        """Every form, user control and module (relative paths)."""
+        return self.forms + self.user_controls + self.modules
 
     # -- the icon -------------------------------------------------------------------------------
     def icon_paths(self) -> list[str]:
@@ -145,16 +155,22 @@ class Project:
     # as a tuple.
 
     def kind_of(self, relative: str) -> str | None:
-        return "form" if relative in self.forms else "module" if relative in self.modules \
-            else None
+        if relative in self.forms:
+            return "form"
+        if relative in self.user_controls:
+            return "usercontrol"
+        return "module" if relative in self.modules else None
 
     def tree(self) -> list:
         """The groups, with every form and module exactly once: files that
         are no longer in the project are left out, and files that aren't in
         any group are placed like new ones (see place_file)."""
         if self.groups is None:
-            return [{"group": "Forms", "items": list(self.forms)},
+            tree = [{"group": "Forms", "items": list(self.forms)},
                     {"group": "Modules", "items": list(self.modules)}]
+            if self.user_controls:
+                tree.insert(1, {"group": "User Controls", "items": list(self.user_controls)})
+            return tree
         seen = set()
 
         def clean(entries) -> list:
@@ -169,7 +185,7 @@ class Project:
             return result
 
         tree = clean(self.groups)
-        for relative in self.forms + self.modules:
+        for relative in self.files():
             if relative not in seen:
                 self._add_to(tree, relative, self._default_group(tree, relative))
         return tree
@@ -264,7 +280,7 @@ class Project:
 
     def remove_file(self, relative: str) -> None:
         """Take a file out of the project (not off the disk)."""
-        for files in (self.forms, self.modules):
+        for files in (self.forms, self.user_controls, self.modules):
             if relative in files:
                 files.remove(relative)
         self._normalize()
@@ -273,6 +289,7 @@ class Project:
         """A file renamed on disk keeps its place."""
         tree = self._normalize()
         self.forms = [new if f == old else f for f in self.forms]
+        self.user_controls = [new if u == old else u for u in self.user_controls]
         self.modules = [new if m == old else m for m in self.modules]
 
         def rename(items):

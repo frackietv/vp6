@@ -17,6 +17,7 @@ import vp6
 from .. import formfile
 from ..controls import CONTROL_TYPES, EVENT_ARGS, ControlArray
 from ..form import Form
+from ..usercontrol import OWN_EVENT_ARGS, OWN_EVENTS
 from .documents import Document, FormDocument
 from .theme import Theme, TextStyle, theme_manager
 
@@ -649,10 +650,14 @@ class CodeWindow(QWidget):
         """(object name, events) - 'Form' for the form itself."""
         result = []
         if isinstance(self.doc, FormDocument):
-            result.append(("Form", Form.Events))
+            if self.doc.kind == "usercontrol":  # its own events: UserControl_Resize...
+                result.append(("UserControl", OWN_EVENTS))
+            else:
+                result.append(("Form", Form.Events))
             controls = {c.name: c for c in self.doc.form_def.controls}  # arrays: once
             for name in sorted(controls, key=str.lower):
-                result.append((name, CONTROL_TYPES[controls[name].type].Events))
+                cls = CONTROL_TYPES.get(controls[name].type)
+                result.append((name, cls.Events if cls is not None else ()))
         return result
 
     def _events_of(self, obj: str) -> tuple[str, ...]:
@@ -709,8 +714,13 @@ class CodeWindow(QWidget):
         if existing:
             self.goto_event(obj, existing[0])
         else:
-            default = Form.DefaultEvent if obj == "Form" else \
-                CONTROL_TYPES[self.doc.form_def.elements(obj)[0].type].DefaultEvent
+            if obj == "Form":
+                default = Form.DefaultEvent
+            elif obj == "UserControl":
+                default = "Initialize"
+            else:
+                cls = CONTROL_TYPES.get(self.doc.form_def.elements(obj)[0].type)
+                default = cls.DefaultEvent if cls is not None else ""
             self.goto_event(obj, default)
 
     def _on_proc_chosen(self, _index) -> None:
@@ -737,6 +747,15 @@ class CodeWindow(QWidget):
         self.editor.setFocus()
         return True
 
+    def _event_args(self, obj: str, event: str) -> str:
+        """A handler's parameters: a user control's own, or its declared ones."""
+        if obj == "UserControl":
+            return OWN_EVENT_ARGS.get(event, EVENT_ARGS.get(event, ""))
+        elements = self.doc.form_def.elements(obj)
+        cls = CONTROL_TYPES.get(elements[0].type) if elements else None
+        declared = getattr(cls, "EventArgs", None) or {}
+        return declared.get(event, EVENT_ARGS.get(event, ""))
+
     def goto_event(self, obj: str, event: str) -> None:
         """Jump to ``obj_event`` - creating the handler stub if needed."""
         if not event:  # an object without events (a Line): nothing to jump to
@@ -746,7 +765,7 @@ class CodeWindow(QWidget):
             return
         if not isinstance(self.doc, FormDocument):
             return
-        stub = formfile.event_stub(obj, event, EVENT_ARGS.get(event, ""),
+        stub = formfile.event_stub(obj, event, self._event_args(obj, event),
                                    index=self.doc.form_def.is_array(obj))
         line = self._class_end_line()
         document = self.editor.document()

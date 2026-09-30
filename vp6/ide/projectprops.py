@@ -168,7 +168,7 @@ class FileTarget(QObject):
 
     @property
     def type_name(self) -> str:
-        return "Form" if self.document.kind == "form" else "Module"
+        return {"form": "Form", "usercontrol": "UserControl"}.get(self.document.kind, "Module")
 
     @property
     def base_dir(self) -> str:

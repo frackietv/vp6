@@ -26,7 +26,7 @@ def import_folders(project: Project) -> list[str]:
     their name (``from Module1 import *``) wherever they are, which is why the
     IDE keeps the file names of forms and modules unique in a project."""
     folders = [project.directory]
-    for relative in project.forms + project.modules:
+    for relative in project.files():
         folder = os.path.dirname(project.abspath(relative))
         if folder not in folders:
             folders.append(folder)

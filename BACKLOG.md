@@ -1,46 +1,28 @@
 # VP6 backlog
 
-- **[Controls]** UserControl: designing your own reusable controls in VP6 (VB's UserControl), with their own properties and events, placed from the Toolbox
 - **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)
-- **[Language and runtime]** Default form instances: using `Form2.Show()` without creating an instance first
-- **[Language and runtime]** `Form_QueryUnload` with `UnloadMode` (closed by the user, by code, or because the program is ending), before `Form_Unload`
-- **[Language and runtime]** `Validate` event and `CausesValidation`: checking a control's value before the focus leaves it
-- **[Language and runtime]** `Form.ActiveControl` and `Screen.ActiveControl` (the control with the focus)
+- **[Language and runtime]** Forms: default form instances (using `Form2.Show()` without creating an instance first); `Form_QueryUnload` with `UnloadMode` (closed by the user, by code, or because the program is ending), before `Form_Unload`; a form `Icon` property, a form's own window icon instead of the program's (the project's `icon`) (self-hosting: window icons of the IDE's MDI windows)
+- **[Language and runtime]** Focus and keyboard: the `Validate` event and `CausesValidation` (checking a control's value before the focus leaves it); `Form.ActiveControl` and `Screen.ActiveControl` (the control with the focus); `SendKeys` (sending keystrokes to the active form)
 - **[Language and runtime]** Moving a control to another container at run time (assigning `Container`, as VB's `Set Command1.Container = Frame1`)
-- **[Language and runtime]** Drag and drop: `DragMode`, `Drag`, `DragDrop` / `DragOver` events, and OLE drag and drop of text and files from other programs
-- **[Language and runtime]** `SendKeys`: sending keystrokes to the active form
-- **[Language and runtime]** Form `Picture`: a background picture on the form
+- **[Language and runtime]** Mouse: `MousePointer` / `MouseIcon` properties for cursor shapes such as resize arrows and crosshair, and `Screen.MousePointer` (e.g. an hourglass during long work); drag and drop: `DragMode`, `Drag`, `DragIcon`, `DragDrop` / `DragOver` events, and OLE drag and drop of text and files from other programs (self-hosting: the designer's handles and drawing tool, dragging from the Toolbox)
 - **[Controls]** Common Dialog control (open, save, color, font, print dialogs)
-- **[Language and runtime]** Form `Icon` property: a form's own window icon, instead of the program's (the project's `icon`) (self-hosting: window icons of the IDE's MDI windows)
-- **[Controls]** `MousePointer` / `MouseIcon` properties for cursor shapes such as resize arrows and crosshair, and `Screen.MousePointer` (e.g. an hourglass during long work) (self-hosting: the designer's handles and drawing tool)
-- **[Language and runtime]** `SaveSetting` / `GetSetting` / `DeleteSetting` for per-user settings (self-hosting: recent projects, themes, window layout)
-- **[Language and runtime]** Graphics methods: `Line`, `Circle`, `PSet` and `Print` drawing on forms and PictureBoxes. `PictureBox.Cls()` exists but only clears the picture.
-- **[Language and runtime]** `Paint` event and `AutoRedraw` on forms and PictureBoxes, so programs can draw custom surfaces (self-hosting: the designer's window frame, grid dots and selection handles, the code editor's gutter)
-- **[Language and runtime]** Text measurement: `TextWidth` / `TextHeight` on forms and PictureBoxes (self-hosting: gutter width, eliding captions)
-- **[Language and runtime]** Picture objects: `LoadPicture`, drawing into an image in memory, using it as a `Picture`/icon, and saving it (`SavePicture`); today `Picture` is only a file path (self-hosting: the IDE's drawn icons and the Kitchen Sink image)
-- **[Language and runtime]** Clipboard pictures and formats: `Clipboard.GetData` / `SetData` / `GetFormat` (today text only)
-- **[Language and runtime]** `Printer` object and `Printers` collection: printing text and graphics
-- **[Language and runtime]** More of VB's `App` object: `Major` / `Minor` / `Revision`, `PrevInstance`, `ProductName`, and the command line (VB's `Command()`)
+- **[Language and runtime]** App, Screen and settings: `SaveSetting` / `GetSetting` / `DeleteSetting` for per-user settings; more of VB's `App` object (`Major` / `Minor` / `Revision`, `PrevInstance`, `ProductName`) and the command line (VB's `Command()`); font enumeration, `Screen.Fonts` / `Screen.FontCount` (self-hosting: recent projects, themes, window layout, the Options font list, the FontName editor)
+- **[Language and runtime]** Drawing on forms and PictureBoxes: the graphics methods `Line`, `Circle`, `PSet`, `Print` and `Cls` (today `PictureBox.Cls()` only clears the picture), drawing properties (`DrawWidth`, `DrawStyle`, `FillStyle`, `FillColor`, `CurrentX` / `CurrentY`), the `Paint` event and `AutoRedraw`, and text measurement with `TextWidth` / `TextHeight` (self-hosting: the designer's window frame, grid dots and selection handles, the code editor's gutter width, eliding captions)
+- **[Language and runtime]** Picture objects: `LoadPicture`, drawing into an image in memory, using it as a `Picture` or icon, and saving it (`SavePicture`); a form `Picture` (a background picture on the form); clipboard pictures and formats, `Clipboard.GetData` / `SetData` / `GetFormat` (today `Picture` is only a file path and the clipboard text only) (self-hosting: the IDE's drawn icons and the Kitchen Sink image)
+- **[Language and runtime]** `Printer` object and `Printers` collection: printing text and graphics (with the drawing methods above)
 - **[IDE]** Find and Replace in all files of the project (today: the current code window only)
-- **[IDE]** Properties window Categorized view (VB's Alphabetic / Categorized tabs)
+- **[IDE]** Designer and Properties window: the Properties window's Categorized view (VB's Alphabetic / Categorized tabs); locking controls in the designer (Format > Lock Controls)
 - **[IDE]** Object Browser: the classes, members, events and constants of `vp6` and of the project's forms and modules
-- **[IDE]** Save Project As (copying a project to a new folder)
-- **[IDE]** Renaming and deleting files from the Project Explorer (today Remove only takes a file out of the project)
-- **[IDE]** Locking controls in the designer (Format > Lock Controls)
-- **[IDE - Debugging]** breakpoints, stepping, watches
-- **[IDE - Debugging]** evaluating expressions in the Immediate window
-- **[IDE - Debugging]** editing code while the program is paused
-- **[Language and runtime]** Font enumeration: `Screen.Fonts` / `Screen.FontCount` (self-hosting: the Options font list, the FontName editor)
-- **[Language and runtime]** An event when the OS switches between light and dark, and a way to ask which one is active (self-hosting: repainting custom-drawn surfaces and icons)
-- **[Language and runtime]** MDI forms (MDI parent and child forms)
-- **[Language and runtime]** Borderless popup forms that don't take the focus from the form that opened them (self-hosting: the code completion list)
+- **[IDE]** Project files: Save Project As (copying a project to a new folder); renaming and deleting files from the Project Explorer's Project view (today Remove only takes a file out of the project; the Files view can already rename and delete files on disk)
+- **[IDE - Debugging]** A debugger: breakpoints, stepping, watches, and evaluating expressions in the Immediate window while the program is paused
+- **[IDE - Debugging]** Editing code while the program is paused
+- **[Language and runtime]** Light and dark: an event when the OS switches between light and dark and a way to ask which one is active (self-hosting: repainting custom-drawn surfaces and icons); picking up a macOS light/dark change live for System forms in the designer while the IDE is forced to Light or Dark (today they update on the next redraw); programs started from the IDE with the "IDE" color scheme following later IDE theme changes (today: its appearance at launch only)
+- **[Language and runtime]** Form kinds: MDI forms (MDI parent and child forms); borderless popup forms that don't take the focus from the form that opened them (self-hosting: the code completion list)
 - **[Language and runtime]** Starting a program asynchronously with output, exit and error events and a way to write to its stdin (a Process object beyond VB's `Shell`) (self-hosting: F5 and the Immediate window)
-- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: graphics methods, MDI forms, Common Dialog
+- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: drawing on forms and PictureBoxes, picture objects, MDI forms, Common Dialog
 - **[Language and runtime]** Twips and VB's `ScaleMode`; VP6 uses pixels only
 - **[Controls]** Data-bound controls
 - **[IDE]** Designer window frames with rounded bottom corners on macOS
 - **[Appearance]** Per-window title bar color: a forced Light or Dark form still gets a title bar in the OS appearance, since Qt can't set it per window on macOS
-- **[Appearance]** Picking up a macOS light/dark change live for System forms in the designer while the IDE is forced to Light or Dark (they update on the next redraw)
-- **[Appearance]** Programs started from the IDE with the "IDE" color scheme follow the IDE's appearance at launch only, not later IDE theme changes
-- **[IDE - Term]** Add a terminal emultator panel (default position same as immediate panel) to allow a shell to be opened in the IDE.
+- **[IDE - Term]** Add a terminal emulator panel (default position same as immediate panel) to allow a shell to be opened in the IDE.
 - **[AI]** Add Claude integration to allow use of Claude straight from the IDE

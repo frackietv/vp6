@@ -32,6 +32,16 @@ def _isolated_settings(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_user_controls_left():
+    """User controls registered by a test (an IDE project, a Kitchen Sink) are
+    gone after it: the control types are the built-in ones again."""
+    yield
+    from vp6.usercontrol import unregister_user_controls
+
+    unregister_user_controls()
+
+
+@pytest.fixture(autouse=True)
 def _fail_on_errors_in_qt_callbacks(monkeypatch):
     """An exception raised in Python code that Qt calls (an event handler
     override like mouseMoveEvent, a slot) doesn't reach the test: PySide

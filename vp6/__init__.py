@@ -18,8 +18,9 @@ from .controls import (Button, CheckBox, CodeBox, ColumnHeader, ComboBox, Comman
                        TextBox, Timer, Toolbar, TreeView, UpDown, VScrollBar)
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
+from .usercontrol import Property, UserControl
 
-__version__ = "0.4.13"
+__version__ = "0.4.14"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen",
@@ -33,7 +34,7 @@ __all__ = [
     "OptionButton", "PictureBox",
     "Panel", "ProgressBar", "RichTextBox", "Shape", "Slider", "Splitter", "StatusBar", "Tab",
     "TabStrip", "TextBox",
-    "Timer", "Toolbar", "TreeView", "UpDown", "VScrollBar",
+    "Timer", "Toolbar", "TreeView", "UpDown", "UserControl", "Property", "VScrollBar",
     "InputBox", "MsgBox",
     "Form", "Forms", "Load", "Unload", "run",
     "vpSchemeProjectDefault", "vpSchemeSystem", "vpSchemeLight", "vpSchemeDark", "vpSchemeIDE",

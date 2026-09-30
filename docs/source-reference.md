@@ -411,7 +411,14 @@ visibility asks the form to place its docked controls again
 
 Reading and writing the designer region of form files (format in
 architecture §6.1). It has no Qt dependency beyond importing the control
-classes for their metadata.
+classes for their metadata. A user control's file is read the same way
+(`find_form_kind`: "usercontrol" for `class X(UserControl)`; `FormDef.kind`):
+its own properties are its surface's, `self.Surface.Width = 160`
+(`_is_surface_attr`, `surface_specs`, written in `generate_region`).
+`new_user_control_source` is a new user control's file; `import_insertion`
+and `ensure_import` add `from ctlX import ctlX` after a file's imports. A
+control whose class isn't known (a user control that couldn't be loaded)
+keeps its values when the region is written (`_props_to_args`).
 
 * **Data:**
   * `control_key(name, index)` is how the IDE identifies a control:
@@ -507,6 +514,39 @@ architecture §6.2).
   file. It does nothing on Windows.
 * Constants: `EXTENSION = ".vp6p"`, `REGION_START` / `REGION_END`, and
   `_FIELDS` (the order the fields are written in).
+
+### `vp6/usercontrol.py` (≈300 lines)
+
+Your own controls (VB's UserControl).
+
+* `Property(Name, Kind, Default, description, choices)` makes a `PropSpec`
+  (an enum's names numbered from 0; a default by kind); `parse_events`
+  splits `"Change(Value)"` declarations into names and `EventArgs`.
+* `UserControl(Control)`: `__init_subclass__` puts the base properties
+  (geometry and `_COMMON`) before the author's (`_author_properties`), parses
+  `Events`, and makes the class name its `TypeName` (in the Toolbox, its first
+  event the default). `_create_widget` makes its `_UserControlSurface` and
+  uses the surface's widget; `_build_widget` then runs `InitializeComponent`
+  (its controls go on the surface: `_owner_form` and `_container_widget` are
+  the surface's; `__setattr__` names controls and control arrays), records
+  the designed size (`_design_size`, the default Width and Height in
+  `_init_values`) and fires its own `Initialize`. `_set_prop` fires
+  `PropertyChanged` for the author's properties; `_own_event` calls
+  `UserControl_<event>` methods; `RaiseEvent` fires a declared event on the
+  form (`Control._fire`). `Surface`, `UserMode`, `Controls`.
+* `_UserControlSurface(Form)` is never loaded (not in `Forms`). Its
+  `__getattr__` forwards handler names (`_is_handler_name`: `cmdUp_Click`,
+  not `Form_...` or `InitializeComponent`) to the user control, except at
+  design time; its `_fire` passes `_SURFACE_EVENTS` (Resize, Click, mouse,
+  keys, Paint) on as the user control's own, at design time only
+  `_DESIGN_TIME_EVENTS`.
+* `SURFACE_PROPERTIES`, `DEFAULT_SURFACE`, `OWN_EVENTS` and `OWN_EVENT_ARGS`
+  (the code window's "UserControl" object).
+* The IDE's registry: `register_user_control` adds a class to
+  `CONTROL_TYPES` (not over a built-in name), `unregister_user_controls`,
+  `user_control_types`; `load_user_control(path, text)` executes a file's
+  text as a module named after the file (as forms import it) and sets the
+  class's DefaultSize to its designed surface.
 
 ### `vp6/make.py` (≈200 lines)
 
@@ -1241,9 +1281,12 @@ Captures the IDE process's stdout and stderr for the Output window.
   * signal `modifiedChanged`;
   * `replace_text(text)` does a whole-text replacement as one undoable edit
     (used for renames).
-* `FormDocument(Document)`:
-  * `form_def`, `name` (the class name found in the text), `region_range()`;
-  * `set_form_def(form_def)` regenerates the region;
+* `FormDocument(Document)` (a form's or a user control's file):
+  * `form_def`, `kind` (`form_def.kind`: "form" or "usercontrol"), `name`
+    (the class name found in the text), `region_range()`;
+  * `set_form_def(form_def)` regenerates the region and, in the same undoable
+    edit, adds the imports of the user controls on the form
+    (`_missing_imports`, `formfile.import_insertion`);
   * `_on_text_changed` re-parses; signals `designReloaded` and `parseError`.
 * `open_document(path)` picks the class by content.
 
@@ -1253,7 +1296,8 @@ The Kitchen Sink project template: a demo of every control and feature,
 explorer-style.
 
 * `create(directory, name)` copies `FORMS` (the window, its pages in the
-  index's order, and the dialog) and `MODULES` (`Module1.py`) from
+  index's order, and the dialog), `USER_CONTROLS` (`ctlRating.py`, in a User
+  Controls group) and `MODULES` (`Module1.py`) from
   `TEMPLATE_DIR`, draws the picture `PICTURE` (`vp6.png`, via
   `draw_picture`, so the package ships no binary) and the ImageLists'
   pictures (`draw_icons`: `IMAGES/<name>.png` for each of `ICONS`, 32 × 32),
@@ -1377,7 +1421,14 @@ explorer-style.
     bar while the page is visible (NegotiatePosition; the window's Help is
     Right too, so it stays last);
   * `pgGlobals.py`: App, Screen, Forms, Clipboard, DoEvents, Debug.Print and
-    End.
+    End;
+  * `pgUserControl.py`: three `ctlRating`s with different Value, Max,
+    StarColor and Locked, their Change and Hover events, an average, and a
+    Value set from code;
+  * `ctlRating.py` (in `USER_CONTROLS`): a user control, a star rating: its
+    Properties and Events, a control array of Labels on its surface, Max and
+    Value kept in range in `UserControl_PropertyChanged`, Change raised there,
+    Hover from its stars' MouseMove.
   Pages that talk to the window use their `shell` attribute (None when a
   page runs on its own).
 * **`frmDialog.py`** is a modal dialog (`Show(vpModal)`) with its own Dark
@@ -1555,6 +1606,7 @@ All tests run headless. `conftest.py`:
 | `test_flexgrid.py` | The FlexGrid: parse_format_string; cells, headings, the corner, alignment by column, Clear, IndexErrors; Rows and Cols, FixedRows and FixedCols moving texts to and from the headings; the current cell and its events (LeaveCell, RowColChange, EnterCell), Text, RowSel/ColSel and SelChange, SelectionMode; the Cell... formats; AddItem, RemoveItem, RowData and every Sort mode (headings and RowData moving with their rows); ColWidth, RowHeight, TopRow, LeftCol and Scroll, MouseRow/MouseCol over cells and headings; not editable by default; text editing (BeforeEdit cancelling, ValidateEdit refusing, AfterEdit, typing to start); column and cell editors (none, list with column or cell choices); check boxes (from text, new rows, clicks only when Editable, the events, back to text); color (the dialog) and button cells (F2 and a click on the button); Toolbox, icon and EVENT_ARGS. |
 | `test_dockpanel.py` | DockPanels: docked places (beside each other, a Fill PictureBox in the rest, controls in the content, moving to another edge); floating and docking (the window, the others taking its space, FloatMove and the Float... properties, Width not moving the window, back to its edge, where it last floated); closing by its button (Close cancelling, DockChange), Visible showing it again, also floating, and the window manager's close; the caption's float button and double-click, Floatable and Closable; dragging (the window following, the rubber band near an edge, docking there and outermost, staying floating in the middle); resizing by the inner edge with limits, Resizable; the floating window hiding and showing with the form; DockLayout (saved, everything changed, put back with the order; empty and invalid text); Floating from the start; Toolbox, icon, default event and EVENT_ARGS. |
 | `test_shape.py` | The Shape: its defaults and no events; drawn pixels: the solid fill, the border inside its box, transparent fill and border, Opaque with BackColor; the round kinds leaving their corners, the circle and square centered, the oval filling its box; every hatched FillStyle drawing lines; Inside Solid and dashed borders; clicks going through; Toolbox (Shape before Line), icon and constants. |
+| `test_usercontrol.py` | User controls: declarations (Property kinds and enum choices, Events with arguments, the default event, the merged Properties); at run time the designed size, property values through PropertyChanged, Initialize first, its own controls' events (control arrays too), RaiseEvent to the form and its cancel, Resize, the surface's Click, Surface, Controls, not in Forms; at design time PropertyChanged and Resize but not its controls' events; form files (find_form_kind, Surface properties round trip, a new one loading, imports, unknown values kept); the registry (built-in names refused); the project's user_controls (round trip, kind, the User Controls group, rename and remove); the IDE (Add User Control, its group and Toolbox button, its surface's properties and no frame, not on itself, its code window's UserControl events, reloading after an edit, placing it on a form with its import and Properties, an event stub, unregistered on close, loaded before forms on open); a broken user control reported; a program using one, run without the IDE. |
 | `test_file_controls.py` | DriveListBox, DirListBox and FileListBox: `file_matches` patterns; the drives (`user_drives`, Drive set from any path, a missing one raising, Refresh); the DirListBox's Path, negative and positive `List` indexes, ListIndex and Click, ShowHidden, Refresh, no Change for the same folder, opening a folder by double-click (and the FileListBox following); the FileListBox's Pattern (case-insensitive, several, `*.*`), Hidden, FileName selecting, setting Pattern and Path, Refresh keeping the selection, no AddItem/RemoveItem/Clear, MultiSelect; clicking a file; Toolbox, icons and Toolbox order. |
 | `test_text_editing.py` | The editing API of a multi-line TextBox and a RichTextBox (each test runs on both) and a single-line TextBox: LineCount, GetLine, GetLineFromChar, GetCharFromLine, GetColumnFromChar and IndexErrors; CurrentLine/CurrentColumn (keeping the column, clamping to the line) and SelChange (once per move, also for a selection); CaretLeft/Top/Height against the lines and GetCharFromPoint; FirstVisibleLine, ScrollToCaret and ScrollLeft; Undo, Redo, CanUndo, CanRedo, ClearUndo (no Change, the caret kept); AcceptsTab (and across a MultiLine rebuild). |
 | `test_richtextbox.py` | The RichTextBox: text and selection (SelText across lines, replacing, clamping, Change and SelChange); formatting the selection (every Sel... property, None when mixed, the ForeColor where no color was set, None resetting the color); the format of what is typed next; paragraph alignment (one, mixed); AppendText (its own format, the selection kept, the view following the end only when it was there); Find (after the selection, match case, whole word, End, no highlight); GetLineFromChar; TextHTML, SelHTML, SaveFile/LoadFile by extension and FileType; MaxLength trimming; Locked against typing; pasting HTML without pictures or tables; ScrollBars and BorderStyle; Toolbox, icon and constants. |
@@ -1572,5 +1624,5 @@ All tests run headless. `conftest.py`:
 | `test_packaging.py` | The package as published: `pyproject.toml`'s version is `vp6.__version__`, the MIT license and its file, the author without an email, the dependencies and the `make` extra; every data file in `vp6/` (not a module of a package) matched by the package data, so the wheel has it; the `vp6`, `vp6-run` and `vp6-make` commands; the source distribution's docs and tests; the release workflow's version check and trusted publishing. |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the Docking panels page (Float and Dock, Close cancelled, a closed panel shown again, the layout saved and restored, the grid following its panel), the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order, lines and shapes, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the Docking panels page (Float and Dock, Close cancelled, a closed panel shown again, the layout saved and restored, the grid following its panel), the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Your own controls page (ctlRating's stars, a click's Change, Hover, Value from code, Locked, Max and Value kept in range), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order, lines and shapes, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (none by default, nothing copied; its own files, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |

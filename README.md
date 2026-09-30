@@ -113,9 +113,10 @@ is one.
 
 ## Files
 
-A project is a folder with a `Name.vp6p` project file listing forms, modules
-and the startup object (a form or `Sub Main`), and how the Project panel
-groups them. Groups are only for the panel: files stay where they are on
+A project is a folder with a `Name.vp6p` project file listing forms, modules,
+user controls (controls of your own, designed like forms and placed on forms
+from the Toolbox, as VB's UserControl) and the startup object (a form or
+`Sub Main`), and how the Project panel groups them. Groups are only for the panel: files stay where they are on
 disk. A group can hold forms, modules and other groups. Forms and modules
 can also be in subfolders of the project's folder (organize them in the
 Project panel's Files view); they import each other by file name wherever

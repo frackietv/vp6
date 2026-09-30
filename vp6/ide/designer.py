@@ -19,7 +19,7 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QGuiApplication, QPainter, Q
 from PySide6.QtWidgets import (QApplication, QMenu, QMessageBox, QScrollArea, QVBoxLayout,
                                QWidget)
 
-from .. import appearance, colors
+from .. import appearance, colors, formfile
 from .._props import normalize
 from ..controls import CONTROL_TYPES, Control
 from ..form import Form
@@ -528,6 +528,8 @@ class FormDesigner(QWidget):
             old.deleteLater()
         self.controls = {}
         self.form = DesignForm(self)
+        if self.form_def.kind == "usercontrol":  # its surface: only its own properties
+            self.form.__dict__["_specs"] = formfile.surface_specs()
         for prop, value in self.form_def.props.items():
             self._safe_set(self.form, prop, value)
         widget = self.form._widget
@@ -578,6 +580,9 @@ class FormDesigner(QWidget):
 
     def frame_info(self) -> chrome.FrameInfo:
         form = self.form
+        if self.form_def.kind == "usercontrol":  # a control's surface: no window frame
+            return chrome.FrameInfo(caption="", border_style=0,
+                                    form_dark=form._is_dark())
         return chrome.FrameInfo(
             caption=form.Caption, border_style=form.BorderStyle, control_box=form.ControlBox,
             min_button=form.MinButton, max_button=form.MaxButton,
@@ -698,7 +703,8 @@ class FormDesigner(QWidget):
         return obj is not self.form
 
     def all_objects(self) -> list[tuple[str, str]]:
-        return [(self.form_def.class_name, "Form")] + \
+        kind = "UserControl" if self.form_def.kind == "usercontrol" else "Form"
+        return [(self.form_def.class_name, kind)] + \
             [(c.key, c.type) for c in self.form_def.controls]
 
     def set_tool(self, tool: str | None) -> None:
@@ -794,6 +800,9 @@ class FormDesigner(QWidget):
 
     def create_control(self, type_name: str, rect: QRect | None, container: str | None,
                        click_pos: QPoint | None = None, end_pos: QPoint | None = None) -> str:
+        if self.form_def.kind == "usercontrol" and type_name == self.form_def.class_name:
+            self.statusMessage.emit(f"{type_name} can't be placed on itself")
+            return ""
         cls = CONTROL_TYPES[type_name]
         name = self.unique_name(NAME_PREFIX.get(type_name, type_name))
         origin = self._container_widget(container).mapTo(self.canvas, QPoint(0, 0))

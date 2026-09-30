@@ -67,9 +67,8 @@ class Document(QObject):
 
 
 class FormDocument(Document):
-    """A form file. ``form_def`` mirrors the designer region."""
-
-    kind = "form"
+    """A form's (or a user control's) file. ``form_def`` mirrors the designer
+    region."""
     # Emitted when the region changed from the text side (undo in the code
     # window, file reload): the designer must rebuild itself.
     designReloaded = Signal()
@@ -80,6 +79,11 @@ class FormDocument(Document):
         self._updating = False
         self.form_def: FormDef = formfile.parse(self.text)
         self.text_document.contentsChanged.connect(self._on_text_changed)
+
+    @property
+    def kind(self) -> str:
+        """"form", or "usercontrol" for a UserControl's file."""
+        return self.form_def.kind
 
     @property
     def name(self) -> str:
@@ -107,15 +111,41 @@ class FormDocument(Document):
         cursor = QTextCursor(self.text_document)
         cursor.setPosition(first.position())
         cursor.setPosition(last.position() + last.length() - 1, QTextCursor.KeepAnchor)
-        if cursor.selectedText().replace(" ", "\n") == new_text:
+        imports = self._missing_imports()
+        if cursor.selectedText().replace(" ", "\n") == new_text and not imports:
             return
         self._updating = True
         try:
             cursor.beginEditBlock()
             cursor.insertText(new_text)
+            for line, statement in sorted(imports, reverse=True):  # (above the region)
+                block = self.text_document.findBlockByNumber(line)
+                at = QTextCursor(self.text_document)
+                if block.isValid():
+                    at.setPosition(block.position())
+                    at.insertText(statement + "\n")
+                else:
+                    at.movePosition(QTextCursor.End)
+                    at.insertText("\n" + statement)
             cursor.endEditBlock()
         finally:
             self._updating = False
+
+    def _missing_imports(self) -> list[tuple[int, str]]:
+        """The imports the file needs for the user controls on it (each from
+        its own module), with the lines they go to."""
+        from ..controls import CONTROL_TYPES
+        from ..usercontrol import UserControl
+
+        insertions, text = [], self.text
+        for type_name in dict.fromkeys(c.type for c in self.form_def.controls):
+            cls = CONTROL_TYPES.get(type_name)
+            if cls is None or not issubclass(cls, UserControl):
+                continue
+            insertion = formfile.import_insertion(text, cls.__module__, type_name)
+            if insertion is not None and insertion[1] not in (s for _, s in insertions):
+                insertions.append(insertion)
+        return insertions
 
     def _on_text_changed(self) -> None:
         if self._updating:

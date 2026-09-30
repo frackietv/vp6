@@ -632,6 +632,7 @@ PROJECT = {
     "startup": "frmCalculator",         # a form class name, or "Sub Main"
     "forms": ["frmCalculator.py"],
     "modules": [],
+    "user_controls": [],                # your own controls (UserControl classes)
     "color_scheme": "system",           # "system", "light", "dark" or "ide"; forms inherit it
     "icon": ["art/calc-32.png", "art/calc-256.png"],   # the program's icon; [] = VP6's
     "groups": [                         # how the Project panel shows them (not folders)
@@ -664,8 +665,12 @@ if __name__ == "__main__":
   the VP6 icon from the VP6 installation, which `ensure_app` gives every VP6
   application (and `vp6-make` uses for the executable), so nothing is copied
   into the project.
-* **Forms, modules and groups.** `forms` and `modules` say what each file
-  is; that's all the runner needs. `groups` only organizes the Project
+* **Forms, modules and groups.** `forms`, `modules` and `user_controls` say
+  what each file is; that's all the runner needs (a user control's folder is
+  one it imports from; forms import the class by its file's name). In the
+  IDE, user controls are loaded before the forms that use them and
+  registered as control types while the project is open
+  (`usercontrol.register_user_control`). `groups` only organizes the Project
   panel, and doesn't reflect where the files are on disk. It is a list of
   entries. Each entry is a file (its path relative to the project) or a
   group, `{"group": name, "items": [entries]}`. So a group can hold forms,

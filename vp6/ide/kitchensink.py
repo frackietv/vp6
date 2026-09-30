@@ -31,10 +31,11 @@ FORMS = (  # the window, its pages (in the index's order) and the modal dialog
     "pgButtons.py", "pgLists.py", "pgScrollBars.py", "pgValues.py", "pgPictures.py", "pgZOrder.py",
     "pgTree.py", "pgListView.py", "pgGrid.py", "pgTabs.py", "pgFiles.py", "pgTimer.py",
     "pgLayout.py", "pgDocking.py", "pgScrolling.py", "pgEmbedded.py", "pgDialogs.py",
-    "pgSchemes.py", "pgKeyboard.py", "pgMouse.py", "pgArrays.py", "pgMenus.py", "pgGlobals.py",
-    "frmDialog.py",
+    "pgSchemes.py", "pgKeyboard.py", "pgMouse.py", "pgArrays.py", "pgMenus.py", "pgUserControl.py",
+    "pgGlobals.py", "frmDialog.py",
 )
 MODULES = ("Module1.py",)
+USER_CONTROLS = ("ctlRating.py",)  # a control of its own (pgUserControl.py uses it)
 PICTURE = "vp6.png"  # shown on the Pictures page
 IMAGES = "images"  # small pictures for the ImageLists (TreeView and TabStrip pages)
 ICONS = ("folder", "paw", "leaf", "star", "gear", "palette", "info",  # TreeView, TabStrip
@@ -44,7 +45,7 @@ ICONS = ("folder", "paw", "leaf", "star", "gear", "palette", "info",  # TreeView
 def create(directory: str, name: str) -> Project:
     """Copy the Kitchen Sink sources into ``directory`` and return its project
     (not saved yet)."""
-    for filename in FORMS + MODULES:
+    for filename in FORMS + MODULES + USER_CONTROLS:
         shutil.copyfile(TEMPLATE_DIR / filename, os.path.join(directory, filename))
     draw_picture(os.path.join(directory, PICTURE))
     draw_icons(os.path.join(directory, IMAGES))
@@ -52,10 +53,12 @@ def create(directory: str, name: str) -> Project:
     groups = [  # the Project panel: the pages in a group of their own
         {"group": "Forms", "items": [name for name in FORMS if name not in pages] +
          [{"group": "Pages", "items": pages}]},
+        {"group": "User Controls", "items": list(USER_CONTROLS)},
         {"group": "Modules", "items": list(MODULES)},
     ]
     return Project(name=name, type="exe", startup=SUB_MAIN, forms=list(FORMS), groups=groups,
-                   modules=list(MODULES), color_scheme="system")
+                   modules=list(MODULES), user_controls=list(USER_CONTROLS),
+                   color_scheme="system")
 
 
 def draw_icons(folder: str) -> None:

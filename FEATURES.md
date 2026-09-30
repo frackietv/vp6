@@ -1,5 +1,32 @@
 # VP6 features
 
+**Version:** 0.4.14
+**Date:** 2026-10-01
+
+## Controls
+
+- User controls (VB's UserControl): your own controls, designed like forms and placed on forms from the Toolbox
+  - A `UserControl` subclass with its constituent controls on its `Surface`, its properties declared with `Property(...)` and its events with `Events` (with arguments, `"Change(Value)"`), raised with `RaiseEvent`
+  - Its own events: `UserControl_Initialize`, `UserControl_PropertyChanged(PropertyName)`, `UserControl_Resize`, Click, mouse and key events; its controls' events are its methods; `UserMode`
+  - It runs on forms in the designer (showing its property values), without its controls' events
+
+## IDE
+
+- Project > Add User Control (and in the Project panel), a User Controls group, the project's `user_controls`
+- A user control's designer: its surface without a window frame, its own properties only; its code window's UserControl events
+- The project's user controls in the Toolbox; placed on a form, the form imports their class, and the Properties window and code window know their properties and events
+- User controls are loaded from their current text and again a moment after an edit; forms using them are redrawn
+
+## Kitchen Sink
+
+- A user control, `ctlRating` (stars), and a "Your own controls" page using it three times
+
+## Other
+
+- The backlog's related items combined
+
+---
+
 **Version:** 0.4.13
 **Date:** 2026-10-01
 

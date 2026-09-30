@@ -25,13 +25,22 @@ from vp6.ide.designer import FormDesigner
 from vp6.ide.documents import FormDocument
 from vp6.ide.mainwindow import create_project
 from vp6.project import SUB_MAIN, Project
+from vp6.usercontrol import load_user_control, register_user_control
 
 UPDATE_HINT = "update the Kitchen Sink (vp6/ide/templates/kitchensink/)"
 
 
 def template_sources() -> dict[str, str]:
     return {name: (kitchensink.TEMPLATE_DIR / name).read_text()
-            for name in kitchensink.FORMS + kitchensink.MODULES}
+            for name in kitchensink.FORMS + kitchensink.MODULES + kitchensink.USER_CONTROLS}
+
+
+@pytest.fixture(autouse=True)
+def _kitchen_sink_user_controls(qapp):
+    """Its user controls are control types, as the IDE makes them when it opens the
+    project (the forms using them can be read and designed); gone after each test."""
+    for name in kitchensink.USER_CONTROLS:
+        register_user_control(load_user_control(str(kitchensink.TEMPLATE_DIR / name)))
 
 
 def form_defs() -> dict[str, formfile.FormDef]:
@@ -76,7 +85,7 @@ def test_every_color_scheme_is_demonstrated():
 def test_designer_regions_are_canonical():
     # Regenerating a region must not change it, so the IDE opens the forms cleanly
     for filename, source in template_sources().items():
-        if filename in kitchensink.FORMS:
+        if filename in kitchensink.FORMS + kitchensink.USER_CONTROLS:
             assert formfile.replace_region(source, formfile.parse(source)) == source, filename
 
 
@@ -87,9 +96,11 @@ def test_create_kitchen_sink_project(qapp, tmp_path):
     project = Project.load(path)
     assert project.forms == list(kitchensink.FORMS)  # the window, its pages, the dialog
     assert project.modules == ["Module1.py"]  # like every new project: Form1 and Module1
+    assert project.user_controls == ["ctlRating.py"]
+    assert project.group_of("ctlRating.py") == ("User Controls",)
     assert project.startup == SUB_MAIN and project.type == "exe"
     folder = tmp_path / "Sink"
-    for name in kitchensink.FORMS + kitchensink.MODULES:
+    for name in kitchensink.FORMS + kitchensink.MODULES + kitchensink.USER_CONTROLS:
         assert (folder / name).read_text() == (kitchensink.TEMPLATE_DIR / name).read_text()
     assert not QPixmap(str(folder / kitchensink.PICTURE)).isNull()
     for name in kitchensink.ICONS:  # the ImageLists' pictures
@@ -128,7 +139,7 @@ def sink(qapp, tmp_path, monkeypatch):
     if window._loaded:
         window.Unload()
     sys.path.remove(folder)
-    for name in names + ["Module1"]:
+    for name in names + ["Module1", "ctlRating"]:
         sys.modules.pop(name, None)
 
 
@@ -377,6 +388,27 @@ def test_code_page(sink):
     page.chkPython.Value = vp6.vpUnchecked
     assert not code.LineNumbers and not code.HighlightCurrentLine and code.WordWrap
     assert code.Language == 0
+
+
+def test_user_control_page(sink):
+    page = _page(sink, "usercontrol")
+    food, service, critics = page.rtgFood, page.rtgService, page.rtgFixed
+    assert (food.Value, food.Max) == (4, 5) and (service.Value, service.Max) == (2, 3)
+    assert [s.Visible for s in service.lblStar] == [True, True, True, False, False]
+    assert [s.Caption for s in food.lblStar] == ["\u2605"] * 4 + ["\u2606"]
+    assert food.lblStar[0].ForeColor == food.StarColor and food.lblStar[4].ForeColor is None
+    assert page.lblAverage.Caption == "Average: 3.4 of 5 stars"
+    QTest.mouseClick(service.lblStar[2]._widget, Qt.LeftButton)  # its own control's Click
+    assert service.Value == 3 and page.lblEvent.Caption == "Service: 3 of 3 stars (Change)"
+    QTest.mouseMove(food.lblStar[1]._widget)  # Hover: the rating the mouse is on
+    assert page.lblEvent.Caption == "Food: 2 stars? (Hover)"
+    page.cmdReset._widget.click()  # Value from code: Change comes here too
+    assert food.Value == 0 and page.lblEvent.Caption == "Food: 0 stars (Change)"
+    QTest.mouseClick(critics.lblStar[4]._widget, Qt.LeftButton)  # Locked: no change
+    assert critics.Value == 3
+    food.Max = 9  # (kept from 1 to 5)
+    food.Value = -2
+    assert food.Max == 5 and food.Value == 0
 
 
 def test_buttons_page(sink):

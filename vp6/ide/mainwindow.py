@@ -20,6 +20,9 @@ from .. import formfile
 from ..app import install_interrupt_handler, vp6_icon
 from ..appearance import IDE_SCHEME_ENV, SCHEME_NAMES, scheme_from_name
 from ..project import EXTENSION, SUB_MAIN, Project
+from ..runner import import_folders
+from ..usercontrol import (load_user_control, register_user_control,
+                           unregister_user_controls, user_control_types)
 from . import icons, kitchensink
 from .codeeditor import CodeWindow
 from .designer import FormDesigner, is_identifier
@@ -58,6 +61,12 @@ class MainWindow(QMainWindow):
         self._last_designer: FormDesigner | None = None
         self.find_dialog: FindReplaceDialog | None = None  # created when first needed
         self._pending_fits: list = []  # subwindows to fit once the window is shown
+        # The project's user controls are loaded again a moment after one is edited
+        self._user_control_timer = QTimer(self)
+        self._user_control_timer.setSingleShot(True)
+        self._user_control_timer.setInterval(600)
+        self._user_control_timer.timeout.connect(self._load_user_controls)
+        self._user_control_paths: list[str] = []  # folders added to sys.path for them
         self._icon_actions: list[tuple[QAction, str]] = []
 
         # The whole IDE follows the light/dark choice of the editor theme
@@ -105,6 +114,7 @@ class MainWindow(QMainWindow):
         self.explorer.setStartup.connect(self._set_startup)
         self.explorer.addForm.connect(self.add_form)
         self.explorer.addModule.connect(self.add_module)
+        self.explorer.addUserControl.connect(self.add_user_control)
         self.explorer.newGroup.connect(self.new_group)
         self.explorer.renameGroup.connect(self.rename_group)
         self.explorer.deleteGroup.connect(self.delete_group)
@@ -225,6 +235,8 @@ class MainWindow(QMainWindow):
         self.act_close = a("&Close Project", self.close_project)
         self.act_add_form = a("Add &Form", self.add_form, None, "Form")
         self.act_add_module = a("Add &Module", self.add_module, None, "Module")
+        self.act_add_user_control = a("Add &User Control", self.add_user_control, None,
+                                      "UserControl")
         self.act_add_file = a("Add F&ile…", self.add_file, "Ctrl+D")
         self.act_add_folder = a("Add F&older…", self.add_folder)
         self.act_project_props = a("Project P&roperties…", self.project_properties)
@@ -307,8 +319,8 @@ class MainWindow(QMainWindow):
         self.view_menu = view
 
         project = bar.addMenu("&Project")
-        for act in (self.act_add_form, self.act_add_module, self.act_add_file,
-                    self.act_add_folder, None, self.act_project_props):
+        for act in (self.act_add_form, self.act_add_module, self.act_add_user_control,
+                    self.act_add_file, self.act_add_folder, None, self.act_project_props):
             project.addSeparator() if act is None else project.addAction(act)
 
         fmt = bar.addMenu("F&ormat")
@@ -468,7 +480,8 @@ class MainWindow(QMainWindow):
     def _update_actions(self):
         has_project = self.project is not None
         for act in (self.act_save, self.act_close, self.act_add_form, self.act_add_module,
-                    self.act_add_file, self.act_add_folder, self.act_project_props):
+                    self.act_add_user_control, self.act_add_file, self.act_add_folder,
+                    self.act_project_props):
             act.setEnabled(has_project)
         self.act_run.setEnabled(has_project and not self.running)
         self.act_restart.setEnabled(has_project)
@@ -570,23 +583,33 @@ class MainWindow(QMainWindow):
             return False
         self.project = project
         missing = []
-        for relative in project.forms + project.modules:
-            full = project.abspath(relative)
-            try:
-                self._add_document(open_document(full))
-            except (OSError, formfile.FormFileError) as exc:
-                missing.append(f"{relative}: {exc}")
+
+        def open_files(relatives):
+            for relative in relatives:
+                try:
+                    self._add_document(open_document(project.abspath(relative)))
+                except (OSError, formfile.FormFileError) as exc:
+                    missing.append(f"{relative}: {exc}")
+
+        # The user controls first: the forms on which they are need them
+        open_files(project.user_controls)
+        problems = self._load_user_controls()
+        open_files(project.forms + project.modules)
         if missing:
             QMessageBox.warning(self, "Open Project",
                                 "Some files could not be loaded:\n\n" + "\n".join(missing))
         self._remember(project.path)
+        if problems:
+            QMessageBox.warning(self, "Open Project", "Some user controls could not be "
+                                "loaded:\n\n" + "\n".join(problems))
         self._refresh_explorer()
         self._update_title()
         self._update_actions()
         # Show the startup object. A windowed project opens a form's designer: the
         # startup form, or the first form when it starts in Sub Main (which
         # normally shows that form). A console project opens its Main module.
-        forms = [p for p, d in self.documents.items() if isinstance(d, FormDocument)]
+        forms = [p for p, d in self.documents.items()
+                 if isinstance(d, FormDocument) and d.kind == "form"]
         startup_form = next((p for p in forms if self.documents[p].name == project.startup),
                             None)
         if project.type != "console" and (startup_form or forms):
@@ -607,6 +630,9 @@ class MainWindow(QMainWindow):
         if isinstance(doc, FormDocument):
             doc.parseError.connect(
                 lambda msg: self.statusBar().showMessage(f"Designer region: {msg}", 6000))
+            # A user control's file changed: load it again (soon, once for many edits)
+            doc.text_document.contentsChanged.connect(
+                lambda d=doc: d.kind == "usercontrol" and self._user_control_timer.start())
 
     def _confirm_save(self) -> bool:
         """Ask to save modified files. Returns False if the user cancelled."""
@@ -641,6 +667,8 @@ class MainWindow(QMainWindow):
         self.documents.clear()
         self._file_targets.clear()
         self.project = None
+        self._user_control_timer.stop()
+        self._load_user_controls()  # (no project: none)
         self._refresh_explorer()
         self._update_title()
         self._update_actions()
@@ -680,7 +708,8 @@ class MainWindow(QMainWindow):
         self._update_window_titles()
 
     def _form_names(self) -> list[str]:
-        return [d.name for d in self.documents.values() if isinstance(d, FormDocument)]
+        return [d.name for d in self.documents.values()
+                if isinstance(d, FormDocument) and d.kind == "form"]
 
     # -- what the Properties panel shows ---------------------------------------------------
     def _context_path(self) -> str | None:
@@ -898,6 +927,62 @@ class MainWindow(QMainWindow):
         self._refresh_explorer()
         self.view_object(path)
 
+    def add_user_control(self):
+        """Project > Add User Control: a new control of your own, designed like a
+        form, in the User Controls group."""
+        if self.project is None:
+            return
+        name, filename = self._unique_file("UserControl")
+        path = self.project.abspath(filename)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(formfile.new_user_control_source(name))
+        self.project.user_controls.append(filename)
+        group = self.explorer.selected_group("usercontrol")
+        if group is None and not any(self.project.kind_of(f) == "usercontrol"
+                                     for f in self.project.user_controls if f != filename):
+            if ("User Controls",) not in self.project.group_paths():
+                self.project.add_group((), "User Controls")
+            group = ("User Controls",)
+        self.project.place_file(filename, group)
+        self.project.save()
+        self._add_document(open_document(path))
+        self._load_user_controls()
+        self._refresh_explorer()
+        self.view_object(path)
+
+    def _load_user_controls(self) -> list[str]:
+        """Make the project's user controls control types (the Toolbox, the
+        designer, the Properties window): each class from its file's current
+        text, saved or not. Forms on which they are get them anew. Returns
+        what couldn't be loaded."""
+        unregister_user_controls()
+        for folder in self._user_control_paths:
+            if folder in sys.path:
+                sys.path.remove(folder)
+        self._user_control_paths = []
+        problems = []
+        if self.project is not None:
+            for folder in import_folders(self.project):  # (what they import, e.g. modules)
+                if folder not in sys.path:
+                    sys.path.insert(0, folder)
+                    self._user_control_paths.append(folder)
+            for relative in self.project.user_controls:
+                doc = self.documents.get(self.project.abspath(relative))
+                if not isinstance(doc, FormDocument):
+                    continue
+                try:
+                    register_user_control(load_user_control(doc.path, doc.text))
+                except Exception as exc:  # noqa: BLE001 - the user's code
+                    problems.append(f"{relative}: {exc}")
+        self.toolbox.set_user_controls(user_control_types())
+        used = set(user_control_types())
+        for designer in self._designers.values():  # forms with one on them: anew
+            if any(c.type in used for c in designer.form_def.controls):
+                designer.load_def(designer.form_def)
+        for problem in problems:
+            self.statusBar().showMessage(f"User control: {problem}", 8000)
+        return problems
+
     def add_module(self):
         if self.project is None:
             return
@@ -931,12 +1016,14 @@ class MainWindow(QMainWindow):
         if os.path.abspath(path) in self.documents:
             return
         doc = open_document(path)
-        (self.project.forms if isinstance(doc, FormDocument) else self.project.modules).append(
-            relative)
-        self.project.place_file(relative, self.explorer.selected_group(
-            "form" if isinstance(doc, FormDocument) else "module"))
+        kind = doc.kind if isinstance(doc, FormDocument) else "module"
+        {"form": self.project.forms, "usercontrol": self.project.user_controls}.get(
+            kind, self.project.modules).append(relative)
+        self.project.place_file(relative, self.explorer.selected_group(kind))
         self.project.save()
         self._add_document(doc)
+        if kind == "usercontrol":
+            self._load_user_controls()
         self._refresh_explorer()
 
     def remove_file(self, path: str):

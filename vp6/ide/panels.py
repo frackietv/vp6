@@ -51,15 +51,45 @@ class Toolbox(QWidget):
             self.buttons[type_name] = button
             grid.addWidget(button, index // 2, index % 2)
         self.buttons[None].setChecked(True)
+        self.grid = grid
+        self.user_buttons: list[str] = []  # the project's user controls, after the others
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(grid)
         layout.addStretch(1)
 
+    def set_user_controls(self, names: list[str]) -> None:
+        """Show the project's user controls (their class names) after the built-in tools."""
+        for name in self.user_buttons:
+            button = self.buttons.pop(name)
+            if button.isChecked():
+                self.reset()
+            self.group.removeButton(button)
+            self.grid.removeWidget(button)
+            button.deleteLater()
+        self.user_buttons = []
+        start = len(self.buttons)
+        for offset, name in enumerate(names):
+            button = QToolButton()
+            button.setIcon(icons.icon("UserControl"))
+            button.setIconSize(QSize(24, 24))
+            button.setCheckable(True)
+            button.setAutoRaise(True)
+            button.setToolTip(f"{name} (a user control of the project)")
+            button.setFixedSize(34, 34)
+            button.clicked.connect(lambda _=False, t=name: self.toolSelected.emit(t))
+            button.mouseDoubleClickEvent = lambda event, t=name: self.toolActivated.emit(t)
+            self.group.addButton(button)
+            self.buttons[name] = button
+            self.user_buttons.append(name)
+            index = start + offset
+            self.grid.addWidget(button, index // 2, index % 2)
+
     def refresh_icons(self) -> None:
         """Redraw the icons after switching between light and dark."""
         for type_name, button in self.buttons.items():
-            button.setIcon(icons.icon(type_name or "Pointer"))
+            button.setIcon(icons.icon("UserControl" if type_name in self.user_buttons
+                                      else type_name or "Pointer"))
 
     def reset(self) -> None:
         self.buttons[None].setChecked(True)
@@ -100,6 +130,7 @@ class ProjectExplorer(QWidget):
     setStartup = Signal(str)
     addForm = Signal()
     addModule = Signal()
+    addUserControl = Signal()
     projectSelected = Signal()  # the project (root) item became current
     fileSelected = Signal(str)  # a form or module item became current
     sortChanged = Signal(bool, bool)  # the user chose the order: descending, groups first
@@ -491,7 +522,8 @@ class ProjectExplorer(QWidget):
         item = QTreeWidgetItem([label or f"{name} ({relative})"])
         if label:
             item.setToolTip(0, f"{name} ({relative})")
-        item.setIcon(0, icons.icon("Form" if kind == "form" else "Module"))
+        item.setIcon(0, icons.icon({"form": "Form", "usercontrol": "UserControl"}.get(kind,
+                                                                                    "Module")))
         item.setData(0, Qt.UserRole, full)
         item.setData(0, Qt.UserRole + 1, kind)
         item.setData(0, Qt.UserRole + 2, name)
@@ -691,7 +723,7 @@ class ProjectExplorer(QWidget):
     def _update_buttons(self, *_):
         path, kind = self._current()
         self.view_code.setEnabled(path is not None)
-        self.view_object.setEnabled(kind == "form")
+        self.view_object.setEnabled(kind in ("form", "usercontrol"))
 
     # -- actions --------------------------------------------------------------------------------
     def _on_view_code(self):
@@ -701,13 +733,13 @@ class ProjectExplorer(QWidget):
 
     def _on_view_object(self):
         path, kind = self._current()
-        if path and kind == "form":
+        if path and kind in ("form", "usercontrol"):
             self.openObject.emit(path)
 
     def _on_double_click(self, item, _column):
         path, kind = item.data(0, Qt.UserRole), item.data(0, Qt.UserRole + 1)
         if path:
-            (self.openObject if kind == "form" else self.openCode).emit(path)
+            (self.openObject if kind in ("form", "usercontrol") else self.openCode).emit(path)
 
     @staticmethod
     def _ref(item):
@@ -833,6 +865,7 @@ class ProjectExplorer(QWidget):
                 self.selected_group() if item is not None else None))
         menu.addAction("Add Form", self.addForm.emit)
         menu.addAction("Add Module", self.addModule.emit)
+        menu.addAction("Add User Control", self.addUserControl.emit)
         return menu
 
     def _on_context_menu(self, pos):

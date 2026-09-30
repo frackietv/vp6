@@ -197,6 +197,17 @@ def _shape(p):
     p.drawEllipse(QRectF(9, 9, 12, 12))  # and a circle over it
 
 
+def _usercontrol(p):
+    p.setBrush(C.face)
+    p.drawRect(QRectF(2, 4, 20, 16))  # a control of your own: a surface...
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(5, 7, 9, 5))  # ...with controls on it
+    p.setBrush(C.button_bottom)
+    p.drawRect(QRectF(5, 14, 6, 4))
+    p.setBrush(C.blue)
+    p.drawEllipse(QRectF(14, 11, 6, 6))
+
+
 def _hscroll(p):
     p.setBrush(C.face)
     p.drawRect(QRectF(2, 8, 20, 8))
@@ -489,7 +500,7 @@ _DRAWERS = {
     "TabStrip": _tabstrip, "ImageList": _imagelist, "Toolbar": _toolbar,
     "ListView": _listview, "RichTextBox": _richtextbox,
     "CodeBox": _codebox, "FlexGrid": _flexgrid,
-    "DockPanel": _dockpanel,
+    "DockPanel": _dockpanel, "UserControl": _usercontrol,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,
