@@ -95,7 +95,7 @@ vpShapeCircle = 3
 vpShapeRoundedRectangle = 4
 vpShapeRoundedSquare = 5
 
-# --- Shape.FillStyle -------------------------------------------------------------
+# --- FillStyle (Shape, Form, PictureBox) -------------------------------------------
 vpFSSolid = 0
 vpFSTransparent = 1
 vpHorizontalLine = 2
@@ -113,6 +113,15 @@ vpBSDot = 3
 vpBSDashDot = 4
 vpBSDashDotDot = 5
 vpBSInsideSolid = 6
+
+# --- DrawStyle (Form, PictureBox) ---------------------------------------------------
+vpSolid = 0
+vpDash = 1
+vpDot = 2
+vpDashDot = 3
+vpDashDotDot = 4
+vpInvisible = 5
+vpInsideSolid = 6
 
 # --- Label.TextFormat -----------------------------------------------------------
 vpPlainText = 0

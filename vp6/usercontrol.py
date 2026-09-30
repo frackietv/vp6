@@ -67,7 +67,7 @@ _SURFACE_EVENTS = ("Resize", "Click", "DblClick", "MouseDown", "MouseMove", "Mou
                    "KeyDown", "KeyPress", "KeyUp", "Paint")
 # Its own events, in the code window's list for "UserControl" (and their arguments)
 OWN_EVENTS = ("Initialize", "PropertyChanged", "Resize", "Click", "DblClick", "MouseDown",
-              "MouseMove", "MouseUp", "KeyDown", "KeyPress", "KeyUp")
+              "MouseMove", "MouseUp", "KeyDown", "KeyPress", "KeyUp", "Paint")
 OWN_EVENT_ARGS = {"PropertyChanged": "PropertyName"}
 _EVENT_RE = re.compile(r"^\s*(\w+)\s*(?:\((.*)\))?\s*$")
 
@@ -138,6 +138,9 @@ class _UserControlSurface(Form):
 
     def _base_dir(self) -> str:
         return self._owner._form._base_dir()
+
+    def _handles_paint(self) -> bool:
+        return getattr(type(self._owner), "UserControl_Paint", None) is not None
 
 
 class UserControl(Control):

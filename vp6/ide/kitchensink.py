@@ -28,8 +28,9 @@ from ..project import SUB_MAIN, Project
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "kitchensink"
 FORMS = (  # the window, its pages (in the index's order) and the modal dialog
     "Form1.py", "pgIntro.py", "pgText.py", "pgRichText.py", "pgEditing.py", "pgCode.py",
-    "pgButtons.py", "pgLists.py", "pgScrollBars.py", "pgValues.py", "pgPictures.py", "pgZOrder.py",
-    "pgTree.py", "pgListView.py", "pgGrid.py", "pgWeb.py", "pgTabs.py", "pgFiles.py", "pgTimer.py",
+    "pgButtons.py", "pgLists.py", "pgScrollBars.py", "pgValues.py", "pgPictures.py", "pgDrawing.py",
+    "pgZOrder.py", "pgTree.py", "pgListView.py", "pgGrid.py", "pgWeb.py", "pgTabs.py", "pgFiles.py",
+    "pgTimer.py",
     "pgLayout.py", "pgDocking.py", "pgScrolling.py", "pgEmbedded.py", "pgDialogs.py",
     "pgSchemes.py", "pgKeyboard.py", "pgMouse.py", "pgArrays.py", "pgMenus.py", "pgUserControl.py",
     "pgGlobals.py", "frmDialog.py",

@@ -512,6 +512,36 @@ def test_pictures_page(sink):
     assert not page.lblTransparent._widget.autoFillBackground()
 
 
+def test_drawing_page(sink):
+    page = _page(sink, "drawing")
+    QTest.qWait(20)
+    pic = page.picSketch
+    assert pic.AutoRedraw and pic.Point(170, 40) == vp6.QBColor(10)  # the shapes, kept
+    page.cmdClear._widget.click()
+    assert pic.Point(170, 40) == vp6.vpWhite and "Cls" in page.lblStatus.Caption
+    page.hsbWidth.Value = 5
+    assert pic.DrawWidth == 5
+    QTest.mousePress(pic._widget, Qt.LeftButton, Qt.NoModifier, QPoint(20, 150))
+    QTest.mouseMove(pic._widget, QPoint(200, 150))
+    QTest.mouseRelease(pic._widget, Qt.LeftButton, Qt.NoModifier, QPoint(200, 150))
+    origin = pic._widget.contentsRect().topLeft()
+    assert pic.Point(100 - origin.x(), 150 - origin.y()) == 0x804000  # drawn with the mouse
+    page.cboStyle.ListIndex = 2
+    assert pic.DrawStyle == 2
+    page.cmdShapes._widget.click()
+    assert pic.Point(170, 40) == vp6.QBColor(10) and pic.DrawStyle == 2  # (kept)
+    # The clock: drawn in its Paint (AutoRedraw False), refreshed by the Timer
+    clock = page.picClock
+    assert not clock.AutoRedraw
+    painted = []
+    page.picClock_Paint = lambda: painted.append(True)
+    page.tmrClock_Timer()
+    QTest.qWait(20)
+    assert painted
+    del page.picClock_Paint
+    assert clock.Point(clock.ScaleWidth / 2, 12) != vp6.vpWhite  # its face's edge, or a mark
+
+
 def test_z_order_page(sink):
     page = _page(sink, "zorder")
     widget = page._widget

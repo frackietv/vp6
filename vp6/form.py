@@ -28,6 +28,7 @@ from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 from . import appearance, colors
 from ._props import P, PropertyHost, enum_choices
 from .app import call_handler, ensure_app, run_event_loop
+from .drawing import DRAWING_PROPERTIES, Drawing
 from .controls import (_FONT, POINTER_CHOICES, CommandButton, Control, ControlArray, TextBox,
                        Timer, handle_drag_event, pointer_cursor, resolve_path, vp_buttons,
                        vp_key_code, vp_shift)
@@ -82,6 +83,11 @@ class _FormWidget(QWidget):
         if loop is not None and not self.isVisible():
             loop.quit()
         self._vp_form._embedded_visibility(False)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self._vp_form._container_widget() is self:  # (else its client area is drawn on)
+            self._vp_form._paint_drawing(self)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -167,6 +173,10 @@ class _FormClient(QWidget):
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
 
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        self.parentWidget()._vp_form._paint_drawing(self)  # (the graphics methods')
+
     def mousePressEvent(self, event):
         self.parentWidget().mousePressEvent(event)
 
@@ -230,14 +240,14 @@ class _FormType(type):
         type.__setattr__(cls, name, value)
 
 
-class Form(PropertyHost, metaclass=_FormType):
+class Form(Drawing, PropertyHost, metaclass=_FormType):
     _vp_base = True  # (Form itself: its names are its own, never a default instance's)
     TypeName = "Form"
     DefaultEvent = "Load"
     Events = ("Load", "QueryUnload", "Unload", "Initialize", "Activate", "Deactivate", "Resize",
               "Click", "DblClick", "MouseDown", "MouseMove", "MouseUp",
               "KeyDown", "KeyPress", "KeyUp", "DragDrop", "DragOver", "OLEDragDrop",
-              "OLEDragOver")
+              "OLEDragOver", "Paint")
     Properties = (
         P("Caption", "str", "", always=True,
           description="The window title; defaults to the form's class name"),
@@ -270,6 +280,7 @@ class Form(PropertyHost, metaclass=_FormType):
         P("BackColor", "color", None, description="Background color; unset = the default"),
         P("ForeColor", "color", None, description="Text color; unset = the default"),
         *_FONT,
+        *DRAWING_PROPERTIES,
         P("Enabled", "bool", True, description="Whether the form responds to the user"),
         P("MousePointer", "enum", 0, POINTER_CHOICES,
           description="The mouse pointer's shape over the form (Custom: its MouseIcon)"),
@@ -354,6 +365,12 @@ class Form(PropertyHost, metaclass=_FormType):
 
     def _fill_widget(self) -> QWidget:
         return self._container_widget()
+
+    def _drawing_surface(self) -> QWidget:  # (the graphics methods draw on its client area)
+        return self._container_widget()
+
+    def _handles_paint(self) -> bool:
+        return getattr(self, "Form_Paint", None) is not None
 
     def _fill_rect(self, designed) -> QRect:
         return self._container_widget().contentsRect()

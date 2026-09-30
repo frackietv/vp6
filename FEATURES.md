@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.4.27
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- Drawing on forms and PictureBoxes (and a user control's Surface) with VB's graphics methods: `Line` (lines, from the current point, Step, boxes with "B" and "BF"), `Circle` (circles, ellipses with Aspect, arcs, pie slices), `PSet`, `Print` (like Python's print, at CurrentX / CurrentY), `Cls` (the drawing, not the Picture), `Point`, and `TextWidth` / `TextHeight` for measuring text
+- Drawing properties: `DrawWidth`, `DrawStyle` (with the new `vpSolid` ... `vpInsideSolid` constants; dashed at any width, and a line drawn bit by bit, e.g. following the mouse, keeps its pattern going), `FillStyle`, `FillColor`, `CurrentX` / `CurrentY`, and PictureBox's `ScaleWidth` / `ScaleHeight` and Font
+- `AutoRedraw` keeps what is drawn; without it the `Paint` event (`Form_Paint`, a PictureBox's, `UserControl_Paint`) fires whenever it needs drawing again, e.g. after `Refresh()`
+- `PictureBox.Cls()` now clears the drawing and keeps the Picture, as in VB
+
+## Kitchen Sink
+
+- A Drawing page: a sketch pad drawn with the mouse, shapes, DrawWidth and DrawStyle, Cls, a clock drawn in its Paint event, and the page's own Form_Paint
+
+---
+
 **Version:** 0.4.26
 **Date:** 2026-10-01
 

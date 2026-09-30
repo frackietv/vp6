@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from . import colors
 from ._props import P, PropertyHost, _make_property, enum_choices
+from .drawing import DRAWING_PROPERTIES, Drawing
 from .app import call_handler
 
 # Parameters passed to each event handler; used by the IDE to generate stubs.
@@ -4114,11 +4115,24 @@ class _Docked:
             self._relayout()  # a hidden pane gives its space to the others
 
 
-class PictureBox(_Docked, Control):
+class _PictureWidget(QLabel):
+    """A PictureBox's widget: its picture, then what the graphics methods drew."""
+
+    def __init__(self, parent, picture_box: "PictureBox"):
+        super().__init__(parent)
+        self._vp_control = picture_box
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        self._vp_control._paint_drawing(self)
+
+
+class PictureBox(_Docked, Drawing, Control):
     TypeName = "PictureBox"
     DefaultSize = (121, 97)
     IsContainer = True
-    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp", "Resize", "Scroll")
+    Events = ("Click", "DblClick", "MouseDown", "MouseMove", "MouseUp", "Resize", "Scroll",
+              "Paint")
     _synthesize_click = True
     Properties = (
         *_geometry(*DefaultSize),
@@ -4134,11 +4148,12 @@ class PictureBox(_Docked, Control):
         P("ScrollBars", "enum", 0, enum_choices("None", "Horizontal", "Vertical", "Both"),
           description="Scroll bars that appear when the controls in it reach beyond its "
                       "edges (at run time); the picture stays in place"),
-        *_COLORS, *_COMMON,
+        *DRAWING_PROPERTIES,
+        *_COLORS, *_FONT, *_COMMON,
     )
 
     def _create_widget(self, parent):
-        label = QLabel(parent)
+        label = _PictureWidget(parent, self)
         label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.__dict__["_scroll_area"] = None  # with ScrollBars: see _apply_ScrollBars
         return label
@@ -4306,8 +4321,24 @@ class PictureBox(_Docked, Control):
 
     _apply_BackColor = _apply_ForeColor = _apply_colors
 
-    def Cls(self) -> None:
-        self._widget.clear()
+    # -- the graphics methods (drawing.Drawing) -------------------------------------------
+    def _drawing_surface(self) -> QWidget:
+        return self._widget
+
+    def _drawing_origin(self) -> QPoint:
+        return self._widget.contentsRect().topLeft()  # (inside the border)
+
+    def _handles_paint(self) -> bool:
+        return self._handler("Paint") is not None
+
+    @property
+    def ScaleWidth(self) -> int:
+        """The width inside the border: the drawing area."""
+        return self._widget.contentsRect().width()
+
+    @property
+    def ScaleHeight(self) -> int:
+        return self._widget.contentsRect().height()
 
 
 class Image(Control):

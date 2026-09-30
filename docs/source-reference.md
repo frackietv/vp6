@@ -149,6 +149,48 @@ Light/dark color schemes for forms (see architecture §4.5).
   * `match_dialog(dialog, parent)` gives a message box the scheme of the form
     under it.
 
+### `vp6/drawing.py` (≈330 lines)
+
+VB's graphics methods, for `Form` (and so a user control's surface) and
+`PictureBox`: the `Drawing` mixin and `DRAWING_PROPERTIES` (AutoRedraw,
+DrawWidth, DrawStyle, FillStyle, FillColor), which both put in their
+Properties.
+
+* **What the class provides:** `_drawing_surface()` (the widget drawn on: a
+  form's `_container_widget()`, the client area below an in-window menu bar;
+  a PictureBox's label), `_drawing_origin()` (inside a PictureBox's border)
+  and `_handles_paint()` (whether there is a Paint handler); its widgets'
+  `paintEvent` calls `_paint_drawing(widget)` after drawing their background,
+  picture and border (`_FormWidget`, `_FormClient`, `controls._PictureWidget`).
+* **State** (`_draw_state()`, in the object's `__dict__`): the persistent
+  image, the current point (`CurrentX`, `CurrentY`) and the painter of a Paint
+  in progress. The helpers are all named `_draw_...`, since a Form has
+  attributes of its own (e.g. `_fill`).
+* **The persistent image** (`_draw_image()`): an ARGB `QImage` at the
+  screen's device pixel ratio, at least the drawing area's size; it grows
+  (keeping its contents) and never shrinks. `Cls` drops it.
+* **`_draw_painter()`** is the painter a graphics method draws with: the
+  Paint's when one is in progress (AutoRedraw False, inside the handler:
+  straight to the screen), else one on the persistent image, after which the
+  surface is updated.
+* **`_paint_drawing(widget)`**: translates and clips to the drawing area,
+  draws the persistent image, then with AutoRedraw False (not at design time,
+  not nested) fires Paint with its painter set as the drawing state's.
+* **Pens and fills:** `_draw_pen` (DrawWidth, DrawStyle at any width; flat
+  caps, so a one-pixel line doesn't cover its end point, as in VB, round for
+  wider solid lines; Transparent: no pen). `Line` keeps the dash pattern going
+  across lines that join: the drawing state's `dash` is where the last line
+  ended and how far its pattern had got (`setDashOffset`, in pen widths),
+  reset by `Cls`; `_draw_inset` (Inside Solid), `_draw_fill`
+  (FillStyle with FillColor, else ForeColor; hatches with `controls._hatch`).
+* **The methods:** `PSet` (a pixel, or a round dot), `Line` (a line, a box
+  covering both corners, "BF" filled), `Circle` (a `QPainterPath`: an
+  ellipse, or an arc from `arcMoveTo`/`arcTo` with radius lines for negative
+  ends, `math.copysign` so -0.0 counts; a closed one is filled), `Print`
+  (`QFontMetricsF` of the surface's font; lines at ascent below the current
+  point), `Cls`, `Point` (renders that one pixel of the surface without its
+  children: `DrawWindowBackground`), `TextWidth`, `TextHeight`.
+
 ### `vp6/colors.py` (≈60 lines)
 
 VB-style colors: integers in `&H00BBGGRR` (BGR) order.
@@ -287,7 +329,7 @@ The intrinsic controls.
 | `Timer` | none at run time (`QTimer`) | Stopwatch icon in design mode (`_timer_design_widget`). |
 | `HScrollBar`, `VScrollBar` | `QScrollBar` | `_ScrollBar` base; Change on value change, Scroll while dragging. |
 | `DockPanel` | `_DockFrame` (a `QFrame` with a `_DockCaption` bar, the `content` widget its controls are on, and a `_DockSizer` on its inner edge) | Docked, it is laid out like an aligned PictureBox (`_Docked`; `_place_parts` puts the caption, content and sizer by its Align). `_float(rect)` moves the frame into a `_FloatWindow` (a frameless `Qt.Tool` window of the form's window, with a `QSizeGrip`) and sets `_floating`, which `Form._layout_aligned` skips; `_dock(align)` moves it back (remembering `_float_rect`). The caption bar handles its buttons (`button_rects`), double-clicks (`_toggle_floating`) and drags: `_drag_start` floats it under the mouse (grabbing the mouse), `_drag_move` moves the window and shows a `QRubberBand` where `_drop_edge` (within `_DOCK_ZONE` of an edge) would dock it, `_drag_end` docks it there after `_move_outermost` (first among the form's DockPanels). Close goes through `_ask_close` (the Close event can cancel); `_apply_Visible` shows or hides a floating window and fires DockChange when Visible changes. A `_DockWatcher` on the form's widget shows and hides the floating window with the form. Its Width, Height, Left and Top don't move a floating window (`FloatMove` does). |
-| `PictureBox` | `QLabel` | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle; `Cls()`. `Align` docks it (`Form._layout_aligned`); changing Align, its size, place or Visible calls `_relayout` (a docked pane's size is left to the layout). `Resize` event when its widget is resized. Always opaque (`autoFillBackground`), with the scheme's window color when BackColor is unset. `ScrollBars` (run time only): `_start_scrolling` puts the controls on a content widget in a `QScrollArea` over the picture (`_stop_scrolling` undoes it), `_container_widget()` is then the content, `_ScrollWatcher` keeps it as large as the visible controls need (`_update_scroll_size`, deferred once per round of changes; the full area when everything fits), `ScrollLeft` / `ScrollTop` (their setters update the size first) and the `Scroll` event; `_fill_widget` / `_fill_rect` make a form shown in it fill the visible area but keep its own size. |
+| `PictureBox` | `_PictureWidget` (a `QLabel` whose `paintEvent` then draws the graphics methods' drawing) | Container; `Picture` is a file path relative to the form's folder; Stretch/AutoSize/BorderStyle. The graphics methods, Paint and the drawing properties are `drawing.Drawing`'s (inside its border: `_drawing_origin`, `ScaleWidth`, `ScaleHeight`); it has the Font properties (for Print). `Align` docks it (`Form._layout_aligned`); changing Align, its size, place or Visible calls `_relayout` (a docked pane's size is left to the layout). `Resize` event when its widget is resized. Always opaque (`autoFillBackground`), with the scheme's window color when BackColor is unset. `ScrollBars` (run time only): `_start_scrolling` puts the controls on a content widget in a `QScrollArea` over the picture (`_stop_scrolling` undoes it), `_container_widget()` is then the content, `_ScrollWatcher` keeps it as large as the visible controls need (`_update_scroll_size`, deferred once per round of changes; the full area when everything fits), `ScrollLeft` / `ScrollTop` (their setters update the size first) and the `Scroll` event; `_fill_widget` / `_fill_rect` make a form shown in it fill the visible area but keep its own size. |
 | `Shape` | `_ShapeWidget` (transparent to the mouse, `NoFocus`) | No events. `paintEvent` builds a `QPainterPath` for its kind (a square, circle or rounded square centered and as wide as high, inset by half the border width so the border stays inside), fills it with BackColor when Opaque, then the FillStyle: solid, or `_hatch` (lines clipped to the path, `_HATCHES` directions `_HATCH_SPACING` apart: drawn rather than a brush pattern, which is faint on high-resolution screens), then the border with Line's `_PEN_STYLES`. Every property just repaints (`_repaint`). |
 | `Line` | `_LineWidget` (transparent to the mouse, covering the line's box) | `X1`, `Y1`, `X2`, `Y2` instead of Left/Top/Width/Height (`_update_geometry` sizes the widget, with `_padding` for the width); `BorderColor` (unset: the palette's text color), `BorderStyle` (`_PEN_STYLES`; 0 = Transparent), `BorderWidth`, `Visible`, `Tag`, `ZIndex`; no events (`DefaultEvent` is empty); `_moved_points()` for the designer. |
 | `Image` | `QLabel` | Not a container, `NoFocus`, no `TabIndex`, no colors (transparent). `Stretch` and `BorderStyle` come before `Picture` in `Properties`, because loading a picture sizes the control: without Stretch `_fit_to_picture` gives it the picture's size (plus the border). `Enabled` doesn't gray it: `_on_qt_event` drops events instead. |
@@ -393,7 +435,9 @@ visibility asks the form to place its docked controls again
   * close → unload query, hide → end of a modal loop, Resize, Activate /
     Deactivate;
   * mouse → Click, DblClick and the MouseDown/Move/Up events;
-  * keys → KeyDown, KeyPress and KeyUp, plus the Default/Cancel buttons.
+  * keys → KeyDown, KeyPress and KeyUp, plus the Default/Cancel buttons;
+  * paint → the graphics methods' drawing and Paint (`drawing.Drawing`, a base
+    class of Form; `_FormClient` too when the controls are on it).
 * **`_FormType`**, Form's metaclass: default instances. For a form class (not
   `Form` itself, `_vp_base`; not one with `_vp_no_default`, the designer's
   `DesignForm` and user controls' surfaces), `__getattribute__` forwards
@@ -1491,6 +1535,12 @@ explorer-style.
     horizontal, wrapping one with a Label buddy;
   * `pgPictures.py`: a PictureBox with a Label on it (Click, MouseDown, a
     Tag from InputBox) and an Image thumbnail;
+  * `pgDrawing.py`: a sketch pad (a PictureBox with AutoRedraw: PSet on
+    MouseDown, `Line(X, Y)` on MouseMove, DrawWidth from an HScrollBar,
+    DrawStyle from a ComboBox, Cls), shapes (Line boxes, hatched and solid
+    fills, Circle, an ellipse, a pie and an arc, PSet, Print centered with
+    TextWidth and TextHeight, Point), a clock drawn in its Paint (AutoRedraw
+    False) that a Timer refreshes, and the page's own Form_Paint;
   * `pgZOrder.py`: ZIndex and ZOrder, Lines (a dashed one above the labels,
     a control array of Lines with BorderStyle 1 to 5, a thick one), Shapes
     (a control array of every kind in QBColor colors, and one whose Shape and
@@ -1766,6 +1816,7 @@ All tests run headless. `conftest.py`:
 | `test_webview.py` | The WebView with a stand-in view (`FakeView`): navigating to a file, a file relative to the form, a domain (https), an error, back and forward, Refresh, Stop, URL set at run time, the events; LoadHTML and RunScript with and without a callback; the designer's placeholder; a clear error without Qt WebView; Toolbox, icon and events. A real web view in a process of its own with VP6_TEST_WEBVIEW=1. |
 | `test_commondialog.py` | The CommonDialog: parse_filter; invisible at run time, in the Toolbox; the Open dialog (title, filters, the starting filter and folder, the file chosen, FileTitle, FileNames, FilterIndex, multi-select), Save As (the overwrite prompt only with the flag, DefaultExt), cancelling (False, FileName kept; CancelError raising DialogCancelled 32755), Color, Font, Printer (copies, page range) and Help; in the designer an icon without a size of its own. |
 | `test_container.py` | Container set at run time: to a Frame, PictureBox, DockPanel and back to the form, Left and Top kept, events still handled; a hidden control staying hidden, ZIndex in the new container; option buttons joining the new group; a container moving with its controls; a docked control leaving the form's layout; the tab order (Tab into a control moved into a frame); errors (not a container, another form's, into itself or something on it, a Menu, None). |
+| `test_drawing.py` | The graphics methods, checked with Point: lines (ForeColor, the end point not covered, from the current point, Step, DrawWidth, a dotted and an invisible DrawStyle), boxes (B, BF, FillStyle solid and hatched, Inside Solid), circles (fill, edge, an ellipse, an arc not filled, a pie from -0.0, Step), points (a round wide one, outside: -1), Print and the current point, TextWidth/TextHeight and the Font, Cls; AutoRedraw and Paint (Paint on show and Refresh, none with AutoRedraw), the drawing kept when the form shrinks and grows, under the controls; a PictureBox (inside its border, Cls keeping the Picture, its Paint), a form with a menu bar in the window, a user control's Paint; the properties, events and form file; no Paint in the designer, and the properties in its Properties window. |
 | `test_docs.py` | The docs keep up with the code: every source file in the source reference, every test file in the test table, every public API name in `api.md` (key-code ranges count), the generated `api.md` tables up to date with a section per control, every property with a description, and every relative link and anchor in the Markdown files resolving. |
 | `test_outline.py` | The Outline replacing the Properties panel (in the same place) while a code window is active and giving it back for designers, View > Outline Window and F4, a closed panel staying closed, closing the last window, the default layout; the outline of the Kitchen Sink's Form1; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: following the Project panel or active window, clicking items goes to the line (unfolding the designer region); the items at a line (a method inside its class, from the first decorator, blank lines and imports at none), and the Outline highlighting the item at the code window's cursor (in a body, none on an import, after re-sorting and edits, another code window's cursor, none for a designer). |
 | `test_packaging.py` | The package as published: `pyproject.toml`'s version is `vp6.__version__`, the MIT license and its file, the author without an email, the dependencies and the `make` extra; every data file in `vp6/` (not a module of a package) matched by the package data, so the wheel has it; the `vp6`, `vp6-run` and `vp6-make` commands; the source distribution's docs and tests; the release workflow's version check and trusted publishing. |

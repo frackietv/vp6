@@ -305,12 +305,17 @@ What the arguments mean:
 <!-- BEGIN GENERATED: form-properties -->
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `AutoRedraw` | bool | `False` | True: what the graphics methods draw is kept (no Paint event); False: Paint fires whenever it needs drawing again |
 | `BackColor` | color | (default) | Background color; unset = the default |
 | `BorderStyle` | enum | 2 - Sizable | 0 - None, 1 - Fixed Single, 2 - Sizable, 3 - Fixed Dialog, 4 - Fixed ToolWindow, 5 - Sizable ToolWindow. The kind of window frame; fixed styles can't be resized |
 | `Caption` | str | `''` | The window title; defaults to the form's class name |
 | `ColorScheme` | enum | 0 - Project Default | 0 - Project Default, 1 - System, 2 - Light, 3 - Dark, 4 - IDE. Light or dark appearance. Project Default uses the project's color scheme; System follows the operating system; IDE follows the VP6 IDE's light/dark setting (System when run on its own). |
 | `ControlBox` | bool | `True` | Show the window buttons |
+| `DrawStyle` | enum | 0 - Solid | 0 - Solid, 1 - Dash, 2 - Dot, 3 - Dash-Dot, 4 - Dash-Dot-Dot, 5 - Transparent, 6 - Inside Solid. The lines the graphics methods draw |
+| `DrawWidth` | int | `1` | The width of the lines the graphics methods draw |
 | `Enabled` | bool | `True` | Whether the form responds to the user |
+| `FillColor` | color | (default) | The fill of Circle and Line boxes (FillStyle); unset = ForeColor |
+| `FillStyle` | enum | 1 - Transparent | 0 - Solid, 1 - Transparent, 2 - Horizontal Line, 3 - Vertical Line, 4 - Upward Diagonal, 5 - Downward Diagonal, 6 - Cross, 7 - Diagonal Cross. How Circle and Line with a box (B) fill what they draw |
 | `FontBold` | bool | `False` | Bold text |
 | `FontItalic` | bool | `False` | Italic text |
 | `FontName` | font name | (default) | Font family; unset = the container's font |
@@ -345,6 +350,7 @@ Run-time only properties:
 | `Name` | the form's class name |
 | `Controls` | list of all controls on the form, including nested ones |
 | `ScaleWidth`, `ScaleHeight` | client area size |
+| `CurrentX`, `CurrentY` | where the [graphics methods](#drawing-on-forms-and-pictureboxes) draw next |
 | `Visible` | whether the form is shown; setting it calls `Show()` / `Hide()` |
 | `ActiveControl` | the form's control with the focus (a control on a [user control](#user-controls): the user control), or `None` |
 | `DockLayout` | where the form's [DockPanels](#dockpanel) are, as text: read it to keep it, set it to put them back |
@@ -359,7 +365,8 @@ Run-time only properties:
 | `Unload()` | Closes the form after asking `Form_Unload`. Returns `False` if cancelled. Timers stop. When the last form closes, the program ends. |
 | `Move(Left, Top=None, Width=None, Height=None)` | Moves or resizes the window. |
 | `PopupMenu(Menu, Flags=0, X=None, Y=None, DefaultMenu=None)` | Shows one of the form's menus as a context menu; see [Popup menus](#popup-menus). Returns the chosen item, or `None`. |
-| `Refresh()` | Repaints. |
+| `Refresh()` | Repaints (with AutoRedraw False, `Form_Paint` fires). |
+| `Line`, `Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight` | The [graphics methods](#drawing-on-forms-and-pictureboxes). |
 | `SetFocus()` | Activates the window. |
 | `ShowIn(Container, Fill=True)` | Shows the form inside a container of another form (a PictureBox or Frame) or inside another form; see [Forms inside forms](#forms-inside-forms). `ShowIn(None)` makes it a window again. |
 | `Container` | Read-only: where `ShowIn` put the form, or `None` for a form in its own window. |
@@ -407,7 +414,7 @@ self.page.ShowIn(self.picContent)     # back into the pane
 ### Form events
 
 <!-- BEGIN GENERATED: form-events -->
-Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Load`.
+Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`, `Paint`. Default event (double-click in the designer): `Load`.
 <!-- END GENERATED -->
 
 * `Initialize` fires when the object is created.
@@ -419,6 +426,70 @@ Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `
   is closing; it can't cancel then). Returning `True` keeps it open; else
   `Unload` follows (and can cancel too). `vpAppWindows` and `vpFormMDIForm`
   are VB's other values, not reported yet.
+* `Paint` fires when the form needs drawing again (AutoRedraw False); see
+  [drawing](#drawing-on-forms-and-pictureboxes).
+
+### Drawing on forms and PictureBoxes
+
+Forms and PictureBoxes (and a user control's `Surface`) have VB's graphics
+methods. Coordinates are pixels from the top left of the client area (inside
+a PictureBox's border); colors are VB colors (`RGB`, `QBColor`, `vpRed`...),
+the ForeColor when left out.
+
+```python
+def Form_Load(self):
+    self.AutoRedraw = True                       # keep what is drawn
+    self.Line(10, 10, 200, 10)                   # Line (10, 10)-(200, 10)
+    self.Line(200, 100, Color=vpRed)             # Line -(200, 100), vbRed: from CurrentX, CurrentY
+    self.Line(10, 20, 80, 40, vpBlue, "BF")      # a filled box (B: just the box)
+    self.FillStyle, self.FillColor = vpFSSolid, vpYellow
+    self.Circle(150, 80, 30, vpBlue)             # filled as FillStyle says
+    self.Circle(250, 80, 30, Start=-0.0, End=-math.pi / 2)  # a pie slice
+    self.PSet(5, 5, vpGreen)
+    self.CurrentX, self.CurrentY = 10, 150
+    self.Print("Total:", 42)                     # then the next line
+```
+
+| Method | Description |
+|---|---|
+| `Line(X1, Y1, X2, Y2, Color=None, Box="", Step=False)` | a line from X1, Y1 to X2, Y2 (VB's `Line (X1, Y1)-(X2, Y2)`); `Line(X, Y)` draws from the current point (`Line -(X, Y)`). `Step=True`: the second point is relative to the first. `Box="B"`: a box with those corners, filled as FillStyle says; `"BF"`: a box filled with the line's color. |
+| `Circle(X, Y, Radius, Color=None, Start=None, End=None, Aspect=1.0, Step=False)` | a circle, or an ellipse (`Aspect`: height to width; Radius is the larger one). `Start`, `End` (radians, counterclockwise from 3 o'clock) draw an arc; a negative one also draws the radius to that end (`-0.0` for 3 o'clock); both negative: a pie slice. Whole circles and pie slices are filled as FillStyle says. `Step`: X, Y relative to the current point. |
+| `PSet(X, Y, Color=None, Step=False)` | a point, DrawWidth across (with DrawStyle Transparent, none: just the current point moves) |
+| `Print(*values, sep=" ", end="\n")` | text at the current point, in the Font and ForeColor, like Python's `print`; after a new line the next text starts at the left, one line lower |
+| `Cls()` | clears what the graphics methods drew (not the `Picture`) and moves the current point to 0, 0 |
+| `Point(X, Y)` | the color at X, Y (under any controls), or -1 outside |
+| `TextWidth(Text)`, `TextHeight(Text)` | the size Print would give Text in the Font (the longest line; all its lines) |
+
+Each moves the current point, `CurrentX` and `CurrentY`: to the end of the
+line, the point, the circle's center or the end of the text.
+
+| Property | Default | Description |
+|---|---|---|
+| `AutoRedraw` | `False` | see below |
+| `DrawWidth` | 1 | the width of lines and points |
+| `DrawStyle` | 0 - Solid | `vpSolid`, `vpDash`, `vpDot`, `vpDashDot`, `vpDashDotDot`, `vpInvisible` (no line), `vpInsideSolid` (boxes and circles drawn inside their bounds). Dashes grow with DrawWidth, so wide lines are dashed too (VB's were always solid). A `Line` that starts where the last one ended goes on with its pattern, so a line drawn bit by bit (following the mouse) is dashed too. |
+| `FillStyle` | 1 - Transparent | `vpFSSolid`, `vpFSTransparent`, `vpHorizontalLine`, `vpVerticalLine`, `vpUpwardDiagonal`, `vpDownwardDiagonal`, `vpCross`, `vpDiagonalCross` |
+| `FillColor` | (ForeColor) | the fill's color |
+
+**AutoRedraw and Paint.** With `AutoRedraw = True` what is drawn is kept
+(also when the form grows, or is covered and shown again) until `Cls`, and
+`Paint` doesn't fire. With `AutoRedraw = False` (the default) `Paint`
+(`Form_Paint`, `picBox_Paint`, `UserControl_Paint`) fires whenever the area
+is drawn again: when it is shown, uncovered, resized, or after `Refresh()`;
+draw everything there.
+
+```python
+def picClock_Paint(self):
+    pic = self.picClock
+    pic.Circle(pic.ScaleWidth / 2, pic.ScaleHeight / 2, 40)
+
+def tmrClock_Timer(self):
+    self.picClock.Refresh()        # Paint again
+```
+
+The drawing is on the form's (or PictureBox's) background and picture, under
+its controls. A Paint handler shouldn't change properties that repaint the
+form (e.g. `BackColor`): that would start Paint again, and again.
 
 ---
 
@@ -661,15 +732,20 @@ self.picContent.ScrollTop = 0          # back to the top
 * The designer shows the controls where they are, without scrolling.
 
 <!-- BEGIN GENERATED: control PictureBox -->
-Default size 121 × 97. A container: other controls can be placed on it. Property groups: Position, Colors, Common.
+Default size 121 × 97. A container: other controls can be placed on it. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Align` | enum | 0 - None | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right, 5 - Fill. Dock to that edge of the form and follow its size, keeping the height (Top, Bottom) or width (Left, Right); Fill takes all the space the others leave; only on the form itself |
+| `AutoRedraw` | bool | `False` | True: what the graphics methods draw is kept (no Paint event); False: Paint fires whenever it needs drawing again |
 | `AutoSize` | bool | `False` | Resize to fit the picture |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A sunken border around the picture |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `DrawStyle` | enum | 0 - Solid | 0 - Solid, 1 - Dash, 2 - Dot, 3 - Dash-Dot, 4 - Dash-Dot-Dot, 5 - Transparent, 6 - Inside Solid. The lines the graphics methods draw |
+| `DrawWidth` | int | `1` | The width of the lines the graphics methods draw |
+| `FillColor` | color | (default) | The fill of Circle and Line boxes (FillStyle); unset = ForeColor |
+| `FillStyle` | enum | 1 - Transparent | 0 - Solid, 1 - Transparent, 2 - Horizontal Line, 3 - Vertical Line, 4 - Upward Diagonal, 5 - Downward Diagonal, 6 - Cross, 7 - Diagonal Cross. How Circle and Line with a box (B) fill what they draw |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
@@ -677,10 +753,14 @@ Default size 121 × 97. A container: other controls can be placed on it. Propert
 | `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Scroll bars that appear when the controls in it reach beyond its edges (at run time); the picture stays in place |
 | `Stretch` | bool | `False` | Scale the picture to fit the control |
 
-Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Resize`, `Scroll`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Resize`, `Scroll`, `Paint`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
-Methods: `Cls()` clears the picture.
+Methods: the [graphics methods](#drawing-on-forms-and-pictureboxes) (`Line`,
+`Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`) with
+`CurrentX` / `CurrentY`, and `ScaleWidth` / `ScaleHeight`, the size inside its
+border. `Cls()` clears the drawing, not the `Picture` (set `Picture = ""` for
+that). The `Paint` event: see [AutoRedraw and Paint](#drawing-on-forms-and-pictureboxes).
 
 ### Label
 
@@ -2666,8 +2746,9 @@ All constants are plain ints or strings.
 | Menu.NegotiatePosition | `vpNegotiateNone`, `vpNegotiateLeft`, `vpNegotiateMiddle`, `vpNegotiateRight` | 0, 1, 2, 3 |
 | Label.BackStyle | `vpTransparent`, `vpOpaque` | 0, 1 |
 | Shape.Shape | `vpShapeRectangle`, `vpShapeSquare`, `vpShapeOval`, `vpShapeCircle`, `vpShapeRoundedRectangle`, `vpShapeRoundedSquare` | 0, 1, 2, 3, 4, 5 |
-| Shape.FillStyle | `vpFSSolid`, `vpFSTransparent`, `vpHorizontalLine`, `vpVerticalLine`, `vpUpwardDiagonal`, `vpDownwardDiagonal`, `vpCross`, `vpDiagonalCross` | 0, 1, 2, 3, 4, 5, 6, 7 |
+| FillStyle (Shape, Form, PictureBox) | `vpFSSolid`, `vpFSTransparent`, `vpHorizontalLine`, `vpVerticalLine`, `vpUpwardDiagonal`, `vpDownwardDiagonal`, `vpCross`, `vpDiagonalCross` | 0, 1, 2, 3, 4, 5, 6, 7 |
 | BorderStyle (Shape, Line) | `vpBSTransparent`, `vpBSSolid`, `vpBSDash`, `vpBSDot`, `vpBSDashDot`, `vpBSDashDotDot`, `vpBSInsideSolid` | 0, 1, 2, 3, 4, 5, 6 |
+| DrawStyle (Form, PictureBox) | `vpSolid`, `vpDash`, `vpDot`, `vpDashDot`, `vpDashDotDot`, `vpInvisible`, `vpInsideSolid` | 0, 1, 2, 3, 4, 5, 6 |
 | Label.TextFormat | `vpPlainText`, `vpRichText`, `vpMarkdown` | 0, 1, 2 |
 | ScrollBars (TextBox, PictureBox) | `vpSBNone`, `vpHorizontal`, `vpVertical`, `vpBoth` | 0, 1, 2, 3 |
 | PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight`, `vpAlignFill` | 0, 1, 2, 3, 4, 5 |
@@ -2832,6 +2913,13 @@ It goes in the project's `dist` folder:
 * **Control arrays are `ControlArray` objects.** Elements are `self.cmd[i]`
   (or VB's `self.cmd(i)`); `Load` and `Unload` take the array and the Index
   (`Load(self.cmd, 5)` for `Load cmd(5)`).
+* **Drawing** (`Line`, `Circle`, `PSet`, `Print`): Python calls instead of
+  VB's syntax (`Line(X1, Y1, X2, Y2, Color, "BF")`, `Line(X, Y)` for
+  `Line -(X, Y)`, `Step=True`); `Print` takes `sep` and `end` like Python's
+  print instead of `;` and `,`. With AutoRedraw False, what is drawn outside
+  a Paint handler stays (as with AutoRedraw) instead of going when the form is
+  covered. There is no `DrawMode`, `FontTransparent` (text is drawn without
+  a background), `PaintPicture` or `ScaleMode` (pixels only).
 * **Settings** (`SaveSetting` and the others) are kept under "VP6 Program
   Settings", not VB's "VB and VBA Program Settings", and on macOS and Linux
   where those systems keep them; `GetAllSettings` returns `(key, setting)`
