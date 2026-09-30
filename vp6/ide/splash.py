@@ -16,6 +16,8 @@ import vp6
 from .dialogs import logo_pixmap
 
 DURATION = 2000  # milliseconds
+BACKGROUND = "#c0c0c0"
+VERSION_COLOR = "#34495e"  # dark blue-grey, whatever the light/dark appearance
 
 
 class SplashScreen(QWidget):
@@ -29,7 +31,9 @@ class SplashScreen(QWidget):
         self.setAttribute(Qt.WA_DeleteOnClose, False)
         self.duration = DURATION if duration is None else duration
         self.done = False
-        self.setStyleSheet("* { background-color: #c0c0c0; }")
+        # Its own colors: the palette's text color would be white in Dark (the OS's, or
+        # the IDE's, applied while the splash screen shows), on the light grey background
+        self.setStyleSheet(f"* {{ background-color: {BACKGROUND}; color: {VERSION_COLOR}; }}")
         frame = QFrame(self)  # a thin border around it
         frame.setObjectName("splash")
         frame.setStyleSheet("QFrame#splash { border: 1px solid palette(mid); }")

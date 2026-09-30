@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.4.26
+**Date:** 2026-10-01
+
+## IDE
+
+- The splash screen's version is dark blue-grey in every appearance (it was white on the grey splash screen when macOS or the IDE was Dark)
+
+---
+
 **Version:** 0.4.25
 **Date:** 2026-10-01
 

@@ -22,7 +22,7 @@ from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.25"
+__version__ = "0.4.26"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Command", "Debug", "DeleteSetting", "DoEvents", "End",

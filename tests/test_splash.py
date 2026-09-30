@@ -73,3 +73,28 @@ def test_main_shows_it_unless_no_splash(qapp, monkeypatch, tmp_path):
     window = run("--no-splash", project)
     assert len(shown) == 1  # no splash screen this time
     window.close()
+
+
+def test_its_colors_dont_follow_the_appearance(qapp):
+    # A Dark palette (the OS's, or the IDE's) must not make the version white on its grey
+    from PySide6.QtGui import QColor, QPalette
+
+    from vp6 import appearance
+
+    saved = QPalette(qapp.palette())
+    try:
+        for dark in (False, True):
+            qapp.setPalette(appearance.scheme_palette(dark))
+            screen = SplashScreen(duration=10)
+            screen.ensurePolished()
+            screen.version.ensurePolished()
+            image = screen.version.grab().toImage()
+            colors = {image.pixelColor(x, y).name() for x in range(image.width())
+                      for y in range(image.height())}
+            assert splash.BACKGROUND in colors
+            text = QColor(splash.VERSION_COLOR)  # its darkest pixels are the text's color
+            darkest = min((QColor(c) for c in colors), key=lambda c: c.lightness())
+            assert abs(darkest.lightness() - text.lightness()) < 12, (dark, darkest.name())
+            screen.finish()
+    finally:
+        qapp.setPalette(saved)
