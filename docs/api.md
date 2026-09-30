@@ -312,6 +312,7 @@ Run-time only properties:
 | `Load()` | Fires `Form_Load` without showing (VB's `Load Form1`). |
 | `Unload()` | Closes the form after asking `Form_Unload`. Returns `False` if cancelled. Timers stop. When the last form closes, the program ends. |
 | `Move(Left, Top=None, Width=None, Height=None)` | Moves or resizes the window. |
+| `PopupMenu(Menu, Flags=0, X=None, Y=None, DefaultMenu=None)` | Shows one of the form's menus as a context menu; see [Popup menus](#popup-menus). Returns the chosen item, or `None`. |
 | `Refresh()` | Repaints. |
 | `SetFocus()` | Activates the window. |
 | `ShowIn(Container, Fill=True)` | Shows the form inside a container of another form (a PictureBox or Frame) or inside another form; see [Forms inside forms](#forms-inside-forms). `ShowIn(None)` makes it a window again. |
@@ -1980,6 +1981,8 @@ def mnuFileOpen_Click(self):
 * Menus can be [control arrays](#control-arrays), e.g. a list of recent
   files: `Load(self.mnuRecent, i)` adds an item right after the array's
   last one.
+* **Popup menus.** `self.PopupMenu(self.mnuEdit)` shows a menu's items
+  where the mouse is, as a context menu (see below).
 * **Menu negotiation.** When the form is shown in another form (`ShowIn`),
   it has no menu bar of its own: while it is visible, its menu bar menus
   join the window's menu bar, placed by their `NegotiatePosition`:
@@ -2016,9 +2019,42 @@ Not in the Toolbox: designed with the Menu Editor.
 Events: `Click`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
+### Popup menus
+
+`PopupMenu` (a Form method) shows one of the form's menus as a context menu,
+VB's way: design the menu in the Menu Editor, usually a menu on the menu bar
+with its **Visible** box unchecked, so it is only a popup, and show it in a
+control's `MouseUp` for the right button:
+
+```python
+self.mnuEdit = Menu(self, Caption='Edit', Visible=False)   # (the Menu Editor writes these)
+self.mnuEditCut = Menu(self.mnuEdit, Caption='Cu&t')
+self.mnuEditCopy = Menu(self.mnuEdit, Caption='&Copy')
+
+def lblNote_MouseUp(self, Button, Shift, X, Y):
+    if Button == vpRightButton:
+        self.PopupMenu(self.mnuEdit, DefaultMenu=self.mnuEditCopy)   # Copy in bold
+
+def mnuEditCopy_Click(self):
+    ...
+```
+
+* `PopupMenu(Menu, Flags=0, X=None, Y=None, DefaultMenu=None)`: the menu at
+  `X`, `Y` (pixels in the form; the mouse's position for what is left out).
+  `Flags` place it: `vpPopupMenuLeftAlign` (its left edge at X, the
+  default), `vpPopupMenuCenterAlign`, `vpPopupMenuRightAlign`;
+  `vpPopupMenuLeftButton` and `vpPopupMenuRightButton` are accepted (either
+  button chooses an item). `DefaultMenu` is shown in bold.
+* It waits until the menu closes. The chosen item's `Click` has fired by
+  then, and `PopupMenu` returns that item (VB's returned nothing), or `None`
+  if the menu was closed without a choice. The menu's own `Click` fires just
+  before it opens, as for a menu on the menu bar.
+* The menu must have items. A visible menu-bar menu can pop up too.
+
 ---
 
 ## 5. Functions and global objects
+
 
 ### Dialogs
 
@@ -2191,6 +2227,7 @@ All constants are plain ints or strings.
 | FlexGrid: ColEditor / CellEditor | `vpGridEditNone`, `vpGridEditText`, `vpGridEditList`, `vpGridEditCheck`, `vpGridEditColor`, `vpGridEditButton` | 0, 1, 2, 3, 4, 5 |
 | FlexGrid.Sort | `vpGridSortGenericAscending`, `vpGridSortGenericDescending`, `vpGridSortNumericAscending`, `vpGridSortNumericDescending`, `vpGridSortStringNoCaseAscending`, `vpGridSortStringNoCaseDescending`, `vpGridSortStringAscending`, `vpGridSortStringDescending` | 1, 2, 3, 4, 5, 6, 7, 8 |
 | FlexGrid.SelectionMode | `vpGridSelectionFree`, `vpGridSelectionByRow`, `vpGridSelectionByColumn` | 0, 1, 2 |
+| PopupMenu flags (added together) | `vpPopupMenuLeftAlign`, `vpPopupMenuCenterAlign`, `vpPopupMenuRightAlign`, `vpPopupMenuLeftButton`, `vpPopupMenuRightButton` | 0, 4, 8, 0, 2 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 

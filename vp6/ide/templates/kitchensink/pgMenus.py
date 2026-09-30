@@ -1,4 +1,5 @@
-"""Kitchen Sink page: menus, and a menu control array grown at run time."""
+"""Kitchen Sink page: menus, a menu control array grown at run time, and a popup menu
+(PopupMenu) for a right-click."""
 
 from vp6 import *
 
@@ -16,8 +17,20 @@ class pgMenus(Form):
         self.cmdBookmark = CommandButton(self, Caption='Add a &bookmark', Left=270, Top=258,
                                          Width=170, Height=30, TabIndex=3)
         self.lblPage = Label(self, Caption='', Left=16, Top=300, Width=600, Height=25, TabIndex=4)
+        self.lblPopup = Label(self,
+                              Caption='Right-click here for a popup menu (PopupMenu in MouseUp)',
+                              Left=16, Top=340, Width=400, Height=40, Alignment=2, BorderStyle=1,
+                              TabIndex=5)
+        self.cmdPopup = CommandButton(self, Caption='&Menu below', Left=430, Top=340, Width=150,
+                                      Height=40, TabIndex=6,
+                                      ToolTipText='PopupMenu at a place: centered under the button')
         self.mnuPage = Menu(self, Caption='&Page', NegotiatePosition=3)
         self.mnuPageHello = Menu(self.mnuPage, Caption='&Say hello', Shortcut='Ctrl+H')
+        self.mnuPopup = Menu(self, Caption='Popup', Visible=False)
+        self.mnuPopupHello = Menu(self.mnuPopup, Caption='&Say hello')
+        self.mnuPopupShout = Menu(self.mnuPopup, Caption='S&hout')
+        self.mnuPopupSep = Menu(self.mnuPopup, Caption='-')
+        self.mnuPopupClear = Menu(self.mnuPopup, Caption='&Clear')
     # endregion
 
     shell = None  # the Kitchen Sink window showing this page (None when run on its own)
@@ -33,6 +46,28 @@ class pgMenus(Form):
     def mnuPageHello_Click(self):
         # This page's own menu, on the window's menu bar while the page is visible
         self.lblPage.Caption = "Hello from the Menus page's own menu!"
+
+    # --- a popup menu: a menu-bar menu made invisible, shown by PopupMenu -------------------
+    def lblPopup_MouseUp(self, Button, Shift, X, Y):
+        if Button == vpRightButton:
+            # Where the mouse is; "Say hello" in bold (the default)
+            chosen = self.PopupMenu(self.mnuPopup, DefaultMenu=self.mnuPopupHello)
+            if chosen is None:
+                self.lblPage.Caption = "The popup menu was closed without a choice"
+
+    def cmdPopup_Click(self):
+        button = self.cmdPopup  # centered under the button (X, Y in the form)
+        self.PopupMenu(self.mnuPopup, vpPopupMenuCenterAlign, button.Left + button.Width // 2,
+                       button.Top + button.Height)
+
+    def mnuPopupHello_Click(self):
+        self.lblPage.Caption = "Hello from the popup menu!"
+
+    def mnuPopupShout_Click(self):
+        self.lblPage.Caption = "HELLO FROM THE POPUP MENU!"
+
+    def mnuPopupClear_Click(self):
+        self.lblPage.Caption = ""
 
     def cmdBookmark_Click(self):
         key, title = self.pages[self.cboPages.ListIndex]

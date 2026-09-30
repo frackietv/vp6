@@ -244,6 +244,13 @@ vpGridSelectionFree = 0
 vpGridSelectionByRow = 1
 vpGridSelectionByColumn = 2
 
+# --- PopupMenu flags (added together) ------------------------------------------------
+vpPopupMenuLeftAlign = 0
+vpPopupMenuCenterAlign = 4
+vpPopupMenuRightAlign = 8
+vpPopupMenuLeftButton = 0
+vpPopupMenuRightButton = 2
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

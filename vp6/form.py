@@ -20,8 +20,8 @@ import json
 import os
 import sys
 
-from PySide6.QtCore import QEvent, QEventLoop, QObject, QRect, QSize, Qt
-from PySide6.QtGui import QFont, QGuiApplication, QPalette
+from PySide6.QtCore import QEvent, QEventLoop, QObject, QPoint, QRect, QSize, Qt
+from PySide6.QtGui import QCursor, QFont, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 
 from . import appearance, colors
@@ -29,6 +29,7 @@ from ._props import P, PropertyHost, enum_choices
 from .app import call_handler, ensure_app, run_event_loop
 from .controls import (_FONT, CommandButton, Control, ControlArray, TextBox, Timer,
                        vp_buttons, vp_key_code, vp_shift)
+from .controls import Menu as MenuControl
 
 _loaded_forms: list["Form"] = []
 
@@ -924,6 +925,42 @@ class Form(PropertyHost):
             self._widget.setGeometry(self._container._fill_rect(designed))
         else:
             self._widget.move(self._values.get("Left", 0), self._values.get("Top", 0))
+
+    def PopupMenu(self, Menu: MenuControl, Flags: int = 0, X: int | None = None,
+                  Y: int | None = None,
+                  DefaultMenu: MenuControl | None = None) -> MenuControl | None:
+        """Show a menu's items as a context menu, e.g. in a MouseUp handler for
+        the right button (VB's PopupMenu). The menu is one of the form's, often
+        a menu-bar menu made invisible in the Menu Editor so it is only a
+        popup. At X, Y (in the form; the mouse's position for what is left
+        out); Flags: vpPopupMenuLeftAlign (its left edge there),
+        vpPopupMenuCenterAlign, vpPopupMenuRightAlign. DefaultMenu is shown in
+        bold. It waits until the menu closes (the chosen item's Click has
+        fired by then) and returns the chosen item, or None."""
+        if not isinstance(Menu, MenuControl):
+            raise TypeError(f"PopupMenu: {Menu!r} is not a Menu")
+        submenu = Menu._submenu
+        if self._design_mode:
+            return None
+        if submenu is None:
+            raise ValueError(f"PopupMenu: menu '{Menu.Name}' has no items")
+        area = self._container_widget()
+        mouse = area.mapFromGlobal(QCursor.pos())
+        point = area.mapToGlobal(QPoint(int(mouse.x() if X is None else X),
+                                        int(mouse.y() if Y is None else Y)))
+        width = submenu.sizeHint().width()
+        align = int(Flags) & 12  # (2 and 0: which button may choose: both always can)
+        if align == 4:
+            point -= QPoint(width // 2, 0)
+        elif align == 8:
+            point -= QPoint(width, 0)
+        submenu.setDefaultAction(DefaultMenu._action if DefaultMenu is not None else None)
+        self.__dict__["_popup_chosen"] = None  # (set by the chosen item: Menu._on_triggered)
+        try:
+            submenu.exec(point)
+        finally:
+            submenu.setDefaultAction(None)
+        return self.__dict__.pop("_popup_chosen", None)
 
     def Move(self, Left, Top=None, Width=None, Height=None) -> None:
         self.__dict__["_shown_once"] = self._shown_once or self._widget.isVisible()

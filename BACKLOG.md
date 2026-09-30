@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)
 - **[Language and runtime]** Forms: default form instances (using `Form2.Show()` without creating an instance first); `Form_QueryUnload` with `UnloadMode` (closed by the user, by code, or because the program is ending), before `Form_Unload`; a form `Icon` property, a form's own window icon instead of the program's (the project's `icon`) (self-hosting: window icons of the IDE's MDI windows)
 - **[Language and runtime]** Focus and keyboard: the `Validate` event and `CausesValidation` (checking a control's value before the focus leaves it); `Form.ActiveControl` and `Screen.ActiveControl` (the control with the focus); `SendKeys` (sending keystrokes to the active form)
 - **[Language and runtime]** Moving a control to another container at run time (assigning `Container`, as VB's `Set Command1.Container = Frame1`)

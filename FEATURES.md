@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.4.15
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- `PopupMenu(Menu, Flags, X, Y, DefaultMenu)`, a Form method, as in VB: one of the form's menus (typically an invisible menu-bar menu) shown as a context menu at the mouse or at X, Y, aligned left, centered or right (`vpPopupMenuLeftAlign`, `vpPopupMenuCenterAlign`, `vpPopupMenuRightAlign`), with DefaultMenu in bold; it waits for the choice and returns the chosen item (or None)
+- The Kitchen Sink's Menus page: a popup menu on a right-click, and one under a button
+
+---
+
 **Version:** 0.4.14
 **Date:** 2026-10-01
 

@@ -8378,6 +8378,8 @@ class Menu(Control):
     def _on_triggered(self, *_):
         # Qt toggles a checkable item by itself; in VB only code changes Checked
         self._action.setChecked(bool(self._values.get("Checked")))
+        if "_popup_chosen" in self._form.__dict__:  # (PopupMenu is waiting: what was chosen)
+            self._form.__dict__["_popup_chosen"] = self
         self._fire("Click")
 
     def _on_about_to_show(self):

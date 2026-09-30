@@ -829,6 +829,31 @@ def test_menus_page_and_bookmarks(sink):
     sink.mnuHelpAbout._action.trigger()  # MsgBox (answered by the test)
 
 
+def test_popup_menu(sink, monkeypatch):
+    page = _page(sink, "menus")
+    assert not page.mnuPopup.Visible  # only a popup: not on the window's menu bar
+    assert "Popup" not in [a.text() for a in sink._menubar.actions()]
+    shown = []
+
+    def popup(point):  # (instead of the real one, which waits for a choice)
+        menu = page.mnuPopup._submenu
+        shown.append((point, menu.defaultAction()))
+        page.mnuPopupShout._action.trigger()
+
+    monkeypatch.setattr(page.mnuPopup._submenu, "exec", popup)
+    QTest.mouseClick(page.lblPopup._widget, Qt.RightButton)  # MouseUp, the right button
+    assert page.lblPage.Caption == "HELLO FROM THE POPUP MENU!"
+    assert shown[0][1] is page.mnuPopupHello._action  # the default item, in bold
+    QTest.mouseClick(page.lblPopup._widget, Qt.LeftButton)  # (not for the left one)
+    assert len(shown) == 1
+    page.cmdPopup._widget.click()  # centered under the button
+    point, default = shown[1]
+    button = page.cmdPopup
+    under = page._container_widget().mapToGlobal(
+        QPoint(button.Left + button.Width // 2, button.Top + button.Height))
+    assert point.y() == under.y() and point.x() < under.x() and default is None
+
+
 def test_page_menus_join_the_window(sink):
     bar = lambda: [a.text() for a in sink._menubar.actions()]  # noqa: E731
     assert bar() == ["&File", "&View", "&Bookmarks", "&Help"]
