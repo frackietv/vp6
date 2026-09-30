@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Common Dialog control (open, save, color, font, print dialogs)
 - **[Controls]** WebView control using QWebView
 - **[Controls]** WebBrowser control using QWebEngineView
 - **[Language and runtime]** App, Screen and settings: `SaveSetting` / `GetSetting` / `DeleteSetting` for per-user settings; more of VB's `App` object (`Major` / `Minor` / `Revision`, `PrevInstance`, `ProductName`) and the command line (VB's `Command()`); font enumeration, `Screen.Fonts` / `Screen.FontCount` (self-hosting: recent projects, themes, window layout, the Options font list, the FontName editor)

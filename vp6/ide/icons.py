@@ -208,6 +208,16 @@ def _usercontrol(p):
     p.drawEllipse(QRectF(14, 11, 6, 6))
 
 
+def _commondialog(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(3, 4, 18, 16))  # a dialog window
+    p.fillRect(QRectF(3.5, 4.5, 17, 3.5), C.blue)  # its title bar
+    p.setBrush(QColor("#e8b730"))
+    p.drawRect(QRectF(6, 11, 6, 5))  # a folder
+    p.setBrush(C.face)
+    p.drawRect(QRectF(14, 15, 5, 3))  # a button
+
+
 def _hscroll(p):
     p.setBrush(C.face)
     p.drawRect(QRectF(2, 8, 20, 8))
@@ -501,6 +511,7 @@ _DRAWERS = {
     "ListView": _listview, "RichTextBox": _richtextbox,
     "CodeBox": _codebox, "FlexGrid": _flexgrid,
     "DockPanel": _dockpanel, "UserControl": _usercontrol,
+    "CommonDialog": _commondialog,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

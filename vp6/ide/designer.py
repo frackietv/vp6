@@ -40,7 +40,7 @@ NAME_PREFIX = {
     "VScrollBar": "VScroll", "Timer": "Timer", "Line": "Line", "Image": "Image",
     "TreeView": "TreeView", "Splitter": "Splitter", "DriveListBox": "Drive",
     "DirListBox": "Dir", "FileListBox": "File", "CodeBox": "Code", "FlexGrid": "Grid",
-    "DockPanel": "Dock", "Shape": "Shape",
+    "DockPanel": "Dock", "Shape": "Shape", "CommonDialog": "CommonDialog",
 }
 
 _clipboard: list[ControlDef] = []
@@ -241,7 +241,7 @@ class _Overlay(QWidget):
             for key, rect in self._form_handles().items():
                 if rect.adjusted(-2, -2, 2, 2).contains(pos):
                     return None, key
-        elif len(d.selection) == 1 and d.controls[d.selection[0]].TypeName != "Timer" and \
+        elif len(d.selection) == 1 and "Width" in d.controls[d.selection[0]]._specs and \
                 d.canvas_rect(d.selection[0]) is not None:  # menus aren't on the canvas
             rect = d.canvas_rect(d.selection[0])
             for key, handle_rect in self._handles(rect).items():
@@ -757,7 +757,7 @@ class FormDesigner(QWidget):
             geometry = self.controls[name]._widget.geometry()
             props = self.form_def.control(name).props
             props.update(Left=geometry.x(), Top=geometry.y())
-            if self.controls[name].TypeName != "Timer":
+            if "Width" in self.controls[name]._specs:  # (a Timer, an ImageList: a fixed icon)
                 props.update(Width=geometry.width(), Height=geometry.height())
             self.controls[name]._values.update(
                 {k: props[k] for k in ("Left", "Top", "Width", "Height") if k in props})
@@ -816,7 +816,7 @@ class FormDesigner(QWidget):
         else:
             point = (click_pos or QPoint(origin.x() + GRID, origin.y() + GRID)) - origin
             left, top = snap(point.x()), snap(point.y())
-        if type_name == "Timer":
+        if "Width" not in cls._specs:  # (an icon at design time: its own size)
             width, height = cls.DefaultSize
 
         props = {"Left": left, "Top": top}
@@ -1204,7 +1204,7 @@ class FormDesigner(QWidget):
             return
         for name, rect in self._selected_rects():
             if resize:
-                if self.controls[name].TypeName in ("Timer", "Line"):
+                if "Width" not in self.controls[name]._specs:  # (Timer, ImageList, Line...)
                     continue
                 rect.setWidth(max(rect.width() + dx, 4))
                 rect.setHeight(max(rect.height() + dy, 4))

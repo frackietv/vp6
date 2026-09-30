@@ -787,6 +787,52 @@ def test_dialogs_page(sink):
     assert dialog._vp_default is first and dialog.txtItem.Text == ""  # the same, loaded again
 
 
+def test_common_dialogs(sink, monkeypatch, tmp_path):
+    from PySide6.QtGui import QColor, QFont
+    from PySide6.QtPrintSupport import QPrintDialog
+    from PySide6.QtWidgets import QColorDialog, QDialog, QFileDialog, QFontDialog
+
+    page = _page(sink, "dialogs")
+    (tmp_path / "one.txt").write_text("1")
+    (tmp_path / "two.py").write_text("2")
+    chosen = []
+
+    def files(dialog):
+        chosen.append((dialog.nameFilters(), dialog.selectedNameFilter()))
+        if dialog.acceptMode() == QFileDialog.AcceptSave:
+            dialog.selectFile(str(tmp_path / "sample.txt"))
+        else:
+            dialog.selectFile(str(tmp_path / "one.txt"))
+        return QDialog.Accepted
+
+    monkeypatch.setattr(QFileDialog, "exec", files)
+    page.cmdOpen._widget.click()
+    assert chosen[0] == (["Text Files (*.txt)", "Python (*.py)", "All Files (*)"],
+                         "All Files (*)")
+    assert page.lblResult.Caption.startswith("ShowOpen: one.txt in ")
+    page.cmdSaveAs._widget.click()  # the sample written to the file chosen
+    assert (tmp_path / "sample.txt").read_text().startswith("The quick brown fox")
+    assert page.lblResult.Caption == "ShowSave: the sample saved as sample.txt"
+    monkeypatch.setattr(QColorDialog, "exec",
+                        lambda d: (d.setCurrentColor(QColor("#0000ff")), QDialog.Accepted)[1])
+    page.cmdColor._widget.click()
+    assert page.lblSample.ForeColor == vp6.vpBlue and page.lblResult.Caption == \
+        "ShowColor: &HFF0000"
+    monkeypatch.setattr(QColorDialog, "exec", lambda d: QDialog.Rejected)
+    page.cmdColor._widget.click()  # CancelError: DialogCancelled caught
+    assert page.lblResult.Caption == "ShowColor: cancelled (error 32755)"
+    assert not page.cdlFiles.CancelError
+    monkeypatch.setattr(QFontDialog, "exec",
+                        lambda d: (d.setCurrentFont(QFont("Courier New", 20)),
+                                   QDialog.Accepted)[1])
+    page.cmdFont._widget.click()
+    assert page.lblSample.FontName == "Courier New" and page.lblSample.FontSize == 20
+    monkeypatch.setattr(QPrintDialog, "exec",
+                        lambda d: (d.printer().setCopyCount(2), QDialog.Accepted)[1])
+    page.cmdPrint._widget.click()
+    assert page.lblResult.Caption == "ShowPrinter: 2 copies of pages 1 to 3"
+
+
 def test_schemes_page_and_menu(sink):
     page = _page(sink, "schemes")
     page.optScheme[2].Value = True  # a control array: optScheme_Click(Index=2)

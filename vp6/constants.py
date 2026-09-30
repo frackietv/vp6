@@ -295,6 +295,25 @@ vpDropEffectNone = 0  # OLEDragOver's Effect
 vpDropEffectCopy = 1
 vpDropEffectMove = 2
 
+# --- CommonDialog Flags (added together) ---------------------------------------------
+vpOFNReadOnly = 0x1  # Open, Save As
+vpOFNOverwritePrompt = 0x2
+vpOFNHideReadOnly = 0x4
+vpOFNNoChangeDir = 0x8
+vpOFNAllowMultiselect = 0x200
+vpOFNPathMustExist = 0x800
+vpOFNFileMustExist = 0x1000
+vpOFNCreatePrompt = 0x2000
+vpOFNExplorer = 0x80000
+vpCCRGBInit = 0x1  # Color
+vpCCFullOpen = 0x2
+vpCFScreenFonts = 0x1  # Font
+vpCFEffects = 0x100
+vpPDAllPages = 0x0  # Printer
+vpPDSelection = 0x1
+vpPDPageNums = 0x2
+vpCdlCancel = 32755  # the error a cancelled dialog raises with CancelError (DialogCancelled)
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

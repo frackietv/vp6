@@ -25,13 +25,13 @@ from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QCursor, QDesk
                            QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
                            QTextDocumentFragment, QTextFormat)
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QFrame,
-    QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView, QListWidget,
-    QListWidgetItem, QMenu, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QRubberBand,
-    QScrollArea, QScrollBar, QSizeGrip, QSlider, QStackedLayout, QStyle, QStyledItemDelegate,
-    QStyleOptionTabWidgetFrame, QStyleOptionViewItem, QTableWidget, QTableWidgetItem,
-    QTableWidgetSelectionRange, QTabWidget, QTextEdit, QToolBar, QToolButton, QTreeView,
-    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QDialog,
+    QFileDialog, QFontDialog, QFrame, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+    QListView, QListWidget, QListWidgetItem, QMenu, QPlainTextEdit, QProgressBar, QPushButton,
+    QRadioButton, QRubberBand, QScrollArea, QScrollBar, QSizeGrip, QSlider, QStackedLayout, QStyle,
+    QStyledItemDelegate, QStyleOptionTabWidgetFrame, QStyleOptionViewItem, QTableWidget,
+    QTableWidgetItem, QTableWidgetSelectionRange, QTabWidget, QTextEdit, QToolBar, QToolButton,
+    QTreeView, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from . import colors
@@ -8611,13 +8611,263 @@ class Menu(Control):
             self._action.setShortcut(QKeySequence(v or ""))
 
 
+# --- CommonDialog -------------------------------------------------------------------------------
+
+class DialogCancelled(Exception):
+    """A CommonDialog's dialog was cancelled while its CancelError is True
+    (VB's run-time error 32755, cdlCancel); ``Number`` is 32755."""
+
+    Number = 32755
+
+    def __init__(self, message: str = "Cancel was selected."):
+        super().__init__(message)
+
+
+def parse_filter(text: str) -> list[str]:
+    """VB's Filter ("Text Files (*.txt)|*.txt|All Files (*.*)|*.*") as Qt's
+    name filters ("Text Files (*.txt)", "All Files (*)"): descriptions and
+    patterns in pairs; *.* is every file."""
+    parts = [p for p in str(text or "").split("|")]
+    filters = []
+    for index in range(0, len(parts) - 1, 2):
+        description = re.sub(r"\s*\([^()]*\)\s*$", "", parts[index]).strip()
+        patterns = " ".join("*" if p.strip() == "*.*" else p.strip()
+                            for p in parts[index + 1].split(";") if p.strip())
+        filters.append(f"{description or patterns} ({patterns or '*'})")
+    return filters
+
+
+def _commondialog_design_widget(parent: QWidget) -> QLabel:
+    """The icon the designer shows for a CommonDialog: a small dialog window."""
+    pixmap = QPixmap(26, 26)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(QPen(QColor("#333333"), 1.2))
+    painter.setBrush(QColor("#f4f4f4"))
+    painter.drawRect(3, 4, 20, 17)
+    painter.fillRect(4, 5, 19, 4, QColor("#3b6fd1"))  # its title bar
+    painter.setBrush(QColor("#ffe08a"))
+    painter.drawRect(6, 12, 7, 6)  # a folder...
+    painter.setBrush(QColor("#d8d8d8"))
+    painter.drawRect(15, 15, 6, 3)  # ...and a button
+    painter.end()
+    label = QLabel(parent)
+    label.setFixedSize(32, 32)
+    label.setAlignment(Qt.AlignCenter)
+    label.setFrameStyle(QFrame.Panel | QFrame.Raised)
+    label.setPixmap(pixmap)
+    return label
+
+
+class CommonDialog(Control):
+    """VB's CommonDialog: the system's Open, Save As, Color, Font and Print
+    dialogs (ShowOpen, ShowSave, ShowColor, ShowFont, ShowPrinter) and help
+    (ShowHelp). Invisible at run time. Set its properties first (Filter,
+    InitDir, Color...), show a dialog, then read what was chosen (FileName,
+    Color, FontName...). Each Show... returns True, or False when cancelled;
+    with CancelError, cancelling raises DialogCancelled (VB's error 32755)."""
+
+    TypeName = "CommonDialog"
+    DefaultEvent = ""
+    Events: tuple[str, ...] = ()
+    DefaultSize = (32, 32)
+    Properties = (
+        P("Left", "int", 0, always=True, description="Position in the designer only"),
+        P("Top", "int", 0, always=True, description="Position in the designer only"),
+        P("DialogTitle", "str", "", description="The dialog's title; unset = the system's"),
+        P("CancelError", "bool", False,
+          description="Cancelling a dialog raises DialogCancelled (VB's error 32755)"),
+        P("Flags", "int", 0,
+          description="Options added together: vpOFN... (Open, Save), vpCC... (Color), "
+                      "vpCF... (Font), vpPD... (Printer)"),
+        P("FileName", "str", "", description="The file chosen (a full path); also the "
+                                             "first one suggested"),
+        P("Filter", "str", "",
+          description="The file types offered: description|patterns pairs, "
+                      "e.g. Text Files (*.txt)|*.txt|All Files (*.*)|*.*"),
+        P("FilterIndex", "int", 1, description="The Filter pair chosen, from 1"),
+        P("InitDir", "str", "", description="The folder a file dialog starts in"),
+        P("DefaultExt", "str", "",
+          description="Added to a file name typed without an extension (Save As)"),
+        P("Color", "color", 0x000000, description="The color chosen (the dialog starts with it)"),
+        P("FontName", "str", "", description="The font chosen (the dialog starts with it)"),
+        P("FontSize", "int", 0, description="Its size in points (0: the system's)"),
+        P("FontBold", "bool", False, description="Bold"),
+        P("FontItalic", "bool", False, description="Italic"),
+        P("FontUnderline", "bool", False, description="Underlined"),
+        P("FontStrikethru", "bool", False, description="Struck through"),
+        P("Copies", "int", 1, description="Copies to print (the Print dialog)"),
+        P("FromPage", "int", 0, description="The first page to print (with vpPDPageNums)"),
+        P("ToPage", "int", 0, description="The last page to print (with vpPDPageNums)"),
+        P("Min", "int", 1, description="The first page there is"),
+        P("Max", "int", 9999, description="The last page there is"),
+        P("Orientation", "enum", 1, ((1, "1 - Portrait"), (2, "2 - Landscape")),
+          description="Portrait or landscape (the Print dialog)"),
+        P("HelpFile", "file", "", description="What ShowHelp opens: a file or web address"),
+        P("Tag", "str", "", description="Free for your own use"),
+    )
+
+    def __init__(self, parent, Name: str = "", **props):
+        self.__dict__["FileNames"] = []
+        super().__init__(parent, Name, **props)
+
+    def _create_widget(self, parent):
+        return _commondialog_design_widget(parent) if self._design_mode else None
+
+    def _read_Width(self):
+        return 32
+
+    def _read_Height(self):
+        return 32
+
+    # (its Font... properties are what the Font dialog chose, not its own font)
+    def _apply_font(self, _=None):
+        pass
+
+    _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
+        _apply_FontUnderline = _apply_font
+
+    @property
+    def FileTitle(self) -> str:
+        """The chosen file's name, without its folder."""
+        return os.path.basename(self._values.get("FileName", ""))
+
+    def _parent_window(self) -> QWidget | None:
+        widget = self._form._widget
+        return widget.window() if widget is not None else None
+
+    def _cancelled(self) -> bool:
+        if self._values.get("CancelError"):
+            raise DialogCancelled()
+        return False
+
+    def _flag(self, value: int) -> bool:
+        return bool(int(self._values.get("Flags", 0)) & value)
+
+    # -- files ---------------------------------------------------------------------------------
+    def _file_dialog(self, save: bool) -> bool:
+        dialog = QFileDialog(self._parent_window(), self._values.get("DialogTitle") or
+                             ("Save As" if save else "Open"))
+        name = self._values.get("FileName", "")
+        folder = self._values.get("InitDir") or (os.path.dirname(name) if name else "")
+        if folder:
+            dialog.setDirectory(resolve_path(self._form, folder))
+        if name:
+            dialog.selectFile(os.path.basename(name))
+        filters = parse_filter(self._values.get("Filter", ""))
+        if filters:
+            dialog.setNameFilters(filters)
+            index = self._values.get("FilterIndex", 1) - 1
+            dialog.selectNameFilter(filters[index if 0 <= index < len(filters) else 0])
+        if self._values.get("DefaultExt"):
+            dialog.setDefaultSuffix(self._values["DefaultExt"].lstrip("."))
+        if save:
+            dialog.setAcceptMode(QFileDialog.AcceptSave)
+            dialog.setFileMode(QFileDialog.AnyFile)
+            if not self._flag(0x2):  # (vpOFNOverwritePrompt: ask before replacing)
+                dialog.setOption(QFileDialog.DontConfirmOverwrite, True)
+        else:
+            dialog.setFileMode(QFileDialog.ExistingFiles if self._flag(0x200)
+                               else QFileDialog.ExistingFile)
+        if dialog.exec() != QDialog.Accepted or not dialog.selectedFiles():
+            return self._cancelled()
+        files = dialog.selectedFiles()
+        self.__dict__["FileNames"] = list(files)
+        self._values["FileName"] = files[0]
+        if filters and dialog.selectedNameFilter() in filters:
+            self._values["FilterIndex"] = filters.index(dialog.selectedNameFilter()) + 1
+        return True
+
+    def ShowOpen(self) -> bool:
+        """The Open dialog: FileName (and FileNames, with vpOFNAllowMultiselect)
+        is the file chosen. False if cancelled."""
+        return self._file_dialog(save=False)
+
+    def ShowSave(self) -> bool:
+        """The Save As dialog (vpOFNOverwritePrompt asks before replacing a
+        file); FileName is the file chosen. False if cancelled."""
+        return self._file_dialog(save=True)
+
+    # -- color, font, printer, help ---------------------------------------------------------------
+    def ShowColor(self) -> bool:
+        """The Color dialog, starting with Color; Color is the color chosen."""
+        dialog = QColorDialog(colors.to_qcolor(self._values.get("Color", 0)),
+                              self._parent_window())
+        if self._values.get("DialogTitle"):
+            dialog.setWindowTitle(self._values["DialogTitle"])
+        if dialog.exec() != QDialog.Accepted:
+            return self._cancelled()
+        self._values["Color"] = colors.from_qcolor(dialog.currentColor())  # (the one chosen)
+        return True
+
+    def ShowFont(self) -> bool:
+        """The Font dialog, starting with FontName, FontSize, FontBold...; they
+        are the font chosen."""
+        values = self._values
+        font = QFont(values.get("FontName") or QApplication.font().family())
+        if values.get("FontSize"):
+            font.setPointSize(values["FontSize"])
+        font.setBold(bool(values.get("FontBold")))
+        font.setItalic(bool(values.get("FontItalic")))
+        font.setUnderline(bool(values.get("FontUnderline")))
+        font.setStrikeOut(bool(values.get("FontStrikethru")))
+        dialog = QFontDialog(font, self._parent_window())
+        if values.get("DialogTitle"):
+            dialog.setWindowTitle(values["DialogTitle"])
+        if dialog.exec() != QDialog.Accepted:
+            return self._cancelled()
+        chosen = dialog.currentFont()  # (the one chosen)
+        values.update(FontName=chosen.family(), FontSize=max(chosen.pointSize(), 0),
+                      FontBold=chosen.bold(), FontItalic=chosen.italic(),
+                      FontUnderline=chosen.underline(), FontStrikethru=chosen.strikeOut())
+        return True
+
+    def ShowPrinter(self) -> bool:
+        """The Print dialog: Copies, the page range (with vpPDPageNums: FromPage,
+        ToPage, between Min and Max) and Orientation are what was chosen."""
+        from PySide6.QtGui import QPageLayout
+        from PySide6.QtPrintSupport import QAbstractPrintDialog, QPrintDialog, QPrinter
+
+        values = self._values
+        printer = QPrinter()
+        printer.setCopyCount(max(1, values.get("Copies", 1)))
+        printer.setPageOrientation(QPageLayout.Landscape if values.get("Orientation") == 2
+                                   else QPageLayout.Portrait)
+        dialog = QPrintDialog(printer, self._parent_window())
+        dialog.setMinMax(values.get("Min", 1), max(values.get("Max", 9999), values.get("Min", 1)))
+        if self._flag(0x2):  # vpPDPageNums: a page range
+            dialog.setOption(QAbstractPrintDialog.PrintPageRange, True)
+            dialog.setFromTo(values.get("FromPage", 0), values.get("ToPage", 0))
+            dialog.setPrintRange(QAbstractPrintDialog.PageRange)
+        if values.get("DialogTitle"):
+            dialog.setWindowTitle(values["DialogTitle"])
+        if dialog.exec() != QDialog.Accepted:
+            return self._cancelled()
+        values.update(Copies=printer.copyCount(), FromPage=dialog.fromPage(),
+                      ToPage=dialog.toPage(),
+                      Orientation=2 if printer.pageLayout().orientation() ==
+                      QPageLayout.Landscape else 1)
+        return True
+
+    def ShowHelp(self) -> bool:
+        """Open HelpFile (a file, relative to the form's folder, or a web
+        address) with the program the system has for it."""
+        target = self._values.get("HelpFile", "")
+        if not target:
+            raise ValueError(f"CommonDialog '{self.Name}': no HelpFile to show")
+        url = QUrl(target) if "://" in target else \
+            QUrl.fromLocalFile(resolve_path(self._form, target))
+        return bool(QDesktopServices.openUrl(url))
+
+
 CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, DriveListBox, DirListBox,
         FileListBox, Shape, Line, Image, TreeView, Splitter,
         ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView,
-        RichTextBox, CodeBox, FlexGrid, DockPanel, Menu,
+        RichTextBox, CodeBox, FlexGrid, DockPanel, CommonDialog, Menu,
     )
 }
 
@@ -8683,7 +8933,7 @@ _MOUSE_PROPERTIES = (
                   "OLEDragDrop (None: the control's own behavior)"),
 )
 _DRAG_EVENTS = ("DragDrop", "DragOver", "OLEDragDrop", "OLEDragOver")
-_NO_MOUSE_MEMBERS = ("Timer", "Line", "Shape", "ImageList", "Menu", "Splitter")
+_NO_MOUSE_MEMBERS = ("Timer", "Line", "Shape", "ImageList", "Menu", "Splitter", "CommonDialog")
 
 
 def _add_mouse_members(cls) -> None:

@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.4.21
+**Date:** 2026-10-01
+
+## Controls
+
+- CommonDialog, as in VB: `ShowOpen` and `ShowSave` (VB's Filter syntax, FilterIndex, InitDir, DefaultExt, FileName, FileTitle, FileNames with multi-select, the overwrite prompt), `ShowColor` (Color), `ShowFont` (FontName, FontSize, FontBold, FontItalic, FontUnderline, FontStrikethru), `ShowPrinter` (Copies, Orientation, FromPage to ToPage) and `ShowHelp` (HelpFile); DialogTitle, Flags (`vpOFN...`, `vpCC...`, `vpCF...`, `vpPD...`); each returns True or False, or with CancelError raises `DialogCancelled` (error 32755)
+- The Kitchen Sink's Dialogs page uses one for Open, Save As, Color, Font and Print setup
+
+## IDE
+
+- Fixed: moving an ImageList in the designer gave it Width and Height in the form file, which then failed to run; icons such as Timer, ImageList and CommonDialog keep no size of their own
+
+---
+
 **Version:** 0.4.20
 **Date:** 2026-10-01
 

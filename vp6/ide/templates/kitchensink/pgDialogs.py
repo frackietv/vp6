@@ -1,4 +1,7 @@
-"""Kitchen Sink page: MsgBox, InputBox, a modal form (by its default instance) and Beep."""
+"""Kitchen Sink page: MsgBox, InputBox, a modal form (by its default instance), Beep, and
+the system's dialogs through a CommonDialog (Open, Save As, Color, Font, Print)."""
+
+import os
 
 from vp6 import *
 from frmDialog import frmDialog
@@ -21,6 +24,24 @@ class pgDialogs(Form):
                                      TabIndex=4)
         self.lblResult = Label(self, Caption='', Left=210, Top=22, Width=410, Height=140,
                                WordWrap=True, TabIndex=5)
+        self.cmdOpen = CommandButton(self, Caption='&Open file...', Left=16, Top=196, Width=180,
+                                     Height=32, TabIndex=6,
+                                     ToolTipText='CommonDialog.ShowOpen with a Filter, several files at once')
+        self.cmdSaveAs = CommandButton(self, Caption='Save &as...', Left=16, Top=236, Width=180,
+                                       Height=32, TabIndex=7,
+                                       ToolTipText='CommonDialog.ShowSave: asks before replacing a file')
+        self.cmdColor = CommandButton(self, Caption='Co&lor...', Left=16, Top=276, Width=180,
+                                      Height=32, TabIndex=8,
+                                      ToolTipText='CommonDialog.ShowColor, with CancelError')
+        self.cmdFont = CommandButton(self, Caption='Fo&nt...', Left=16, Top=316, Width=180,
+                                     Height=32, TabIndex=9,
+                                     ToolTipText="CommonDialog.ShowFont: the sample's font")
+        self.cmdPrint = CommandButton(self, Caption='&Print setup...', Left=16, Top=356, Width=180,
+                                      Height=32, TabIndex=10,
+                                      ToolTipText='CommonDialog.ShowPrinter: copies and pages')
+        self.lblSample = Label(self, Caption='The quick brown fox jumps over the lazy dog',
+                               Left=210, Top=196, Width=410, Height=80, WordWrap=True, TabIndex=11)
+        self.cdlFiles = CommonDialog(self, Left=588, Top=400)
     # endregion
 
     shell = None  # the Kitchen Sink window showing this page (None when run on its own)
@@ -42,6 +63,63 @@ class pgDialogs(Form):
         Unload(frmDialog)  # Form_QueryUnload tells why (here: Unload in code)
         self.lblResult.Caption = (f"The dialog's Result: {result!r} "
                                   f"(closed by {frmDialog.ClosedBy})")
+
+    # --- the system's dialogs: a CommonDialog ----------------------------------------------------
+    def cmdOpen_Click(self):
+        cdl = self.cdlFiles
+        cdl.DialogTitle = "Open files"
+        cdl.Filter = "Text Files (*.txt)|*.txt|Python (*.py)|*.py|All Files (*.*)|*.*"
+        cdl.FilterIndex = 3  # (All Files)
+        cdl.Flags = vpOFNAllowMultiselect + vpOFNFileMustExist
+        if cdl.ShowOpen():
+            names = ", ".join(os.path.basename(f) for f in cdl.FileNames)
+            self.lblResult.Caption = (f"ShowOpen: {names} in {os.path.dirname(cdl.FileName)} "
+                                      f"(file type {cdl.FilterIndex})")
+        else:
+            self.lblResult.Caption = "ShowOpen: cancelled"
+
+    def cmdSaveAs_Click(self):
+        cdl = self.cdlFiles
+        cdl.DialogTitle = "Save the sample as"
+        cdl.Filter = "Text Files (*.txt)|*.txt"
+        cdl.FilterIndex = 1
+        cdl.DefaultExt = "txt"  # (a name typed without one gets .txt)
+        cdl.Flags = vpOFNOverwritePrompt
+        if cdl.ShowSave():
+            with open(cdl.FileName, "w", encoding="utf-8") as f:
+                f.write(self.lblSample.Caption + "\n")
+            self.lblResult.Caption = f"ShowSave: the sample saved as {cdl.FileTitle}"
+
+    def cmdColor_Click(self):
+        cdl = self.cdlFiles
+        cdl.Color = self.lblSample.ForeColor or vpBlack
+        cdl.CancelError = True  # cancelling raises DialogCancelled (VB's error 32755)
+        try:
+            cdl.ShowColor()
+            self.lblSample.ForeColor = cdl.Color
+            self.lblResult.Caption = f"ShowColor: &H{cdl.Color:06X}"
+        except DialogCancelled as error:
+            self.lblResult.Caption = f"ShowColor: cancelled (error {error.Number})"
+        finally:
+            cdl.CancelError = False
+
+    def cmdFont_Click(self):
+        cdl, sample = self.cdlFiles, self.lblSample
+        cdl.FontName, cdl.FontSize = sample.FontName or "", sample.FontSize or 0
+        cdl.FontBold, cdl.FontItalic = sample.FontBold, sample.FontItalic
+        if cdl.ShowFont():
+            sample.FontName, sample.FontSize = cdl.FontName, cdl.FontSize or None
+            sample.FontBold, sample.FontItalic = cdl.FontBold, cdl.FontItalic
+            sample.FontUnderline = cdl.FontUnderline
+            self.lblResult.Caption = f"ShowFont: {cdl.FontName}, {cdl.FontSize} points"
+
+    def cmdPrint_Click(self):
+        cdl = self.cdlFiles
+        cdl.Flags = vpPDPageNums  # a page range: FromPage to ToPage, of Min to Max
+        cdl.Min, cdl.Max, cdl.FromPage, cdl.ToPage = 1, 10, 1, 3
+        if cdl.ShowPrinter():
+            self.lblResult.Caption = (f"ShowPrinter: {cdl.Copies} copies of pages "
+                                      f"{cdl.FromPage} to {cdl.ToPage}")
 
     def cmdBeep_Click(self):
         Beep()

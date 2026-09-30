@@ -1863,6 +1863,79 @@ Default size 32 × 32.
 No events.
 <!-- END GENERATED -->
 
+### CommonDialog
+
+The system's Open, Save As, Color, Font and Print dialogs (VB's CommonDialog
+control). Like a Timer it is invisible at run time: set its properties, show a
+dialog, then read what was chosen.
+
+```python
+def mnuFileOpen_Click(self):
+    self.cdlFile.Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*"
+    self.cdlFile.Flags = vpOFNFileMustExist
+    if self.cdlFile.ShowOpen():                 # False: cancelled
+        with open(self.cdlFile.FileName) as f:
+            self.txtNote.Text = f.read()
+
+def cmdColor_Click(self):
+    self.cdlFile.CancelError = True             # cancelling raises DialogCancelled
+    try:
+        self.cdlFile.ShowColor()
+        self.BackColor = self.cdlFile.Color
+    except DialogCancelled:
+        pass
+```
+
+* **Files:** `ShowOpen()` and `ShowSave()` start in `InitDir` (else
+  `FileName`'s folder) with `FileName` suggested, offer the `Filter`'s file
+  types (VB's syntax: description and patterns in pairs separated by `|`,
+  several patterns with `;`, `*.*` for every file) starting with
+  `FilterIndex` (from 1), and give `FileName` (the full path), `FileTitle`
+  (its name), `FileNames` (all of them, with `vpOFNAllowMultiselect`) and
+  `FilterIndex`. `DefaultExt` is added to a name typed without an extension;
+  `vpOFNOverwritePrompt` asks before replacing a file.
+* **Color:** `ShowColor()` starts with `Color` and sets it.
+* **Font:** `ShowFont()` starts with `FontName`, `FontSize`, `FontBold`,
+  `FontItalic`, `FontUnderline`, `FontStrikethru` and sets them.
+* **Printer:** `ShowPrinter()` sets `Copies`, `Orientation`, and with
+  `vpPDPageNums` the page range `FromPage` to `ToPage` (between `Min` and
+  `Max`). Printing itself is the backlog's `Printer` object.
+* **Help:** `ShowHelp()` opens `HelpFile` (a file or a web address) with the
+  program the system has for it.
+* `DialogTitle` titles any of them. Each `Show...` returns True, or False if
+  the dialog was cancelled; with `CancelError = True` cancelling raises
+  `DialogCancelled` instead (its `Number` is `vpCdlCancel`, 32755, VB's
+  error number).
+
+<!-- BEGIN GENERATED: control CommonDialog -->
+Default size 32 × 32. Property groups: Font.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `CancelError` | bool | `False` | Cancelling a dialog raises DialogCancelled (VB's error 32755) |
+| `Color` | color | `0` | The color chosen (the dialog starts with it) |
+| `Copies` | int | `1` | Copies to print (the Print dialog) |
+| `DefaultExt` | str | `''` | Added to a file name typed without an extension (Save As) |
+| `DialogTitle` | str | `''` | The dialog's title; unset = the system's |
+| `FileName` | str | `''` | The file chosen (a full path); also the first one suggested |
+| `Filter` | str | `''` | The file types offered: description|patterns pairs, e.g. Text Files (*.txt)|*.txt|All Files (*.*)|*.* |
+| `FilterIndex` | int | `1` | The Filter pair chosen, from 1 |
+| `Flags` | int | `0` | Options added together: vpOFN... (Open, Save), vpCC... (Color), vpCF... (Font), vpPD... (Printer) |
+| `FontStrikethru` | bool | `False` | Struck through |
+| `FromPage` | int | `0` | The first page to print (with vpPDPageNums) |
+| `HelpFile` | file path | `''` | What ShowHelp opens: a file or web address |
+| `InitDir` | str | `''` | The folder a file dialog starts in |
+| `Left` | int | `0` | Position in the designer only |
+| `Max` | int | `9999` | The last page there is |
+| `Min` | int | `1` | The first page there is |
+| `Orientation` | enum | 1 - Portrait | 1 - Portrait, 2 - Landscape. Portrait or landscape (the Print dialog) |
+| `Tag` | str | `''` | Free for your own use |
+| `ToPage` | int | `0` | The last page to print (with vpPDPageNums) |
+| `Top` | int | `0` | Position in the designer only |
+
+No events.
+<!-- END GENERATED -->
+
 ### Toolbar
 
 A row of buttons along the top of a form (VB's Toolbar, from the Windows
@@ -2391,7 +2464,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 [`DriveListBox`, `DirListBox` and `FileListBox`](#drivelistbox-dirlistbox-and-filelistbox), [`Line`](#line), [`Image`](#image),
 [`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
-[`ImageList`](#imagelist) (and its `ListImage`), [`Toolbar`](#toolbar) (and its `Button`),
+[`ImageList`](#imagelist) (and its `ListImage`), [`CommonDialog`](#commondialog) (and `DialogCancelled`), [`Toolbar`](#toolbar) (and its `Button`),
 [`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid),
 [`StatusBar`](#statusbar) (and its
 `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
@@ -2501,6 +2574,7 @@ All constants are plain ints or strings.
 | Form_QueryUnload: UnloadMode | `vpFormControlMenu`, `vpFormCode`, `vpAppWindows`, `vpAppTaskManager`, `vpFormMDIForm`, `vpFormOwner` | 0, 1, 2, 3, 4, 5 |
 | MousePointer (controls, forms, Screen) | `vpDefault`, `vpArrow`, `vpCrosshair`, `vpIbeam`, `vpIconPointer`, `vpSizePointer`, `vpSizeNESW`, `vpSizeNS`, `vpSizeNWSE`, `vpSizeWE`, `vpUpArrow`, `vpHourglass`, `vpNoDrop`, `vpArrowHourglass`, `vpArrowQuestion`, `vpSizeAll`, `vpCustom` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 99 |
 | Drag and drop | `vpManual`, `vpAutomatic`, `vpCancelDrag`, `vpBeginDrag`, `vpEndDrag`, `vpEnter`, `vpLeave`, `vpOver`, `vpOLEDropNone`, `vpOLEDropManual`, `vpCFText`, `vpCFFiles`, `vpDropEffectNone`, `vpDropEffectCopy`, `vpDropEffectMove` | 0, 1, 0, 1, 2, 0, 1, 2, 0, 1, 1, 15, 0, 1, 2 |
+| CommonDialog Flags (added together) | `vpOFNReadOnly`, `vpOFNOverwritePrompt`, `vpOFNHideReadOnly`, `vpOFNNoChangeDir`, `vpOFNAllowMultiselect`, `vpOFNPathMustExist`, `vpOFNFileMustExist`, `vpOFNCreatePrompt`, `vpOFNExplorer`, `vpCCRGBInit`, `vpCCFullOpen`, `vpCFScreenFonts`, `vpCFEffects`, `vpPDAllPages`, `vpPDSelection`, `vpPDPageNums`, `vpCdlCancel` | 1, 2, 4, 8, 512, 2048, 4096, 8192, 524288, 1, 2, 1, 256, 0, 1, 2, 32755 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -2670,6 +2744,11 @@ It goes in the project's `dist` folder:
   control can't be a container for the form's controls.
 * **DockPanel** is VP6's own (VB had no docking panels), as are the form's
   `DockLayout` and its events `DockChange` and `Close`.
+* **CommonDialog** methods return True or False (VB's returned nothing);
+  cancelling with CancelError raises `DialogCancelled` (VB's error 32755); a
+  multiple selection is `FileNames` (VB packed the names into FileName);
+  `ShowHelp` opens a file or web address (no WinHelp commands); `Flags`
+  without a Qt equivalent are accepted and ignored.
 * **Drag and drop:** `Drag` starts a drag and waits until it is over (VB's
   returned at once); Drag's cancel action is `vpCancelDrag` (VB's `vbCancel`
   clashes with the MsgBox result, `vpCancel`); `DragOver` returning False
