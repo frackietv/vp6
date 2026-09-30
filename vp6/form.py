@@ -19,9 +19,10 @@ from __future__ import annotations
 import json
 import os
 import sys
+import types
 
 from PySide6.QtCore import QEvent, QEventLoop, QObject, QPoint, QRect, QSize, Qt
-from PySide6.QtGui import QCursor, QFont, QGuiApplication, QPalette
+from PySide6.QtGui import QCursor, QFont, QGuiApplication, QIcon, QPalette
 from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 
 from . import appearance, colors
@@ -62,7 +63,9 @@ class _FormWidget(QWidget):
         self.setFocusPolicy(Qt.ClickFocus)
 
     def closeEvent(self, event):
-        if self._vp_form._query_unload():
+        # Why it closes: Unload() in code, Ctrl+C (close_all_windows), else the user
+        mode = self._vp_form.__dict__.pop("_unload_mode", None)
+        if self._vp_form._query_unload(mode=VP_FORM_CONTROL_MENU if mode is None else mode):
             event.accept()
         else:
             event.ignore()
@@ -157,10 +160,56 @@ class _FormClient(QWidget):
         self.parentWidget().mouseDoubleClickEvent(event)
 
 
-class Form(PropertyHost):
+# Form_QueryUnload's UnloadMode (constants.vpFormControlMenu ...)
+VP_FORM_CONTROL_MENU, VP_FORM_CODE, VP_APP_TASK_MANAGER, VP_FORM_OWNER = 0, 1, 3, 5
+
+
+class _FormType(type):
+    """Default form instances, as in VB: a form's class name stands for one
+    instance of it, made the first time it is used. ``frmOptions.Show()``,
+    ``frmOptions.txtName.Text`` and ``frmOptions.Caption = "x"`` are the
+    default instance's (``run(Form1)`` makes the running form Form1's). Only
+    public names of a form class are forwarded: its methods, its properties
+    and what only an instance has (its controls, its variables); not Form
+    itself, classmethods, constants or names starting with _."""
+
+    def __init__(cls, name, bases, namespace, **kwargs):
+        super().__init__(name, bases, namespace, **kwargs)
+        type.__setattr__(cls, "_vp_ready", True)  # (its class body is done)
+
+    def _forwards(cls, name: str) -> bool:
+        own = type.__getattribute__(cls, "__dict__")
+        return not name.startswith("_") and own.get("_vp_ready", False) and \
+            "_vp_base" not in own and not type.__getattribute__(cls, "_vp_no_default")
+
+    def __getattribute__(cls, name):
+        value = type.__getattribute__(cls, name)
+        if isinstance(value, (types.FunctionType, property)) and \
+                type(cls)._forwards(cls, name):
+            return getattr(cls._vp_default_instance(), name)
+        return value
+
+    def __getattr__(cls, name):  # (not on the class: the default instance's, e.g. a control)
+        if type(cls)._forwards(cls, name):
+            return getattr(cls._vp_default_instance(), name)
+        raise AttributeError(f"type object {cls.__name__!r} has no attribute {name!r}")
+
+    def __setattr__(cls, name, value):
+        if type(cls)._forwards(cls, name):
+            found = next((c.__dict__[name] for c in cls.__mro__ if name in c.__dict__), None)
+            default = type.__getattribute__(cls, "__dict__").get("_vp_default")
+            if isinstance(found, property) or (default is not None and
+                                               name in default.__dict__):
+                setattr(cls._vp_default_instance(), name, value)
+                return
+        type.__setattr__(cls, name, value)
+
+
+class Form(PropertyHost, metaclass=_FormType):
+    _vp_base = True  # (Form itself: its names are its own, never a default instance's)
     TypeName = "Form"
     DefaultEvent = "Load"
-    Events = ("Load", "Unload", "Initialize", "Activate", "Deactivate", "Resize",
+    Events = ("Load", "QueryUnload", "Unload", "Initialize", "Activate", "Deactivate", "Resize",
               "Click", "DblClick", "MouseDown", "MouseMove", "MouseUp",
               "KeyDown", "KeyPress", "KeyUp")
     Properties = (
@@ -196,11 +245,26 @@ class Form(PropertyHost):
         P("ForeColor", "color", None, description="Text color; unset = the default"),
         *_FONT,
         P("Enabled", "bool", True, description="Whether the form responds to the user"),
+        P("Icon", "file", "",
+          description="The window's icon: an image file (relative to the form's folder); "
+                      "unset = the program's icon"),
         P("Tag", "str", "", description="Free for your own use"),
     )
 
     # The IDE designer instantiates a subclass with this set to True.
     _design_mode = False
+    # Forms that are not the program's own (the designer's, a user control's surface)
+    # have no default instance
+    _vp_no_default = False
+
+    @classmethod
+    def _vp_default_instance(cls) -> "Form":
+        """The form's default instance (VB's), made the first time it is needed."""
+        default = type.__getattribute__(cls, "__dict__").get("_vp_default")
+        if default is None:
+            default = cls()
+            type.__setattr__(cls, "_vp_default", default)
+        return default
 
     def __init__(self):
         ensure_app()
@@ -634,6 +698,11 @@ class Form(PropertyHost):
     def _apply_Caption(self, v):
         self._widget.setWindowTitle(v)
 
+    def _apply_Icon(self, v):
+        path = v if not v or os.path.isabs(v) else os.path.join(self._base_dir(), v)
+        # (none, or a file that can't be read: the program's icon)
+        self._widget.setWindowIcon(QIcon(path) if path and os.path.isfile(path) else QIcon())
+
     def _read_Width(self):
         return self._widget.width()
 
@@ -793,15 +862,19 @@ class Form(PropertyHost):
         self._widget.hide()
 
     def Unload(self) -> bool:
-        """Close the form. Returns False if Form_Unload cancelled it."""
+        """Close the form. Returns False if Form_QueryUnload or Form_Unload
+        cancelled it."""
         if self._widget.isVisible():
+            self.__dict__["_unload_mode"] = VP_FORM_CODE
             return self._widget.close()
-        return self._query_unload()
+        return self._query_unload(mode=VP_FORM_CODE)
 
-    def _query_unload(self, force: bool = False) -> bool:
-        """Fire Form_Unload (which can cancel, unless ``force``), then unload
-        the forms shown in this one."""
+    def _query_unload(self, force: bool = False, mode: int = VP_FORM_CODE) -> bool:
+        """Fire Form_QueryUnload(UnloadMode), then Form_Unload (each can cancel,
+        unless ``force``), then unload the forms shown in this one."""
         if self._loaded:
+            if self._fire("QueryUnload", mode) and not force:  # True -> Cancel
+                return False
             result = self._fire("Unload")
             if result and not force:  # Form_Unload returned True -> Cancel
                 return False
@@ -812,7 +885,7 @@ class Form(PropertyHost):
             if isinstance(control, Timer) and control._timer is not None:
                 control._timer.stop()
         for form in list(self._embedded):  # they go with their host, and can't cancel
-            form._query_unload(force=True)
+            form._query_unload(force=True, mode=VP_FORM_OWNER)
             form._widget.hide()
             form._leave_container()
         return True
@@ -1009,7 +1082,8 @@ def run(form) -> int:
     """Show a form (class or instance) and run the event loop until all
     windows are closed. Returns the application's exit code."""
     ensure_app()
-    instance = form() if isinstance(form, type) else form
+    # A class: its default instance (Form1 in other code is the running form)
+    instance = form._vp_default_instance() if isinstance(form, type) else form
     instance.Show()
     return run_event_loop()
 

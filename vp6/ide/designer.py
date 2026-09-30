@@ -66,6 +66,7 @@ def is_identifier(name: str) -> bool:
 
 class DesignForm(Form):
     _design_mode = True
+    _vp_no_default = True  # (the designer's: never a program's default instance)
 
     def __init__(self, designer: "FormDesigner"):
         self.__dict__["_designer"] = designer

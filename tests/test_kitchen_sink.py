@@ -764,7 +764,20 @@ def test_dialogs_page(sink):
 
     QTimer.singleShot(50, answer_dialog)
     page.cmdModal._widget.click()  # modal: returns after OK
-    assert page.lblResult.Caption == "The dialog's Result: 'Yankee'"
+    assert page.lblResult.Caption == \
+        "The dialog's Result: 'Yankee' (closed by Unload in code)"
+    dialog = sys.modules["frmDialog"].frmDialog
+    assert dialog.Icon == "images/star.png"
+    assert not dialog._vp_default._widget.windowIcon().isNull()
+    first = dialog._vp_default
+
+    def close_it():  # its close button this time: Result None, Form_QueryUnload knows
+        dialog._vp_default._widget.close()
+
+    QTimer.singleShot(50, close_it)
+    page.cmdModal._widget.click()
+    assert page.lblResult.Caption == "The dialog's Result: None (closed by its close button)"
+    assert dialog._vp_default is first and dialog.txtItem.Text == ""  # the same, loaded again
 
 
 def test_schemes_page_and_menu(sink):

@@ -69,6 +69,33 @@ if __name__ == "__main__":
 * Controls can share a name as a [control array](#control-arrays):
   `self.cmdDigit = ControlArray()`, then `self.cmdDigit[0] = CommandButton(...)`.
 
+### Default form instances
+
+As in VB, a form's class name also stands for one instance of it, its
+**default instance**, made the first time it is used:
+
+```python
+from frmOptions import frmOptions
+
+frmOptions.Show(vpModal)              # VB's frmOptions.Show vbModal
+name = frmOptions.txtName.Text        # its controls,
+frmOptions.Caption = "Options"        # its properties,
+total = frmOptions.Total              # its variables (self.Total in its code)
+Unload(frmOptions)
+```
+
+* Methods, properties, controls and the instance's variables used through
+  the class are the default instance's. Class attributes stay the class's
+  (a constant `frmOptions.LIMIT`, `Properties`, classmethods like `Run`),
+  and so do names starting with `_`.
+* `run(Form1)` (and a project's startup form) makes the running form the
+  default instance: `Form1.lblStatus` in a module is the one on the screen.
+* It is one object for the whole program: `Unload(frmOptions)` unloads it,
+  and the next `frmOptions.Show()` loads it again (`Form_Load` runs again;
+  its controls keep what they had, unless `Form_Load` resets them).
+* `frm = frmOptions()` still makes an instance of its own, as VB's
+  `Dim frm As New frmOptions`.
+
 ### Modules and `Sub Main`
 
 Any other `.py` file in the project is a module. A project whose startup
@@ -178,6 +205,7 @@ def Picture1_MouseMove(self, Button, Shift, X, Y): ...
   | `KeyPress(KeyAscii)` | `0` | the key is swallowed |
   | `KeyPress(KeyAscii)` | another int | the typed character is replaced, e.g. `return ord(chr(KeyAscii).upper())` |
   | `Form_KeyDown` / `Form_KeyUp` with `KeyPreview = True` | `0` | the key is cancelled |
+  | `Form_QueryUnload(UnloadMode)` | `True` | closing is cancelled (VB's `Cancel = 1`); `Form_Unload` isn't asked |
   | `Form_Unload` | `True` | closing is cancelled (VB's `Cancel = 1`) |
 
 * **Errors** in a handler show a *Run-time error* box (End / Continue). The
@@ -207,6 +235,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `KeyPress` | KeyAscii |
 | `Initialize` | none |
 | `Load` | none |
+| `QueryUnload` | UnloadMode |
 | `Unload` | none |
 | `Activate` | none |
 | `Deactivate` | none |
@@ -277,6 +306,7 @@ What the arguments mean:
 | `FontUnderline` | bool | `False` | Underlined text |
 | `ForeColor` | color | (default) | Text color; unset = the default |
 | `Height` | int | `360` | Client area height in pixels |
+| `Icon` | file path | `''` | The window's icon: an image file (relative to the form's folder); unset = the program's icon |
 | `KeyPreview` | bool | `False` | Form receives key events before its controls |
 | `Left` | int | `0` | Screen position; used with StartUpPosition Manual |
 | `MaxButton` | bool | `True` | Show a maximize button (sizable forms) |
@@ -361,11 +391,18 @@ self.page.ShowIn(self.picContent)     # back into the pane
 ### Form events
 
 <!-- BEGIN GENERATED: form-events -->
-Events: `Load`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Load`.
+Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Load`.
 <!-- END GENERATED -->
 
 * `Initialize` fires when the object is created.
 * `Load` fires before the first show.
+* `QueryUnload(UnloadMode)` fires first when the form is closing, telling
+  why: `vpFormControlMenu` (the user: its close button, Alt+F4, Cmd+W),
+  `vpFormCode` (`Unload` in code), `vpAppTaskManager` (Ctrl+C in the
+  program's terminal), `vpFormOwner` (the form it is shown in with `ShowIn`
+  is closing; it can't cancel then). Returning `True` keeps it open; else
+  `Unload` follows (and can cancel too). `vpAppWindows` and `vpFormMDIForm`
+  are VB's other values, not reported yet.
 
 ---
 
@@ -2228,6 +2265,7 @@ All constants are plain ints or strings.
 | FlexGrid.Sort | `vpGridSortGenericAscending`, `vpGridSortGenericDescending`, `vpGridSortNumericAscending`, `vpGridSortNumericDescending`, `vpGridSortStringNoCaseAscending`, `vpGridSortStringNoCaseDescending`, `vpGridSortStringAscending`, `vpGridSortStringDescending` | 1, 2, 3, 4, 5, 6, 7, 8 |
 | FlexGrid.SelectionMode | `vpGridSelectionFree`, `vpGridSelectionByRow`, `vpGridSelectionByColumn` | 0, 1, 2 |
 | PopupMenu flags (added together) | `vpPopupMenuLeftAlign`, `vpPopupMenuCenterAlign`, `vpPopupMenuRightAlign`, `vpPopupMenuLeftButton`, `vpPopupMenuRightButton` | 0, 4, 8, 0, 2 |
+| Form_QueryUnload: UnloadMode | `vpFormControlMenu`, `vpFormCode`, `vpAppWindows`, `vpAppTaskManager`, `vpFormMDIForm`, `vpFormOwner` | 0, 1, 2, 3, 4, 5 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -2345,8 +2383,9 @@ It goes in the project's `dist` folder:
   client area.
 * **`ByRef` event arguments are return values** (see [§2](#2-events)).
 * **Constants use the `vp` prefix** instead of `vb`.
-* **Forms are classes.** Create instances explicitly (`frm = Form2();
-  frm.Show()`); there are no implicit default instances.
+* **Forms are classes,** with VB's [default instances](#default-form-instances):
+  `Form2.Show()` uses the one made the first time; it stays one object after
+  `Unload` (its controls aren't made anew when it is loaded again).
 * **Control arrays are `ControlArray` objects.** Elements are `self.cmd[i]`
   (or VB's `self.cmd(i)`); `Load` and `Unload` take the array and the Index
   (`Load(self.cmd, 5)` for `Load cmd(5)`).

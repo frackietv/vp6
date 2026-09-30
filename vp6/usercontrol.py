@@ -115,6 +115,7 @@ class _UserControlSurface(Form):
     never loaded, so it isn't in Forms."""
 
     _design_mode = False  # (its controls run as they will; events are held back instead)
+    _vp_no_default = True  # (one per user control: no default instance)
 
     def __init__(self, owner: "UserControl"):
         self.__dict__["_owner"] = owner

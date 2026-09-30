@@ -43,7 +43,7 @@ EVENT_ARGS = {
     "MouseDown": "Button, Shift, X, Y", "MouseUp": "Button, Shift, X, Y",
     "MouseMove": "Button, Shift, X, Y",
     "KeyDown": "KeyCode, Shift", "KeyUp": "KeyCode, Shift", "KeyPress": "KeyAscii",
-    "Initialize": "", "Load": "", "Unload": "", "Activate": "", "Deactivate": "",
+    "Initialize": "", "Load": "", "QueryUnload": "UnloadMode", "Unload": "", "Activate": "", "Deactivate": "",
     "Resize": "", "Moved": "", "LinkClick": "URL",
     "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
     "UpClick": "", "DownClick": "", "PanelClick": "Panel", "PanelDblClick": "Panel",

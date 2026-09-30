@@ -251,7 +251,8 @@ sequenceDiagram
     replaces the character (a new key event is sent);
   * a form's `KeyDown`/`KeyUp` with `KeyPreview` returning `0` cancels the
     key;
-  * `Form_Unload` returning a truthy value cancels closing.
+  * `Form_QueryUnload` or `Form_Unload` returning a truthy value cancels
+    closing.
 * **Default and Cancel buttons.** `Form._handle_default_cancel` clicks the
   `Default` button on Enter and the `Cancel` button on Esc.
 * **Run-time errors.** Any exception from a handler goes to
@@ -271,7 +272,7 @@ stateDiagram-v2
     Loaded --> Shown: Show()<br/>(first time: window flags, start-up position)
     Shown --> Hidden: Hide()
     Hidden --> Shown: Show()
-    Shown --> Unloaded: Unload() / close button<br/>Form_Unload (may cancel), timers stopped
+    Shown --> Unloaded: Unload() / close button<br/>Form_QueryUnload, Form_Unload (may cancel), timers stopped
     Unloaded --> Loaded: Show() again
 ```
 

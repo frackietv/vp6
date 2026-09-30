@@ -139,6 +139,9 @@ def close_all_windows() -> None:
         app.quit()  # an event loop without windows: just stop it
         return
     for window in windows:
+        form = getattr(window, "_vp_form", None)
+        if form is not None:  # (its Form_QueryUnload's UnloadMode: vpAppTaskManager)
+            form.__dict__["_unload_mode"] = 3
         window.close()
 
 

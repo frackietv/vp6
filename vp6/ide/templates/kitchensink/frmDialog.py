@@ -1,4 +1,6 @@
-"""A modal dialog with its own color scheme (ColorScheme = 3 - Dark)."""
+"""A modal dialog with its own color scheme (ColorScheme = 3 - Dark) and window icon
+(Icon), used through its default instance (frmDialog.Show(vpModal): no frmDialog()
+needed), telling why it closed in Form_QueryUnload."""
 
 from vp6 import *
 
@@ -12,6 +14,7 @@ class frmDialog(Form):
         self.StartUpPosition = 1
         self.BorderStyle = 3
         self.ColorScheme = 3
+        self.Icon = 'images/star.png'
         self.lblPrompt = Label(self, Caption='New list item:', Left=16, Top=16, Width=288,
                                Height=25, TabIndex=1)
         self.txtItem = TextBox(self, Text='', Left=16, Top=44, Width=288, Height=25, TabIndex=2)
@@ -22,7 +25,16 @@ class frmDialog(Form):
     # endregion
 
     def Form_Load(self):
+        # (its default instance is used again: Form_Load runs each time it is loaded)
         self.Result = None
+        self.ClosedBy = ""
+        self.txtItem.Text = ""
+
+    def Form_QueryUnload(self, UnloadMode):
+        # Before Form_Unload: why it is closing (returning True would keep it open)
+        self.ClosedBy = {vpFormControlMenu: "its close button", vpFormCode: "Unload in code",
+                         vpAppTaskManager: "Ctrl+C", vpFormOwner: "its owner form"}.get(
+            UnloadMode, f"UnloadMode {UnloadMode}")
 
     def Form_Activate(self):
         self.txtItem.SetFocus()

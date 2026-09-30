@@ -1,5 +1,17 @@
 # VP6 features
 
+**Version:** 0.4.17
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- Default form instances, as in VB: a form's class name stands for one instance made on first use (`frmOptions.Show()`, `frmOptions.txtName.Text`, `frmOptions.Caption = "x"`); `run(Form1)` makes the running form the default one
+- `Form_QueryUnload(UnloadMode)` before `Form_Unload`, telling why the form closes (`vpFormControlMenu`, `vpFormCode`, `vpAppTaskManager`, `vpFormOwner`); returning True keeps it open
+- A form's `Icon` property: its own window icon (an image file), else the program's
+- The Kitchen Sink's dialog is used through its default instance, has its own icon and tells why it closed
+
+---
+
 **Version:** 0.4.16
 **Date:** 2026-10-01
 

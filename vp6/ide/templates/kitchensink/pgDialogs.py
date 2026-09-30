@@ -1,4 +1,4 @@
-"""Kitchen Sink page: MsgBox, InputBox, a modal form and Beep."""
+"""Kitchen Sink page: MsgBox, InputBox, a modal form (by its default instance) and Beep."""
 
 from vp6 import *
 from frmDialog import frmDialog
@@ -16,7 +16,7 @@ class pgDialogs(Form):
                                          Height=32, TabIndex=2)
         self.cmdModal = CommandButton(self, Caption='Modal &form...', Left=16, Top=96, Width=180,
                                       Height=32, TabIndex=3,
-                                      ToolTipText='Shows frmDialog with Show(vpModal): it has its own Dark scheme')
+                                      ToolTipText='frmDialog.Show(vpModal), its default instance: it has its own Dark scheme and icon')
         self.cmdBeep = CommandButton(self, Caption='&Beep', Left=16, Top=136, Width=180, Height=32,
                                      TabIndex=4)
         self.lblResult = Label(self, Caption='', Left=210, Top=22, Width=410, Height=140,
@@ -35,12 +35,13 @@ class pgDialogs(Form):
         self.lblResult.Caption = f"InputBox returned {text!r}"
 
     def cmdModal_Click(self):
-        dialog = frmDialog()
-        Load(dialog)
+        # VB style: the form's class name is its default instance, made when first used.
         # Modal: waits until the dialog is hidden; centered on this window
-        dialog.Show(vpModal, self.shell or self)
-        self.lblResult.Caption = f"The dialog's Result: {dialog.Result!r}"
-        Unload(dialog)
+        frmDialog.Show(vpModal, self.shell or self)
+        result = frmDialog.Result
+        Unload(frmDialog)  # Form_QueryUnload tells why (here: Unload in code)
+        self.lblResult.Caption = (f"The dialog's Result: {result!r} "
+                                  f"(closed by {frmDialog.ClosedBy})")
 
     def cmdBeep_Click(self):
         Beep()
