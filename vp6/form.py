@@ -230,6 +230,9 @@ class Form(PropertyHost):
             refresh = getattr(control, "_refresh_images", None)
             if refresh is not None:
                 refresh()
+            named = getattr(control, "_named", None)  # (the controls have their names now)
+            if named is not None:
+                named()
         self._layout_aligned()
         self._apply_tab_order()
         self._fire("Initialize")

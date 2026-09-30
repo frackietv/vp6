@@ -9,15 +9,18 @@ parameters than VB passes (``def Text1_KeyPress(self, KeyAscii)`` or just
 from __future__ import annotations
 
 import html
+import keyword
 import os
+import re
 import sys
 
 from PySide6.QtCore import (QDate, QEvent, QFileInfo, QItemSelectionModel, QLocale, QObject,
                             QPoint, QRect, QSize, Qt, QTime, QTimer, QUrl, Signal)
-from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServices, QFont, QIcon,
-                           QKeyEvent, QKeySequence, QPainter, QPalette, QPen, QPixmap,
-                           QShortcut, QStandardItem, QStandardItemModel, QTextCharFormat,
-                           QTextCursor, QTextDocument, QTextDocumentFragment, QTextFormat)
+from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServices, QFont,
+                           QFontDatabase, QIcon, QKeyEvent, QKeySequence, QPainter, QPalette, QPen,
+                           QPixmap, QShortcut, QStandardItem, QStandardItemModel,
+                           QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
+                           QTextDocumentFragment, QTextFormat)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox, QFrame, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
@@ -43,6 +46,8 @@ EVENT_ARGS = {
     "UpClick": "", "DownClick": "", "PanelClick": "Panel", "PanelDblClick": "Panel",
     "BeforeClick": "", "ButtonClick": "Button",
     "ItemClick": "Item", "ColumnClick": "ColumnHeader", "ItemCheck": "Item",
+    "SelChange": "", "Highlight": "Line, Text, State", "GutterClick": "Line",
+    "ProtectedEdit": "Line",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -1150,7 +1155,46 @@ class _RichEdit(QTextEdit):
         self.setTextCursor(cursor)
 
 
-class RichTextBox(_TextEditing, Control):
+class _EditorSelection:
+    """SelStart, SelLength and SelText of RichTextBox and CodeBox (a
+    QTextEdit or QPlainTextEdit)."""
+
+    @property
+    def SelStart(self) -> int:
+        return self._widget.textCursor().selectionStart()
+
+    @SelStart.setter
+    def SelStart(self, value):
+        cursor = self._widget.textCursor()
+        cursor.setPosition(max(0, min(int(value), len(self.Text))))
+        self._widget.setTextCursor(cursor)
+
+    @property
+    def SelLength(self) -> int:
+        cursor = self._widget.textCursor()
+        return cursor.selectionEnd() - cursor.selectionStart()
+
+    @SelLength.setter
+    def SelLength(self, value):
+        start = self.SelStart
+        cursor = self._widget.textCursor()
+        cursor.setPosition(start)
+        cursor.setPosition(max(0, min(start + int(value), len(self.Text))),
+                           QTextCursor.KeepAnchor)
+        self._widget.setTextCursor(cursor)
+
+    @property
+    def SelText(self) -> str:
+        return self._widget.textCursor().selectedText().replace("\u2029", "\n")
+
+    @SelText.setter
+    def SelText(self, value):
+        """Replace the selection (or insert at the cursor), in the format of
+        the Sel... properties."""
+        self._widget.textCursor().insertText(str(value))
+
+
+class RichTextBox(_EditorSelection, _TextEditing, Control):
     """Text with colors, fonts, bold, italic and underline, and aligned
     paragraphs, like VB's RichTextBox. Format the selection with its Sel...
     properties (SelBold, SelColor...; with nothing selected, what is typed
@@ -1243,41 +1287,6 @@ class RichTextBox(_TextEditing, Control):
     @TextHTML.setter
     def TextHTML(self, value):
         self._widget.setHtml(str(value))
-
-    # -- the selection ----------------------------------------------------------------------
-    @property
-    def SelStart(self) -> int:
-        return self._widget.textCursor().selectionStart()
-
-    @SelStart.setter
-    def SelStart(self, value):
-        cursor = self._widget.textCursor()
-        cursor.setPosition(max(0, min(int(value), len(self.Text))))
-        self._widget.setTextCursor(cursor)
-
-    @property
-    def SelLength(self) -> int:
-        cursor = self._widget.textCursor()
-        return cursor.selectionEnd() - cursor.selectionStart()
-
-    @SelLength.setter
-    def SelLength(self, value):
-        start = self.SelStart
-        cursor = self._widget.textCursor()
-        cursor.setPosition(start)
-        cursor.setPosition(max(0, min(start + int(value), len(self.Text))),
-                           QTextCursor.KeepAnchor)
-        self._widget.setTextCursor(cursor)
-
-    @property
-    def SelText(self) -> str:
-        return self._widget.textCursor().selectedText().replace("\u2029", "\n")
-
-    @SelText.setter
-    def SelText(self, value):
-        """Replace the selection (or insert at the cursor), in the format of
-        the Sel... properties."""
-        self._widget.textCursor().insertText(str(value))
 
     @property
     def SelHTML(self) -> str:
@@ -1486,6 +1495,646 @@ class RichTextBox(_TextEditing, Control):
         contents = self.TextHTML if self._is_html(FileName, FileType) else self.Text
         with open(FileName, "w", encoding="utf-8") as f:
             f.write(contents)
+
+
+# --- CodeBox ---------------------------------------------------------------------------
+
+_PY_KEYWORDS = re.compile(r"\b(?:%s)\b" % "|".join(keyword.kwlist + ["match", "case"]))
+_PY_NUMBER = re.compile(r"\b(?:0[xXoObB][0-9a-fA-F_]+|\d[\d_]*\.?\d*(?:[eE][+-]?\d+)?j?)\b")
+_PY_DECORATOR = re.compile(r"^\s*@[\w.]+")
+_PY_DEF = re.compile(r"\b(?:def|class)\s+(\w+)")
+_PY_STRING = re.compile(r""""[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'""")
+_PY_COLORS = {  # (on a light background, on a dark one)
+    "keyword": ("#0000c0", "#569cd6"), "string": ("#a31515", "#ce9178"),
+    "comment": ("#008000", "#6a9955"), "number": ("#098658", "#b5cea8"),
+    "defname": ("#795e26", "#dcdcaa"), "decorator": ("#af00db", "#c586c0"),
+}
+_PY_IN_SINGLE, _PY_IN_DOUBLE = 1, 2  # inside ''' or """ at the line's end
+
+
+class _CodeHighlighter(QSyntaxHighlighter):
+    """Colors a CodeBox line by line: its Language's colors, then its
+    Highlight event. A line's block state keeps both: the language's in the
+    low two bits, the event's State above them."""
+
+    def __init__(self, box: "CodeBox"):
+        super().__init__(box._widget.document())
+        self.box = box
+        self.formats: dict[str, QTextCharFormat] = {}
+
+    def set_dark(self, dark: bool) -> None:
+        self.formats = {}
+        for name, pair in _PY_COLORS.items():
+            fmt = QTextCharFormat()
+            fmt.setForeground(QColor(pair[dark]))
+            if name == "comment":
+                fmt.setFontItalic(True)
+            self.formats[name] = fmt
+
+    def highlightBlock(self, text: str) -> None:
+        previous = max(self.previousBlockState(), 0)
+        language = previous & 3
+        if self.box._values.get("Language") == 1:
+            language = self._python(text, language)
+        else:
+            language = 0
+        state = self.box._highlight(self, self.currentBlock().blockNumber(), text,
+                                    previous >> 2)
+        self.setCurrentBlockState(state * 4 + language)
+
+    def _python(self, text: str, state: int) -> int:
+        formats = self.formats
+        for pattern, name in ((_PY_KEYWORDS, "keyword"), (_PY_NUMBER, "number"),
+                              (_PY_DECORATOR, "decorator")):
+            for match in pattern.finditer(text):
+                self.setFormat(match.start(), match.end() - match.start(), formats[name])
+        for match in _PY_DEF.finditer(text):
+            self.setFormat(match.start(1), len(match.group(1)), formats["defname"])
+        index = 0
+        if state:  # inside a triple-quoted string from an earlier line
+            delimiter = "'''" if state == _PY_IN_SINGLE else '"""'
+            end = text.find(delimiter)
+            if end == -1:
+                self.setFormat(0, len(text), formats["string"])
+                return state
+            self.setFormat(0, end + 3, formats["string"])
+            index, state = end + 3, 0
+        while index < len(text):
+            char = text[index]
+            if char == "#":
+                self.setFormat(index, len(text) - index, formats["comment"])
+                break
+            if text.startswith(('"""', "'''"), index):
+                delimiter = text[index:index + 3]
+                end = text.find(delimiter, index + 3)
+                if end == -1:
+                    self.setFormat(index, len(text) - index, formats["string"])
+                    return _PY_IN_SINGLE if delimiter == "'''" else _PY_IN_DOUBLE
+                self.setFormat(index, end + 3 - index, formats["string"])
+                index = end + 3
+                continue
+            if char in "\"'":
+                match = _PY_STRING.match(text, index)
+                if match:
+                    self.setFormat(index, match.end() - index, formats["string"])
+                    index = match.end()
+                    continue
+            index += 1
+        return state
+
+
+class _CodeGutter(QWidget):
+    """The CodeBox's gutter: line numbers and markers, left of the text."""
+
+    def __init__(self, edit: "_CodeEdit"):
+        super().__init__(edit)
+        self.edit = edit
+
+    def paintEvent(self, event):
+        self.edit.box._paint_gutter(self, event)
+
+    def mousePressEvent(self, event):
+        self.edit.box._gutter_clicked(event.position().toPoint())
+
+
+class _CodeEdit(QPlainTextEdit):
+    """The CodeBox's editor: its gutter, and the user's edits checked against
+    the protected lines."""
+
+    def __init__(self, box: "CodeBox", parent):
+        super().__init__(parent)
+        self.box = box
+        self.gutter = _CodeGutter(self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.box._place_gutter()
+
+    def paintEvent(self, event):
+        painter = QPainter(self.viewport())
+        self.box._paint_shading(painter, event.rect())
+        painter.end()
+        super().paintEvent(event)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.PaletteChange, QEvent.FontChange, QEvent.StyleChange):
+            self.box._restyle()
+
+    def keyPressEvent(self, event):
+        if not self.box._key_press(event):
+            super().keyPressEvent(event)
+
+    def insertFromMimeData(self, source):  # pasting and dropping
+        if self.box._may_edit():
+            super().insertFromMimeData(source)
+        else:
+            self.box._reject_edit()
+
+    def inputMethodEvent(self, event):
+        if event.commitString() and not self.box._may_edit():
+            self.box._reject_edit()
+            return
+        super().inputMethodEvent(event)
+
+    def contextMenuEvent(self, event):
+        menu = self.createStandardContextMenu(event.pos())
+        if not self.box._may_edit():  # (the menu's own Cut, Paste and Delete)
+            for action in menu.actions():
+                if action.objectName() in ("edit-cut", "edit-paste", "edit-delete"):
+                    action.setEnabled(False)
+        menu.exec(event.globalPos())
+        menu.deleteLater()
+
+
+class _LineMarkers:
+    """CodeBox.LineMarker: ``Code1.LineMarker[5] = "●"`` shows a short text
+    in line 5's gutter, ``Code1.LineMarker(5)`` reads it ("" = none). A marker
+    stays with its line when lines are added or removed above it."""
+
+    def __init__(self, box: "CodeBox"):
+        self._box = box
+
+    def _find(self, line: int):
+        return next((entry for entry in self._box._markers
+                     if entry[0].blockNumber() == line), None)
+
+    def __call__(self, line):
+        return self[line]
+
+    def __getitem__(self, line) -> str:
+        self._box._line_block(line)
+        entry = self._find(int(line))
+        return entry[1] if entry else ""
+
+    def __setitem__(self, line, text):
+        block = self._box._line_block(line)
+        entry = self._find(int(line))
+        if entry:
+            self._box._markers.remove(entry)
+        if text:
+            cursor = QTextCursor(block)
+            self._box._markers.append([cursor, str(text)])
+        self._box._update_gutter()
+
+
+class CodeBox(_EditorSelection, _TextEditing, Control):
+    """A code editor: line numbers, the current line highlighted, syntax
+    coloring (Language, and your own in the Highlight event), markers in the
+    gutter (LineMarker, GutterClick), hidden (folded) lines and protected
+    lines the user can't change (code can). Enter keeps the indentation, Tab
+    and Shift+Tab indent; it has the TextBox's editing API."""
+
+    TypeName = "CodeBox"
+    DefaultEvent = "Change"
+    DefaultSize = (321, 201)
+    Events = ("Change", "SelChange", "Highlight", "GutterClick", "ProtectedEdit", "Click",
+              "DblClick", "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp",
+              "MouseDown", "MouseMove", "MouseUp")
+    _qss_type = "QPlainTextEdit"
+    Properties = (
+        P("Text", "text", "", always=True, description="The code"),
+        *_geometry(*DefaultSize),
+        P("Language", "enum", 0, enum_choices("None", "Python"),
+          description="Built-in syntax coloring; add your own in the Highlight event"),
+        P("LineNumbers", "bool", True, description="Line numbers in the gutter"),
+        P("HighlightCurrentLine", "bool", True, description="Shade the caret's line"),
+        P("CurrentLineColor", "color", None,
+          description="The current line's shade; unset = a shade of the background"),
+        P("ProtectedColor", "color", None,
+          description="The background of protected lines; unset = a tint of the background"),
+        P("TabWidth", "int", 4, description="Columns per indentation level (and tab stop)"),
+        P("UseTabs", "bool", False, description="Indent with tab characters instead of spaces"),
+        P("AutoIndent", "bool", True,
+          description="Enter keeps the line's indentation (Python: one more after a colon)"),
+        P("AcceptsTab", "bool", True,
+          description="Tab and Shift+Tab indent instead of moving to another control"),
+        P("WordWrap", "bool", False, description="Wrap long lines instead of scrolling"),
+        P("Locked", "bool", False, description="Read-only: the code can't be edited"),
+        *_COLORS, *_FONT, *_COMMON,
+    )
+
+    def _create_widget(self, parent):
+        self.__dict__.update(_protected=[], _markers=[], _highlighting=None, _highlighter=None)
+        widget = _CodeEdit(self, parent)
+        self._widget = widget
+        self.__dict__["_highlighter"] = _CodeHighlighter(self)
+        self._highlighter.set_dark(self._dark())
+        widget.blockCountChanged.connect(self._update_gutter)
+        widget.updateRequest.connect(self._on_update_request)
+        widget.cursorPositionChanged.connect(self._update_extra)
+        return widget
+
+    def _event_targets(self):
+        return [self._widget, self._widget.viewport()]
+
+    def _connect_signals(self):
+        self._widget.textChanged.connect(lambda: self._fire("Change"))
+        self._connect_selection()
+
+    # -- looks -------------------------------------------------------------------------------
+    def _base_color(self) -> QColor:
+        back = self._values.get("BackColor")
+        return colors.to_qcolor(back) if back is not None else \
+            self._widget.palette().color(QPalette.Base)
+
+    def _dark(self) -> bool:
+        return self._base_color().lightness() < 128
+
+    def _restyle(self) -> None:
+        """The colors or font changed: tab stops, gutter, coloring, shading."""
+        widget = self._widget
+        if widget is None or self._highlighter is None:
+            return
+        widget.setTabStopDistance(
+            widget.fontMetrics().horizontalAdvance(" ") * max(1, self._values.get("TabWidth", 4)))
+        dark = self._dark()
+        if self._highlighter.formats.get("keyword") is None or \
+                self._highlighter.formats["keyword"].foreground().color() != \
+                QColor(_PY_COLORS["keyword"][dark]):
+            self._highlighter.set_dark(dark)
+            self._highlighter.rehighlight()
+        self._update_gutter()
+        self._update_extra()
+
+    def _apply_font(self, _=None):
+        super()._apply_font()
+        if self._widget is not None and not self._values.get("FontName"):
+            font = self._widget.font()  # code: a fixed-width font unless one is chosen
+            font.setFamily(QFontDatabase.systemFont(QFontDatabase.FixedFont).family())
+            self._widget.setFont(font)
+
+    _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
+        _apply_FontUnderline = _apply_font
+
+    def _apply_colors(self, _=None):
+        super()._apply_colors()
+        self._restyle()
+
+    _apply_BackColor = _apply_ForeColor = _apply_colors
+
+    def _apply_Language(self, v):
+        self._highlighter.rehighlight()
+
+    def _apply_LineNumbers(self, v):
+        self._update_gutter()
+
+    def _apply_HighlightCurrentLine(self, v):
+        self._update_extra()
+
+    _apply_CurrentLineColor = _apply_ProtectedColor = _apply_HighlightCurrentLine
+
+    def _apply_TabWidth(self, v):
+        self._restyle()
+
+    def _apply_WordWrap(self, v):
+        self._widget.setLineWrapMode(QPlainTextEdit.WidgetWidth if v else
+                                     QPlainTextEdit.NoWrap)
+
+    def _apply_Locked(self, v):
+        self._widget.setReadOnly(v)
+
+    def _read_Text(self):
+        return self._widget.toPlainText()
+
+    def _apply_Text(self, v):
+        if self._widget.toPlainText() != v:
+            self._widget.setPlainText(v)
+            # (a new text: no protected, hidden or marked lines from the old one)
+            self._protected.clear()
+            self._markers.clear()
+            self._update_gutter()
+            self._update_extra()
+
+    def _update_extra(self, *_) -> None:
+        """Shade the current line (and the protected ones) again."""
+        if self._widget is not None:
+            self._widget.viewport().update()
+
+    def _paint_shading(self, painter: QPainter, rect: QRect) -> None:
+        """Under the text: the protected lines' tint and the current line's
+        shade (painted first, so the text's own backgrounds stay on top)."""
+        widget = self._widget
+        dark = self._dark()
+        protected = self._values.get("ProtectedColor")
+        tint = colors.to_qcolor(protected) if protected is not None else (
+            QColor(110, 140, 255, 45) if dark else QColor(60, 100, 220, 28))
+        current = self._values.get("CurrentLineColor")
+        shade = colors.to_qcolor(current) if current is not None else (
+            QColor(255, 255, 255, 22) if dark else QColor(0, 0, 0, 16))
+        show_current = self._values.get("HighlightCurrentLine", True)
+        ranges = [(start.blockNumber(), end.blockNumber()) for start, end in self._protected]
+        caret = widget.textCursor().blockNumber()
+        block = widget.firstVisibleBlock()
+        top = widget.blockBoundingGeometry(block).translated(widget.contentOffset()).top()
+        while block.isValid() and top <= rect.bottom():
+            height = widget.blockBoundingRect(block).height()
+            if block.isVisible() and top + height >= rect.top():
+                number = block.blockNumber()
+                line = QRect(0, round(top), widget.viewport().width(), round(height))
+                if any(first <= number <= last for first, last in ranges):
+                    painter.fillRect(line, tint)
+                if show_current and number == caret:
+                    painter.fillRect(line, shade)
+            top += height
+            block = block.next()
+
+    # -- the gutter ------------------------------------------------------------------------
+    def _gutter_width(self) -> int:
+        widget = self._widget
+        marks = 14 if (self._values.get("LineNumbers", True) or self._markers or
+                       self._has_hidden()) else 0
+        if not self._values.get("LineNumbers", True):
+            return marks
+        digits = max(3, len(str(widget.blockCount())))
+        return 6 + widget.fontMetrics().horizontalAdvance("9") * digits + marks
+
+    def _has_hidden(self) -> bool:
+        block = self._widget.document().begin()
+        while block.isValid():
+            if not block.isVisible():
+                return True
+            block = block.next()
+        return False
+
+    def _update_gutter(self, *_) -> None:
+        widget = self._widget
+        if widget is None:
+            return
+        widget.setViewportMargins(self._gutter_width(), 0, 0, 0)
+        self._place_gutter()
+        widget.gutter.update()
+
+    def _place_gutter(self) -> None:
+        widget = self._widget
+        rect = widget.contentsRect()
+        widget.gutter.setGeometry(QRect(rect.left(), rect.top(), self._gutter_width(),
+                                        rect.height()))
+
+    def _on_update_request(self, rect, dy):
+        gutter = self._widget.gutter
+        if dy:
+            gutter.scroll(0, dy)
+        else:
+            gutter.update(0, rect.y(), gutter.width(), rect.height())
+
+    def _paint_gutter(self, gutter: QWidget, event) -> None:
+        widget = self._widget
+        painter = QPainter(gutter)
+        base, dark = self._base_color(), self._dark()
+        painter.fillRect(event.rect(), base.lighter(115) if dark else base.darker(104))
+        ink = QColor(widget.palette().color(QPalette.Text))
+        ink.setAlpha(130)
+        numbers = self._values.get("LineNumbers", True)
+        markers = {cursor.blockNumber(): text for cursor, text in self._markers}
+        block = widget.firstVisibleBlock()
+        top = round(widget.blockBoundingGeometry(block).translated(widget.contentOffset()).top())
+        height = widget.fontMetrics().height()
+        width = gutter.width()
+        while block.isValid() and top <= event.rect().bottom():
+            bottom = top + round(widget.blockBoundingRect(block).height())
+            if block.isVisible() and bottom >= event.rect().top():
+                number = block.blockNumber()
+                if numbers:
+                    painter.setPen(ink)
+                    painter.drawText(0, top, width - 16, height, Qt.AlignRight, str(number + 1))
+                marker = markers.get(number)
+                folded = block.next().isValid() and not block.next().isVisible()
+                if marker:
+                    painter.setPen(widget.palette().color(QPalette.Text))
+                    painter.drawText(width - 14, top, 14, height, Qt.AlignCenter, marker)
+                elif folded:  # (hidden lines follow: a + box)
+                    box = QRect(width - 12, top + (height - 9) // 2, 9, 9)
+                    painter.setPen(ink)
+                    painter.drawRect(box)
+                    center = box.center()
+                    painter.drawLine(center.x() - 2, center.y(), center.x() + 2, center.y())
+                    painter.drawLine(center.x(), center.y() - 2, center.x(), center.y() + 2)
+            block = block.next()
+            top = bottom
+        painter.end()
+
+    def _gutter_clicked(self, point: QPoint) -> None:
+        if not self._design_mode:
+            self._fire("GutterClick", self._widget.cursorForPosition(
+                QPoint(0, point.y())).blockNumber())
+
+    @property
+    def LineMarker(self) -> _LineMarkers:
+        """A short text in a line's gutter (●, ▸...): ``LineMarker[5] = "●"``
+        sets line 5's, ``LineMarker(5)`` reads it; "" removes it."""
+        return _LineMarkers(self)
+
+    # -- syntax coloring -------------------------------------------------------------------
+    def _highlight(self, highlighter, line: int, text: str, state: int) -> int:
+        if not self._name and not self._design_mode and not self.__dict__.get("_unnamed"):
+            # (being made in InitializeComponent: named later, then colored again)
+            self.__dict__["_unnamed"] = True
+            QTimer.singleShot(0, self._widget, self._named)
+        if self._handler("Highlight") is None:
+            return 0
+        self.__dict__["_highlighting"] = highlighter
+        try:
+            result = self._fire("Highlight", line, text, state)
+        finally:
+            self.__dict__["_highlighting"] = None
+        return result if isinstance(result, int) and not isinstance(result, bool) and \
+            result > 0 else 0
+
+    def _named(self) -> None:
+        """It has its name now: color the lines again for its Highlight event."""
+        if self.__dict__.pop("_unnamed", False) and self._name:
+            self._highlighter.rehighlight()
+
+    def HighlightText(self, Start: int, Length: int, ForeColor=None, Bold=None, Italic=None,
+                      BackColor=None, Underline=None) -> None:
+        """In the Highlight event: format part of the line (Start is a
+        column, from 0). Only what you give changes (e.g. the color, keeping
+        the language's bold)."""
+        highlighter = self._highlighting
+        if highlighter is None:
+            raise RuntimeError(f"CodeBox '{self.Name}': HighlightText works in the "
+                               "Highlight event (Rehighlight() runs it again)")
+        for column in range(max(0, int(Start)), max(0, int(Start) + int(Length))):
+            fmt = QTextCharFormat(highlighter.format(column))
+            if ForeColor is not None:
+                fmt.setForeground(QBrush(colors.to_qcolor(ForeColor)))
+            if BackColor is not None:
+                fmt.setBackground(QBrush(colors.to_qcolor(BackColor)))
+            if Bold is not None:
+                fmt.setFontWeight(QFont.Bold if Bold else QFont.Normal)
+            if Italic is not None:
+                fmt.setFontItalic(bool(Italic))
+            if Underline is not None:
+                fmt.setFontUnderline(bool(Underline))
+            highlighter.setFormat(column, 1, fmt)
+
+    def Rehighlight(self) -> None:
+        """Color every line again (e.g. when what Highlight colors changed)."""
+        self._highlighter.rehighlight()
+
+    # -- hidden lines -----------------------------------------------------------------------
+    def _set_visible(self, first: int, last: int, visible: bool) -> None:
+        document = self._widget.document()
+        first_block, last_block = self._line_block(first), self._line_block(last)
+        if last < first:
+            raise ValueError(f"CodeBox '{self.Name}': lines {first} to {last}")
+        block = first_block
+        while block.isValid():
+            block.setVisible(visible)
+            if block == last_block:
+                break
+            block = block.next()
+        document.markContentsDirty(first_block.position(), last_block.position() +
+                                   last_block.length() - first_block.position())
+        if not visible and first <= self.CurrentLine <= last:  # (the caret: out of them)
+            self._move_caret(first_block.previous().position() if first > 0 else
+                             last_block.next().position() if last_block.next().isValid()
+                             else 0)
+        self._update_gutter()
+        self._widget.viewport().update()
+
+    def HideLines(self, First: int, Last: int) -> None:
+        """Hide lines First to Last (fold them); the line before shows a + in
+        the gutter."""
+        self._set_visible(int(First), int(Last), False)
+
+    def ShowLines(self, First: int | None = None, Last: int | None = None) -> None:
+        """Show hidden lines again: First to Last, or all."""
+        first = 0 if First is None else int(First)
+        last = self.LineCount - 1 if Last is None else int(Last)
+        self._set_visible(first, last, True)
+
+    def IsLineHidden(self, Line: int) -> bool:
+        return not self._line_block(Line).isVisible()
+
+    # -- protected lines ----------------------------------------------------------------------
+    def ProtectLines(self, First: int, Last: int) -> None:
+        """Protect lines First to Last: the user can't change them (code can,
+        e.g. with SelText). They move with the text when lines are added or
+        removed above them."""
+        first_block, last_block = self._line_block(First), self._line_block(Last)
+        if int(Last) < int(First):
+            raise ValueError(f"CodeBox '{self.Name}': lines {First} to {Last}")
+        start = QTextCursor(first_block)
+        end = QTextCursor(last_block)
+        end.movePosition(QTextCursor.EndOfBlock)
+        end.setKeepPositionOnInsert(True)  # (Enter at its end: a new line outside)
+        self._protected.append((start, end))
+        self._update_extra()
+
+    def UnprotectLines(self) -> None:
+        """Let the user change every line again."""
+        self._protected.clear()
+        self._update_extra()
+
+    def IsLineProtected(self, Line: int) -> bool:
+        self._line_block(Line)
+        return any(start.blockNumber() <= int(Line) <= end.blockNumber()
+                   for start, end in self._protected)
+
+    def _may_edit(self, key: int | None = None) -> bool:
+        """Whether the user's edit at the selection leaves protected lines alone."""
+        cursor = self._widget.textCursor()
+        a, b = cursor.selectionStart(), cursor.selectionEnd()
+        for start_cursor, end_cursor in self._protected:
+            start, end = start_cursor.position(), end_cursor.position()
+            if a == b:
+                if key in (Qt.Key_Return, Qt.Key_Enter) and a in (start, end):
+                    continue  # (a new line before or after them)
+                low = a - 1 if key == Qt.Key_Backspace else a
+                high = b + 1 if key == Qt.Key_Delete else b
+            else:
+                low, high = a, b
+            if not (high < start or low > end):
+                return False
+        return True
+
+    def _reject_edit(self) -> None:
+        line = self.CurrentLine
+        if self._handler("ProtectedEdit") is None:
+            QApplication.beep()
+        else:
+            self._fire("ProtectedEdit", line)
+
+    # -- keys -------------------------------------------------------------------------------
+    def _indent_unit(self) -> str:
+        return "\t" if self._values.get("UseTabs") else " " * max(1, self._values.get("TabWidth",
+                                                                                      4))
+
+    def _key_press(self, event) -> bool:
+        """Protection, auto-indent and Tab indenting; True if it was handled."""
+        if self._values.get("Locked"):
+            return False
+        key, modifiers = event.key(), event.modifiers()
+        cut_or_paste = event.matches(QKeySequence.Cut) or event.matches(QKeySequence.Paste)
+        modifies = bool(event.text()) or cut_or_paste or key in (
+            Qt.Key_Backspace, Qt.Key_Delete, Qt.Key_Backtab)
+        shortcut = bool(modifiers & (Qt.ControlModifier | Qt.MetaModifier)) and not cut_or_paste
+        if modifies and not shortcut and not self._may_edit(key):
+            self._reject_edit()
+            return True
+        if key in (Qt.Key_Return, Qt.Key_Enter) and not modifiers & Qt.ShiftModifier and \
+                self._values.get("AutoIndent", True):
+            self._new_line()
+            return True
+        if key == Qt.Key_Tab and not modifiers & ~Qt.KeypadModifier:
+            self._indent(True)
+            return True
+        if key == Qt.Key_Backtab:
+            self._indent(False)
+            return True
+        return False
+
+    def _new_line(self) -> None:
+        cursor = self._widget.textCursor()
+        before = cursor.block().text()[:cursor.positionInBlock()]
+        indent = before[:len(before) - len(before.lstrip())]
+        stripped = before.strip()
+        if self._values.get("Language") == 1:
+            unit = self._indent_unit()
+            if stripped.endswith(":"):
+                indent += unit
+            elif stripped.split(" ")[0] in ("return", "pass", "break", "continue", "raise") \
+                    and indent.endswith(unit):
+                indent = indent[:-len(unit)]
+        cursor.insertText("\n" + indent)
+        self._widget.ensureCursorVisible()
+
+    def _indent(self, forward: bool) -> None:
+        widget = self._widget
+        cursor = widget.textCursor()
+        unit = self._indent_unit()
+        document = widget.document()
+        first = document.findBlock(cursor.selectionStart())
+        last = document.findBlock(cursor.selectionEnd())
+        if forward and first == last:  # no lines selected: to the next tab stop
+            if unit == "\t":
+                cursor.insertText("\t")
+            else:
+                column = cursor.positionInBlock()
+                cursor.insertText(" " * (len(unit) - column % len(unit)))
+            return
+        if cursor.hasSelection() and last != first and \
+                cursor.selectionEnd() == last.position():
+            last = last.previous()  # (a selection ending at a line's start leaves it)
+        cursor.beginEditBlock()
+        block = first
+        while block.isValid():
+            edit = QTextCursor(block)
+            if forward:
+                edit.insertText(unit)
+            else:
+                text = block.text()
+                spaces = len(text) - len(text.lstrip(" "))
+                width = max(1, self._values.get("TabWidth", 4))
+                remove = 1 if text.startswith("\t") else min(spaces, width)
+                edit.movePosition(QTextCursor.NextCharacter, QTextCursor.KeepAnchor, remove)
+                edit.removeSelectedText()
+            if block == last:
+                break
+            block = block.next()
+        cursor.endEditBlock()
 
 
 # --- CommandButton ------------------------------------------------------------------
@@ -6224,7 +6873,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, DriveListBox, DirListBox,
         FileListBox, Line, Image, TreeView, Splitter,
         ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView,
-        RichTextBox, Menu,
+        RichTextBox, CodeBox, Menu,
     )
 }
 

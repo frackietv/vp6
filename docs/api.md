@@ -156,6 +156,10 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `ItemClick` | Item |
 | `ColumnClick` | ColumnHeader |
 | `ItemCheck` | Item |
+| `SelChange` | none |
+| `Highlight` | Line, Text, State |
+| `GutterClick` | Line |
+| `ProtectedEdit` | Line |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -666,6 +670,88 @@ Default size 201 × 121. Property groups: Position, Colors, Font, Common.
 | `Text` | str (multi-line) | `''` | The contents, as plain text |
 
 Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+<!-- END GENERATED -->
+
+### CodeBox
+
+A code editor (VP6's own; VB had none): line numbers, the current line
+shaded, syntax coloring, markers in the gutter, hidden (folded) lines and
+protected lines the user can't change. It has the TextBox's
+[editing API](#editing-text-textbox-and-richtextbox) and `SelStart`,
+`SelLength`, `SelText`; lines count from 0.
+
+```python
+self.codMain = CodeBox(self, Language=1)          # Python colors
+
+def codMain_Highlight(self, Line, Text, State):    # your own coloring, line by line
+    for match in re.finditer(r"\bTODO\b", Text):
+        self.codMain.HighlightText(match.start(), 4, BackColor=vpYellow, Bold=True)
+    return State                                    # the State for the next line
+
+def codMain_GutterClick(self, Line):               # a breakpoint
+    self.codMain.LineMarker[Line] = "" if self.codMain.LineMarker(Line) else "●"
+
+self.codMain.ProtectLines(6, 10)                  # the user can't change lines 6-10
+self.codMain.HideLines(7, 10)                     # fold them: line 6 gets a + in the gutter
+```
+
+* **Coloring.** `Language` colors Python (keywords, strings, also
+  triple-quoted over several lines, comments, numbers, decorators, the names
+  `def` and `class` define), in colors for a light or a dark background.
+  The **Highlight** event then gets each line (`Line`, its `Text`, and the
+  `State` the line before returned, 0 for the first) and colors parts of it
+  with `HighlightText(Start, Length, ForeColor, Bold, Italic, BackColor,
+  Underline)`, giving only what changes. Return a `State` for the next line
+  (e.g. "inside a comment"; 0 when nothing continues): a line is colored
+  again when its own text changes, and the following lines when its returned
+  State changes. `Rehighlight()` colors every line again. Highlight can come
+  before Form_Load.
+* **The gutter.** `LineNumbers` shows them; `LineMarker[Line] = "●"` puts
+  a short text in a line's gutter (`LineMarker(Line)` reads it, `""` removes
+  it), and it moves with its line. `GutterClick(Line)` fires when the gutter
+  is clicked.
+* **The current line** is shaded while `HighlightCurrentLine` (its color
+  `CurrentLineColor`; unset, a translucent shade that keeps Highlight's
+  backgrounds visible).
+* **Hidden lines.** `HideLines(First, Last)` folds lines away (the line
+  before them shows a + in the gutter unless it has a marker),
+  `ShowLines(First, Last)` (or `ShowLines()` for all) brings them back,
+  `IsLineHidden(Line)` tells.
+* **Protected lines.** `ProtectLines(First, Last)` stops the user from
+  changing them: typing, Backspace or Delete reaching them, pasting, cutting,
+  dropping (code still can, e.g. with `SelText`). Enter at their start or end
+  adds a line outside them. They move with the text and are tinted
+  (`ProtectedColor`). `ProtectedEdit(Line)` fires when the user tries
+  (without a handler, a beep); `IsLineProtected(Line)` and
+  `UnprotectLines()`.
+* **Indenting.** With `AutoIndent`, Enter keeps the line's indentation
+  (Python: one level more after a colon, one less after `return`, `pass`...).
+  Tab goes to the next tab stop, or indents the selected lines; Shift+Tab
+  unindents them (`AcceptsTab`, on by default). `TabWidth` columns per
+  level, `UseTabs` for tab characters.
+* `WordWrap` wraps long lines; `Locked` makes it read-only. Without a
+  `FontName` it uses the system's fixed-width font.
+* Setting `Text` starts over: no protected, hidden or marked lines.
+
+<!-- BEGIN GENERATED: control CodeBox -->
+Default size 321 × 201. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `AcceptsTab` | bool | `True` | Tab and Shift+Tab indent instead of moving to another control |
+| `AutoIndent` | bool | `True` | Enter keeps the line's indentation (Python: one more after a colon) |
+| `CurrentLineColor` | color | (default) | The current line's shade; unset = a shade of the background |
+| `HighlightCurrentLine` | bool | `True` | Shade the caret's line |
+| `Language` | enum | 0 - None | 0 - None, 1 - Python. Built-in syntax coloring; add your own in the Highlight event |
+| `LineNumbers` | bool | `True` | Line numbers in the gutter |
+| `Locked` | bool | `False` | Read-only: the code can't be edited |
+| `ProtectedColor` | color | (default) | The background of protected lines; unset = a tint of the background |
+| `TabWidth` | int | `4` | Columns per indentation level (and tab stop) |
+| `Text` | str (multi-line) | `''` | The code |
+| `UseTabs` | bool | `False` | Indent with tab characters instead of spaces |
+| `WordWrap` | bool | `False` | Wrap long lines instead of scrolling |
+
+Events: `Change`, `SelChange`, `Highlight(Line, Text, State)`, `GutterClick(Line)`, `ProtectedEdit(Line)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### Frame
@@ -1731,7 +1817,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
 `HScrollBar`, `VScrollBar`, `PictureBox`,
 [`DriveListBox`, `DirListBox` and `FileListBox`](#drivelistbox-dirlistbox-and-filelistbox), [`Line`](#line), [`Image`](#image),
-[`RichTextBox`](#richtextbox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
+[`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`Toolbar`](#toolbar) (and its `Button`),
 [`ListView`](#listview) (and its `ListItem` and `ColumnHeader`),
@@ -1991,6 +2077,8 @@ It goes in the project's `dist` folder:
 * **RichTextBox** formatted text is HTML instead of RTF (`TextHTML`,
   `SelHTML`, `vpRtfHTML` files), and `GetLineFromChar` counts paragraphs, not
   wrapped lines.
+* **CodeBox** is VP6's own (VB had no code editor control); its events
+  `Highlight`, `GutterClick` and `ProtectedEdit` are VP6's too.
 * **TextBox and RichTextBox** have an editing API VB didn't (`CurrentLine`,
   `CaretLeft`, `FirstVisibleLine`, `Undo`, `AcceptsTab`...: in VB these took
   `SendMessage` calls), and a TextBox has `SelChange`. It adds `AppendText`; it has no `SelBullet`, `SelIndent`,

@@ -157,6 +157,17 @@ def _richtextbox(p):
     p.drawLine(QPointF(6, 17.5), QPointF(15, 17.5))
 
 
+def _codebox(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(3, 3, 18, 18))
+    p.fillRect(QRectF(3.5, 3.5, 5, 17), C.face)  # the gutter
+    for y in (7, 11, 15, 19):  # its line numbers
+        p.drawLine(QPointF(5, y - 1), QPointF(7, y - 1))
+    for x, y, w, color in ((10, 6, 6, C.blue), (12, 10, 7, QColor("#d03030")),
+                           (12, 14, 5, QColor("#2e9e40")), (10, 18, 4, C.ink)):
+        p.fillRect(QRectF(x, y, w, 1.6), color)  # colored code
+
+
 def _hscroll(p):
     p.setBrush(C.face)
     p.drawRect(QRectF(2, 8, 20, 8))
@@ -447,6 +458,7 @@ _DRAWERS = {
     "ProgressBar": _progressbar, "Slider": _slider, "UpDown": _updown, "StatusBar": _statusbar,
     "TabStrip": _tabstrip, "ImageList": _imagelist, "Toolbar": _toolbar,
     "ListView": _listview, "RichTextBox": _richtextbox,
+    "CodeBox": _codebox,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

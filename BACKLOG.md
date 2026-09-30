@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** A code-editor capable text control: syntax-highlighting hook, line-number gutter, current-line highlight, hidden (folded) lines and read-only ranges (self-hosting: the code window and its protected designer region)
 - **[Controls]** Grid control with editable cells and per-cell editors (like MSFlexGrid) (self-hosting: the Properties window and the Options color table)
 - **[Controls]** Dockable tool windows (docking, floating, closing and restoring panels) (self-hosting: Toolbox, Project Explorer, Properties and Immediate panels)
 - **[Controls]** Shape

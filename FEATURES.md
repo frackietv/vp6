@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.4.9
+**Date:** 2026-10-01
+
+## Controls
+
+- CodeBox, a code editor control:
+  - Syntax coloring: `Language` (Python, in light or dark colors) and a `Highlight(Line, Text, State)` event coloring parts of each line with `HighlightText`, its returned State carried to the next line; `Rehighlight()`
+  - A gutter with line numbers (`LineNumbers`), markers (`LineMarker[Line] = "●"`, moving with their lines) and `GutterClick(Line)`
+  - The current line shaded (`HighlightCurrentLine`, `CurrentLineColor`)
+  - Hidden (folded) lines: `HideLines`, `ShowLines`, `IsLineHidden`, a + in the gutter
+  - Protected lines the user can't change but code can: `ProtectLines`, `UnprotectLines`, `IsLineProtected`, `ProtectedColor`, the `ProtectedEdit(Line)` event
+  - Auto-indent (`AutoIndent`), Tab and Shift+Tab indenting (`TabWidth`, `UseTabs`, `AcceptsTab`), `WordWrap`, `Locked`, a fixed-width font, and the TextBox editing API
+- A Kitchen Sink page, "CodeBox": Python code with TODO and FIXME marked, breakpoints and a foldable, protected region in the gutter
+
+---
+
 **Version:** 0.4.8
 **Date:** 2026-10-01
 

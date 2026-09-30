@@ -13,7 +13,7 @@ import sys
 
 import pytest
 from PySide6.QtCore import QPoint, Qt, QTimer
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtTest import QTest
 
 import vp6
@@ -341,6 +341,41 @@ def test_editing_page(sink):
     code.SelStart = code.GetCharFromLine(2) + 6  # the word under the mouse
     page.txtCode_MouseMove(0, 0, code.CaretLeft + 2, code.CaretTop + code.CaretHeight // 2)
     assert page.lblMouse.Caption == "Under the mouse: message"
+
+
+def test_code_page(sink):
+    page = _page(sink, "code")
+    code = page.codSample
+    assert page.region == (6, 10) and code.IsLineProtected(6) and code.IsLineProtected(10)
+    assert code.LineMarker(6) == "-" and code.Language == 1
+    todo_line = next(n for n in range(code.LineCount) if "TODO" in code.GetLine(n))
+    block = code._widget.document().findBlockByNumber(todo_line)
+    backgrounds = [QColor(r.format.background().color()).name() for r in block.layout().formats()]
+    assert "#ffdc50" in backgrounds  # TODO marked by the Highlight event
+    page.codSample_GutterClick(13)  # a breakpoint, and off again
+    assert code.LineMarker(13) == "\u25cf" and "Breakpoint on line 14" in page.lblEvent.Caption
+    page.codSample_GutterClick(13)
+    assert code.LineMarker(13) == ""
+    page.codSample_GutterClick(6)  # the region's line: fold it
+    assert code.IsLineHidden(7) and code.IsLineHidden(10) and code.LineMarker(6) == "+"
+    assert page.cmdFold.Caption == "Un&fold region" and "hidden" in page.lblEvent.Caption
+    page.cmdFold_Click()
+    assert not code.IsLineHidden(7) and code.LineMarker(6) == "-"
+    code.SetFocus()  # typing in the region: refused
+    code.CurrentLine, code.CurrentColumn = 8, 0
+    QTest.keyClicks(code._widget, "x")
+    assert not code.GetLine(8).startswith("x") and "Line 9 is protected" in page.lblEvent.Caption
+    code.CurrentLine, code.CurrentColumn = 0, 0  # a line above: the region moves down
+    QTest.keyClick(code._widget, Qt.Key_Return)
+    assert page.region == (7, 11) and code.IsLineProtected(7)
+    page.codSample_GutterClick(7)
+    assert code.IsLineHidden(8)
+    page.chkNumbers.Value = vp6.vpUnchecked
+    page.chkCurrent.Value = vp6.vpUnchecked
+    page.chkWrap.Value = vp6.vpChecked
+    page.chkPython.Value = vp6.vpUnchecked
+    assert not code.LineNumbers and not code.HighlightCurrentLine and code.WordWrap
+    assert code.Language == 0
 
 
 def test_buttons_page(sink):

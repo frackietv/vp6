@@ -10,22 +10,23 @@ from .colors import (RGB, QBColor, vpBlack, vpBlue, vpCyan, vpGreen, vpMagenta, 
                      vpWhite, vpYellow)
 from .constants import *  # noqa: F403
 from .constants import __all__ as _constants_all
-from .controls import (Button, CheckBox, ColumnHeader, ComboBox, CommandButton, Control,
-                       ControlArray, DirListBox, DriveListBox, FileListBox, Frame, HScrollBar, Image, ImageList, Label, Line, ListBox,
-                       ListImage, ListItem, ListView, Menu, Node, OptionButton,
-                       Panel, PictureBox, ProgressBar, RichTextBox, Slider, Splitter,
-                       StatusBar, Tab,
-                       TabStrip, TextBox, Timer, Toolbar, TreeView, UpDown, VScrollBar)
+from .controls import (Button, CheckBox, CodeBox, ColumnHeader, ComboBox, CommandButton, Control,
+                       ControlArray, DirListBox, DriveListBox, FileListBox, Frame, HScrollBar,
+                       Image, ImageList, Label, Line, ListBox, ListImage, ListItem, ListView, Menu,
+                       Node, OptionButton, Panel, PictureBox, ProgressBar, RichTextBox, Slider,
+                       Splitter, StatusBar, Tab, TabStrip, TextBox, Timer, Toolbar, TreeView,
+                       UpDown, VScrollBar)
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
 
-__version__ = "0.4.8"
+__version__ = "0.4.9"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen",
     "RGB", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",
-    "Button", "CheckBox", "ColumnHeader", "ComboBox", "CommandButton", "Control", "ControlArray", "DirListBox", "DriveListBox",
+    "Button", "CheckBox", "CodeBox", "ColumnHeader", "ComboBox", "CommandButton", "Control",
+    "ControlArray", "DirListBox", "DriveListBox",
     "FileListBox", "Frame", "HScrollBar",
     "Image", "ImageList", "Label", "Line", "ListBox", "ListImage", "ListItem", "ListView",
     "Menu", "Node",
