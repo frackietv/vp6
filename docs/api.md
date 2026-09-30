@@ -160,6 +160,13 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `Highlight` | Line, Text, State |
 | `GutterClick` | Line |
 | `ProtectedEdit` | Line |
+| `EnterCell` | none |
+| `LeaveCell` | none |
+| `RowColChange` | none |
+| `BeforeEdit` | Row, Col |
+| `ValidateEdit` | Row, Col, Text |
+| `AfterEdit` | Row, Col |
+| `CellButtonClick` | Row, Col |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -1569,6 +1576,86 @@ Default size 257 × 177. Property groups: Position, Colors, Font, Common.
 Events: `ItemClick(Item)`, `ColumnClick(ColumnHeader)`, `ItemCheck(Item)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `ItemClick`.
 <!-- END GENERATED -->
 
+### FlexGrid
+
+A grid of text cells (VB's MSFlexGrid), which the user can also edit, each
+column or cell with its own kind of editor. Rows and columns count from 0
+and include the fixed ones: with `FixedRows = 1` row 0 is the column
+headings, with `FixedCols = 1` column 0 the row headings; they stay put while
+the rest scrolls.
+
+```python
+self.grdFruit = FlexGrid(self, Rows=1, Cols=3, FormatString="|<Fruit|>Price")
+self.grdFruit.AddItem("1\tApple\t1.20")                # cells separated by tabs
+self.grdFruit.TextMatrix[1, 2] = "1.25"                 # VB's TextMatrix(1, 2) = "1.25"
+self.grdFruit.Col = 2
+self.grdFruit.Sort = vpGridSortNumericAscending         # by the current column
+
+self.grdProps.Editable = True                           # an editable property sheet
+self.grdProps.ColEditor[1] = vpGridEditText             # the Value column: text...
+self.grdProps.Row, self.grdProps.Col = 2, 1
+self.grdProps.CellEditor = vpGridEditCheck              # ...but this cell: a check box
+
+def grdProps_ValidateEdit(self, Row, Col, Text):
+    return not Text                                     # True cancels: empty refused
+```
+
+* **Cells.** `TextMatrix(r, c)` (or `[r, c]`) reads a cell's text,
+  `TextMatrix[r, c] = "x"` sets it; `Rows` and `Cols` resize the grid.
+  `FormatString` sets the headings and alignments of row 0: `|`-separated,
+  each optionally starting with `<` (left), `^` (center) or `>` (right).
+* **The current cell.** `Row` and `Col` (never a fixed cell), `Text` its
+  text; `RowSel` and `ColSel` the other corner of the selection.
+  `SelectionMode`: `vpGridSelectionFree`, `vpGridSelectionByRow`,
+  `vpGridSelectionByColumn`. `LeaveCell`, `RowColChange` and `EnterCell` fire
+  when it moves, `SelChange` when the selection changes.
+* **The current cell's format:** `CellBackColor`, `CellForeColor`,
+  `CellFontBold`, `CellFontItalic`, `CellAlignment`.
+* **Columns and rows:** `ColWidth(c)`, `RowHeight(r)` (pixels),
+  `ColAlignment(c)` (`vpLeftJustify`, `vpRightJustify`, `vpCenter`) and
+  `RowData(r)` (any value kept with a row), each read with `(i)` and set with
+  `[i] = value`.
+* **Rows:** `AddItem(Item, Index=None)` (the cells' texts separated by tabs),
+  `RemoveItem(Index)`, `Clear()` (empties every cell, keeping the size).
+  `Sort = ...` sorts the rows by the current column: `vpGridSortGeneric...`
+  (numbers as numbers, other text ignoring case), `vpGridSortNumeric...`,
+  `vpGridSortStringNoCase...`, `vpGridSortString...` (each `Ascending` or
+  `Descending`); the row headings and RowData move with their rows.
+* **Scrolling and the mouse:** `TopRow`, `LeftCol` (setting them scrolls),
+  the `Scroll` event, `MouseRow` and `MouseCol` (the cell under the mouse, 0
+  for the headings, -1 for none: e.g. in Click, a heading clicked to sort).
+* **Editing** (`Editable`): double-click, F2 or typing edits the current
+  cell, with its editor: its own (`CellEditor`, `CellList`) or its column's
+  (`ColEditor[c]`, `ColList[c]`), one of `vpGridEditText` (the default),
+  `vpGridEditList` (choices from the list), `vpGridEditCheck` (a check box:
+  the text is `"True"` or `"False"`, toggled by a click or Space),
+  `vpGridEditColor` (a color dialog: the text is `"#rrggbb"`, shown with a
+  swatch), `vpGridEditButton` (a `...` button firing `CellButtonClick(Row,
+  Col)`, e.g. to open your own dialog) or `vpGridEditNone` (read-only).
+  `EditCell()` starts editing the current cell from code.
+* **Edit events:** `BeforeEdit(Row, Col)` (return True to cancel the edit),
+  `ValidateEdit(Row, Col, Text)` (return True to refuse the new text),
+  `AfterEdit(Row, Col)` once it is in.
+* `AllowUserResizing` (columns, rows, both) and `GridLines`.
+
+<!-- BEGIN GENERATED: control FlexGrid -->
+Default size 321 × 161. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `AllowUserResizing` | enum | 1 - Columns | 0 - None, 1 - Columns, 2 - Rows, 3 - Both. What the user can resize by dragging the headings' edges |
+| `Cols` | int | `2` | How many columns, the fixed one included |
+| `Editable` | bool | `False` | The user can edit the cells, each with its column's or its own editor |
+| `FixedCols` | enum | 1 - 1 | 0 - 0, 1 - 1. 1: the first column is the row headings, staying put while scrolling |
+| `FixedRows` | enum | 1 - 1 | 0 - 0, 1 - 1. 1: the first row is the column headings, staying put while scrolling |
+| `FormatString` | str | `''` | Column headings and alignments: <Name|^Qty|>Price (< left, ^ center, > right) |
+| `GridLines` | bool | `True` | Lines between the cells |
+| `Rows` | int | `2` | How many rows, the fixed one included |
+| `SelectionMode` | enum | 0 - Free | 0 - Free, 1 - By Row, 2 - By Column. What a click selects: cells, whole rows or whole columns |
+
+Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
 ### StatusBar
 
 A bar of panels along the bottom of a form, showing texts, the time, the date
@@ -1820,7 +1907,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 [`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`Toolbar`](#toolbar) (and its `Button`),
-[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`),
+[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid),
 [`StatusBar`](#statusbar) (and its
 `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
 [`Menu`](#menu), and
@@ -1919,6 +2006,9 @@ All constants are plain ints or strings.
 | ListView.SortOrder | `vpLvwAscending`, `vpLvwDescending` | 0, 1 |
 | RichTextBox: LoadFile / SaveFile file types | `vpRtfHTML`, `vpRtfText` | 0, 1 |
 | RichTextBox.Find options (added together) | `vpRtfWholeWord`, `vpRtfMatchCase`, `vpRtfNoHighlight` | 2, 4, 8 |
+| FlexGrid: ColEditor / CellEditor | `vpGridEditNone`, `vpGridEditText`, `vpGridEditList`, `vpGridEditCheck`, `vpGridEditColor`, `vpGridEditButton` | 0, 1, 2, 3, 4, 5 |
+| FlexGrid.Sort | `vpGridSortGenericAscending`, `vpGridSortGenericDescending`, `vpGridSortNumericAscending`, `vpGridSortNumericDescending`, `vpGridSortStringNoCaseAscending`, `vpGridSortStringNoCaseDescending`, `vpGridSortStringAscending`, `vpGridSortStringDescending` | 1, 2, 3, 4, 5, 6, 7, 8 |
+| FlexGrid.SelectionMode | `vpGridSelectionFree`, `vpGridSelectionByRow`, `vpGridSelectionByColumn` | 0, 1, 2 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -2077,6 +2167,12 @@ It goes in the project's `dist` folder:
 * **RichTextBox** formatted text is HTML instead of RTF (`TextHTML`,
   `SelHTML`, `vpRtfHTML` files), and `GetLineFromChar` counts paragraphs, not
   wrapped lines.
+* **FlexGrid** is MSFlexGrid with editing added (`Editable`, the editors
+  and the edit events). It has at most one fixed row and one fixed column,
+  measures in pixels, and has no `MergeCells`, `FillStyle`, `CellPicture`,
+  `WordWrap` or custom sort (`Compare`); `TextMatrix(r, c) = "x"` is written
+  `TextMatrix[r, c] = "x"`, and `Sort` is set with the `vpGridSort...`
+  constants.
 * **CodeBox** is VP6's own (VB had no code editor control); its events
   `Highlight`, `GutterClick` and `ProtectedEdit` are VP6's too.
 * **TextBox and RichTextBox** have an editing API VB didn't (`CurrentLine`,

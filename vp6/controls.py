@@ -22,7 +22,9 @@ from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServic
                            QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
                            QTextDocumentFragment, QTextFormat)
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox, QFrame, QGroupBox,
+    QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QFrame,
+    QGroupBox, QHeaderView, QStyledItemDelegate, QStyleOptionViewItem,
+    QTableWidget, QTableWidgetItem, QTableWidgetSelectionRange,
     QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
     QPushButton, QRadioButton, QScrollArea, QScrollBar, QSlider, QStackedLayout, QStyle,
     QStyleOptionTabWidgetFrame, QTabWidget, QTextEdit, QToolBar, QToolButton, QTreeView,
@@ -48,6 +50,8 @@ EVENT_ARGS = {
     "ItemClick": "Item", "ColumnClick": "ColumnHeader", "ItemCheck": "Item",
     "SelChange": "", "Highlight": "Line, Text, State", "GutterClick": "Line",
     "ProtectedEdit": "Line",
+    "EnterCell": "", "LeaveCell": "", "RowColChange": "", "BeforeEdit": "Row, Col",
+    "ValidateEdit": "Row, Col, Text", "AfterEdit": "Row, Col", "CellButtonClick": "Row, Col",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -6241,6 +6245,881 @@ class Line(Control):
         return {"X1": self.X1 + dx, "Y1": self.Y1 + dy, "X2": self.X2 + dx, "Y2": self.Y2 + dy}
 
 
+# --- FlexGrid ------------------------------------------------------------------------
+
+_GRID_EDITOR_ROLE = Qt.UserRole + 10  # a cell's own editor (else its column's)
+_GRID_LIST_ROLE = Qt.UserRole + 11  # a cell's own list of choices
+_GRID_ROW_DATA_ROLE = Qt.UserRole + 12  # RowData, kept in the row's header item
+_EDIT_NONE, _EDIT_TEXT, _EDIT_LIST, _EDIT_CHECK, _EDIT_COLOR, _EDIT_BUTTON = range(6)
+_TRUE_TEXTS = ("true", "1", "-1", "yes", "checked")
+_BUTTON_WIDTH = 20  # the "..." button of a Button cell
+
+
+class _GridIndexed:
+    """A FlexGrid per-row or per-column property, like VB's ``ColWidth(2)``:
+    ``Grid1.ColWidth(2)`` (or ``[2]``) reads it, ``Grid1.ColWidth[2] = 80``
+    sets it. Rows and columns count from 0, the fixed ones included."""
+
+    def __init__(self, grid, name: str, count, read, write):
+        self._grid, self._name, self._count = grid, name, count
+        self._read, self._write = read, write
+
+    def _check(self, index) -> int:
+        index, count = int(index), self._count()
+        if not 0 <= index < count:
+            raise IndexError(f"FlexGrid '{self._grid.Name}': no {self._name}({index}) "
+                             f"(there are {count})")
+        return index
+
+    def __call__(self, index):
+        return self[index]
+
+    def __getitem__(self, index):
+        return self._read(self._check(index))
+
+    def __setitem__(self, index, value):
+        self._write(self._check(index), value)
+
+    def __len__(self):
+        return self._count()
+
+
+class _TextMatrix:
+    """FlexGrid.TextMatrix: ``TextMatrix(r, c)`` (or ``[r, c]``) is a cell's
+    text, ``TextMatrix[r, c] = "x"`` sets it (VB's ``TextMatrix(r, c) = "x"``)."""
+
+    def __init__(self, grid):
+        self._grid = grid
+
+    def __call__(self, row, col):
+        return self._grid._get_text(*self._grid._check_cell(row, col))
+
+    def __getitem__(self, cell):
+        return self(*cell)
+
+    def __setitem__(self, cell, value):
+        self._grid._set_text(*self._grid._check_cell(*cell), value)
+
+
+class _GridDelegate(QStyledItemDelegate):
+    """The FlexGrid's cells: the editor each one's kind needs, color swatches,
+    "..." buttons, check boxes toggled by the user, and the edit events."""
+
+    def __init__(self, grid: "FlexGrid"):
+        super().__init__(grid._widget)
+        self.grid = grid
+
+    def _cell(self, index) -> tuple[int, int]:
+        return index.row() + self.grid._frows, index.column() + self.grid._fcols
+
+    def _button_rect(self, rect: QRect) -> QRect:
+        return QRect(rect.right() - _BUTTON_WIDTH + 1, rect.top() + 1, _BUTTON_WIDTH - 1,
+                     rect.height() - 2)
+
+    def paint(self, painter, option, index):
+        grid = self.grid
+        kind = grid._editor_of(*self._cell(index))
+        if kind == _EDIT_COLOR:
+            option = QStyleOptionViewItem(option)
+            self.initStyleOption(option, index)
+            color = QColor(index.data())
+            text_rect = QRect(option.rect)
+            if color.isValid():
+                swatch = QRect(option.rect.left() + 4, option.rect.center().y() - 6, 18, 12)
+                text_rect.setLeft(swatch.right() + 4)
+                option.rect = text_rect
+                super().paint(painter, option, index)
+                painter.save()
+                painter.fillRect(swatch, color)
+                painter.setPen(option.palette.color(QPalette.Text))
+                painter.drawRect(swatch)
+                painter.restore()
+                return
+        super().paint(painter, option, index)
+        if kind == _EDIT_BUTTON and grid._values.get("Editable"):
+            rect = self._button_rect(option.rect).adjusted(1, 2, -2, -2)
+            palette = grid._widget.palette()
+            painter.save()
+            painter.setPen(palette.color(QPalette.Mid))
+            painter.setBrush(palette.color(QPalette.Button))
+            painter.drawRoundedRect(rect, 3, 3)
+            painter.setPen(palette.color(QPalette.ButtonText))
+            painter.drawText(rect, Qt.AlignCenter, "...")
+            painter.restore()
+
+    def editorEvent(self, event, model, option, index):
+        grid = self.grid
+        row, col = self._cell(index)
+        kind = grid._editor_of(row, col)
+        if not grid._values.get("Editable") or grid._design_mode:
+            return False
+        etype = event.type()
+        if kind == _EDIT_CHECK:  # a click on the cell or Space toggles it
+            if (etype == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton) or \
+                    (etype == QEvent.KeyPress and event.key() == Qt.Key_Space):
+                checked = grid._get_text(row, col) == "True"
+                if not grid._fire_cancel("BeforeEdit", row, col):
+                    grid._commit(row, col, "False" if checked else "True")
+                return True
+            return etype in (QEvent.MouseButtonPress, QEvent.MouseButtonDblClick)
+        if kind == _EDIT_BUTTON and etype == QEvent.MouseButtonRelease and \
+                self._button_rect(option.rect).contains(event.position().toPoint()):
+            grid._fire("CellButtonClick", row, col)
+            return True
+        return False
+
+    def createEditor(self, parent, option, index):
+        grid = self.grid
+        row, col = self._cell(index)
+        kind = grid._editor_of(row, col)
+        if kind in (_EDIT_NONE, _EDIT_CHECK) or not grid._values.get("Editable"):
+            return None
+        if grid._fire_cancel("BeforeEdit", row, col):
+            return None
+        if kind == _EDIT_BUTTON:  # (F2 or Enter on it: as clicking its button)
+            grid._fire("CellButtonClick", row, col)
+            return None
+        if kind == _EDIT_COLOR:  # a dialog, then no editor
+            QTimer.singleShot(0, grid._widget, lambda: grid._pick_color(row, col))
+            return None
+        if kind == _EDIT_LIST:
+            combo = QComboBox(parent)
+            combo.addItems([str(v) for v in grid._list_of(row, col)])
+            combo.activated.connect(lambda _i, c=combo: (self.commitData.emit(c),
+                                                         self.closeEditor.emit(c)))
+            return combo
+        return super().createEditor(parent, option, index)
+
+    def setEditorData(self, editor, index):
+        if isinstance(editor, QComboBox):
+            editor.setCurrentIndex(max(0, editor.findText(index.data() or "")))
+        else:
+            super().setEditorData(editor, index)
+
+    def setModelData(self, editor, model, index):
+        text = editor.currentText() if isinstance(editor, QComboBox) else editor.text()
+        self.grid._commit(*self._cell(index), text)
+
+
+class _GridTable(QTableWidget):
+    """The FlexGrid's table, remembering the cell under the mouse."""
+
+    def __init__(self, grid: "FlexGrid", parent):
+        super().__init__(parent)
+        self.grid = grid
+        for widget in (self.viewport(), self.horizontalHeader().viewport(),
+                       self.verticalHeader().viewport()):
+            widget.setMouseTracking(True)
+            widget.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if event.type() in (QEvent.MouseMove, QEvent.MouseButtonPress):
+            point = event.position().toPoint()
+            grid = self.grid
+            if watched is self.viewport():
+                row, col = self.rowAt(point.y()), self.columnAt(point.x())
+                cell = (row + grid._frows if row >= 0 else -1,
+                        col + grid._fcols if col >= 0 else -1)
+            elif watched is self.horizontalHeader().viewport():
+                col = self.horizontalHeader().logicalIndexAt(point)
+                cell = (0, col + grid._fcols if col >= 0 else -1)
+            else:
+                row = self.verticalHeader().logicalIndexAt(point)
+                cell = (row + grid._frows if row >= 0 else -1, 0)
+            grid.__dict__["_mouse_cell"] = cell
+        return False
+
+
+def parse_format_string(text: str) -> list[tuple[str, int]]:
+    """A FlexGrid FormatString: column headings separated by |, each
+    optionally starting with < (left), ^ (center) or > (right):
+    ``"<Name|^Qty|>Price"`` -> [("Name", 0), ("Qty", 2), ("Price", 1)]
+    (alignments as vpLeftJustify, vpCenter, vpRightJustify)."""
+    if not text:
+        return []
+    columns = []
+    for piece in text.split("|"):
+        align = {"<": 0, "^": 2, ">": 1}.get(piece[:1])
+        columns.append((piece[1:] if align is not None else piece, align or 0))
+    return columns
+
+
+class FlexGrid(Control):
+    """A grid of text cells like VB's MSFlexGrid: Rows and Cols (the first
+    FixedRows and FixedCols are headings that stay put while scrolling),
+    TextMatrix(row, col), the current cell (Row, Col, Text and the Cell...
+    properties), sorting, and, unlike MSFlexGrid, editing: with Editable,
+    each column (ColEditor) or cell (CellEditor) has an editor: text, a
+    list, a check box, a color or a "..." button."""
+
+    TypeName = "FlexGrid"
+    DefaultEvent = "Click"
+    DefaultSize = (321, 161)
+    Events = ("Click", "DblClick", "EnterCell", "LeaveCell", "RowColChange", "SelChange",
+              "Scroll", "BeforeEdit", "ValidateEdit", "AfterEdit", "CellButtonClick",
+              "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp",
+              "MouseDown", "MouseMove", "MouseUp")
+    _qss_type = "QTableWidget"
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Rows", "int", 2, description="How many rows, the fixed one included"),
+        P("Cols", "int", 2, description="How many columns, the fixed one included"),
+        P("FixedRows", "enum", 1, enum_choices("0", "1"),
+          description="1: the first row is the column headings, staying put while scrolling"),
+        P("FixedCols", "enum", 1, enum_choices("0", "1"),
+          description="1: the first column is the row headings, staying put while scrolling"),
+        P("FormatString", "str", "",
+          description="Column headings and alignments: <Name|^Qty|>Price (< left, ^ center, "
+                      "> right)"),
+        P("Editable", "bool", False,
+          description="The user can edit the cells, each with its column's or its own editor"),
+        P("SelectionMode", "enum", 0, enum_choices("Free", "By Row", "By Column"),
+          description="What a click selects: cells, whole rows or whole columns"),
+        P("AllowUserResizing", "enum", 1, enum_choices("None", "Columns", "Rows", "Both"),
+          description="What the user can resize by dragging the headings' edges"),
+        P("GridLines", "bool", True, description="Lines between the cells"),
+        *_COLORS, *_FONT, *_COMMON,
+    )
+
+    def _create_widget(self, parent):
+        self.__dict__.update(_frows=1, _fcols=1, _corner="", _col_editors={},
+                             _col_lists={}, _col_align={}, _mouse_cell=(-1, -1))
+        table = _GridTable(self, parent)
+        table.setRowCount(1)
+        table.setColumnCount(1)
+        table.setVerticalScrollMode(QAbstractItemView.ScrollPerItem)
+        table.setHorizontalScrollMode(QAbstractItemView.ScrollPerItem)
+        table.setItemDelegate(_GridDelegate(self))
+        table.setSelectionMode(QAbstractItemView.ContiguousSelection)
+        table.verticalHeader().setDefaultSectionSize(table.fontMetrics().height() + 8)
+        self._widget = table
+        self._fill_headers()
+        return table
+
+    def _event_targets(self):
+        return [self._widget, self._widget.viewport()]
+
+    def _connect_signals(self):
+        table = self._widget
+        table.cellClicked.connect(lambda *_: self._fire("Click"))
+        table.horizontalHeader().sectionClicked.connect(lambda *_: self._fire("Click"))
+        table.verticalHeader().sectionClicked.connect(lambda *_: self._fire("Click"))
+        table.currentCellChanged.connect(self._on_current_changed)
+        table.itemSelectionChanged.connect(lambda: self._fire("SelChange"))
+        table.verticalScrollBar().valueChanged.connect(lambda *_: self._fire("Scroll"))
+        table.horizontalScrollBar().valueChanged.connect(lambda *_: self._fire("Scroll"))
+
+    def _on_current_changed(self, row, col, previous_row, previous_col):
+        if previous_row >= 0 and previous_col >= 0:
+            self._fire("LeaveCell")
+        if row >= 0 and col >= 0:
+            self._fire("RowColChange")
+            self._fire("EnterCell")
+
+    # -- structure ------------------------------------------------------------------------
+    def _fill_headers(self) -> None:
+        """Empty heading items where there are none (Qt would show numbers)."""
+        table = self._widget
+        for col in range(table.columnCount()):
+            if table.horizontalHeaderItem(col) is None:
+                table.setHorizontalHeaderItem(col, QTableWidgetItem(""))
+        for row in range(table.rowCount()):
+            if table.verticalHeaderItem(row) is None:
+                table.setVerticalHeaderItem(row, QTableWidgetItem(""))
+        table.horizontalHeader().setVisible(self._frows > 0)
+        table.verticalHeader().setVisible(self._fcols > 0)
+        for col, editor in self._col_editors.items():  # check boxes need their items
+            if editor == _EDIT_CHECK and self._fcols <= col < self.Cols:
+                for row in range(self._frows, self.Rows):
+                    if self._item(row, col, create=False) is None:
+                        self._show_value(row, col, "False")
+        if table.currentRow() < 0 and table.rowCount() and table.columnCount():
+            table.setCurrentCell(0, 0)
+
+    def _read_Rows(self):
+        return self._widget.rowCount() + self._frows
+
+    def _apply_Rows(self, v):
+        self._widget.setRowCount(max(int(v), self._frows) - self._frows)
+        self._fill_headers()
+
+    def _read_Cols(self):
+        return self._widget.columnCount() + self._fcols
+
+    def _apply_Cols(self, v):
+        self._widget.setColumnCount(max(int(v), self._fcols) - self._fcols)
+        self._fill_headers()
+        self._apply_FormatString(self._values.get("FormatString", ""))
+
+    def _apply_FixedRows(self, v):
+        v = int(v)
+        if v == self._frows:
+            return
+        table = self._widget
+        if v == 0:  # the headings become the first row
+            texts = [self._get_text(0, c) for c in range(self.Cols)]
+            self.__dict__["_frows"] = 0
+            table.insertRow(0)
+            for col, text in enumerate(texts):
+                if col >= self._fcols:
+                    table.setHorizontalHeaderItem(col - self._fcols, QTableWidgetItem(""))
+                self._set_text(0, col, text)
+        else:  # the first row becomes the headings
+            if table.rowCount() == 0:
+                table.insertRow(0)
+            texts = [self._get_text(0, c) for c in range(self.Cols)]
+            table.removeRow(0)
+            self.__dict__["_frows"] = 1
+            for col, text in enumerate(texts):
+                self._set_text(0, col, text)
+        self._fill_headers()
+
+    def _apply_FixedCols(self, v):
+        v = int(v)
+        if v == self._fcols:
+            return
+        table = self._widget
+        if v == 0:
+            texts = [self._get_text(r, 0) for r in range(self.Rows)]
+            self.__dict__["_fcols"] = 0
+            table.insertColumn(0)
+            for row, text in enumerate(texts):
+                if row >= self._frows:
+                    item = table.verticalHeaderItem(row - self._frows)
+                    if item is not None:
+                        item.setText("")
+                self._set_text(row, 0, text)
+        else:
+            if table.columnCount() == 0:
+                table.insertColumn(0)
+            texts = [self._get_text(r, 0) for r in range(self.Rows)]
+            table.removeColumn(0)
+            self.__dict__["_fcols"] = 1
+            for row, text in enumerate(texts):
+                self._set_text(row, 0, text)
+        self._fill_headers()
+
+    def _apply_FormatString(self, v):
+        columns = parse_format_string(v)
+        if not columns:
+            return
+        if len(columns) > self.Cols:
+            self._widget.setColumnCount(len(columns) - self._fcols)
+            self._fill_headers()
+        metrics = self._widget.fontMetrics()
+        for col, (text, align) in enumerate(columns):
+            if self._frows:
+                self._set_text(0, col, text)
+            if col >= self._fcols:
+                self._set_col_alignment(col, align)
+                width = metrics.horizontalAdvance(text) + 24
+                if width > self._widget.columnWidth(col - self._fcols):
+                    self._widget.setColumnWidth(col - self._fcols, width)
+
+    def _apply_Editable(self, v):
+        table = self._widget
+        table.setEditTriggers(
+            QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed |
+            QAbstractItemView.AnyKeyPressed if v else QAbstractItemView.NoEditTriggers)
+        table.viewport().update()
+
+    def _apply_SelectionMode(self, v):
+        self._widget.setSelectionBehavior({1: QAbstractItemView.SelectRows,
+                                           2: QAbstractItemView.SelectColumns}.get(
+            int(v), QAbstractItemView.SelectItems))
+
+    def _apply_AllowUserResizing(self, v):
+        v = int(v)
+        table = self._widget
+        table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Interactive if v in (1, 3) else QHeaderView.Fixed)
+        table.verticalHeader().setSectionResizeMode(
+            QHeaderView.Interactive if v in (2, 3) else QHeaderView.Fixed)
+
+    def _apply_GridLines(self, v):
+        self._widget.setShowGrid(bool(v))
+
+    # -- cells ------------------------------------------------------------------------------
+    def _check_cell(self, row, col) -> tuple[int, int]:
+        row, col = int(row), int(col)
+        if not (0 <= row < self.Rows and 0 <= col < self.Cols):
+            raise IndexError(f"FlexGrid '{self.Name}': no cell ({row}, {col}) (Rows is "
+                             f"{self.Rows}, Cols is {self.Cols})")
+        return row, col
+
+    def _item(self, row: int, col: int, create: bool = True):
+        """The item behind a cell (a heading's for a fixed one); None for the
+        corner, or a cell without one when ``create`` is False."""
+        table, fr, fc = self._widget, self._frows, self._fcols
+        if row < fr and col < fc:
+            return None
+        if row < fr:
+            item = table.horizontalHeaderItem(col - fc)
+            if item is None and create:
+                item = QTableWidgetItem("")
+                table.setHorizontalHeaderItem(col - fc, item)
+            return item
+        if col < fc:
+            item = table.verticalHeaderItem(row - fr)
+            if item is None and create:
+                item = QTableWidgetItem("")
+                table.setVerticalHeaderItem(row - fr, item)
+            return item
+        item = table.item(row - fr, col - fc)
+        if item is None and create:
+            item = QTableWidgetItem("")
+            item.setTextAlignment(_QT_ALIGN.get(self._col_align.get(col, 0), Qt.AlignLeft) |
+                                  Qt.AlignVCenter)
+            table.setItem(row - fr, col - fc, item)
+        return item
+
+    def _get_text(self, row: int, col: int) -> str:
+        if row < self._frows and col < self._fcols:
+            return self._corner
+        item = self._item(row, col, create=False)
+        if self._editor_of(row, col) == _EDIT_CHECK:
+            return "True" if item is not None and item.checkState() == Qt.Checked else "False"
+        return item.text() if item is not None else ""
+
+    def _set_text(self, row: int, col: int, value) -> None:
+        text = "" if value is None else str(value)
+        if row < self._frows and col < self._fcols:
+            self.__dict__["_corner"] = text
+            return
+        item = self._item(row, col)
+        if self._editor_of(row, col) == _EDIT_CHECK:
+            item.setCheckState(Qt.Checked if text.strip().lower() in _TRUE_TEXTS else
+                               Qt.Unchecked)
+        else:
+            item.setText(text)
+
+    @property
+    def TextMatrix(self) -> _TextMatrix:
+        """A cell's text: ``TextMatrix(r, c)`` reads, ``TextMatrix[r, c] = "x"``
+        sets (rows and columns from 0, the fixed ones included)."""
+        return _TextMatrix(self)
+
+    def _current(self) -> tuple[int, int]:
+        table = self._widget
+        row, col = table.currentRow(), table.currentColumn()
+        return (row + self._frows if row >= 0 else self._frows,
+                col + self._fcols if col >= 0 else self._fcols)
+
+    @property
+    def Text(self) -> str:
+        """The current cell's text (Row, Col)."""
+        row, col = self._current()
+        return self._get_text(row, col) if row < self.Rows and col < self.Cols else ""
+
+    @Text.setter
+    def Text(self, value):
+        self._set_text(*self._check_cell(*self._current()), value)
+
+    # -- the current cell and the selection ---------------------------------------------------
+    def _move(self, row: int, col: int) -> None:
+        row, col = self._check_cell(row, col)
+        if row < self._frows or col < self._fcols:
+            raise IndexError(f"FlexGrid '{self.Name}': the current cell can't be a fixed one "
+                             f"({row}, {col})")
+        self._widget.setCurrentCell(row - self._frows, col - self._fcols)
+
+    @property
+    def Row(self) -> int:
+        """The current cell's row (from 0, the fixed one included)."""
+        return self._current()[0]
+
+    @Row.setter
+    def Row(self, value):
+        self._move(value, self.Col)
+
+    @property
+    def Col(self) -> int:
+        return self._current()[1]
+
+    @Col.setter
+    def Col(self, value):
+        self._move(self.Row, value)
+
+    def _selection(self):
+        ranges = self._widget.selectedRanges()
+        return ranges[0] if ranges else None
+
+    @property
+    def RowSel(self) -> int:
+        """The selection's other end (the current cell is one corner of it)."""
+        selected = self._selection()
+        if selected is None:
+            return self.Row
+        row = self.Row - self._frows
+        return (selected.bottomRow() if selected.topRow() == row else selected.topRow()) + \
+            self._frows
+
+    @RowSel.setter
+    def RowSel(self, value):
+        self._select(int(value), self.ColSel)
+
+    @property
+    def ColSel(self) -> int:
+        selected = self._selection()
+        if selected is None:
+            return self.Col
+        col = self.Col - self._fcols
+        return (selected.rightColumn() if selected.leftColumn() == col else
+                selected.leftColumn()) + self._fcols
+
+    @ColSel.setter
+    def ColSel(self, value):
+        self._select(self.RowSel, int(value))
+
+    def _select(self, row_sel: int, col_sel: int) -> None:
+        row_sel, col_sel = self._check_cell(row_sel, col_sel)
+        row, col = self.Row - self._frows, self.Col - self._fcols
+        table = self._widget
+        table.clearSelection()
+        table.setRangeSelected(QTableWidgetSelectionRange(
+            min(row, row_sel - self._frows), min(col, col_sel - self._fcols),
+            max(row, row_sel - self._frows), max(col, col_sel - self._fcols)), True)
+
+    # -- the current cell's format ---------------------------------------------------------
+    def _current_item(self):
+        return self._item(*self._check_cell(*self._current()))
+
+    @property
+    def CellBackColor(self):
+        """The current cell's background (vpYellow, RGB(...)); None = the grid's."""
+        brush = self._current_item().background()
+        return colors.from_qcolor(brush.color()) if brush.style() != Qt.NoBrush else None
+
+    @CellBackColor.setter
+    def CellBackColor(self, value):
+        self._current_item().setBackground(QBrush() if value is None else
+                                           QBrush(colors.to_qcolor(value)))
+
+    @property
+    def CellForeColor(self):
+        brush = self._current_item().foreground()
+        return colors.from_qcolor(brush.color()) if brush.style() != Qt.NoBrush else None
+
+    @CellForeColor.setter
+    def CellForeColor(self, value):
+        self._current_item().setForeground(QBrush() if value is None else
+                                           QBrush(colors.to_qcolor(value)))
+
+    @property
+    def CellFontBold(self) -> bool:
+        return self._current_item().font().bold()
+
+    @CellFontBold.setter
+    def CellFontBold(self, value):
+        item = self._current_item()
+        font = item.font()
+        font.setBold(bool(value))
+        item.setFont(font)
+
+    @property
+    def CellFontItalic(self) -> bool:
+        return self._current_item().font().italic()
+
+    @CellFontItalic.setter
+    def CellFontItalic(self, value):
+        item = self._current_item()
+        font = item.font()
+        font.setItalic(bool(value))
+        item.setFont(font)
+
+    @property
+    def CellAlignment(self) -> int:
+        """The current cell's alignment: vpLeftJustify, vpRightJustify, vpCenter."""
+        align = self._current_item().textAlignment()
+        return 1 if align & Qt.AlignRight else 2 if align & Qt.AlignHCenter else 0
+
+    @CellAlignment.setter
+    def CellAlignment(self, value):
+        self._current_item().setTextAlignment(_QT_ALIGN.get(int(value), Qt.AlignLeft) |
+                                              Qt.AlignVCenter)
+
+    # -- editors ------------------------------------------------------------------------------
+    def _editor_of(self, row: int, col: int) -> int:
+        """A cell's editor: its own, else its column's (text by default); none
+        for a fixed cell."""
+        if row < self._frows or col < self._fcols:
+            return _EDIT_NONE
+        item = self._item(row, col, create=False)
+        own = item.data(_GRID_EDITOR_ROLE) if item is not None else None
+        return int(own) if own is not None else self._col_editors.get(col, _EDIT_TEXT)
+
+    def _list_of(self, row: int, col: int) -> list:
+        item = self._item(row, col, create=False)
+        own = item.data(_GRID_LIST_ROLE) if item is not None else None
+        return list(own) if own is not None else list(self._col_lists.get(col, []))
+
+    def _change_editor(self, row: int, col: int, change) -> None:
+        """Change a cell's editor, keeping its value (a check box's is its state)."""
+        text = self._get_text(row, col)
+        change()
+        self._show_value(row, col, text)
+
+    def _show_value(self, row: int, col: int, text: str) -> None:
+        """Show a cell's value as its editor needs: a check box's as its state."""
+        item = self._item(row, col)
+        if self._editor_of(row, col) == _EDIT_CHECK:
+            item.setText("")
+            item.setCheckState(Qt.Checked if text.lower() in _TRUE_TEXTS else Qt.Unchecked)
+        else:
+            item.setData(Qt.CheckStateRole, None)
+            item.setText(text)
+
+    @property
+    def CellEditor(self) -> int:
+        """The current cell's editor: vpGridEditText, vpGridEditList (CellList),
+        vpGridEditCheck, vpGridEditColor, vpGridEditButton (CellButtonClick) or
+        vpGridEditNone (read-only); setting it gives the cell its own."""
+        return self._editor_of(*self._current())
+
+    @CellEditor.setter
+    def CellEditor(self, value):
+        row, col = self._check_cell(*self._current())
+        self._change_editor(row, col, lambda: self._item(row, col).setData(
+            _GRID_EDITOR_ROLE, None if value is None else int(value)))
+
+    @property
+    def CellList(self) -> list:
+        """The current cell's choices for vpGridEditList (else its column's)."""
+        return self._list_of(*self._current())
+
+    @CellList.setter
+    def CellList(self, value):
+        self._current_item().setData(_GRID_LIST_ROLE, [str(v) for v in value])
+
+    @property
+    def ColEditor(self) -> _GridIndexed:
+        """Each column's editor (vpGridEdit...), for its cells without their own."""
+        def write(col, value):
+            # (the cells without their own editor change with it, keeping their values)
+            rows = [row for row in range(self._frows, self.Rows)
+                    if (item := self._item(row, col, create=False)) is None or
+                    item.data(_GRID_EDITOR_ROLE) is None]
+            texts = {row: self._get_text(row, col) for row in rows}
+            self._col_editors[col] = int(value)
+            for row in rows:
+                self._show_value(row, col, texts[row])
+            self._widget.viewport().update()
+
+        return _GridIndexed(self, "ColEditor", lambda: self.Cols,
+                            lambda col: self._col_editors.get(col, _EDIT_TEXT), write)
+
+    @property
+    def ColList(self) -> _GridIndexed:
+        """Each column's choices for vpGridEditList: ``ColList[2] = ["S", "M", "L"]``."""
+        return _GridIndexed(self, "ColList", lambda: self.Cols,
+                            lambda col: list(self._col_lists.get(col, [])),
+                            lambda col, value: self._col_lists.__setitem__(
+                                col, [str(v) for v in value]))
+
+    def _fire_cancel(self, event: str, *args) -> bool:
+        """Fire an event whose handler returns True to cancel (VB's Cancel)."""
+        return self._fire(event, *args) is True
+
+    def _commit(self, row: int, col: int, text: str) -> None:
+        """The user's new value: ValidateEdit may refuse it, AfterEdit follows."""
+        if self._fire_cancel("ValidateEdit", row, col, text):
+            return
+        self._set_text(row, col, text)
+        self._fire("AfterEdit", row, col)
+
+    def _pick_color(self, row: int, col: int) -> None:
+        current = QColor(self._get_text(row, col))
+        color = QColorDialog.getColor(current if current.isValid() else QColor("white"),
+                                      self._widget, "Color")
+        if color.isValid():
+            self._commit(row, col, color.name())
+
+    def EditCell(self) -> None:
+        """Start editing the current cell, as if the user pressed F2 (Editable)."""
+        table = self._widget
+        index = table.currentIndex()
+        if index.isValid() and self._values.get("Editable"):
+            row, col = self._current()
+            if self._editor_of(row, col) == _EDIT_CHECK:
+                if not self._fire_cancel("BeforeEdit", row, col):
+                    self._commit(row, col, "False" if self._get_text(row, col) == "True"
+                                 else "True")
+            else:
+                table.edit(index)
+
+    # -- rows and columns -------------------------------------------------------------------
+    def _set_col_alignment(self, col: int, value: int) -> None:
+        self._col_align[col] = int(value)
+        flags = _QT_ALIGN.get(int(value), Qt.AlignLeft) | Qt.AlignVCenter
+        for row in range(self._frows, self.Rows):
+            item = self._item(row, col, create=False)
+            if item is not None:
+                item.setTextAlignment(flags)
+
+    @property
+    def ColAlignment(self) -> _GridIndexed:
+        """Each column's alignment: vpLeftJustify, vpRightJustify, vpCenter."""
+        return _GridIndexed(self, "ColAlignment", lambda: self.Cols,
+                            lambda col: self._col_align.get(col, 0), self._set_col_alignment)
+
+    @property
+    def ColWidth(self) -> _GridIndexed:
+        """Each column's width in pixels: ``ColWidth[1] = 120``."""
+        table = self._widget
+
+        def read(col):
+            if col < self._fcols:
+                return table.verticalHeader().width()
+            return table.columnWidth(col - self._fcols)
+
+        def write(col, value):
+            if col < self._fcols:
+                table.verticalHeader().setFixedWidth(int(value))
+            else:
+                table.setColumnWidth(col - self._fcols, int(value))
+
+        return _GridIndexed(self, "ColWidth", lambda: self.Cols, read, write)
+
+    @property
+    def RowHeight(self) -> _GridIndexed:
+        """Each row's height in pixels."""
+        table = self._widget
+
+        def read(row):
+            if row < self._frows:
+                return table.horizontalHeader().height()
+            return table.rowHeight(row - self._frows)
+
+        def write(row, value):
+            if row < self._frows:
+                table.horizontalHeader().setFixedHeight(int(value))
+            else:
+                table.setRowHeight(row - self._frows, int(value))
+
+        return _GridIndexed(self, "RowHeight", lambda: self.Rows, read, write)
+
+    @property
+    def RowData(self) -> _GridIndexed:
+        """A value kept with each row (any value), moving with it when sorted."""
+        def item(row):
+            if row < self._frows:
+                raise IndexError(f"FlexGrid '{self.Name}': RowData is for the rows "
+                                 "under the fixed one")
+            header = self._widget.verticalHeaderItem(row - self._frows)
+            if header is None:
+                header = QTableWidgetItem("")
+                self._widget.setVerticalHeaderItem(row - self._frows, header)
+            return header
+
+        return _GridIndexed(self, "RowData", lambda: self.Rows,
+                            lambda row: item(row).data(_GRID_ROW_DATA_ROLE),
+                            lambda row, value: item(row).setData(_GRID_ROW_DATA_ROLE, value))
+
+    def AddItem(self, Item, Index: int | None = None) -> None:
+        """Add a row: Item is its cells' texts separated by tabs ("a\\tb\\tc"),
+        at the end or at Index (a row, from 0)."""
+        table = self._widget
+        index = self.Rows if Index is None else int(Index)
+        if not self._frows <= index <= self.Rows:
+            raise IndexError(f"FlexGrid '{self.Name}': can't add a row at {index}")
+        table.insertRow(index - self._frows)
+        table.setVerticalHeaderItem(index - self._frows, QTableWidgetItem(""))
+        for col, text in enumerate(str(Item).split("\t")[:self.Cols]):
+            self._set_text(index, col, text)
+        self._fill_headers()
+
+    def RemoveItem(self, Index: int) -> None:
+        """Remove a row (not the fixed one)."""
+        index = int(Index)
+        if not self._frows <= index < self.Rows:
+            raise IndexError(f"FlexGrid '{self.Name}': no row {index} to remove")
+        self._widget.removeRow(index - self._frows)
+
+    def Clear(self) -> None:
+        """Empty every cell, the fixed ones too (Rows and Cols stay)."""
+        for row in range(self.Rows):
+            for col in range(self.Cols):
+                self._set_text(row, col, "")
+
+    @property
+    def Sort(self):
+        raise AttributeError(f"FlexGrid '{self.Name}': Sort is set, not read "
+                             "(Grid1.Sort = vpGridSortGenericAscending)")
+
+    @Sort.setter
+    def Sort(self, value):
+        """Sort the rows (not the fixed one) by the current column (Col), as
+        in VB: vpGridSortGenericAscending / Descending (numbers as numbers,
+        other text without case), vpGridSortNumericAscending / Descending,
+        vpGridSortStringNoCaseAscending / Descending,
+        vpGridSortStringAscending / Descending."""
+        mode = int(value)
+        if mode not in range(1, 9):
+            raise ValueError(f"FlexGrid '{self.Name}': no sort {mode}")
+        table, col = self._widget, self.Col - self._fcols
+        rows = []
+        for row in range(table.rowCount()):  # take every row's items out
+            rows.append(([table.takeItem(row, c) for c in range(table.columnCount())],
+                         table.takeVerticalHeaderItem(row)))
+
+        def key(entry):
+            item = entry[0][col]
+            text = item.text() if item is not None else ""
+            if item is not None and item.data(Qt.CheckStateRole) is not None:
+                text = "1" if item.checkState() == Qt.Checked else "0"
+            number = _as_number(text)
+            if mode in (1, 2):
+                return (0, number, "") if number is not None else (1, 0, text.casefold())
+            if mode in (3, 4):
+                return number if number is not None else 0.0
+            return text.casefold() if mode in (5, 6) else text
+
+        rows.sort(key=key, reverse=mode in (2, 4, 6, 8))
+        for row, (items, header) in enumerate(rows):
+            for c, item in enumerate(items):
+                if item is not None:
+                    table.setItem(row, c, item)
+            table.setVerticalHeaderItem(row, header if header is not None else
+                                        QTableWidgetItem(""))
+
+    # -- scrolling and the mouse ----------------------------------------------------------------
+    @property
+    def TopRow(self) -> int:
+        """The first row shown under the fixed one; setting it scrolls."""
+        return self._widget.verticalScrollBar().value() + self._frows
+
+    @TopRow.setter
+    def TopRow(self, value):
+        self._widget.updateGeometries()  # (the scroll range after new rows or sizes)
+        self._widget.verticalScrollBar().setValue(int(value) - self._frows)
+
+    @property
+    def LeftCol(self) -> int:
+        """The first column shown right of the fixed one; setting it scrolls."""
+        return self._widget.horizontalScrollBar().value() + self._fcols
+
+    @LeftCol.setter
+    def LeftCol(self, value):
+        self._widget.updateGeometries()
+        self._widget.horizontalScrollBar().setValue(int(value) - self._fcols)
+
+    @property
+    def MouseRow(self) -> int:
+        """The row under the mouse (0 for the headings), -1 if none."""
+        return self._mouse_cell[0]
+
+    @property
+    def MouseCol(self) -> int:
+        return self._mouse_cell[1]
+
+
+def _as_number(text: str):
+    try:
+        return float(text.replace(",", "")) if text.strip() else None
+    except ValueError:
+        return None
+
+
 # --- TreeView ------------------------------------------------------------------
 
 _TVW_FIRST, _TVW_LAST, _TVW_NEXT, _TVW_PREVIOUS, _TVW_CHILD = range(5)  # vpTvw* constants
@@ -6873,7 +7752,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, DriveListBox, DirListBox,
         FileListBox, Line, Image, TreeView, Splitter,
         ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView,
-        RichTextBox, CodeBox, Menu,
+        RichTextBox, CodeBox, FlexGrid, Menu,
     )
 }
 

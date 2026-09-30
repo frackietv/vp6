@@ -39,7 +39,7 @@ NAME_PREFIX = {
     "ComboBox": "Combo", "ListBox": "List", "HScrollBar": "HScroll",
     "VScrollBar": "VScroll", "Timer": "Timer", "Line": "Line", "Image": "Image",
     "TreeView": "TreeView", "Splitter": "Splitter", "DriveListBox": "Drive",
-    "DirListBox": "Dir", "FileListBox": "File", "CodeBox": "Code",
+    "DirListBox": "Dir", "FileListBox": "File", "CodeBox": "Code", "FlexGrid": "Grid",
 }
 
 _clipboard: list[ControlDef] = []

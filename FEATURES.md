@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.4.10
+**Date:** 2026-10-01
+
+## Controls
+
+- FlexGrid, a grid like VB's MSFlexGrid:
+  - `Rows`, `Cols`, `FixedRows` and `FixedCols` (headings that stay put while scrolling), `TextMatrix(r, c)` and `TextMatrix[r, c] = "x"`, `FormatString`
+  - The current cell and the selection: `Row`, `Col`, `Text`, `RowSel`, `ColSel`, `SelectionMode`; `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`
+  - `CellBackColor`, `CellForeColor`, `CellFontBold`, `CellFontItalic`, `CellAlignment`; `ColWidth`, `RowHeight`, `ColAlignment`, `RowData`
+  - `AddItem`, `RemoveItem`, `Clear`, `Sort` (generic, numeric, text with or without case, both ways); `TopRow`, `LeftCol`, `Scroll`, `MouseRow`, `MouseCol`; `AllowUserResizing`, `GridLines`
+  - Editing (beyond MSFlexGrid): `Editable`, editors per column (`ColEditor`, `ColList`) or cell (`CellEditor`, `CellList`): text, list, check box, color, a `...` button (`CellButtonClick`) or none; `BeforeEdit`, `ValidateEdit`, `AfterEdit`; `EditCell()`
+- Constants `vpGridEdit...`, `vpGridSort...` and `vpGridSelection...`
+- A Kitchen Sink page, "FlexGrid": a sortable price list and an editable property sheet with an editor per cell
+
+---
+
 **Version:** 0.4.9
 **Date:** 2026-10-01
 

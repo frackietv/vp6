@@ -15,6 +15,7 @@ import pytest
 from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QLineEdit
 
 import vp6
 from vp6 import formfile
@@ -530,6 +531,48 @@ def test_listview_page(sink):
     assert nemo.Text == "Nemo" and nemo.SubItems(1) == "Fish" and pets.ListItems.Count == 6
     page.cmdRemove._widget.click()
     assert pets.ListItems.Count == 5 and page.lblEvent.Caption == "Removed Nemo"
+
+
+def test_grid_page(sink, monkeypatch):
+    page = _page(sink, "grid")
+    prices = page.grdPrices
+    assert prices.Rows == 7 and prices.TextMatrix(0, 1) == "Fruit" and prices.RowData(1) == 100
+    header = prices._widget.horizontalHeader()
+    point = QPoint(header.sectionViewportPosition(1) + 10, header.height() // 2)
+    QTest.mouseClick(header.viewport(), Qt.LeftButton, Qt.NoModifier, point)  # Price
+    column = [float(prices.TextMatrix(r, 2)) for r in range(1, 7)]
+    assert column == sorted(column) and "Sorted by Price, ascending" in page.lblEvent.Caption
+    QTest.mouseClick(header.viewport(), Qt.LeftButton, Qt.NoModifier, point)  # again
+    column = [float(prices.TextMatrix(r, 2)) for r in range(1, 7)]
+    assert column == sorted(column, reverse=True)
+    prices.Row = 2
+    prices.Row = 1  # (RowColChange: a move)
+    assert page.lblCell.Caption == "Row 1: Cherry costs 4.80 (RowData 300)"
+    props, label = page.grdProps, page.lblSample
+    assert label.Caption == "A sample label" and label.Width == 292
+    props.Row, props.Col = 1, 1  # Caption: a text editor
+    props.EditCell()
+    editor = props._widget.findChild(QLineEdit)
+    editor.setText("Hello")
+    QTest.keyClick(editor, Qt.Key_Return)
+    QTest.qWait(10)
+    assert label.Caption == "Hello" and "Caption = Hello (AfterEdit)" in page.lblEvent.Caption
+    props.Row = 2  # Visible: a check box
+    props.EditCell()
+    assert not label.Visible and props.TextMatrix(2, 1) == "False"
+    props.Row = 3  # Alignment: a list
+    assert props.CellList == ["Left", "Right", "Center"]
+    props._commit(3, 1, "Center")  # (what choosing it in the list does)
+    assert label.Alignment == vp6.vpCenter
+    monkeypatch.setattr(sys.modules["pgGrid"], "InputBox", lambda *args: "Courier New")
+    props.Row = 5  # FontName: a ... button
+    props.EditCell()
+    assert label.FontName == "Courier New" and props.TextMatrix(5, 1) == "Courier New"
+    props._commit(6, 1, "wide")  # Width: ValidateEdit refuses text
+    assert props.TextMatrix(6, 1) == "292" and "must be a number" in page.lblEvent.Caption
+    props._commit(6, 1, "200")
+    assert label.Width == 200
+    assert props._editor_of(4, 1) == vp6.vpGridEditColor and label.BackColor is not None
 
 
 def test_tabs_page(sink):

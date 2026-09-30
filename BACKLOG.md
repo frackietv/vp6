@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Grid control with editable cells and per-cell editors (like MSFlexGrid) (self-hosting: the Properties window and the Options color table)
 - **[Controls]** Dockable tool windows (docking, floating, closing and restoring panels) (self-hosting: Toolbox, Project Explorer, Properties and Immediate panels)
 - **[Controls]** Shape
 - **[Controls]** UserControl: designing your own reusable controls in VP6 (VB's UserControl), with their own properties and events, placed from the Toolbox

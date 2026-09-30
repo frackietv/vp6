@@ -194,6 +194,29 @@ vpRtfWholeWord = 2
 vpRtfMatchCase = 4
 vpRtfNoHighlight = 8
 
+# --- FlexGrid: ColEditor / CellEditor -------------------------------------------
+vpGridEditNone = 0
+vpGridEditText = 1
+vpGridEditList = 2
+vpGridEditCheck = 3
+vpGridEditColor = 4
+vpGridEditButton = 5
+
+# --- FlexGrid.Sort ----------------------------------------------------------------
+vpGridSortGenericAscending = 1
+vpGridSortGenericDescending = 2
+vpGridSortNumericAscending = 3
+vpGridSortNumericDescending = 4
+vpGridSortStringNoCaseAscending = 5
+vpGridSortStringNoCaseDescending = 6
+vpGridSortStringAscending = 7
+vpGridSortStringDescending = 8
+
+# --- FlexGrid.SelectionMode ----------------------------------------------------------
+vpGridSelectionFree = 0
+vpGridSelectionByRow = 1
+vpGridSelectionByColumn = 2
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9
