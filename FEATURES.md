@@ -1,5 +1,16 @@
 # VP6 features
 
+**Version:** 0.4.13
+**Date:** 2026-10-01
+
+## Controls
+
+- Shape, as in VB: a rectangle, square, oval, circle, rounded rectangle or rounded square (`Shape`), with a border (`BorderStyle`, `BorderColor`, `BorderWidth`), a solid or hatched fill (`FillStyle`, `FillColor`) and, opaque, a `BackColor` (`BackStyle`); no events, clicks go through
+- Constants `vpShape...`, `vpFS...` and the hatch styles, and `vpBS...` border styles (for Shape and Line)
+- The Kitchen Sink's "Lines, shapes and z-order" page shows every kind of Shape and changes one from lists
+
+---
+
 **Version:** 0.4.12
 **Date:** 2026-10-01
 

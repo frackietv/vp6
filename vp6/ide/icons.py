@@ -190,6 +190,13 @@ def _dockpanel(p):
     p.fillRect(QRectF(12.5, 8.5, 7, 3), C.blue)
 
 
+def _shape(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 4, 12, 10))  # a rectangle
+    p.setBrush(C.blue)
+    p.drawEllipse(QRectF(9, 9, 12, 12))  # and a circle over it
+
+
 def _hscroll(p):
     p.setBrush(C.face)
     p.drawRect(QRectF(2, 8, 20, 8))
@@ -474,7 +481,8 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Shape": _shape,
+    "Line": _line, "Image": _image,
     "DriveListBox": _drivelistbox, "DirListBox": _dirlistbox, "FileListBox": _filelistbox,
     "TreeView": _treeview, "Splitter": _splitter,
     "ProgressBar": _progressbar, "Slider": _slider, "UpDown": _updown, "StatusBar": _statusbar,

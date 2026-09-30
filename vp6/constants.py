@@ -87,6 +87,33 @@ vpNegotiateRight = 3
 vpTransparent = 0
 vpOpaque = 1
 
+# --- Shape.Shape ------------------------------------------------------------------
+vpShapeRectangle = 0
+vpShapeSquare = 1
+vpShapeOval = 2
+vpShapeCircle = 3
+vpShapeRoundedRectangle = 4
+vpShapeRoundedSquare = 5
+
+# --- Shape.FillStyle -------------------------------------------------------------
+vpFSSolid = 0
+vpFSTransparent = 1
+vpHorizontalLine = 2
+vpVerticalLine = 3
+vpUpwardDiagonal = 4
+vpDownwardDiagonal = 5
+vpCross = 6
+vpDiagonalCross = 7
+
+# --- BorderStyle (Shape, Line) -----------------------------------------------------
+vpBSTransparent = 0
+vpBSSolid = 1
+vpBSDash = 2
+vpBSDot = 3
+vpBSDashDot = 4
+vpBSDashDotDot = 5
+vpBSInsideSolid = 6
+
 # --- Label.TextFormat -----------------------------------------------------------
 vpPlainText = 0
 vpRichText = 1

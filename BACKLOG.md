@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Shape
 - **[Controls]** UserControl: designing your own reusable controls in VP6 (VB's UserControl), with their own properties and events, placed from the Toolbox
 - **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)
 - **[Language and runtime]** Default form instances: using `Form2.Show()` without creating an instance first

@@ -15,10 +15,11 @@ import re
 import sys
 
 from PySide6.QtCore import (QDate, QEvent, QFileInfo, QItemSelectionModel, QLocale, QObject,
-                            QPoint, QRect, QSize, Qt, QTime, QTimer, QUrl, Signal)
+                            QPoint, QPointF, QRect, QRectF, QSize, Qt, QTime, QTimer, QUrl,
+                            Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServices, QFont,
-                           QFontDatabase, QIcon, QKeyEvent, QKeySequence, QPainter, QPalette, QPen,
-                           QPixmap, QShortcut, QStandardItem, QStandardItemModel,
+                           QFontDatabase, QIcon, QKeyEvent, QKeySequence, QPainter, QPainterPath,
+                           QPalette, QPen, QPixmap, QShortcut, QStandardItem, QStandardItemModel,
                            QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
                            QTextDocumentFragment, QTextFormat)
 from PySide6.QtWidgets import (
@@ -6769,6 +6770,149 @@ class Line(Control):
         return {"X1": self.X1 + dx, "Y1": self.Y1 + dy, "X2": self.X2 + dx, "Y2": self.Y2 + dy}
 
 
+# --- Shape -------------------------------------------------------------------------------
+
+_HATCH_SPACING = 8  # pixels between a hatched fill's lines
+# A FillStyle's lines: their directions as (dx, dy) steps, 2 Horizontal ... 7 Diagonal Cross
+_HATCHES = {2: ((1, 0),), 3: ((0, 1),), 4: ((1, -1),), 5: ((1, 1),), 6: ((1, 0), (0, 1)),
+            7: ((1, -1), (1, 1))}
+
+
+def _hatch(painter: QPainter, path: QPainterPath, style: int, color: QColor) -> None:
+    """Fill a path with a FillStyle's lines (drawn, not a brush pattern, so they
+    stay crisp on high-resolution screens)."""
+    bounds = path.boundingRect()
+    painter.save()
+    painter.setClipPath(path)
+    painter.setPen(QPen(color, 1))
+    size = bounds.width() + bounds.height()
+    for dx, dy in _HATCHES[style]:
+        if dy == 0:  # horizontal
+            y = bounds.top() + _HATCH_SPACING / 2
+            while y < bounds.bottom():
+                painter.drawLine(QPointF(bounds.left(), y), QPointF(bounds.right(), y))
+                y += _HATCH_SPACING
+        elif dx == 0:  # vertical
+            x = bounds.left() + _HATCH_SPACING / 2
+            while x < bounds.right():
+                painter.drawLine(QPointF(x, bounds.top()), QPointF(x, bounds.bottom()))
+                x += _HATCH_SPACING
+        else:  # diagonal: lines across the whole box, one spacing apart
+            offset = -size
+            while offset < size:
+                start = QPointF(bounds.left() + offset, bounds.top() if dy > 0 else bounds.bottom())
+                painter.drawLine(start, start + QPointF(size, size * dy))
+                offset += _HATCH_SPACING * 1.4142
+    painter.restore()
+
+
+class _ShapeWidget(QWidget):
+    """Paints a Shape in its rectangle; clicks go through to whatever is
+    underneath (a VB Shape has no events)."""
+
+    def __init__(self, shape: "Shape", parent: QWidget):
+        super().__init__(parent)
+        self._shape = shape
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setFocusPolicy(Qt.NoFocus)
+
+    def paintEvent(self, event):
+        values = self._shape._values
+        kind = values.get("Shape", 0)
+        border_style = values.get("BorderStyle", 1)
+        width = max(1, values.get("BorderWidth", 1)) if border_style else 0
+        rect = QRectF(self.rect())
+        if kind in (1, 3, 5):  # Square, Circle, Rounded Square: centered, as wide as high
+            side = min(rect.width(), rect.height())
+            rect = QRectF(rect.center().x() - side / 2, rect.center().y() - side / 2, side,
+                          side)
+        rect = rect.adjusted(width / 2, width / 2, -width / 2, -width / 2)  # (inside it)
+        path = QPainterPath()
+        if kind in (2, 3):
+            path.addEllipse(rect)
+        elif kind in (4, 5):
+            radius = min(rect.width(), rect.height()) / 6
+            path.addRoundedRect(rect, radius, radius)
+        else:
+            path.addRect(rect)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, kind >= 2)
+        text_color = self.palette().color(QPalette.WindowText)  # (follows the scheme)
+        if values.get("BackStyle", 0) == 1:  # Opaque: its BackColor behind the fill
+            back = values.get("BackColor")
+            painter.fillPath(path, colors.to_qcolor(back) if back is not None
+                             else self.palette().color(QPalette.Window))
+        fill_style = values.get("FillStyle", 1)
+        fill = values.get("FillColor")
+        fill_color = colors.to_qcolor(fill) if fill is not None else text_color
+        if fill_style == 0:  # Solid
+            painter.fillPath(path, fill_color)
+        elif fill_style in _HATCHES:  # (1: Transparent)
+            _hatch(painter, path, fill_style, fill_color)
+        if border_style:
+            border = values.get("BorderColor")
+            pen = QPen(colors.to_qcolor(border) if border is not None else text_color)
+            pen.setWidth(width)
+            pen.setStyle(_PEN_STYLES.get(border_style, Qt.SolidLine))
+            pen.setJoinStyle(Qt.MiterJoin)
+            painter.setPen(pen)
+            painter.drawPath(path)
+        painter.end()
+
+
+class Shape(Control):
+    """A rectangle, square, oval, circle or rounded rectangle (Shape), with a
+    border (BorderStyle, BorderColor, BorderWidth), a fill (FillStyle, solid
+    or hatched, in FillColor) and, opaque, a BackColor behind it. Like VB's,
+    it has no events and never takes the focus; clicks go to what is
+    underneath."""
+
+    TypeName = "Shape"
+    DefaultEvent = ""
+    Events: tuple[str, ...] = ()
+    DefaultSize = (81, 81)
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Shape", "enum", 0, enum_choices("Rectangle", "Square", "Oval", "Circle",
+                                           "Rounded Rectangle", "Rounded Square"),
+          description="Its form; a Square, Circle or Rounded Square is centered in its box"),
+        P("BackStyle", "enum", 0, enum_choices("Transparent", "Opaque"),
+          description="Opaque: filled with BackColor (under the FillStyle); Transparent: "
+                      "what is behind shows through"),
+        P("BackColor", "color", None,
+          description="The color inside it when Opaque; unset = the window color"),
+        P("FillStyle", "enum", 1, enum_choices(
+            "Solid", "Transparent", "Horizontal Line", "Vertical Line", "Upward Diagonal",
+            "Downward Diagonal", "Cross", "Diagonal Cross"),
+          description="How the inside is filled with FillColor: solid, a pattern, or not"),
+        P("FillColor", "color", None,
+          description="The fill's color; unset = the text color of the color scheme"),
+        P("BorderStyle", "enum", 1, enum_choices(
+            "Transparent", "Solid", "Dash", "Dot", "Dash-Dot", "Dash-Dot-Dot", "Inside Solid"),
+          description="How the border is drawn; Transparent: none"),
+        P("BorderColor", "color", None,
+          description="The border's color; unset = the text color of the color scheme"),
+        P("BorderWidth", "int", 1, description="The border's thickness in pixels"),
+        P("Visible", "bool", True, description="Whether the shape is shown at run time"),
+        P("Tag", "str", "", description="Free for your own use"),
+        next(spec for spec in _COMMON if spec.name == "ZIndex"),
+    )
+
+    def _create_widget(self, parent):
+        return _ShapeWidget(self, parent)
+
+    def _event_targets(self):
+        return []  # no events
+
+    def _repaint(self, _=None) -> None:
+        if self._widget is not None:
+            self._widget.update()
+
+    _apply_Shape = _apply_BackStyle = _apply_BackColor = _apply_FillStyle = \
+        _apply_FillColor = _apply_BorderStyle = _apply_BorderColor = _apply_BorderWidth = \
+        _repaint
+
+
 # --- FlexGrid ------------------------------------------------------------------------
 
 _GRID_EDITOR_ROLE = Qt.UserRole + 10  # a cell's own editor (else its column's)
@@ -8274,7 +8418,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, DriveListBox, DirListBox,
-        FileListBox, Line, Image, TreeView, Splitter,
+        FileListBox, Shape, Line, Image, TreeView, Splitter,
         ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView,
         RichTextBox, CodeBox, FlexGrid, DockPanel, Menu,
     )

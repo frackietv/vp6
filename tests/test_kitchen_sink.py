@@ -488,6 +488,19 @@ def test_z_order_page(sink):
     assert on_top() == "lblZRed" and page.lblZRed.ZIndex == 4
     assert [line.BorderStyle for line in page.linSample] == [1, 2, 3, 4, 5]
     assert page.linZ.ZIndex == 3 and page.linThick.BorderWidth == 5
+    # Shapes: every kind in a control array, and one changed from lists
+    assert [shape.Shape for shape in page.shpKinds] == list(range(6))
+    assert page.shpKinds[3].FillColor == vp6.QBColor(12)
+    sample = page.shpSample
+    assert (sample.Shape, sample.FillStyle) == (vp6.vpShapeRoundedRectangle,
+                                                vp6.vpDiagonalCross)
+    page.cboShape.ListIndex = vp6.vpShapeCircle
+    page.cboFill.ListIndex = vp6.vpFSSolid
+    assert (sample.Shape, sample.FillStyle) == (vp6.vpShapeCircle, vp6.vpFSSolid)
+    page.chkOpaque.Value = vp6.vpChecked
+    assert sample.BackStyle == vp6.vpOpaque
+    page.chkOpaque.Value = vp6.vpUnchecked
+    assert sample.BackStyle == vp6.vpTransparent
 
 
 def test_tree_page(sink):

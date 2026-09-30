@@ -1092,6 +1092,53 @@ Default size 161 × 145. Property groups: Position, Colors, Font, Common.
 Events: `Click`, `DblClick`, `PathChange`, `PatternChange`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
+### Shape
+
+A rectangle, square, oval, circle or rounded rectangle (VB's Shape): a
+border, a fill and, when opaque, a background. Like a Line it has no events
+and never takes the focus; clicks go to what is underneath.
+
+```python
+self.shpLight = Shape(self, Shape=vpShapeCircle, FillStyle=vpFSSolid, FillColor=vpGreen,
+                      Left=16, Top=16, Width=40, Height=40)
+self.shpLight.FillColor = vpRed                # e.g. a traffic light
+```
+
+* `Shape`: `vpShapeRectangle`, `vpShapeSquare`, `vpShapeOval`,
+  `vpShapeCircle`, `vpShapeRoundedRectangle`, `vpShapeRoundedSquare`. A
+  square, circle or rounded square is as wide as it is high, centered in the
+  control's box.
+* `FillStyle` in `FillColor`: `vpFSSolid`, `vpFSTransparent` (the default),
+  or lines: `vpHorizontalLine`, `vpVerticalLine`, `vpUpwardDiagonal`,
+  `vpDownwardDiagonal`, `vpCross`, `vpDiagonalCross`.
+* `BackStyle`: `vpTransparent` (the default: what is behind shows through)
+  or `vpOpaque` (filled with `BackColor` first, under the FillStyle).
+* The border: `BorderStyle` (`vpBSTransparent` for none, `vpBSSolid`,
+  `vpBSDash`, `vpBSDot`, `vpBSDashDot`, `vpBSDashDotDot`, `vpBSInsideSolid`;
+  the same values as a Line's), `BorderColor`, `BorderWidth`. The border is
+  drawn inside the control's box. Unset colors are the color scheme's text
+  color (the window color for BackColor).
+
+<!-- BEGIN GENERATED: control Shape -->
+Default size 81 × 81. Property groups: Position.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `BackColor` | color | (default) | The color inside it when Opaque; unset = the window color |
+| `BackStyle` | enum | 0 - Transparent | 0 - Transparent, 1 - Opaque. Opaque: filled with BackColor (under the FillStyle); Transparent: what is behind shows through |
+| `BorderColor` | color | (default) | The border's color; unset = the text color of the color scheme |
+| `BorderStyle` | enum | 1 - Solid | 0 - Transparent, 1 - Solid, 2 - Dash, 3 - Dot, 4 - Dash-Dot, 5 - Dash-Dot-Dot, 6 - Inside Solid. How the border is drawn; Transparent: none |
+| `BorderWidth` | int | `1` | The border's thickness in pixels |
+| `FillColor` | color | (default) | The fill's color; unset = the text color of the color scheme |
+| `FillStyle` | enum | 1 - Transparent | 0 - Solid, 1 - Transparent, 2 - Horizontal Line, 3 - Vertical Line, 4 - Upward Diagonal, 5 - Downward Diagonal, 6 - Cross, 7 - Diagonal Cross. How the inside is filled with FillColor: solid, a pattern, or not |
+| `Shape` | enum | 0 - Rectangle | 0 - Rectangle, 1 - Square, 2 - Oval, 3 - Circle, 4 - Rounded Rectangle, 5 - Rounded Square. Its form; a Square, Circle or Rounded Square is centered in its box |
+| `Tag` | str | `''` | Free for your own use |
+| `Visible` | bool | `True` | Whether the shape is shown at run time |
+| `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top. Equal values keep creation order (later on top). |
+
+No events.
+<!-- END GENERATED -->
+
 ### Line
 
 A straight line, like VB's: from (`X1`, `Y1`) to (`X2`, `Y2`) in its
@@ -1964,7 +2011,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 
 `Form`, `Control` (base class), `Label`, `TextBox`, `CommandButton`,
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
-`HScrollBar`, `VScrollBar`, `PictureBox`,
+`HScrollBar`, `VScrollBar`, `PictureBox`, [`Shape`](#shape),
 [`DriveListBox`, `DirListBox` and `FileListBox`](#drivelistbox-dirlistbox-and-filelistbox), [`Line`](#line), [`Image`](#image),
 [`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
@@ -2048,6 +2095,9 @@ All constants are plain ints or strings.
 | Strings | `vpCr`, `vpLf`, `vpCrLf`, `vpNewLine`, `vpTab`, `vpNullString` | `'\r'`, `'\n'`, `'\r\n'`, `'\n'`, `'\t'`, `''` |
 | Menu.NegotiatePosition | `vpNegotiateNone`, `vpNegotiateLeft`, `vpNegotiateMiddle`, `vpNegotiateRight` | 0, 1, 2, 3 |
 | Label.BackStyle | `vpTransparent`, `vpOpaque` | 0, 1 |
+| Shape.Shape | `vpShapeRectangle`, `vpShapeSquare`, `vpShapeOval`, `vpShapeCircle`, `vpShapeRoundedRectangle`, `vpShapeRoundedSquare` | 0, 1, 2, 3, 4, 5 |
+| Shape.FillStyle | `vpFSSolid`, `vpFSTransparent`, `vpHorizontalLine`, `vpVerticalLine`, `vpUpwardDiagonal`, `vpDownwardDiagonal`, `vpCross`, `vpDiagonalCross` | 0, 1, 2, 3, 4, 5, 6, 7 |
+| BorderStyle (Shape, Line) | `vpBSTransparent`, `vpBSSolid`, `vpBSDash`, `vpBSDot`, `vpBSDashDot`, `vpBSDashDotDot`, `vpBSInsideSolid` | 0, 1, 2, 3, 4, 5, 6 |
 | Label.TextFormat | `vpPlainText`, `vpRichText`, `vpMarkdown` | 0, 1, 2 |
 | ScrollBars (TextBox, PictureBox) | `vpSBNone`, `vpHorizontal`, `vpVertical`, `vpBoth` | 0, 1, 2, 3 |
 | PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight`, `vpAlignFill` | 0, 1, 2, 3, 4, 5 |
