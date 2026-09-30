@@ -148,6 +148,15 @@ def _filelistbox(p):
         p.drawLine(QPointF(11, y + 0.5), QPointF(18.5, y + 0.5))
 
 
+def _richtextbox(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(3, 3, 18, 18))
+    _text(p, QRectF(4, 3, 9, 10), "A", 9, True, QColor("#d03030"))  # formatted text
+    _text(p, QRectF(11, 3, 9, 10), "b", 9, False, C.blue)
+    p.drawLine(QPointF(6, 14), QPointF(18, 14))
+    p.drawLine(QPointF(6, 17.5), QPointF(15, 17.5))
+
+
 def _hscroll(p):
     p.setBrush(C.face)
     p.drawRect(QRectF(2, 8, 20, 8))
@@ -437,7 +446,7 @@ _DRAWERS = {
     "TreeView": _treeview, "Splitter": _splitter,
     "ProgressBar": _progressbar, "Slider": _slider, "UpDown": _updown, "StatusBar": _statusbar,
     "TabStrip": _tabstrip, "ImageList": _imagelist, "Toolbar": _toolbar,
-    "ListView": _listview,
+    "ListView": _listview, "RichTextBox": _richtextbox,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

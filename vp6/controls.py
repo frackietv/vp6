@@ -12,17 +12,18 @@ import html
 import os
 import sys
 
-from PySide6.QtCore import (QDate, QEvent, QFileInfo, QItemSelectionModel, QLocale, QObject, QPoint,
-                            QRect, QSize, Qt, QTime, QTimer, QUrl, Signal)
+from PySide6.QtCore import (QDate, QEvent, QFileInfo, QItemSelectionModel, QLocale, QObject,
+                            QPoint, QRect, QSize, Qt, QTime, QTimer, QUrl, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServices, QFont, QIcon,
                            QKeyEvent, QKeySequence, QPainter, QPalette, QPen, QPixmap,
-                           QShortcut, QStandardItem, QStandardItemModel)
+                           QShortcut, QStandardItem, QStandardItemModel, QTextCharFormat,
+                           QTextCursor, QTextDocument, QTextDocumentFragment, QTextFormat)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QComboBox, QFrame, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
     QPushButton, QRadioButton, QScrollArea, QScrollBar, QSlider, QStackedLayout, QStyle,
-    QStyleOptionTabWidgetFrame, QTabWidget, QToolBar, QToolButton, QTreeView, QTreeWidget,
-    QTreeWidgetItem, QListWidgetItem, QVBoxLayout, QWidget,
+    QStyleOptionTabWidgetFrame, QTabWidget, QTextEdit, QToolBar, QToolButton, QTreeView,
+    QTreeWidget, QTreeWidgetItem, QListWidgetItem, QVBoxLayout, QWidget,
 )
 
 from . import colors
@@ -867,6 +868,397 @@ class TextBox(Control):
             self._widget.textCursor().insertText(str(value))
         else:
             self._widget.insert(str(value))
+
+
+# --- RichTextBox ---------------------------------------------------------------------
+
+_RTF_QT_ALIGN = {0: Qt.AlignLeft, 1: Qt.AlignRight, 2: Qt.AlignHCenter}
+
+
+class _RichEdit(QTextEdit):
+    """The RichTextBox's editor: pasted text keeps its formatting, but
+    not pictures or tables from elsewhere (just their text)."""
+
+    def insertFromMimeData(self, source):
+        if not source.hasHtml():
+            super().insertFromMimeData(source)
+            return
+        pasted = QTextDocument()
+        pasted.setHtml(source.html())
+        paragraphs = []  # each a list of (text, format) runs
+        block = pasted.begin()
+        while block.isValid():  # (a table's cells are paragraphs of their own)
+            runs, it = [], block.begin()
+            while not it.atEnd():
+                fragment = it.fragment()
+                text = fragment.text().replace("\ufffc", "")  # (a picture's placeholder)
+                if text and not fragment.charFormat().isImageFormat():
+                    runs.append((text, fragment.charFormat()))
+                it += 1
+            paragraphs.append(runs)
+            block = block.next()
+        while paragraphs and not paragraphs[-1]:
+            paragraphs.pop()
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+        for number, runs in enumerate(paragraphs):
+            if number:
+                cursor.insertBlock()
+            for text, fmt in runs:
+                cursor.insertText(text, fmt)
+        cursor.endEditBlock()
+        self.setTextCursor(cursor)
+
+
+class RichTextBox(Control):
+    """Text with colors, fonts, bold, italic and underline, and aligned
+    paragraphs, like VB's RichTextBox. Format the selection with its Sel...
+    properties (SelBold, SelColor...; with nothing selected, what is typed
+    next); add formatted text at the end with AppendText. VB's RTF is HTML
+    here: TextHTML, SelHTML, and LoadFile/SaveFile with vpRtfHTML."""
+
+    TypeName = "RichTextBox"
+    DefaultEvent = "Change"
+    DefaultSize = (201, 121)
+    Events = ("Change", "SelChange", "Click", "DblClick", "GotFocus", "LostFocus",
+              "KeyDown", "KeyPress", "KeyUp", "MouseDown", "MouseMove", "MouseUp")
+    _qss_type = "QTextEdit"
+    Properties = (
+        P("Text", "text", "", always=True, description="The contents, as plain text"),
+        *_geometry(*DefaultSize),
+        P("Locked", "bool", False, description="Read-only: the text can't be edited"),
+        P("MaxLength", "int", 0, description="Maximum length; 0 = no limit"),
+        P("ScrollBars", "enum", 2, enum_choices("None", "Horizontal", "Vertical", "Both"),
+          description="Its scroll bars (shown when needed); with a horizontal one, lines "
+                      "don't wrap"),
+        P("BorderStyle", "enum", 1, enum_choices("None", "Fixed Single"),
+          description="A border around it"),
+        *_COLORS, *_FONT, *_COMMON,
+    )
+
+    def _create_widget(self, parent):
+        self.__dict__.update(_selection=(0, 0), _trimming=False)
+        widget = _RichEdit(parent)
+        widget.setTabChangesFocus(True)
+        return widget
+
+    def _event_targets(self):
+        return [self._widget, self._widget.viewport()]
+
+    def _connect_signals(self):
+        widget = self._widget
+        widget.textChanged.connect(lambda: self._fire("Change"))
+        widget.document().contentsChange.connect(self._limit_length)
+        widget.cursorPositionChanged.connect(self._on_selection)
+        widget.selectionChanged.connect(self._on_selection)
+
+    def _on_selection(self):
+        cursor = self._widget.textCursor()
+        selection = (cursor.selectionStart(), cursor.selectionEnd())
+        if selection != self._selection:
+            self.__dict__["_selection"] = selection
+            self._fire("SelChange")
+
+    def _limit_length(self, position, removed, added):
+        limit = self._values.get("MaxLength", 0)
+        if not limit or not added or self._trimming:
+            return
+        excess = len(self._widget.toPlainText()) - limit
+        if excess > 0:  # drop the end of what was just typed or pasted
+            self.__dict__["_trimming"] = True
+            try:
+                cursor = QTextCursor(self._widget.document())
+                end = position + added
+                cursor.setPosition(end - min(excess, added))
+                cursor.setPosition(end, QTextCursor.KeepAnchor)
+                cursor.removeSelectedText()
+            finally:
+                self.__dict__["_trimming"] = False
+
+    # -- properties -------------------------------------------------------------------------
+    def _read_Text(self):
+        return self._widget.toPlainText()
+
+    def _apply_Text(self, v):
+        if self._widget.toPlainText() != v:
+            self._widget.setPlainText(v)
+
+    def _apply_Locked(self, v):
+        self._widget.setReadOnly(v)
+        self._widget.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard if v else
+            Qt.TextEditorInteraction)
+
+    def _apply_MaxLength(self, v):
+        if v > 0 and len(self._widget.toPlainText()) > v:
+            self.Text = self._widget.toPlainText()[:v]
+
+    def _apply_ScrollBars(self, v):
+        on, off = Qt.ScrollBarAsNeeded, Qt.ScrollBarAlwaysOff
+        self._widget.setHorizontalScrollBarPolicy(on if v in (1, 3) else off)
+        self._widget.setVerticalScrollBarPolicy(on if v in (2, 3) else off)
+        self._widget.setLineWrapMode(QTextEdit.NoWrap if v in (1, 3) else QTextEdit.WidgetWidth)
+
+    def _apply_BorderStyle(self, v):
+        self._widget.setFrameShape(QFrame.StyledPanel if v else QFrame.NoFrame)
+
+    @property
+    def TextHTML(self) -> str:
+        """The contents with their formatting, as HTML (VB's TextRTF)."""
+        return self._widget.toHtml()
+
+    @TextHTML.setter
+    def TextHTML(self, value):
+        self._widget.setHtml(str(value))
+
+    # -- the selection ----------------------------------------------------------------------
+    @property
+    def SelStart(self) -> int:
+        return self._widget.textCursor().selectionStart()
+
+    @SelStart.setter
+    def SelStart(self, value):
+        cursor = self._widget.textCursor()
+        cursor.setPosition(max(0, min(int(value), len(self.Text))))
+        self._widget.setTextCursor(cursor)
+
+    @property
+    def SelLength(self) -> int:
+        cursor = self._widget.textCursor()
+        return cursor.selectionEnd() - cursor.selectionStart()
+
+    @SelLength.setter
+    def SelLength(self, value):
+        start = self.SelStart
+        cursor = self._widget.textCursor()
+        cursor.setPosition(start)
+        cursor.setPosition(max(0, min(start + int(value), len(self.Text))),
+                           QTextCursor.KeepAnchor)
+        self._widget.setTextCursor(cursor)
+
+    @property
+    def SelText(self) -> str:
+        return self._widget.textCursor().selectedText().replace("\u2029", "\n")
+
+    @SelText.setter
+    def SelText(self, value):
+        """Replace the selection (or insert at the cursor), in the format of
+        the Sel... properties."""
+        self._widget.textCursor().insertText(str(value))
+
+    @property
+    def SelHTML(self) -> str:
+        """The selection with its formatting, as HTML (VB's SelRTF)."""
+        return QTextDocumentFragment(self._widget.textCursor()).toHtml()
+
+    @SelHTML.setter
+    def SelHTML(self, value):
+        self._widget.textCursor().insertHtml(str(value))
+
+    def _formats(self) -> list:
+        """The character formats of the selection's pieces; with nothing
+        selected, the format of what is typed next."""
+        cursor = self._widget.textCursor()
+        if not cursor.hasSelection():
+            return [self._widget.currentCharFormat()]
+        start, end = cursor.selectionStart(), cursor.selectionEnd()
+        probe = QTextCursor(self._widget.document())
+        formats = []
+        for position in range(start + 1, end + 1):  # (the format of the character before)
+            probe.setPosition(position)
+            if probe.block().position() == position and position > start + 1 and \
+                    probe.block().length() > 1:
+                continue  # (a paragraph break: not a character)
+            formats.append(probe.charFormat())
+        return formats or [self._widget.currentCharFormat()]
+
+    def _font_of(self, fmt) -> QFont:
+        return fmt.font().resolve(self._widget.document().defaultFont())
+
+    def _sel_value(self, read):
+        """One value for the selection, or None (VB's Null) when it is mixed."""
+        values = [read(fmt) for fmt in self._formats()]
+        first = values[0]
+        return first if all(v == first for v in values) else None
+
+    def _sel_merge(self, setup) -> None:
+        fmt = QTextCharFormat()
+        setup(fmt)
+        self._widget.mergeCurrentCharFormat(fmt)
+
+    @property
+    def SelBold(self):
+        """Whether the selection is bold (None if partly); set it to make it so."""
+        return self._sel_value(lambda f: self._font_of(f).bold())
+
+    @SelBold.setter
+    def SelBold(self, value):
+        self._sel_merge(lambda f: f.setFontWeight(QFont.Bold if value else QFont.Normal))
+
+    @property
+    def SelItalic(self):
+        return self._sel_value(lambda f: self._font_of(f).italic())
+
+    @SelItalic.setter
+    def SelItalic(self, value):
+        self._sel_merge(lambda f: f.setFontItalic(bool(value)))
+
+    @property
+    def SelUnderline(self):
+        return self._sel_value(
+            lambda f: f.fontUnderline() if f.hasProperty(QTextFormat.TextUnderlineStyle)
+            else self._widget.document().defaultFont().underline())
+
+    @SelUnderline.setter
+    def SelUnderline(self, value):
+        self._sel_merge(lambda f: f.setFontUnderline(bool(value)))
+
+    @property
+    def SelStrikeThru(self):
+        return self._sel_value(lambda f: self._font_of(f).strikeOut())
+
+    @SelStrikeThru.setter
+    def SelStrikeThru(self, value):
+        self._sel_merge(lambda f: f.setFontStrikeOut(bool(value)))
+
+    @property
+    def SelFontName(self):
+        return self._sel_value(lambda f: self._font_of(f).family())
+
+    @SelFontName.setter
+    def SelFontName(self, value):
+        self._sel_merge(lambda f: f.setFontFamilies([str(value)]))
+
+    @property
+    def SelFontSize(self):
+        def size(fmt):
+            points = self._font_of(fmt).pointSizeF()
+            return int(points) if points == int(points) else points
+        return self._sel_value(size)
+
+    @SelFontSize.setter
+    def SelFontSize(self, value):
+        self._sel_merge(lambda f: f.setFontPointSize(float(value)))
+
+    def _color_of(self, fmt):
+        brush = fmt.foreground()
+        if fmt.hasProperty(QTextFormat.ForegroundBrush) and brush.style() != Qt.NoBrush:
+            return colors.from_qcolor(brush.color())
+        return None
+
+    @property
+    def SelColor(self):
+        """The selection's text color (vpRed, RGB(...)); the control's
+        ForeColor where none was given. None if it is mixed."""
+        values = [self._color_of(fmt) for fmt in self._formats()]
+        if any(v != values[0] for v in values):
+            return None
+        if values[0] is not None:
+            return values[0]
+        fore = self._values.get("ForeColor")
+        return fore if fore is not None else colors.from_qcolor(
+            self._widget.palette().color(QPalette.Text))
+
+    @SelColor.setter
+    def SelColor(self, value):
+        """A color, or None for the control's ForeColor."""
+        self._sel_merge(lambda f: f.setForeground(
+            QBrush() if value is None else QBrush(colors.to_qcolor(value))))
+
+    def _blocks(self):
+        cursor = self._widget.textCursor()
+        document = self._widget.document()
+        block = document.findBlock(cursor.selectionStart())
+        last = document.findBlock(cursor.selectionEnd())
+        while block.isValid():
+            yield block
+            if block == last:
+                break
+            block = block.next()
+
+    @property
+    def SelAlignment(self):
+        """The alignment of the selection's paragraphs (vpLeftJustify,
+        vpRightJustify, vpCenter); None if they differ."""
+        def alignment(block):
+            align = block.blockFormat().alignment()
+            if align & Qt.AlignRight:
+                return 1
+            return 2 if align & Qt.AlignHCenter else 0
+        values = [alignment(b) for b in self._blocks()]
+        return values[0] if all(v == values[0] for v in values) else None
+
+    @SelAlignment.setter
+    def SelAlignment(self, value):
+        self._widget.setAlignment(_RTF_QT_ALIGN.get(int(value), Qt.AlignLeft) | Qt.AlignAbsolute)
+
+    # -- methods ----------------------------------------------------------------------------
+    def AppendText(self, Text, Color=None, Bold: bool = False, Italic: bool = False,
+                   Underline: bool = False) -> None:
+        """Add text at the end in its own format, without moving the cursor or
+        the selection; the view follows the end if it was showing it (a log)."""
+        widget = self._widget
+        bar = widget.verticalScrollBar()
+        following = bar.value() >= bar.maximum() - 2
+        fmt = QTextCharFormat()
+        fmt.setForeground(QBrush() if Color is None else QBrush(colors.to_qcolor(Color)))
+        fmt.setFontWeight(QFont.Bold if Bold else QFont.Normal)
+        fmt.setFontItalic(bool(Italic))
+        fmt.setFontUnderline(bool(Underline))
+        cursor = QTextCursor(widget.document())
+        cursor.movePosition(QTextCursor.End)
+        cursor.insertText(str(Text), fmt)
+        if following:
+            bar.setValue(bar.maximum())
+
+    def Find(self, String, Start: int | None = None, End: int | None = None,
+             Options: int = 0) -> int:
+        """Find text and select it; returns where it starts, or -1. It looks
+        from Start (else just after the selection, so calling it again finds
+        the next one) up to End. Options: vpRtfWholeWord, vpRtfMatchCase,
+        vpRtfNoHighlight (don't select it), added together."""
+        if Start is None:
+            Start = self.SelStart + self.SelLength
+        flags = QTextDocument.FindFlag(0)
+        if Options & 2:
+            flags |= QTextDocument.FindWholeWords
+        if Options & 4:
+            flags |= QTextDocument.FindCaseSensitively
+        found = self._widget.document().find(str(String), int(Start), flags)
+        if found.isNull() or (End is not None and found.selectionEnd() > int(End)):
+            return -1
+        if not Options & 8:
+            self._widget.setTextCursor(found)
+        return found.selectionStart()
+
+    def GetLineFromChar(self, CharPos: int) -> int:
+        """The line (paragraph, from 0) holding a character position."""
+        block = self._widget.document().findBlock(int(CharPos))
+        return block.blockNumber() if block.isValid() else \
+            self._widget.document().blockCount() - 1
+
+    @staticmethod
+    def _is_html(FileName, FileType) -> bool:
+        if FileType is None:
+            return os.path.splitext(str(FileName))[1].lower() in (".htm", ".html")
+        return int(FileType) == 0
+
+    def LoadFile(self, FileName, FileType: int | None = None) -> None:
+        """Load a file: vpRtfHTML (formatted) or vpRtfText; without a FileType,
+        .htm and .html files are HTML and others text."""
+        with open(FileName, encoding="utf-8") as f:
+            contents = f.read()
+        if self._is_html(FileName, FileType):
+            self._widget.setHtml(contents)
+        else:
+            self._widget.setPlainText(contents)
+
+    def SaveFile(self, FileName, FileType: int | None = None) -> None:
+        """Save the contents: vpRtfHTML (with the formatting) or vpRtfText;
+        without a FileType, by the file's extension as in LoadFile."""
+        contents = self.TextHTML if self._is_html(FileName, FileType) else self.Text
+        with open(FileName, "w", encoding="utf-8") as f:
+            f.write(contents)
 
 
 # --- CommandButton ------------------------------------------------------------------
@@ -5604,7 +5996,8 @@ CONTROL_TYPES: dict[str, type[Control]] = {
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, DriveListBox, DirListBox,
         FileListBox, Line, Image, TreeView, Splitter,
-        ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView, Menu,
+        ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView,
+        RichTextBox, Menu,
     )
 }
 

@@ -568,6 +568,65 @@ Events: `Change`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode
 
 Run-time properties: `SelStart`, `SelLength`, `SelText` (the selection; setting `SelText` replaces it).
 
+### RichTextBox
+
+Text with fonts, colors, bold, italic and underline, and aligned paragraphs
+(VB's RichTextBox). Format the selection with its `Sel...` properties; with
+nothing selected they set the format of what is typed (or `SelText`-inserted)
+next.
+
+```python
+self.rtbNotes.SelStart = 6          # select "world"
+self.rtbNotes.SelLength = 5
+self.rtbNotes.SelBold = True
+self.rtbNotes.SelColor = vpRed
+
+self.rtbLog.AppendText("ERROR", Color=vpRed, Bold=True)   # add formatted text at the end
+self.rtbLog.AppendText(" disk full\n")
+
+def rtbNotes_SelChange(self):        # keep a Bold button in step with the selection
+    self.chkBold.Value = vpChecked if self.rtbNotes.SelBold else vpUnchecked
+```
+
+* **The selection's format:** `SelBold`, `SelItalic`, `SelUnderline`,
+  `SelStrikeThru`, `SelColor` (None sets the control's `ForeColor`),
+  `SelFontName`, `SelFontSize` and `SelAlignment` (`vpLeftJustify`,
+  `vpRightJustify`, `vpCenter`, for the selected paragraphs). Reading one
+  gives None, VB's Null, when the selection is mixed (partly bold...).
+* **The selection:** `SelStart`, `SelLength`, `SelText` as in a TextBox;
+  `SelChange` fires whenever the cursor or the selection moves.
+* **Text with its formatting** is HTML (VB used RTF): `TextHTML` is all of
+  it, `SelHTML` the selection (setting it inserts HTML there).
+  `Text` is the plain text; setting it clears the formatting.
+* `AppendText(Text, Color=None, Bold=False, Italic=False, Underline=False)`
+  adds text at the end in its own format, leaving the cursor and selection
+  where they are; if the end was showing, it stays in view (a log).
+* `Find(String, Start=None, End=None, Options=0)` selects the next match and
+  returns where it starts, or -1. Without Start it looks after the
+  selection, so calling it again finds the next one. Options add up:
+  `vpRtfWholeWord`, `vpRtfMatchCase`, `vpRtfNoHighlight` (don't select it).
+* `GetLineFromChar(CharPos)` is the line (paragraph, from 0) holding a
+  position.
+* `LoadFile(FileName, FileType=None)` and `SaveFile(FileName, FileType=None)`
+  read and write `vpRtfHTML` (formatted) or `vpRtfText` (UTF-8); without a
+  FileType, `.htm` and `.html` files are HTML and others text.
+* Pasted text keeps its formatting (but not pictures or tables). Tab moves
+  to the next control, as in a TextBox.
+
+<!-- BEGIN GENERATED: control RichTextBox -->
+Default size 201 × 121. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A border around it |
+| `Locked` | bool | `False` | Read-only: the text can't be edited |
+| `MaxLength` | int | `0` | Maximum length; 0 = no limit |
+| `ScrollBars` | enum | 2 - Vertical | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Its scroll bars (shown when needed); with a horizontal one, lines don't wrap |
+| `Text` | str (multi-line) | `''` | The contents, as plain text |
+
+Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+<!-- END GENERATED -->
+
 ### Frame
 
 A captioned container that groups controls. OptionButtons in a Frame form their own group.
@@ -1631,7 +1690,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
 `HScrollBar`, `VScrollBar`, `PictureBox`,
 [`DriveListBox`, `DirListBox` and `FileListBox`](#drivelistbox-dirlistbox-and-filelistbox), [`Line`](#line), [`Image`](#image),
-[`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
+[`RichTextBox`](#richtextbox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`Toolbar`](#toolbar) (and its `Button`),
 [`ListView`](#listview) (and its `ListItem` and `ColumnHeader`),
@@ -1731,6 +1790,8 @@ All constants are plain ints or strings.
 | ListView.View | `vpLvwIcon`, `vpLvwSmallIcon`, `vpLvwList`, `vpLvwReport` | 0, 1, 2, 3 |
 | ColumnHeader.Alignment (ListView) | `vpLvwColumnLeft`, `vpLvwColumnRight`, `vpLvwColumnCenter` | 0, 1, 2 |
 | ListView.SortOrder | `vpLvwAscending`, `vpLvwDescending` | 0, 1 |
+| RichTextBox: LoadFile / SaveFile file types | `vpRtfHTML`, `vpRtfText` | 0, 1 |
+| RichTextBox.Find options (added together) | `vpRtfWholeWord`, `vpRtfMatchCase`, `vpRtfNoHighlight` | 2, 4, 8 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -1886,6 +1947,12 @@ It goes in the project's `dist` folder:
 * **StatusBar** panels have no `Picture` or `Bevel`, and the lock-key
   panels read the key state from the system on Windows (all four keys) and
   macOS (Caps Lock only); elsewhere they show the key as off.
+* **RichTextBox** formatted text is HTML instead of RTF (`TextHTML`,
+  `SelHTML`, `vpRtfHTML` files), and `GetLineFromChar` counts paragraphs, not
+  wrapped lines. It adds `AppendText`; it has no `SelBullet`, `SelIndent`,
+  `SelCharOffset`, `SelProtected`, `RightMargin`, `OLEObjects` or `Span`/`UpTo`,
+  its `ScrollBars` default to Vertical (VB: none), and Find without Start
+  looks after the selection.
 * **DriveListBox, DirListBox and FileListBox** show drives as root folders
   on macOS and Linux (`/` and the mounted volumes), list folders with full
   paths in `List`, and a FileListBox has `Hidden` but no `Archive`,

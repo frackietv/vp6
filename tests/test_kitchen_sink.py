@@ -251,6 +251,57 @@ def test_text_page(sink):
     assert page.lblKeys.AccessKey == "" and "Rock & Roll" in page.lblKeys._widget.text()
 
 
+def test_rich_text_page(sink, monkeypatch, tmp_path):
+    page = _page(sink, "richtext")
+    doc = page.rtbDoc
+    assert doc.Text.startswith("A RichTextBox has text in colors")
+    assert doc.Text.endswith("A larger blue line, added with SelText")
+    assert page.lblCount.Caption == f"{len(doc.Text.split())} words, {len(doc.Text)} characters"
+    doc.SelStart, doc.SelLength = 0, 13  # "A RichTextBox": SelChange shows its format
+    assert page.chkBold.Value == vp6.vpChecked and page.chkItalic.Value == vp6.vpUnchecked
+    assert "Line 1, position 0, 13 selected" == page.lblStatus.Caption
+    page.chkItalic.Value = vp6.vpChecked  # the buttons format the selection
+    assert doc.SelItalic and doc.SelBold
+    page.cboColor.ListIndex = 3
+    assert doc.SelColor == sys.modules["pgRichText"].BLUE
+    page.cboSize.ListIndex = 3
+    assert doc.SelFontSize == 18
+    page.optAlign[1].Value = True
+    assert doc.SelAlignment == vp6.vpCenter
+    start = doc.Text.index("colors")
+    doc.SelStart, doc.SelLength = start, 6  # red text: the color shown
+    assert page.cboColor.ListIndex == 1 and page.optAlign[1].Value  # Red, centered
+    page.txtFind.Text = "vp6"
+    page.cmdFind_Click()
+    assert doc.SelText == "VP6" and "(1 in all)" in page.lblStatus.Caption
+    page.chkCase.Value = vp6.vpChecked
+    page.cmdFind_Click()
+    assert "isn't there" in page.lblStatus.Caption
+    page.txtFind.Text, page.chkCase.Value = "line", vp6.vpUnchecked
+    page.chkWord.Value = vp6.vpChecked
+    page.cmdFind_Click()
+    assert doc.SelText == "line" and "(1 in all)" in page.lblStatus.Caption
+    module = sys.modules["pgRichText"]
+    monkeypatch.setattr(module, "SAVED", str(tmp_path / "saved.html"))
+    monkeypatch.setattr(module, "SAVED_TEXT", str(tmp_path / "saved.txt"))
+    page.cmdSave_Click()
+    assert page.cmdLoad.Enabled and (tmp_path / "saved.txt").read_text() == doc.Text
+    text = doc.Text
+    doc.Text = ""
+    page.cmdLoad_Click()
+    assert doc.Text == text
+    doc.SelStart, doc.SelLength = 0, 13
+    assert doc.SelBold and doc.SelItalic  # (the formatting came back)
+    for _ in range(3):
+        page.cmdLog_Click()
+    log = page.rtbLog
+    assert log.Locked and log.Text.count("\n") == 3 and "WARNING message 1" in log.Text
+    assert "ERROR message 2" in log.Text and "INFO message 3" in log.Text
+    position = log.Text.index("ERROR")
+    log.SelStart, log.SelLength = position, 5
+    assert log.SelColor == vp6.vpRed and log.SelBold
+
+
 def test_buttons_page(sink):
     page = _page(sink, "buttons")
     page.cmdAuto._widget.click()  # sets cmdClick.Value = True

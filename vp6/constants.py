@@ -185,6 +185,15 @@ vpLvwColumnCenter = 2
 vpLvwAscending = 0
 vpLvwDescending = 1
 
+# --- RichTextBox: LoadFile / SaveFile file types ----------------------------------
+vpRtfHTML = 0
+vpRtfText = 1
+
+# --- RichTextBox.Find options (added together) ------------------------------------
+vpRtfWholeWord = 2
+vpRtfMatchCase = 4
+vpRtfNoHighlight = 8
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

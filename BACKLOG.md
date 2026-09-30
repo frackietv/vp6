@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** RichTextBox: text with colors, bold and italic, and appending formatted text (self-hosting: the code editor and the colored Immediate output)
 - **[Controls]** TextBox/RichTextBox editing API: line/column ↔ position, caret screen position, scroll position, undo/redo, a `SelChange` event, and an option for Tab to insert a tab instead of moving focus (self-hosting: completion, combos following the cursor, go-to-line, indentation)
 - **[Controls]** A code-editor capable text control: syntax-highlighting hook, line-number gutter, current-line highlight, hidden (folded) lines and read-only ranges (self-hosting: the code window and its protected designer region)
 - **[Controls]** Grid control with editable cells and per-cell editors (like MSFlexGrid) (self-hosting: the Properties window and the Options color table)

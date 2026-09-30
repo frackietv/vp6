@@ -13,12 +13,13 @@ from .constants import __all__ as _constants_all
 from .controls import (Button, CheckBox, ColumnHeader, ComboBox, CommandButton, Control,
                        ControlArray, DirListBox, DriveListBox, FileListBox, Frame, HScrollBar, Image, ImageList, Label, Line, ListBox,
                        ListImage, ListItem, ListView, Menu, Node, OptionButton,
-                       Panel, PictureBox, ProgressBar, Slider, Splitter, StatusBar, Tab,
+                       Panel, PictureBox, ProgressBar, RichTextBox, Slider, Splitter,
+                       StatusBar, Tab,
                        TabStrip, TextBox, Timer, Toolbar, TreeView, UpDown, VScrollBar)
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
 
-__version__ = "0.4.6"
+__version__ = "0.4.7"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen",
@@ -29,7 +30,8 @@ __all__ = [
     "Image", "ImageList", "Label", "Line", "ListBox", "ListImage", "ListItem", "ListView",
     "Menu", "Node",
     "OptionButton", "PictureBox",
-    "Panel", "ProgressBar", "Slider", "Splitter", "StatusBar", "Tab", "TabStrip", "TextBox",
+    "Panel", "ProgressBar", "RichTextBox", "Slider", "Splitter", "StatusBar", "Tab", "TabStrip",
+    "TextBox",
     "Timer", "Toolbar", "TreeView", "UpDown", "VScrollBar",
     "InputBox", "MsgBox",
     "Form", "Forms", "Load", "Unload", "run",

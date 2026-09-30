@@ -1,5 +1,22 @@
 # VP6 features
 
+**Version:** 0.4.7
+**Date:** 2026-10-01
+
+## Controls
+
+- RichTextBox: text with fonts, colors, bold, italic, underline and strikethrough, and aligned paragraphs
+- The selection's format: `SelBold`, `SelItalic`, `SelUnderline`, `SelStrikeThru`, `SelColor`, `SelFontName`, `SelFontSize`, `SelAlignment`; None (VB's Null) when the selection is mixed; with nothing selected, the format of what is typed next
+- `SelStart`, `SelLength`, `SelText`, and the `SelChange` event
+- `AppendText(Text, Color, Bold, Italic, Underline)`: formatted text added at the end without moving the selection, following the end like a log
+- `Find` (whole word, match case, no highlight: `vpRtfWholeWord`, `vpRtfMatchCase`, `vpRtfNoHighlight`), `GetLineFromChar`
+- Formatting as HTML instead of VB's RTF: `TextHTML`, `SelHTML`, `LoadFile`/`SaveFile` with `vpRtfHTML` or `vpRtfText`
+- `Locked`, `MaxLength`, `ScrollBars`, `BorderStyle`; pasting keeps formatting but leaves out pictures and tables
+- A RichTextBox Toolbox icon
+- A Kitchen Sink page, "RichTextBox": a small word processor (formatting buttons kept in step with the selection, Find, Save and Load as HTML, a word count) and a colored log
+
+---
+
 **Version:** 0.4.6
 **Date:** 2026-09-30
 
