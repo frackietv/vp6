@@ -205,8 +205,8 @@ def test_project_properties_in_properties_window(window, tmp_path):
     assert window.properties.designer is window.project_target
     assert window.properties.object_combo.currentText() == "Demo  Project"
     rows = _property_rows(window)
-    assert list(rows) == ["(Name)", "Arguments", "ColorScheme", "CompanyName", "Description",
-                          "Icon", "ProductName", "StartupObject", "Type", "Version"]
+    assert list(rows) == ["(Name)", "Arguments", "ArgumentsHelp", "ColorScheme", "CompanyName",
+                          "Description", "Icon", "ProductName", "StartupObject", "Type", "Version"]
     assert rows["Type"].currentData() == "exe"
     assert [rows["StartupObject"].itemText(i) for i in range(rows["StartupObject"].count())] \
         == ["Form1", "Sub Main"]

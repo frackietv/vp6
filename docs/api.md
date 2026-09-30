@@ -2741,7 +2741,16 @@ VP6_PYTHON=/path/to/venv/bin/python ./Calculator.vp6p
 python3 Calculator.vp6p                             # e.g. on Windows
 vp6-run Calculator.vp6p                             # the console script
 python -m vp6.runner Calculator.vp6p
+./Calculator.vp6p --open "a file.txt"               # arguments for the program (Command())
+./Calculator.vp6p --help                            # the program's help
 ```
+
+`--help` (to the project file, `vp6-run` after the project, or a made
+executable) shows the program's help instead of starting it: its product
+name, version and description, its usage, and the arguments the project's
+`ArgumentsHelp` lists (one per line). Every other argument is the program's
+own. `vp6 --help`, `vp6-run --help` and `vp6-make --help` show those
+commands' options.
 
 Its `PROJECT` dict:
 
@@ -2756,6 +2765,7 @@ Its `PROJECT` dict:
 | `version` | `"major.minor.revision"`: `App.Major`, `App.Minor`, `App.Revision` (`Version` in the Properties window) |
 | `product_name`, `company_name`, `description` | `App.ProductName` (`""`: the project's name), `App.CompanyName`, `App.FileDescription` |
 | `arguments` | the command line the IDE gives the program when it runs it (`Command()`); a program started from a shell gets the shell's: `./Calculator.vp6p --open "a file.txt"` |
+| `arguments_help` | the program's own arguments, one per line, as `--help` lists them (`ArgumentsHelp` in the Properties window), e.g. `--open FILE    open FILE at the start` |
 | `icon` | the program's icon (its windows, and the Dock or taskbar): image files relative to the project folder, sizes of one picture; `[]` (new projects) = the VP6 icon, from the VP6 installation (nothing is copied into the project); set your own with the project's `Icon` in the Properties window |
 | `groups` | how the IDE's Project panel groups the forms and modules (not folders on disk) |
 

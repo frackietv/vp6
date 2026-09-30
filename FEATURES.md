@@ -1,5 +1,16 @@
 # VP6 features
 
+**Version:** 0.4.25
+**Date:** 2026-10-01
+
+## Command line
+
+- `--help` everywhere: `vp6 --help` (the IDE: a project to open, `--no-splash`, its environment variables), `vp6-run --help` (and `python -m vp6.runner --help`), `vp6-make --help`
+- VP6 programs take `--help` too (the project file, `vp6-run PROJECT --help`, a made executable): the product name, version and description, the usage, and the program's own arguments from the project's new ArgumentsHelp property (Project Properties and the Properties window); a windowed executable without a console shows it in a message box
+- The Kitchen Sink's `--help` lists its `--page NAME`
+
+---
+
 **Version:** 0.4.24
 **Date:** 2026-10-01
 

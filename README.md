@@ -28,6 +28,7 @@ python3 -m venv .venv
 .venv/bin/vp6                       # start the IDE (or: python -m vp6.ide)
 .venv/bin/vp6 path/to/Project.vp6p      # open a project
 .venv/bin/vp6 --no-splash           # without the two-second splash screen
+.venv/bin/vp6 --help                # the command line options (vp6-run and vp6-make too)
 ```
 
 To make standalone executables (File > Make Executable…, or `vp6-make

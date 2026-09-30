@@ -77,6 +77,10 @@ class _ProjectObject:
         return self._target.project.arguments
 
     @property
+    def ArgumentsHelp(self) -> str:
+        return self._target.project.arguments_help
+
+    @property
     def Icon(self) -> str:
         """The icon's last file: the largest size, as new projects list them."""
         icon = self._target.project.icon
@@ -112,6 +116,9 @@ class ProjectTarget(QObject):
             P("ColorScheme", "enum", "system", COLOR_SCHEME_CHOICES,
               description="Light or dark appearance of every form whose ColorScheme is "
                           "'0 - Project Default'."),
+            P("ArgumentsHelp", "text", "",
+              description="The program's own command line arguments, one per line, as "
+                          "--help lists them, e.g. --open FILE    open FILE at the start."),
             P("CompanyName", "str", "", description="App.CompanyName."),
             P("Description", "str", "", description="App.FileDescription: what the "
                                                     "program is."),
@@ -167,6 +174,8 @@ class ProjectTarget(QObject):
             setattr(project, {"ProductName": "product_name", "CompanyName": "company_name",
                               "Description": "description", "Arguments": "arguments"}[prop],
                     str(value).strip())
+        elif prop == "ArgumentsHelp":
+            project.arguments_help = str(value or "").strip("\n")
         elif prop == "Icon":  # one file now, whatever sizes it had
             value = str(value or "").strip().replace(os.sep, "/")
             project.icon = [value] if value else []

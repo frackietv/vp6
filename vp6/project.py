@@ -21,6 +21,7 @@ A project file is an executable Python script that starts the program::
         "company_name": "",           # App.CompanyName
         "description": "",            # App.FileDescription
         "arguments": "",              # the command line when the IDE runs it
+        "arguments_help": "",         # the program's arguments, for --help
         "groups": [                   # how the Project panel shows them
             {"group": "Forms", "items": ["Form1.py"]},
             {"group": "Modules", "items": ["Module1.py"]},
@@ -54,7 +55,8 @@ groups, "Forms" and "Modules", holding the forms and the modules.
 ``version`` ("major.minor.revision"), ``product_name``, ``company_name`` and
 ``description`` are what the program's ``App`` object reports;
 ``arguments`` is the command line the IDE gives the program when it runs it
-(``Command()``). Older projects without them get the defaults.
+(``Command()``), and ``arguments_help`` lists the program's own arguments
+for ``--help``. Older projects without them get the defaults.
 """
 
 from __future__ import annotations
@@ -75,7 +77,8 @@ _START_RE = re.compile(r"^# region VP6 Project\b.*$", re.M)
 _END_RE = re.compile(r"^# endregion\b.*$", re.M)
 
 _FIELDS = ("name", "type", "startup", "forms", "modules", "user_controls", "color_scheme", "icon",
-           "version", "product_name", "company_name", "description", "arguments", "groups")
+           "version", "product_name", "company_name", "description", "arguments",
+           "arguments_help", "groups")
 _COMMENTS = {
     "icon": "the program's icon: image files (sizes of it), or []",
     "type": '"exe" (GUI) or "console"',
@@ -86,6 +89,7 @@ _COMMENTS = {
     "version": "App.Major, App.Minor and App.Revision",
     "product_name": 'App.ProductName ("": the project\'s name)',
     "arguments": "the command line the IDE runs it with (Command())",
+    "arguments_help": "the program's own arguments, shown by --help",
 }
 
 _TEMPLATE = '''#!/bin/sh
@@ -139,6 +143,7 @@ class Project:
     company_name: str = ""  # App.CompanyName
     description: str = ""  # App.FileDescription
     arguments: str = ""  # the command line when the IDE runs the program (Command())
+    arguments_help: str = ""  # the program's own arguments, listed by --help
     # The Project panel's tree (None: Forms and Modules groups); compared by tree()
     groups: list | None = field(default=None, compare=False)
     path: str = field(default="", compare=False)  # the .vp6p file

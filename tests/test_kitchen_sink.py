@@ -1083,6 +1083,7 @@ def test_globals_page(sink, capsys):
 def test_the_command_line_names_the_first_page(qapp, tmp_path, monkeypatch):
     project = create_project(str(tmp_path), "Sink", "kitchensink")
     assert Project.load(project).arguments == "--page intro"
+    assert "--page NAME" in Project.load(project).arguments_help  # (its --help)
     monkeypatch.setattr(sys, "argv", ["Sink.vp6p", "--page", "globals"])
     folder = str(tmp_path / "Sink")
     sys.path.insert(0, folder)

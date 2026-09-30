@@ -60,7 +60,9 @@ def create(directory: str, name: str) -> Project:
                    modules=list(MODULES), user_controls=list(USER_CONTROLS),
                    color_scheme="system", product_name="VP6 Kitchen Sink",
                    company_name="VP6", description="Every feature of VP6, on one window",
-                   arguments="--page intro")  # (Form1 shows the page named by --page)
+                   arguments="--page intro",  # (Form1 shows the page named by --page)
+                   arguments_help="--page NAME    start on the page NAME, e.g. globals "
+                                  "(the keys of PAGES in Form1.py)")
 
 
 def draw_icons(folder: str) -> None:

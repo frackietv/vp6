@@ -559,7 +559,7 @@ architecture §6.2).
   * fields `name`, `type` (`"exe"` / `"console"`), `startup` (a form class
     name or `SUB_MAIN = "Sub Main"`), `forms`, `modules`, `color_scheme`,
     `icon`, `version`, `product_name`, `company_name`, `description`,
-    `arguments`, `path` (the ones missing from older projects get their
+    `arguments`, `arguments_help`, `path` (the ones missing from older projects get their
     defaults); `version_numbers()` is `version` as (major, minor, revision);
   * **the icon:** `icon` lists image files relative to the project (`load`
     turns a single string into a list); `icon_paths()` gives them as absolute
@@ -681,7 +681,11 @@ programs would then fail.
 
 Starts a project. `run_project(path)`:
 
-1. loads the project;
+1. loads the project; with `--help` (`HELP_OPTION`) among the program's
+   arguments, shows `program_help(project, prog)` (name, version,
+   description, usage, the project's `arguments_help`, VP6_PYTHON unless
+   frozen) with `show_help` (stdout, or a MsgBox when there is none: a
+   windowed executable on Windows) and returns 0 without starting anything;
 2. puts `import_folders(project)` on `sys.path` (the project's folder, then
    every folder holding a form or module, so files in subfolders import each
    other by name) and `chdir`s into the project's folder;
@@ -699,7 +703,9 @@ Starts a project. `run_project(path)`:
      imported by file name (`_import_file`).
 
 `main(argv)` implements `python -m vp6.runner PROJECT.vp6p [ARGUMENTS...]`
-and the `vp6-run` console script. It makes `sys.argv` the project and its
+and the `vp6-run` console script (`argument_parser()`: argparse, the
+program's arguments a REMAINDER, so `--help` after the project is the
+program's). It makes `sys.argv` the project and its
 arguments, as when the project file runs itself, so `sys.argv[1:]` (and
 `Command()`) are the program's arguments either way.
 
@@ -891,8 +897,11 @@ Module functions:
   itself too. Unless `--no-splash` is given, it shows the splash screen
   (`splash.SplashScreen`) first, builds the window meanwhile, and shows the
   window once the splash screen has finished (`wait`).
-  `parse_arguments(argv)` gives `(project, splash)` from `vp6 [--no-splash]
-  [Project.vp6p]` (options may come before or after the project).
+  `parse_arguments(argv)` gives `(project, splash)` from `vp6 [--help]
+  [--no-splash] [Project.vp6p]` (options may come before or after the
+  project), with `argument_parser()` (argparse: `--help` prints the options
+  and the environment variables, and exits; options it doesn't know are left
+  to Qt).
 
 `open_project` opens a windowed project's startup form designer, or its first
 form's when it starts in Sub Main, and a console project's Main module.
@@ -1102,7 +1111,8 @@ of the Properties window.
 * It exposes the project's `(Name)`, `Type`, `StartupObject` and
   `ColorScheme` as `enum` specs, and `Version` (validated as up to three
   numbers, stored as major.minor.revision), `ProductName`, `CompanyName`,
-  `Description` and `Arguments` as text. `StartupObject`'s choices are the project's
+  `Description` and `Arguments` as text, and `ArgumentsHelp` as multi-line
+  text. `StartupObject`'s choices are the project's
   forms plus `Sub Main`. `Icon` is a `file`: the icon's last file (the
   largest size, as new projects list them); setting it makes that one file
   the icon, and an empty value none (the VP6 icon).
@@ -1571,7 +1581,8 @@ explorer-style.
 * `ProjectPropertiesDialog` edits the name, type, startup object and color
   scheme (System / Light / Dark / Follow the IDE), and as VB's Make tab the
   version (three spin boxes, `version`), product name, company name,
-  description and command line arguments; `apply(project)`.
+  description, command line arguments and the arguments' help (a
+  `QPlainTextEdit`); `apply(project)`.
 * `MakeDialog(project)`: File > Make Executable…: what will be made and
   where (`make.output_path`), and a "One file" check box, disabled where it
   can't apply (`make.can_be_one_file`).
@@ -1743,6 +1754,7 @@ All tests run headless. `conftest.py`:
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
 | `test_app_settings.py` | SaveSetting, GetSetting (its Default), GetAllSettings, DeleteSetting of a setting, a section or everything (in INI files of the test's own); App's title, version and descriptions from a project; the new project fields saved and loaded, and older projects' defaults; Command(); Screen.Fonts and FontCount; the Project Properties dialog's version and text fields; PrevInstance in real programs (a second copy sees the first, a third after it ends doesn't); a project's arguments reaching Command() and `sys.argv` from the project file and from `vp6.runner`. |
+| `test_command_line.py` | `--help`: the IDE's (its options and environment variables, exit 0; Qt's options left alone), the runner's (and no project: exit 2); a program's help text (name, version, description, usage, the project's ArgumentsHelp, the VP6 version), a message box without stdout; a real program showing its help from its project file and from `vp6.runner` without starting, and starting with other arguments; ArgumentsHelp saved and in the Project Properties dialog. |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import shlex
 import shutil
@@ -1791,12 +1792,30 @@ def create_project(location: str, name: str, template: str) -> str:
     return path
 
 
+def argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="vp6", description=f"VP6 {vp6.__version__}: a VB6 style IDE for Python.",
+        epilog="environment:\n"
+               "  VP6_NO_OUTPUT_CAPTURE  show the IDE's own messages in the terminal, not in "
+               "its Output window\n"
+               "  VP6_SETTINGS_DIR       keep the IDE's settings in an INI file in this folder\n\n"
+               "Other commands: vp6-run PROJECT.vp6p (run a project), vp6-make PROJECT.vp6p "
+               "(make an executable); both take --help.",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("project", metavar="PROJECT.vp6p", nargs="?",
+                        help="a project file to open")
+    parser.add_argument("--no-splash", action="store_true",
+                        help="start without the splash screen")
+    return parser
+
+
 def parse_arguments(argv: list[str]) -> tuple[str | None, bool]:
     """(the project to open or None, whether to show the splash screen) from
-    the command line: ``vp6 [--no-splash] [Project.vp6p]``."""
-    splash = "--no-splash" not in argv[1:]
-    paths = [arg for arg in argv[1:] if not arg.startswith("-")]
-    return (paths[0] if paths and os.path.exists(paths[0]) else None), splash
+    the command line: ``vp6 [--help] [--no-splash] [Project.vp6p]`` (--help
+    prints the help and exits). Arguments it doesn't know are left to Qt."""
+    args, _ = argument_parser().parse_known_args(argv[1:])
+    project = args.project if args.project and os.path.exists(args.project) else None
+    return project, not args.no_splash
 
 
 def main(argv: list[str] | None = None) -> int:

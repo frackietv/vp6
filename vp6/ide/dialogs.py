@@ -9,8 +9,8 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QListWidgetItem, QPushButton, QSpinBox, QTabWidget, QVBoxLayout,
-    QWidget,
+    QLineEdit, QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton, QSpinBox, QTabWidget,
+    QVBoxLayout, QWidget,
 )
 
 import vp6
@@ -226,6 +226,11 @@ class ProjectPropertiesDialog(QDialog):
         self.arguments = QLineEdit(project.arguments)
         self.arguments.setToolTip("What the program gets when the IDE runs it: Command(), "
                                   "sys.argv[1:].")
+        self.arguments_help = QPlainTextEdit(project.arguments_help)
+        self.arguments_help.setPlaceholderText("--open FILE    open FILE at the start")
+        self.arguments_help.setToolTip("The program's own arguments, one per line, as "
+                                       "--help lists them.")
+        self.arguments_help.setFixedHeight(64)
         form = QFormLayout()
         form.addRow("Project Name:", self.name)
         form.addRow("Project Type:", self.type)
@@ -236,6 +241,7 @@ class ProjectPropertiesDialog(QDialog):
         form.addRow("Company Name:", self.company_name)
         form.addRow("Description:", self.description)
         form.addRow("Command Line Arguments:", self.arguments)
+        form.addRow("Arguments Help:", self.arguments_help)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -254,6 +260,7 @@ class ProjectPropertiesDialog(QDialog):
         project.company_name = self.company_name.text().strip()
         project.description = self.description.text().strip()
         project.arguments = self.arguments.text().strip()
+        project.arguments_help = self.arguments_help.toPlainText().strip("\n")
 
 
 ABOUT_HTML = f"""

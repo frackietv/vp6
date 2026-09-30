@@ -12,6 +12,7 @@ any form is still open, like VB6.
 
 from __future__ import annotations
 
+import argparse
 import importlib
 import inspect
 import os
@@ -58,8 +59,48 @@ def find_main(project: Project):
     raise SystemExit("Startup is 'Sub Main' but no module defines Main()")
 
 
+HELP_OPTION = "--help"
+
+
+def program_help(project: Project, prog: str) -> str:
+    """What ``--help`` shows for a VP6 program: its name, version and
+    description, its usage, and the arguments it lists in the project's
+    ``arguments_help``."""
+    major, minor, revision = project.version_numbers()
+    title = f"{project.product_name or project.name} {major}.{minor}.{revision}"
+    lines = [f"{title} - {project.description}" if project.description else title, "",
+             f"usage: {prog} [{HELP_OPTION}] [ARGUMENTS...]", ""]
+    if project.arguments_help.strip():
+        lines += ["arguments:"] + ["  " + line for line in
+                                   project.arguments_help.strip("\n").splitlines()] + [""]
+    else:
+        lines += ["The program reads its arguments with Command() (sys.argv[1:]).", ""]
+    lines += ["options:", f"  {HELP_OPTION:<10}show this help and exit", ""]
+    if not getattr(sys, "frozen", False):  # (the project file, not a made executable)
+        lines += ["environment:",
+                  "  VP6_PYTHON  the Python that runs the project file (default: python3)", ""]
+    from . import __version__
+
+    lines.append(f"Made with VP6 {__version__}.")
+    return "\n".join(lines)
+
+
+def show_help(text: str) -> None:
+    """Print the help; a windowed program made into an executable on Windows
+    has no console (no stdout), so there it is a message box."""
+    if sys.stdout is not None:
+        print(text)
+        return
+    from .dialogs import MsgBox
+
+    MsgBox(text, 64, "Help")  # vpInformation
+
+
 def run_project(path: str) -> int:
     project = Project.load(path)
+    if HELP_OPTION in sys.argv[1:]:  # (before anything starts)
+        show_help(program_help(project, os.path.basename(sys.argv[0]) or project.name))
+        return 0
     sys.path[:0] = import_folders(project)
     os.chdir(project.directory)
     from . import appearance
@@ -88,12 +129,27 @@ def run_project(path: str) -> int:
     return run(find_form_class(project, project.startup))
 
 
+def argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="vp6-run", description="Run a VP6 project (as running its project file does).",
+        epilog="The arguments after the project are the program's own (Command(), "
+               "sys.argv[1:]); PROJECT.vp6p --help shows the program's help.\n\n"
+               "environment:\n"
+               "  VP6_NO_ERROR_DIALOG  report run-time errors on stderr only, without the "
+               "Run-time error box",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("project", metavar="PROJECT.vp6p", help="the project file")
+    parser.add_argument("arguments", metavar="ARGUMENTS", nargs=argparse.REMAINDER,
+                        help="the program's command line arguments")
+    return parser
+
+
 def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
-    if not argv:
-        raise SystemExit("usage: python -m vp6.runner PROJECT.vp6p [ARGUMENTS...]")
-    sys.argv = argv[:]  # the program's arguments in sys.argv[1:] (Command()), as when
-    sys.exit(run_project(argv[0]))  # the project file runs itself
+    args = argument_parser().parse_args(argv)
+    # The program's arguments in sys.argv[1:] (Command()), as when the project file runs itself
+    sys.argv = [args.project] + args.arguments
+    sys.exit(run_project(args.project))
 
 
 if __name__ == "__main__":
