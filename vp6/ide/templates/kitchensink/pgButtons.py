@@ -1,5 +1,6 @@
 """Kitchen Sink page: CommandButtons, CheckBoxes, OptionButtons (also Graphical ones: a
-picture button and toggle buttons) and Frames."""
+picture button and toggle buttons) and Frames, and a button moving into another container
+at run time (Container)."""
 
 from vp6 import *
 
@@ -56,6 +57,11 @@ class pgButtons(Form):
         self.optAlign[2] = OptionButton(self.fraAlign, Caption='Right', Left=144, Top=36, Width=62,
                                         Height=32, Style=1, TabIndex=19,
                                         ToolTipText='Graphical OptionButtons: toggle buttons, one of them pressed')
+        self.fraBasket = Frame(self, Caption='Basket', Left=250, Top=290, Width=200, Height=110,
+                               TabIndex=20)
+        self.cmdHop = CommandButton(self, Caption='&Hop in', Left=470, Top=330, Width=110,
+                                    Height=30, TabIndex=21,
+                                    ToolTipText='Moves itself into the Basket frame and out again (Container)')
     # endregion
 
     def Form_Load(self):
@@ -100,6 +106,20 @@ class pgButtons(Form):
     def chkUnderline_Click(self):
         # A Graphical CheckBox is a toggle button: pressed while its Value is vpChecked
         self.lblSample.FontUnderline = self.chkUnderline.Value == vpChecked
+
+    def cmdHop_Click(self):
+        # VB's Set cmdHop.Container = fraBasket: the button moves into the frame; its
+        # Left and Top are then in the frame
+        hop = self.cmdHop
+        if hop.Container is self:
+            hop.Container = self.fraBasket
+            hop.Move(45, 50)
+            hop.Caption = "&Hop out"
+        else:
+            hop.Container = self
+            hop.Move(470, 330)
+            hop.Caption = "&Hop in"
+        self.lblClicks.Caption = f"cmdHop is in {hop.Container.Name}"
 
     def optAlign_Click(self, Index):
         # Graphical OptionButtons: one of the Frame's is pressed

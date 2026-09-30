@@ -428,7 +428,14 @@ def test_buttons_page(sink):
     assert not page.cmdStar._widget.icon().isNull()  # a picture button
     page.cmdStar._widget.click()
     assert "picture button" in page.lblClicks.Caption
-
+    hop = page.cmdHop  # moved into the Basket frame and out again (Container)
+    hop._widget.click()
+    assert hop.Container is page.fraBasket and (hop.Left, hop.Top) == (45, 50)
+    assert hop._widget.parent() is page.fraBasket._container_widget() and hop.Visible
+    assert page.lblClicks.Caption == "cmdHop is in fraBasket" and hop.Caption == "&Hop out"
+    hop._widget.click()
+    assert hop.Container is page and (hop.Left, hop.Top) == (470, 330)
+    assert page.lblClicks.Caption == "cmdHop is in pgButtons"
 
 def test_lists_page(sink):
     page = _page(sink, "lists")

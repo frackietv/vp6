@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.4.19
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- Moving a control to another container at run time, as VB's `Set Command1.Container = Frame1`: `Command1.Container = self.Frame1` (its form, a Frame, PictureBox or DockPanel); its Left and Top stay, now in the new container; option buttons join the new container's group
+- The Kitchen Sink's Buttons page: a button hopping into a frame and out
+
+---
+
 **Version:** 0.4.18
 **Date:** 2026-10-01
 

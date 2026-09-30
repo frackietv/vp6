@@ -416,7 +416,7 @@ Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `
 |---|---|
 | `Name` | read-only; set by the attribute the control is assigned to (all elements of a control array share it) |
 | `Index` | read-only; the element's number in a [control array](#control-arrays), `None` for other controls |
-| `Parent`, `Container` | the form or container control the control is on |
+| `Parent`, `Container` | the form or container control the control is on. Setting `Container` moves the control there at run time (VB's `Set Command1.Container = Frame1`): to its form or a Frame, PictureBox or DockPanel on it; its `Left` and `Top` stay, now in the new container, and option buttons join the new container's group |
 | `SetFocus()` | gives the control the keyboard focus |
 | `Move(Left, Top=None, Width=None, Height=None)` | moves / resizes |
 | `Refresh()` | repaints |

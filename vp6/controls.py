@@ -274,7 +274,43 @@ class Control(PropertyHost):
 
     @property
     def Container(self):
+        """The form or container control (Frame, PictureBox, DockPanel) it is
+        on. Setting it moves the control there at run time, as VB's ``Set
+        Command1.Container = Frame1``: its Left and Top stay, now in the new
+        container (option buttons join the new container's group)."""
         return self.Parent
+
+    @Container.setter
+    def Container(self, value):
+        form = self._form
+        if value is not form and not (isinstance(value, Control) and value.IsContainer and
+                                      value._form is form):
+            raise ValueError(f"{self.TypeName} '{self.Name}': the Container must be its form "
+                             f"or a container control on it (a Frame, PictureBox or "
+                             f"DockPanel), not {value!r}")
+        if self._widget is None:
+            raise TypeError(f"{self.TypeName} '{self.Name}' can't be moved to a container")
+        inside = value
+        while isinstance(inside, Control):
+            if inside is self:
+                raise ValueError(f"{self.TypeName} '{self.Name}' can't go into itself or into "
+                                 f"a control on it")
+            inside = inside.Parent
+        if value is self.Parent:
+            return
+        widget = self._widget
+        shown = not widget.isHidden()
+        geometry = widget.geometry()
+        self.__dict__["Parent"] = value
+        widget.setParent(self._parent_widget())
+        widget.setGeometry(geometry)  # (the same Left and Top, in the new container)
+        if shown:
+            widget.show()
+        if self._stackable():
+            self._restack()  # its place among the new container's controls
+        if "Align" in self._specs and self._values.get("Align"):
+            form._layout_aligned()  # (it was docked to the form, or is now)
+        form._apply_tab_order()
 
     def __repr__(self):
         index = "" if self._index is None else f"({self._index})"
