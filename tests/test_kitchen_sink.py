@@ -15,7 +15,7 @@ import pytest
 from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QTimer, QUrl
 from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QPixmap
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLineEdit
+from PySide6.QtWidgets import QApplication, QLineEdit, QWidget
 
 import vp6
 from vp6 import formfile
@@ -625,6 +625,32 @@ def test_grid_page(sink, monkeypatch):
     props._commit(6, 1, "200")
     assert label.Width == 200
     assert props._editor_of(4, 1) == vp6.vpGridEditColor and label.BackColor is not None
+
+
+def test_web_page(sink, monkeypatch):
+    sys.path.insert(0, os.path.dirname(__file__))
+    from test_webview import FakeView
+
+    from vp6 import controls
+
+    views = []
+    monkeypatch.setattr(controls, "_new_web_view",
+                        lambda parent: (QWidget(parent), views.append(FakeView()) or views[-1]))
+    page = _page(sink, "web")
+    view = views[0]
+    assert view.calls[0][0] == "loadHtml" and page.lblStatus.Caption == "Done: html"
+    page.txtAddress.Text = "example.com"
+    page.cmdGo._widget.click()  # Navigate: a domain, https added
+    assert page.txtAddress.Text == "https://example.com" and page.cmdBack.Enabled
+    page.txtAddress.Text = "https://nowhere.invalid/"
+    QTest.keyClick(page.txtAddress._widget, Qt.Key_Return)  # Go is the Default button
+    assert page.lblStatus.Caption.startswith("Couldn't open https://nowhere.invalid/")
+    page.cmdBack._widget.click()
+    assert page.cmdForward.Enabled
+    page.cmdScript._widget.click()  # RunScript's result comes to show_links
+    assert page.lblStatus.Caption == "RunScript: the page has 42 links"
+    page.cmdRefresh._widget.click()
+    assert view.calls[-1] == ("reload",)
 
 
 def test_tabs_page(sink):

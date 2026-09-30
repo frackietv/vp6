@@ -218,6 +218,17 @@ def _commondialog(p):
     p.drawRect(QRectF(14, 15, 5, 3))  # a button
 
 
+def _webview(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 3, 20, 18))  # a page...
+    p.fillRect(QRectF(2.5, 3.5, 19, 4), C.face)  # ...with an address bar
+    p.setBrush(Qt.NoBrush)
+    p.setPen(QPen(C.blue, 1.2))
+    p.drawEllipse(QRectF(7, 9, 10, 10))  # a globe
+    p.drawEllipse(QRectF(10, 9, 4, 10))
+    p.drawLine(QPointF(7, 14), QPointF(17, 14))
+
+
 def _hscroll(p):
     p.setBrush(C.face)
     p.drawRect(QRectF(2, 8, 20, 8))
@@ -511,7 +522,7 @@ _DRAWERS = {
     "ListView": _listview, "RichTextBox": _richtextbox,
     "CodeBox": _codebox, "FlexGrid": _flexgrid,
     "DockPanel": _dockpanel, "UserControl": _usercontrol,
-    "CommonDialog": _commondialog,
+    "CommonDialog": _commondialog, "WebView": _webview,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

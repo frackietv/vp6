@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.4.22
+**Date:** 2026-10-01
+
+## Controls
+
+- WebView: a web page shown by the platform's own web view (Qt WebView's QWebView: WebKit on macOS, WebView2 on Windows), with VB's WebBrowser names: `URL`, `Navigate` (web addresses, files, domains), `GoBack`, `GoForward`, `Refresh`, `Stop`, `LoadHTML`, `RunScript` (with a callback for the result), `LocationURL`, `LocationName`, `Busy`, `Progress`, `CanGoBack`, `CanGoForward`, and the `DocumentComplete`, `NavigateError`, `TitleChange` and `ProgressChange` events
+- The Kitchen Sink's Web page: an address box, Back, Forward, Refresh, HTML of its own and a script
+
+---
+
 **Version:** 0.4.21
 **Date:** 2026-10-01
 

@@ -28,6 +28,8 @@ def ensure_app() -> QApplication:
     global _interrupt_handler
     app = QApplication.instance()
     if app is None:
+        # (a web view needs this set before the application exists: Qt WebView, WebEngine)
+        QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
         app = QApplication(sys.argv[:1])
         _interrupt_handler = install_interrupt_handler(close_all_windows)
         app.setWindowIcon(vp6_icon())

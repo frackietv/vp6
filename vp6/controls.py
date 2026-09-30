@@ -60,6 +60,8 @@ EVENT_ARGS = {
     "DragDrop": "Source, X, Y", "DragOver": "Source, X, Y, State",
     "OLEDragDrop": "Data, Effect, Button, Shift, X, Y",
     "OLEDragOver": "Data, Effect, Button, Shift, X, Y, State",
+    "DocumentComplete": "URL", "NavigateError": "URL, Description", "TitleChange": "Text",
+    "ProgressChange": "Progress",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -8611,6 +8613,177 @@ class Menu(Control):
             self._action.setShortcut(QKeySequence(v or ""))
 
 
+# --- WebView ----------------------------------------------------------------------------------
+
+def _new_web_view(parent: QWidget):
+    """The platform's own web view (Qt WebView's QWebView: WebKit on macOS,
+    WebView2 on Windows, ...), a native window, in a widget: (widget, view)."""
+    try:
+        from PySide6.QtWebView import QWebView
+    except ImportError as exc:
+        raise RuntimeError("WebView needs PySide6 6.11 or newer (Qt WebView's QWebView): "
+                           "pip install --upgrade PySide6") from exc
+    view = QWebView()
+    return QWidget.createWindowContainer(view, parent), view
+
+
+def _allow_local_files(view) -> None:
+    """Let a page loaded from a file (the program's own HTML) open its files."""
+    try:
+        from PySide6.QtWebView import QWebViewSettings
+    except ImportError:
+        return
+    attributes = QWebViewSettings.WebAttribute
+    for name in ("AllowFileAccess", "LocalContentCanAccessFileUrls"):
+        if hasattr(attributes, name):
+            view.settings().setAttribute(getattr(attributes, name), True)
+
+
+def _web_design_widget(parent: QWidget, title: str) -> QLabel:
+    """A WebView in the designer: a page with a globe (no web view runs there)."""
+    label = QLabel(parent)
+    label.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken)
+    label.setAlignment(Qt.AlignCenter)
+    label.setAutoFillBackground(True)
+    palette = label.palette()
+    palette.setColor(QPalette.Window, QColor("#ffffff"))
+    palette.setColor(QPalette.WindowText, QColor("#4a6fa5"))
+    label.setPalette(palette)
+    label.setText(f"\\U0001F310  {title}")
+    return label
+
+
+class WebView(Control):
+    """A web page shown by the platform's own web view (Qt WebView: WebKit on
+    macOS, WebView2 on Windows), with VB's WebBrowser names: URL, Navigate,
+    GoBack, GoForward, Refresh, Stop, LoadHTML, RunScript, LocationURL,
+    LocationName, Busy, and the DocumentComplete, NavigateError, TitleChange
+    and ProgressChange events. The page is drawn by the system, above
+    controls that overlap it."""
+
+    TypeName = "WebView"
+    DefaultEvent = "DocumentComplete"
+    DefaultSize = (321, 241)
+    Events = ("DocumentComplete", "NavigateError", "TitleChange", "ProgressChange",
+              "GotFocus", "LostFocus")
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("URL", "str", "",
+          description="The page shown: a web address (https://...), a file (relative to "
+                      "the form's folder) or about:blank; setting it at run time goes there"),
+        *_COMMON,
+    )
+
+    def _create_widget(self, parent):
+        self.__dict__["_view"] = None
+        if self._design_mode:
+            return _web_design_widget(parent, self.TypeName)
+        widget, view = _new_web_view(parent)
+        self.__dict__["_view"] = view
+        _allow_local_files(view)
+        view.loadingChanged.connect(self._on_loading)
+        view.titleChanged.connect(lambda title: self._fire("TitleChange", title))
+        view.loadProgressChanged.connect(lambda: self._fire("ProgressChange", self.Progress))
+        return widget
+
+    def _on_loading(self, info) -> None:
+        status = getattr(info.status(), "name", str(info.status()))
+        url = info.url().toString()
+        if status == "Succeeded":
+            self._fire("DocumentComplete", url)
+        elif status == "Failed":
+            self._fire("NavigateError", url, info.errorString())
+
+    # -- where it is -----------------------------------------------------------------------
+    def _url(self, value: str) -> QUrl:
+        """A web address, a domain (example.com) or a file (relative to the form's folder)."""
+        text = str(value).strip()
+        if not text:
+            return QUrl("about:blank")
+        if "://" in text or text.startswith(("about:", "data:")):
+            return QUrl(text)
+        path = resolve_path(self._form, text)
+        if os.path.exists(path):
+            return QUrl.fromLocalFile(os.path.abspath(path))
+        url = QUrl.fromUserInput(text)
+        if url.scheme() == "http":
+            url.setScheme("https")  # (a bare domain: https, as browsers do)
+        return url
+
+    def _apply_URL(self, v):
+        if self._view is not None and v:
+            self._view.setUrl(self._url(v))
+
+    def _read_URL(self):
+        return self.LocationURL if self._view is not None else self._values.get("URL", "")
+
+    def Navigate(self, URL: str) -> None:
+        """Go to a page: a web address, a domain (example.com) or a file."""
+        self._values["URL"] = str(URL)
+        if self._view is not None:
+            self._view.setUrl(self._url(URL))
+
+    def LoadHTML(self, HTML: str, BaseURL: str = "") -> None:
+        """Show this HTML (VB: Document.write); BaseURL is where its links and
+        pictures are relative to."""
+        if self._view is not None:
+            self._view.loadHtml(str(HTML), self._url(BaseURL) if BaseURL else QUrl())
+
+    def GoBack(self) -> None:
+        if self._view is not None:
+            self._view.goBack()
+
+    def GoForward(self) -> None:
+        if self._view is not None:
+            self._view.goForward()
+
+    def Refresh(self) -> None:
+        """Load the page again."""
+        if self._view is not None:
+            self._view.reload()
+
+    def Stop(self) -> None:
+        if self._view is not None:
+            self._view.stop()
+
+    def RunScript(self, Script: str, Callback=None) -> None:
+        """Run JavaScript in the page; Callback, if given, gets its result
+        (later, when the page has run it)."""
+        if self._view is not None:
+            if Callback is None:
+                self._view.runJavaScript(str(Script))
+            else:
+                self._view.runJavaScript(str(Script), Callback)
+
+    @property
+    def LocationURL(self) -> str:
+        """The address of the page shown."""
+        return self._view.url().toString() if self._view is not None else ""
+
+    @property
+    def LocationName(self) -> str:
+        """The page's title."""
+        return self._view.title() if self._view is not None else ""
+
+    @property
+    def Busy(self) -> bool:
+        """Whether a page is loading."""
+        return bool(self._view is not None and self._view.isLoading())
+
+    @property
+    def Progress(self) -> int:
+        """How much of the page has loaded, 0 to 100."""
+        return int(self._view.loadProgress()) if self._view is not None else 0
+
+    @property
+    def CanGoBack(self) -> bool:
+        return bool(self._view is not None and self._view.canGoBack())
+
+    @property
+    def CanGoForward(self) -> bool:
+        return bool(self._view is not None and self._view.canGoForward())
+
+
 # --- CommonDialog -------------------------------------------------------------------------------
 
 class DialogCancelled(Exception):
@@ -8867,7 +9040,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, DriveListBox, DirListBox,
         FileListBox, Shape, Line, Image, TreeView, Splitter,
         ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView,
-        RichTextBox, CodeBox, FlexGrid, DockPanel, CommonDialog, Menu,
+        RichTextBox, CodeBox, FlexGrid, DockPanel, CommonDialog, WebView, Menu,
     )
 }
 
@@ -8933,7 +9106,8 @@ _MOUSE_PROPERTIES = (
                   "OLEDragDrop (None: the control's own behavior)"),
 )
 _DRAG_EVENTS = ("DragDrop", "DragOver", "OLEDragDrop", "OLEDragOver")
-_NO_MOUSE_MEMBERS = ("Timer", "Line", "Shape", "ImageList", "Menu", "Splitter", "CommonDialog")
+_NO_MOUSE_MEMBERS = ("Timer", "Line", "Shape", "ImageList", "Menu", "Splitter", "CommonDialog",
+                     "WebView")  # (a native page: the system has its mouse)
 
 
 def _add_mouse_members(cls) -> None:

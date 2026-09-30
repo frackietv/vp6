@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** WebView control using QWebView
 - **[Controls]** WebBrowser control using QWebEngineView
 - **[Language and runtime]** App, Screen and settings: `SaveSetting` / `GetSetting` / `DeleteSetting` for per-user settings; more of VB's `App` object (`Major` / `Minor` / `Revision`, `PrevInstance`, `ProductName`) and the command line (VB's `Command()`); font enumeration, `Screen.Fonts` / `Screen.FontCount` (self-hosting: recent projects, themes, window layout, the Options font list, the FontName editor)
 - **[Language and runtime]** Drawing on forms and PictureBoxes: the graphics methods `Line`, `Circle`, `PSet`, `Print` and `Cls` (today `PictureBox.Cls()` only clears the picture), drawing properties (`DrawWidth`, `DrawStyle`, `FillStyle`, `FillColor`, `CurrentX` / `CurrentY`), the `Paint` event and `AutoRedraw`, and text measurement with `TextWidth` / `TextHeight` (self-hosting: the designer's window frame, grid dots and selection handles, the code editor's gutter width, eliding captions)

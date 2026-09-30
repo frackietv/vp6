@@ -273,6 +273,10 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `DragOver` | Source, X, Y, State |
 | `OLEDragDrop` | Data, Effect, Button, Shift, X, Y |
 | `OLEDragOver` | Data, Effect, Button, Shift, X, Y, State |
+| `DocumentComplete` | URL |
+| `NavigateError` | URL, Description |
+| `TitleChange` | Text |
+| `ProgressChange` | Progress |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -2167,6 +2171,52 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
+### WebView
+
+A web page, shown by the platform's own web view (Qt WebView: WebKit on macOS,
+WebView2 on Windows), with the names of VB's WebBrowser control. It needs
+PySide6 6.11 or newer; Qt WebView is only loaded when a WebView is made.
+
+```python
+self.webHelp = WebView(self, Left=8, Top=40, Width=400, Height=300,
+                       URL="help/index.html")          # a file, a domain or a web address
+
+def cmdGo_Click(self):
+    self.webHelp.Navigate(self.txtAddress.Text)        # example.com: https:// added
+
+def webHelp_DocumentComplete(self, URL):
+    self.Caption = self.webHelp.LocationName           # the page's title
+```
+
+* **Where it is:** `URL` (set in the designer: the first page; setting it at
+  run time goes there), `Navigate(URL)` (a web address, a file relative to
+  the form's folder, or a domain, which gets `https://`), `GoBack()`,
+  `GoForward()`, `Refresh()`, `Stop()`; `LocationURL` (the address shown),
+  `LocationName` (its title), `Busy`, `Progress` (0 to 100), `CanGoBack`,
+  `CanGoForward`.
+* **Its own content:** `LoadHTML(HTML, BaseURL="")` shows HTML of the
+  program's own (VB's `Document.write`); `RunScript(Script, Callback=None)`
+  runs JavaScript in the page, and `Callback` gets the result once it has
+  run.
+* **Events:** `DocumentComplete(URL)` when a page has loaded,
+  `NavigateError(URL, Description)` when it couldn't, `TitleChange(Text)`,
+  `ProgressChange(Progress)`.
+* The page is drawn by the system, as a window of its own inside the form:
+  it is above controls that overlap it, its mouse isn't the form's (no
+  MousePointer, drag and drop or mouse events), and form screenshots don't
+  show it. In the designer it is a placeholder.
+
+<!-- BEGIN GENERATED: control WebView -->
+Default size 321 × 241. Property groups: Position, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `URL` | str | `''` | The page shown: a web address (https://...), a file (relative to the form's folder) or about:blank; setting it at run time goes there |
+
+Events: `DocumentComplete(URL)`, `NavigateError(URL, Description)`, `TitleChange(Text)`, `ProgressChange(Progress)`, `GotFocus`, `LostFocus`, `Validate`. Default event (double-click in the designer): `DocumentComplete`.
+<!-- END GENERATED -->
+
 ### StatusBar
 
 A bar of panels along the bottom of a form, showing texts, the time, the date
@@ -2465,7 +2515,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 [`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`CommonDialog`](#commondialog) (and `DialogCancelled`), [`Toolbar`](#toolbar) (and its `Button`),
-[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid),
+[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`WebView`](#webview),
 [`StatusBar`](#statusbar) (and its
 `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
 [`Menu`](#menu), and
@@ -2744,6 +2794,9 @@ It goes in the project's `dist` folder:
   control can't be a container for the form's controls.
 * **DockPanel** is VP6's own (VB had no docking panels), as are the form's
   `DockLayout` and its events `DockChange` and `Close`.
+* **WebView** has VB's WebBrowser names, but no `BeforeNavigate2` (a
+  navigation can't be cancelled), `NewWindow2` or `Document` object; use
+  `RunScript` to reach the page.
 * **CommonDialog** methods return True or False (VB's returned nothing);
   cancelling with CancelError raises `DialogCancelled` (VB's error 32755); a
   multiple selection is `FileNames` (VB packed the names into FileName);
