@@ -736,11 +736,249 @@ class Label(Control):
 
 # --- TextBox ------------------------------------------------------------------------
 
-class TextBox(Control):
+class _TextEditing:
+    """What TextBox and RichTextBox share for editors: lines and columns, the
+    caret's place on screen, scrolling, undo and redo, AcceptsTab and
+    SelChange. A line is a paragraph (it ends where Enter was pressed),
+    counted from 0, as are columns; a single-line TextBox has one line."""
+
+    def _editor(self):
+        """The multi-line editor (QPlainTextEdit, QTextEdit); None for one line."""
+        return None if isinstance(self._widget, QLineEdit) else self._widget
+
+    def _connect_selection(self) -> None:
+        self.__dict__["_selection"] = self._selection_range()
+        self._widget.cursorPositionChanged.connect(self._on_selection)
+        self._widget.selectionChanged.connect(self._on_selection)
+
+    def _selection_range(self) -> tuple[int, int]:
+        editor = self._editor()
+        if editor is not None:
+            cursor = editor.textCursor()
+            return cursor.selectionStart(), cursor.selectionEnd()
+        line = self._widget
+        if line.hasSelectedText():
+            return line.selectionStart(), line.selectionEnd()
+        return line.cursorPosition(), line.cursorPosition()
+
+    def _on_selection(self, *_):
+        selection = self._selection_range()
+        if selection != self._selection:
+            self.__dict__["_selection"] = selection
+            self._fire("SelChange")
+
+    def _apply_AcceptsTab(self, v):
+        editor = self._editor()
+        if editor is not None:
+            editor.setTabChangesFocus(not v)
+
+    # -- lines and columns ------------------------------------------------------------------
+    def _caret(self) -> int:
+        editor = self._editor()
+        return editor.textCursor().position() if editor is not None else \
+            self._widget.cursorPosition()
+
+    def _move_caret(self, position: int) -> None:
+        editor = self._editor()
+        if editor is not None:
+            cursor = editor.textCursor()
+            cursor.setPosition(position)
+            editor.setTextCursor(cursor)
+        else:
+            self._widget.setCursorPosition(position)
+
+    def _line_block(self, Line):
+        """The paragraph of a line number (an IndexError if there is none)."""
+        line, count = int(Line), self.LineCount
+        if not 0 <= line < count:
+            raise IndexError(f"{self.TypeName} '{self.Name}': no line {line} "
+                             f"(LineCount is {count})")
+        editor = self._editor()
+        return editor.document().findBlockByNumber(line) if editor is not None else None
+
+    @property
+    def LineCount(self) -> int:
+        """How many lines (paragraphs) the text has: 1 for no text."""
+        editor = self._editor()
+        return editor.document().blockCount() if editor is not None else 1
+
+    def GetLine(self, Line: int) -> str:
+        """The text of a line (from 0), without its line break."""
+        block = self._line_block(Line)
+        return block.text() if block is not None else self._widget.text()
+
+    def GetLineFromChar(self, CharPos: int) -> int:
+        """The line (paragraph, from 0) holding a character position."""
+        editor = self._editor()
+        if editor is None:
+            return 0
+        document = editor.document()
+        block = document.findBlock(max(0, int(CharPos)))
+        return block.blockNumber() if block.isValid() else document.blockCount() - 1
+
+    def GetCharFromLine(self, Line: int) -> int:
+        """Where a line starts (a character position, like SelStart)."""
+        block = self._line_block(Line)
+        return block.position() if block is not None else 0
+
+    def GetColumnFromChar(self, CharPos: int) -> int:
+        """A character position's column in its line (from 0)."""
+        position = max(0, min(int(CharPos), len(self.Text)))
+        return position - self.GetCharFromLine(self.GetLineFromChar(position))
+
+    @property
+    def CurrentLine(self) -> int:
+        """The caret's line (from 0); setting it moves the caret there (keeping
+        its column where the line is long enough), into view."""
+        return self.GetLineFromChar(self._caret())
+
+    @CurrentLine.setter
+    def CurrentLine(self, value):
+        start = self.GetCharFromLine(value)
+        column = min(self.CurrentColumn, len(self.GetLine(value)))
+        self._move_caret(start + column)
+
+    @property
+    def CurrentColumn(self) -> int:
+        """The caret's column in its line (from 0); setting it moves the caret
+        along the line (no further than its end)."""
+        return self.GetColumnFromChar(self._caret())
+
+    @CurrentColumn.setter
+    def CurrentColumn(self, value):
+        line = self.CurrentLine
+        column = max(0, min(int(value), len(self.GetLine(line))))
+        self._move_caret(self.GetCharFromLine(line) + column)
+
+    # -- the screen -------------------------------------------------------------------------
+    def _caret_rect(self) -> QRect:
+        editor = self._editor()
+        if editor is None:  # (its rectangle is wider than the caret, around it)
+            rect = self._widget.cursorRect()
+            return QRect(rect.center().x(), rect.top(), 1, rect.height())
+        return editor.cursorRect().translated(editor.viewport().mapTo(editor, QPoint(0, 0)))
+
+    @property
+    def CaretLeft(self) -> int:
+        """Where the caret is, in pixels from the control's left edge (e.g. to
+        put a list of completions under it: Left + CaretLeft)."""
+        return self._caret_rect().left()
+
+    @property
+    def CaretTop(self) -> int:
+        """The top of the caret, in pixels from the control's top edge."""
+        return self._caret_rect().top()
+
+    @property
+    def CaretHeight(self) -> int:
+        """The caret's height in pixels (its line's): its bottom is
+        CaretTop + CaretHeight."""
+        return self._caret_rect().height()
+
+    def GetCharFromPoint(self, X: int, Y: int) -> int:
+        """The character position nearest a point (pixels in the control, as
+        in MouseMove's X and Y)."""
+        editor = self._editor()
+        if editor is None:
+            return self._widget.cursorPositionAt(QPoint(int(X), int(Y)))
+        point = editor.viewport().mapFrom(editor, QPoint(int(X), int(Y)))
+        return editor.cursorForPosition(point).position()
+
+    @property
+    def FirstVisibleLine(self) -> int:
+        """The line at the top of the view; setting it scrolls that line to
+        the top (as far as the text allows)."""
+        editor = self._editor()
+        if editor is None:
+            return 0
+        if isinstance(editor, QPlainTextEdit):
+            return editor.firstVisibleBlock().blockNumber()
+        margin = int(editor.document().documentMargin())
+        return editor.cursorForPosition(QPoint(0, margin + 1)).blockNumber()
+
+    @FirstVisibleLine.setter
+    def FirstVisibleLine(self, value):
+        editor = self._editor()
+        if editor is None:
+            return
+        block = self._line_block(max(0, min(int(value), self.LineCount - 1)))
+        bar = editor.verticalScrollBar()
+        if isinstance(editor, QPlainTextEdit):  # (it scrolls by lines of text)
+            lines, before = 0, editor.document().begin()
+            while before.isValid() and before != block:
+                lines += max(1, before.lineCount())
+                before = before.next()
+            bar.setValue(lines)
+        else:  # (by pixels)
+            top = editor.cursorRect(QTextCursor(block)).top()
+            bar.setValue(bar.value() + top - int(editor.document().documentMargin()))
+
+    @property
+    def ScrollLeft(self) -> int:
+        """How far the text is scrolled to the left, in pixels (a multi-line
+        editor without wrapping); setting it scrolls."""
+        editor = self._editor()
+        return editor.horizontalScrollBar().value() if editor is not None else 0
+
+    @ScrollLeft.setter
+    def ScrollLeft(self, value):
+        editor = self._editor()
+        if editor is not None:
+            editor.horizontalScrollBar().setValue(int(value))
+
+    def ScrollToCaret(self) -> None:
+        """Scroll so the caret is in view."""
+        editor = self._editor()
+        if editor is not None:
+            editor.ensureCursorVisible()
+
+    # -- undo -------------------------------------------------------------------------------
+    def Undo(self) -> None:
+        """Undo the last edit (typing, pasting, SelText...), like Ctrl+Z."""
+        self._widget.undo()
+
+    def Redo(self) -> None:
+        """Redo what Undo undid."""
+        self._widget.redo()
+
+    @property
+    def CanUndo(self) -> bool:
+        editor = self._editor()
+        return editor.document().isUndoAvailable() if editor is not None else \
+            self._widget.isUndoAvailable()
+
+    @property
+    def CanRedo(self) -> bool:
+        editor = self._editor()
+        return editor.document().isRedoAvailable() if editor is not None else \
+            self._widget.isRedoAvailable()
+
+    def ClearUndo(self) -> None:
+        """Forget the edits, so Undo can't go back past now (e.g. after loading)."""
+        editor = self._editor()
+        if editor is not None:
+            editor.document().clearUndoRedoStacks()
+            return
+        line = self._widget
+        position = line.cursorPosition()
+        line.blockSignals(True)  # (setText clears the history; no Change)
+        try:
+            line.setText(line.text())
+            line.setCursorPosition(position)
+        finally:
+            line.blockSignals(False)
+
+
+_ACCEPTS_TAB = P("AcceptsTab", "bool", False,
+                 description="Tab types a tab instead of moving to the next control "
+                             "(multi-line)")
+
+
+class TextBox(_TextEditing, Control):
     TypeName = "TextBox"
     DefaultEvent = "Change"
     DefaultSize = (121, 25)
-    Events = ("Change", "Click", "DblClick", "GotFocus", "LostFocus",
+    Events = ("Change", "SelChange", "Click", "DblClick", "GotFocus", "LostFocus",
               "KeyDown", "KeyPress", "KeyUp", "MouseDown", "MouseMove", "MouseUp")
     Properties = (
         P("MultiLine", "bool", False, description="A multi-line editor instead of a single line"),
@@ -753,6 +991,7 @@ class TextBox(Control):
         P("Locked", "bool", False, description="Read-only: the text can't be edited"),
         P("ScrollBars", "enum", 0, enum_choices("None", "Horizontal", "Vertical", "Both"),
           description="Scroll bars of a multi-line TextBox"),
+        _ACCEPTS_TAB,
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -783,6 +1022,7 @@ class TextBox(Control):
 
     def _connect_signals(self):
         self._widget.textChanged.connect(lambda *_: self._fire("Change"))
+        self._connect_selection()
 
     def _apply_MultiLine(self, v):
         if isinstance(self._widget, QPlainTextEdit) != bool(v):
@@ -910,7 +1150,7 @@ class _RichEdit(QTextEdit):
         self.setTextCursor(cursor)
 
 
-class RichTextBox(Control):
+class RichTextBox(_TextEditing, Control):
     """Text with colors, fonts, bold, italic and underline, and aligned
     paragraphs, like VB's RichTextBox. Format the selection with its Sel...
     properties (SelBold, SelColor...; with nothing selected, what is typed
@@ -933,11 +1173,12 @@ class RichTextBox(Control):
                       "don't wrap"),
         P("BorderStyle", "enum", 1, enum_choices("None", "Fixed Single"),
           description="A border around it"),
+        _ACCEPTS_TAB,
         *_COLORS, *_FONT, *_COMMON,
     )
 
     def _create_widget(self, parent):
-        self.__dict__.update(_selection=(0, 0), _trimming=False)
+        self.__dict__["_trimming"] = False
         widget = _RichEdit(parent)
         widget.setTabChangesFocus(True)
         return widget
@@ -949,15 +1190,7 @@ class RichTextBox(Control):
         widget = self._widget
         widget.textChanged.connect(lambda: self._fire("Change"))
         widget.document().contentsChange.connect(self._limit_length)
-        widget.cursorPositionChanged.connect(self._on_selection)
-        widget.selectionChanged.connect(self._on_selection)
-
-    def _on_selection(self):
-        cursor = self._widget.textCursor()
-        selection = (cursor.selectionStart(), cursor.selectionEnd())
-        if selection != self._selection:
-            self.__dict__["_selection"] = selection
-            self._fire("SelChange")
+        self._connect_selection()
 
     def _limit_length(self, position, removed, added):
         limit = self._values.get("MaxLength", 0)
@@ -1230,12 +1463,6 @@ class RichTextBox(Control):
         if not Options & 8:
             self._widget.setTextCursor(found)
         return found.selectionStart()
-
-    def GetLineFromChar(self, CharPos: int) -> int:
-        """The line (paragraph, from 0) holding a character position."""
-        block = self._widget.document().findBlock(int(CharPos))
-        return block.blockNumber() if block.isValid() else \
-            self._widget.document().blockCount() - 1
 
     @staticmethod
     def _is_html(FileName, FileType) -> bool:

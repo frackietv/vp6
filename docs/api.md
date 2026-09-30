@@ -555,6 +555,7 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment (single-line only) |
 | `Locked` | bool | `False` | Read-only: the text can't be edited |
 | `MaxLength` | int | `0` | Maximum length; 0 = no limit (single-line) |
@@ -563,10 +564,49 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Scroll bars of a multi-line TextBox |
 | `Text` | str (multi-line) | `''` | The contents |
 
-Events: `Change`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 Run-time properties: `SelStart`, `SelLength`, `SelText` (the selection; setting `SelText` replaces it).
+
+#### Editing text (TextBox and RichTextBox)
+
+TextBox and RichTextBox share what an editor needs, e.g. for a code editor
+with completions, go-to-line and indenting. A **line** is a paragraph (it
+ends where Enter was pressed), counted from 0 like columns; a single-line
+TextBox has one line, and doesn't scroll by lines.
+
+```python
+def txtCode_SelChange(self):                 # the caret or the selection moved
+    self.lblPos.Caption = f"Ln {self.txtCode.CurrentLine + 1}, Col {self.txtCode.CurrentColumn + 1}"
+
+def cmdGoTo_Click(self):
+    self.txtCode.CurrentLine = 41            # the caret to line 42 (same column)...
+    self.txtCode.FirstVisibleLine = 41       # ...shown at the top
+
+# a list of completions just under the caret
+self.lstWords.Move(self.txtCode.Left + self.txtCode.CaretLeft,
+                   self.txtCode.Top + self.txtCode.CaretTop + self.txtCode.CaretHeight)
+```
+
+* **Lines and columns:** `LineCount`, `GetLine(Line)` (its text, without
+  the line break), `GetLineFromChar(CharPos)`, `GetCharFromLine(Line)` (where
+  it starts, like `SelStart`), `GetColumnFromChar(CharPos)`. `CurrentLine`
+  and `CurrentColumn` are the caret's; setting them moves it (the column no
+  further than the line's end; `CurrentLine` keeps the column). A line that
+  doesn't exist raises IndexError.
+* **The caret on screen:** `CaretLeft`, `CaretTop` and `CaretHeight`, in
+  pixels in the control (add its `Left`/`Top` for the form);
+  `GetCharFromPoint(X, Y)` is the character position nearest a point, e.g.
+  MouseMove's.
+* **Scrolling:** `FirstVisibleLine` is the line at the top (setting it
+  scrolls that line up, as far as possible), `ScrollLeft` the horizontal
+  scroll in pixels, and `ScrollToCaret()` brings the caret into view.
+* **Undo:** `Undo()`, `Redo()`, `CanUndo`, `CanRedo`, and `ClearUndo()` to
+  forget the history (e.g. after loading a file; setting `Text` also does).
+* `SelChange` fires when the caret or the selection moves (also from code).
+* `AcceptsTab`: Tab types a tab in a multi-line box, instead of moving to the
+  next control.
 
 ### RichTextBox
 
@@ -605,8 +645,8 @@ def rtbNotes_SelChange(self):        # keep a Bold button in step with the selec
   returns where it starts, or -1. Without Start it looks after the
   selection, so calling it again finds the next one. Options add up:
   `vpRtfWholeWord`, `vpRtfMatchCase`, `vpRtfNoHighlight` (don't select it).
-* `GetLineFromChar(CharPos)` is the line (paragraph, from 0) holding a
-  position.
+* The [editing API](#editing-text-textbox-and-richtextbox) (lines and columns,
+  the caret on screen, scrolling, undo, `AcceptsTab`) is the TextBox's.
 * `LoadFile(FileName, FileType=None)` and `SaveFile(FileName, FileType=None)`
   read and write `vpRtfHTML` (formatted) or `vpRtfText` (UTF-8); without a
   FileType, `.htm` and `.html` files are HTML and others text.
@@ -618,6 +658,7 @@ Default size 201 × 121. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A border around it |
 | `Locked` | bool | `False` | Read-only: the text can't be edited |
 | `MaxLength` | int | `0` | Maximum length; 0 = no limit |
@@ -1949,7 +1990,10 @@ It goes in the project's `dist` folder:
   macOS (Caps Lock only); elsewhere they show the key as off.
 * **RichTextBox** formatted text is HTML instead of RTF (`TextHTML`,
   `SelHTML`, `vpRtfHTML` files), and `GetLineFromChar` counts paragraphs, not
-  wrapped lines. It adds `AppendText`; it has no `SelBullet`, `SelIndent`,
+  wrapped lines.
+* **TextBox and RichTextBox** have an editing API VB didn't (`CurrentLine`,
+  `CaretLeft`, `FirstVisibleLine`, `Undo`, `AcceptsTab`...: in VB these took
+  `SendMessage` calls), and a TextBox has `SelChange`. It adds `AppendText`; it has no `SelBullet`, `SelIndent`,
   `SelCharOffset`, `SelProtected`, `RightMargin`, `OLEObjects` or `Span`/`UpTo`,
   its `ScrollBars` default to Vertical (VB: none), and Find without Start
   looks after the selection.

@@ -302,6 +302,47 @@ def test_rich_text_page(sink, monkeypatch, tmp_path):
     assert log.SelColor == vp6.vpRed and log.SelBold
 
 
+def test_editing_page(sink):
+    page = _page(sink, "editing")
+    code = page.txtCode
+    assert code.LineCount == 10 and not page.cmdUndo.Enabled  # (loading: nothing to undo)
+    code.SetFocus()
+    code.CurrentLine, code.CurrentColumn = 3, 4  # SelChange: where the caret is
+    assert page.lblPosition.Caption == "Line 4, column 5 of 10 lines"
+    page.cmdIndent_Click()
+    assert code.GetLine(3) == "        print(message)" and code.CurrentColumn == 8
+    assert page.cmdUndo.Enabled
+    page.cmdUndo_Click()
+    assert code.GetLine(3) == "    print(message)" and page.cmdRedo.Enabled
+    page.cmdRedo_Click()
+    assert code.GetLine(3).startswith("        print")
+    page.txtLine.Text = "9"
+    page.cmdGoTo_Click()
+    assert code.CurrentLine == 8 and "Line 9" in page.lblPosition.Caption
+    page.txtLine.Text = "99"
+    page.cmdGoTo_Click()
+    assert page.lblPosition.Caption == "There are 10 lines"
+    code.CurrentLine = 9  # Tab types a tab (AcceptsTab), "pr" offers completions
+    QTest.keyClick(code._widget, Qt.Key_Tab)
+    QTest.keyClicks(code._widget, "pr")
+    assert page.lstComplete.Visible and page.lstComplete.List == ["print"]
+    assert page.lstComplete.Left == code.Left + code.CaretLeft  # under the caret
+    assert page.lstComplete.Top == code.Top + code.CaretTop + code.CaretHeight + 2
+    QTest.keyClick(code._widget, Qt.Key_Return)  # Enter takes it
+    assert code.GetLine(9) == "\tprint" and not page.lstComplete.Visible
+    QTest.keyClicks(code._widget, "(gr")  # a click takes one
+    assert page.lstComplete.List == ["greet"]
+    page.lstComplete.ListIndex = 0
+    assert code.GetLine(9) == "\tprint(greet" and not page.lstComplete.Visible
+    QTest.keyClicks(code._widget, " me")
+    assert page.lstComplete.List == ["message"]
+    QTest.keyClick(code._widget, Qt.Key_Escape)  # Esc closes them
+    assert not page.lstComplete.Visible and code.GetLine(9) == "\tprint(greet me"
+    code.SelStart = code.GetCharFromLine(2) + 6  # the word under the mouse
+    page.txtCode_MouseMove(0, 0, code.CaretLeft + 2, code.CaretTop + code.CaretHeight // 2)
+    assert page.lblMouse.Caption == "Under the mouse: message"
+
+
 def test_buttons_page(sink):
     page = _page(sink, "buttons")
     page.cmdAuto._widget.click()  # sets cmdClick.Value = True

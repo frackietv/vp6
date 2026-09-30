@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.4.8
+**Date:** 2026-10-01
+
+## Controls
+
+- An editing API shared by TextBox and RichTextBox (a line is a paragraph, lines and columns count from 0):
+  - Lines and columns: `LineCount`, `GetLine`, `GetLineFromChar`, `GetCharFromLine`, `GetColumnFromChar`, and the caret's `CurrentLine` and `CurrentColumn` (setting them moves it)
+  - The caret on screen: `CaretLeft`, `CaretTop`, `CaretHeight`; `GetCharFromPoint(X, Y)`
+  - Scrolling: `FirstVisibleLine`, `ScrollLeft`, `ScrollToCaret()`
+  - Undo: `Undo()`, `Redo()`, `CanUndo`, `CanRedo`, `ClearUndo()`
+  - `AcceptsTab`: Tab types a tab instead of moving to the next control
+  - TextBox gets the `SelChange` event
+- A Kitchen Sink page, "Editing text": a small code editor with line and column, Undo/Redo, Indent, Go to line, Tab, the word under the mouse, and completions under the caret
+
+---
+
 **Version:** 0.4.7
 **Date:** 2026-10-01
 
