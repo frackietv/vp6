@@ -1,5 +1,17 @@
 # VP6 features
 
+**Version:** 0.4.20
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- `MousePointer` and `MouseIcon` on controls and forms (VB's pointer shapes, or a picture with vpCustom), and `Screen.MousePointer` for every window (e.g. vpHourglass)
+- VB drag and drop: `DragMode` (Automatic: pressing drags), `Drag` (begin, end, cancel), `DragIcon`, and the `DragOver(Source, X, Y, State)` and `DragDrop(Source, X, Y)` events on controls and forms
+- Drops from other programs: `OLEDropMode` Manual, `OLEDragOver` and `OLEDragDrop` with a Data object (`GetFormat`, `GetData`, `Files`) for text and files
+- The Kitchen Sink's Mouse page: pointers, fruit dragged into a basket, and a drop zone for text and files
+
+---
+
 **Version:** 0.4.19
 **Date:** 2026-10-01
 

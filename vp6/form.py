@@ -28,8 +28,9 @@ from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 from . import appearance, colors
 from ._props import P, PropertyHost, enum_choices
 from .app import call_handler, ensure_app, run_event_loop
-from .controls import (_FONT, CommandButton, Control, ControlArray, TextBox, Timer,
-                       vp_buttons, vp_key_code, vp_shift)
+from .controls import (_FONT, POINTER_CHOICES, CommandButton, Control, ControlArray, TextBox,
+                       Timer, handle_drag_event, pointer_cursor, resolve_path, vp_buttons,
+                       vp_key_code, vp_shift)
 from .controls import Menu as MenuControl
 
 _loaded_forms: list["Form"] = []
@@ -61,6 +62,7 @@ class _FormWidget(QWidget):
         self._vp_form = form
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.ClickFocus)
+        self.setAcceptDrops(True)  # (drag and drop: the form's events)
 
     def closeEvent(self, event):
         # Why it closes: Unload() in code, Ctrl+C (close_all_windows), else the user
@@ -124,6 +126,23 @@ class _FormWidget(QWidget):
     def keyReleaseEvent(self, event):
         self._vp_form._fire("KeyUp", vp_key_code(event.key()), vp_shift(event.modifiers()))
 
+    def event(self, event):
+        if self._form_drag_event(event, self):
+            return True
+        return super().event(event)
+
+    def _form_drag_event(self, event, widget) -> bool:
+        """A drag over the form itself (not over one of its controls): the
+        form's DragOver / DragDrop or OLEDragOver / OLEDragDrop."""
+        if event.type() not in (QEvent.DragEnter, QEvent.DragMove, QEvent.DragLeave,
+                                QEvent.Drop) or self._vp_form._design_mode:
+            return False
+        pos = event.position().toPoint() if event.type() != QEvent.DragLeave else QPoint()
+        # (the client area's own coordinates are the form's, as Left and Top are)
+        # (a user control's surface: the user control, on its form)
+        owner = self._vp_form.__dict__.get("_owner") or self._vp_form
+        return handle_drag_event(owner, event, pos)
+
 
 class _ContainerWatcher(QObject):
     """Keeps a form shown in a container (Form.ShowIn) as large as the
@@ -146,6 +165,7 @@ class _FormClient(QWidget):
     def __init__(self, form_widget: _FormWidget):
         super().__init__(form_widget)
         self.setMouseTracking(True)
+        self.setAcceptDrops(True)
 
     def mousePressEvent(self, event):
         self.parentWidget().mousePressEvent(event)
@@ -158,6 +178,11 @@ class _FormClient(QWidget):
 
     def mouseDoubleClickEvent(self, event):
         self.parentWidget().mouseDoubleClickEvent(event)
+
+    def event(self, event):  # drag and drop over it: the form's
+        if self.parentWidget()._form_drag_event(event, self):
+            return True
+        return super().event(event)
 
 
 # Form_QueryUnload's UnloadMode (constants.vpFormControlMenu ...)
@@ -211,7 +236,8 @@ class Form(PropertyHost, metaclass=_FormType):
     DefaultEvent = "Load"
     Events = ("Load", "QueryUnload", "Unload", "Initialize", "Activate", "Deactivate", "Resize",
               "Click", "DblClick", "MouseDown", "MouseMove", "MouseUp",
-              "KeyDown", "KeyPress", "KeyUp")
+              "KeyDown", "KeyPress", "KeyUp", "DragDrop", "DragOver", "OLEDragDrop",
+              "OLEDragOver")
     Properties = (
         P("Caption", "str", "", always=True,
           description="The window title; defaults to the form's class name"),
@@ -245,6 +271,12 @@ class Form(PropertyHost, metaclass=_FormType):
         P("ForeColor", "color", None, description="Text color; unset = the default"),
         *_FONT,
         P("Enabled", "bool", True, description="Whether the form responds to the user"),
+        P("MousePointer", "enum", 0, POINTER_CHOICES,
+          description="The mouse pointer's shape over the form (Custom: its MouseIcon)"),
+        P("MouseIcon", "file", "", description="The pointer's picture when MousePointer is Custom"),
+        P("OLEDropMode", "enum", 0, enum_choices("None", "Manual"),
+          description="Manual: text and files dropped from other programs fire OLEDragOver and "
+                      "OLEDragDrop"),
         P("Icon", "file", "",
           description="The window's icon: an image file (relative to the form's folder); "
                       "unset = the program's icon"),
@@ -697,6 +729,16 @@ class Form(PropertyHost, metaclass=_FormType):
     # -- properties -------------------------------------------------------------------------
     def _apply_Caption(self, v):
         self._widget.setWindowTitle(v)
+
+    def _apply_MousePointer(self, v):
+        cursor = pointer_cursor(self._values.get("MousePointer", 0),
+                                resolve_path(self, self._values.get("MouseIcon", "")))
+        if cursor is None:
+            self._widget.unsetCursor()
+        else:
+            self._widget.setCursor(cursor)
+
+    _apply_MouseIcon = _apply_MousePointer
 
     def _apply_Icon(self, v):
         path = v if not v or os.path.isabs(v) else os.path.join(self._base_dir(), v)

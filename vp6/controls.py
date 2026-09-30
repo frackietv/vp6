@@ -15,11 +15,12 @@ import re
 import sys
 import time
 
-from PySide6.QtCore import (QDate, QEvent, QFileInfo, QItemSelectionModel, QLocale, QObject,
-                            QPoint, QPointF, QRect, QRectF, QSize, Qt, QTime, QTimer, QUrl,
-                            Signal)
-from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServices, QFont,
-                           QFontDatabase, QIcon, QKeyEvent, QKeySequence, QPainter, QPainterPath,
+from PySide6.QtCore import (QByteArray, QDate, QEvent, QFileInfo, QItemSelectionModel, QLocale,
+                            QMimeData, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTime,
+                            QTimer, QUrl, Signal)
+from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QCursor, QDesktopServices,
+                           QDrag, QFont, QFontDatabase, QIcon, QKeyEvent, QKeySequence, QPainter,
+                           QPainterPath,
                            QPalette, QPen, QPixmap, QShortcut, QStandardItem, QStandardItemModel,
                            QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
                            QTextDocumentFragment, QTextFormat)
@@ -56,6 +57,9 @@ EVENT_ARGS = {
     "EnterCell": "", "LeaveCell": "", "RowColChange": "", "BeforeEdit": "Row, Col",
     "ValidateEdit": "Row, Col, Text", "AfterEdit": "Row, Col", "CellButtonClick": "Row, Col",
     "DockChange": "", "Close": "", "Validate": "",
+    "DragDrop": "Source, X, Y", "DragOver": "Source, X, Y, State",
+    "OLEDragDrop": "Data, Effect, Button, Shift, X, Y",
+    "OLEDragOver": "Data, Effect, Button, Shift, X, Y, State",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -358,6 +362,8 @@ class Control(PropertyHost):
         for target in self._event_targets():
             target.installEventFilter(self._bridge)
             target.setMouseTracking(True)
+            if "DragDrop" in self.Events:
+                target.setAcceptDrops(True)  # (drag events come to the filter)
         self._connect_signals()
 
     def _rebuild_widget(self) -> None:
@@ -430,6 +436,16 @@ class Control(PropertyHost):
         if self._design_mode:
             return False
         etype = event.type()
+        if etype in (QEvent.DragEnter, QEvent.DragMove, QEvent.DragLeave, QEvent.Drop) and \
+                "DragDrop" in self.Events:
+            pos = event.position().toPoint() if etype != QEvent.DragLeave else QPoint()
+            if watched is not self._widget:
+                pos = watched.mapTo(self._widget, pos)
+            return handle_drag_event(self, event, pos)
+        if etype == QEvent.MouseButtonPress and self._values.get("DragMode") == 1 and \
+                event.button() == Qt.LeftButton:
+            self.Drag(1)  # Automatic: pressing drags it (no MouseDown, no Click)
+            return True
         if etype in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease, QEvent.MouseMove):
             pos = watched.mapTo(self._widget, event.position().toPoint()) \
                 if watched is not self._widget else event.position().toPoint()
@@ -605,6 +621,76 @@ class Control(PropertyHost):
     def SetFocus(self) -> None:
         if self._widget:
             self._widget.setFocus()
+
+    # -- the mouse pointer, dragging ----------------------------------------------------
+    def _update_cursor(self, _=None) -> None:
+        """MousePointer (and MouseIcon) on its widgets; vpDefault gives them
+        their own pointers back (e.g. a TextBox's I-beam)."""
+        if self._widget is None or self._design_mode:
+            return
+        cursor = pointer_cursor(self._values.get("MousePointer", 0),
+                                resolve_path(self._form, self._values.get("MouseIcon", "")))
+        saved = self.__dict__.setdefault("_saved_cursors", {})
+        for widget in self._event_targets() or [self._widget]:
+            if cursor is None:
+                if widget in saved:
+                    had_cursor, own = saved.pop(widget)
+                    widget.setCursor(own) if had_cursor else widget.unsetCursor()
+            else:
+                if widget not in saved:
+                    saved[widget] = (widget.testAttribute(Qt.WA_SetCursor), widget.cursor())
+                widget.setCursor(cursor)
+
+    _apply_MousePointer = _apply_MouseIcon = _update_cursor
+
+    def _apply_DragMode(self, v):
+        pass  # (looked at when the mouse is pressed)
+
+    def Drag(self, Action: int = 1) -> None:
+        """VB's Drag: vpBeginDrag (the default) starts dragging the control (call
+        it in MouseDown); vpEndDrag drops it where it is; vpCancelDrag stops.
+        DragOver and DragDrop fire on what it is dragged over and dropped on."""
+        Action = int(Action)
+        if Action == 0:
+            if _DRAGGING["drag"] is not None:
+                QDrag.cancel()
+            return
+        if Action == 2:
+            target = _DRAGGING["target"]
+            if _DRAGGING["drag"] is not None:
+                _DRAGGING["target"] = None
+                if target is not None:
+                    target._fire("DragDrop", self, *_DRAGGING["pos"])
+                QDrag.cancel()
+            return
+        if self._design_mode or self._widget is None or _DRAGGING["source"] is not None:
+            return
+        widget = self._widget
+        drag = QDrag(widget)
+        mime = QMimeData()
+        mime.setData(_VP6_DRAG_MIME, QByteArray(str(id(self)).encode()))
+        drag.setMimeData(mime)
+        icon = QPixmap(resolve_path(self._form, self._values.get("DragIcon", "")))
+        if not icon.isNull():
+            drag.setPixmap(icon)
+            drag.setHotSpot(QPoint(icon.width() // 2, icon.height() // 2))
+        else:  # (an image of the control, see-through, held where it was grabbed)
+            image = widget.grab()
+            faded = QPixmap(image.size())
+            faded.setDevicePixelRatio(image.devicePixelRatio())
+            faded.fill(Qt.transparent)
+            painter = QPainter(faded)
+            painter.setOpacity(0.6)
+            painter.drawPixmap(0, 0, image)
+            painter.end()
+            drag.setPixmap(faded)
+            spot = widget.mapFromGlobal(QCursor.pos())
+            drag.setHotSpot(spot if widget.rect().contains(spot) else QPoint(0, 0))
+        _DRAGGING.update(source=self, drag=drag, target=None)
+        try:
+            drag.exec(Qt.MoveAction | Qt.CopyAction)
+        finally:
+            _DRAGGING.update(source=None, drag=None, target=None)
 
     def Move(self, Left, Top=None, Width=None, Height=None) -> None:
         self.Left = Left
@@ -8555,6 +8641,149 @@ def _add_validation(cls) -> None:
 
 for _cls in CONTROL_TYPES.values():
     _add_validation(_cls)
+
+
+# --- the mouse: pointers, and drag and drop -------------------------------------------------------
+
+_CURSORS = {1: Qt.ArrowCursor, 2: Qt.CrossCursor, 3: Qt.IBeamCursor, 4: Qt.ArrowCursor,
+            5: Qt.SizeAllCursor, 6: Qt.SizeBDiagCursor, 7: Qt.SizeVerCursor,
+            8: Qt.SizeFDiagCursor, 9: Qt.SizeHorCursor, 10: Qt.UpArrowCursor,
+            11: Qt.WaitCursor, 12: Qt.ForbiddenCursor, 13: Qt.BusyCursor,
+            14: Qt.WhatsThisCursor, 15: Qt.SizeAllCursor}
+POINTER_CHOICES = tuple((value, f"{value} - {label}") for value, label in (
+    (0, "Default"), (1, "Arrow"), (2, "Cross"), (3, "I-Beam"), (4, "Icon"), (5, "Size"),
+    (6, "Size NE SW"), (7, "Size N S"), (8, "Size NW SE"), (9, "Size W E"), (10, "Up Arrow"),
+    (11, "Hourglass"), (12, "No Drop"), (13, "Arrow and Hourglass"),
+    (14, "Arrow and Question"), (15, "Size All"), (99, "Custom")))
+
+
+def pointer_cursor(value: int, icon: str = "") -> QCursor | None:
+    """A MousePointer value as a cursor: None for vpDefault (the control's
+    own), the MouseIcon picture for vpCustom (None if it can't be read)."""
+    value = int(value or 0)
+    if value == 0:
+        return None
+    if value == 99:
+        pixmap = QPixmap(icon) if icon else QPixmap()
+        return QCursor(pixmap) if not pixmap.isNull() else None
+    return QCursor(_CURSORS.get(value, Qt.ArrowCursor))
+
+
+_MOUSE_PROPERTIES = (
+    P("MousePointer", "enum", 0, POINTER_CHOICES,
+      description="The mouse pointer's shape over it (Custom: its MouseIcon picture)"),
+    P("MouseIcon", "file", "", description="The pointer's picture when MousePointer is Custom"),
+    P("DragMode", "enum", 0, enum_choices("Manual", "Automatic"),
+      description="Automatic: pressing the mouse on it drags it (no Click or MouseDown); "
+                  "Manual: its Drag method does"),
+    P("DragIcon", "file", "",
+      description="The picture shown while it is dragged; unset = an image of the control"),
+    P("OLEDropMode", "enum", 0, enum_choices("None", "Manual"),
+      description="Manual: text and files dropped from other programs fire OLEDragOver and "
+                  "OLEDragDrop (None: the control's own behavior)"),
+)
+_DRAG_EVENTS = ("DragDrop", "DragOver", "OLEDragDrop", "OLEDragOver")
+_NO_MOUSE_MEMBERS = ("Timer", "Line", "Shape", "ImageList", "Menu", "Splitter")
+
+
+def _add_mouse_members(cls) -> None:
+    """A visible control gets MousePointer, MouseIcon, DragMode, DragIcon,
+    OLEDropMode and the drag and drop events."""
+    if cls.TypeName in _NO_MOUSE_MEMBERS or "MousePointer" in cls._specs:
+        return
+    cls.Properties = tuple(cls.Properties) + _MOUSE_PROPERTIES
+    cls._specs = {**cls._specs, **{spec.name: spec for spec in _MOUSE_PROPERTIES}}
+    for spec in _MOUSE_PROPERTIES:
+        setattr(cls, spec.name, _make_property(spec.name))
+    cls.Events = tuple(cls.Events) + _DRAG_EVENTS
+
+
+for _cls in CONTROL_TYPES.values():
+    _add_mouse_members(_cls)
+
+# VB's drag in progress: the control being dragged, the QDrag, the control (or
+# form) it is over and where
+_VP6_DRAG_MIME = "application/x-vp6-control"
+_DRAGGING: dict = {"source": None, "drag": None, "target": None, "pos": (0, 0)}
+VP_ENTER, VP_LEAVE, VP_OVER = 0, 1, 2  # DragOver's State
+
+
+class DataObject:
+    """What was dropped from another program (OLEDragDrop's Data): its text and
+    files. ``GetFormat(vpCFText)``, ``GetData(vpCFText)``, ``Files``."""
+
+    def __init__(self, mime):
+        self._text = mime.text() if mime.hasText() else None
+        self.Files = [url.toLocalFile() for url in mime.urls() if url.isLocalFile()]
+
+    def GetFormat(self, Format: int) -> bool:
+        """Whether it has that format: vpCFText (1) or vpCFFiles (15)."""
+        return {1: self._text is not None, 15: bool(self.Files)}.get(int(Format), False)
+
+    def GetData(self, Format: int = 1):
+        """Its text (vpCFText) or its files' paths (vpCFFiles); None if it has none."""
+        if int(Format) == 15:
+            return list(self.Files) or None
+        if int(Format) == 1:
+            return self._text
+        return None
+
+    def __repr__(self):
+        return f"<DataObject text={self._text!r} files={self.Files!r}>"
+
+
+def handle_drag_event(owner, event, pos) -> bool:
+    """A drag event over a control or form (``owner``, ``pos`` in it): VB's
+    DragOver / DragDrop for a VP6 drag, OLEDragOver / OLEDragDrop for one from
+    another program when its OLEDropMode is Manual. True: handled here."""
+    etype = event.type()
+    if etype == QEvent.DragLeave:
+        if _DRAGGING["target"] is owner:
+            _DRAGGING["target"] = None
+            owner._fire("DragOver", _DRAGGING["source"], *_DRAGGING["pos"], VP_LEAVE)
+        elif owner.__dict__.get("_ole_over"):
+            owner.__dict__["_ole_over"] = False
+            owner._fire("OLEDragOver", None, 0, 0, 0, 0, 0, VP_LEAVE)
+        return False
+    mime = event.mimeData()
+    x, y = pos.x(), pos.y()
+    if mime.hasFormat(_VP6_DRAG_MIME) and _DRAGGING["source"] is not None:
+        source = _DRAGGING["source"]
+        if etype == QEvent.Drop:
+            _DRAGGING["target"] = None
+            event.acceptProposedAction()
+            owner._fire("DragDrop", source, x, y)
+            return True
+        state = VP_ENTER if _DRAGGING["target"] is not owner else VP_OVER
+        _DRAGGING.update(target=owner, pos=(x, y))
+        refused = owner._fire("DragOver", source, x, y, state) is False
+        _accept_drag(event, refused)
+        return True
+    if owner._values.get("OLEDropMode") == 1 and (mime.hasText() or mime.hasUrls()):
+        data = DataObject(mime)
+        buttons, shift = vp_buttons(event.buttons()), vp_shift(event.modifiers())
+        if etype == QEvent.Drop:
+            owner.__dict__["_ole_over"] = False
+            event.acceptProposedAction()
+            owner._fire("OLEDragDrop", data, 1, buttons, shift, x, y)
+            return True
+        state = VP_OVER if owner.__dict__.get("_ole_over") else VP_ENTER
+        owner.__dict__["_ole_over"] = True
+        effect = owner._fire("OLEDragOver", data, 1, buttons, shift, x, y, state)
+        _accept_drag(event, isinstance(effect, int) and not isinstance(effect, bool) and
+                     effect == 0)  # (vpDropEffectNone: not here)
+        return True
+    return False
+
+
+def _accept_drag(event, refused: bool) -> None:
+    """Take a drag event here: refused, no drop (the no-drop pointer). (Ignoring
+    it would hand it to the container, which might take the drop instead.)"""
+    if refused:
+        event.setDropAction(Qt.IgnoreAction)
+        event.accept()
+    else:
+        event.acceptProposedAction()
 
 
 class ControlArray:

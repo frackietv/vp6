@@ -259,6 +259,42 @@ vpAppTaskManager = 3  # the program is being stopped (Ctrl+C in its terminal)
 vpFormMDIForm = 4  # its MDI parent form is closing (no MDI forms yet)
 vpFormOwner = 5  # the form it is shown in (ShowIn) is closing
 
+# --- MousePointer (controls, forms, Screen) ------------------------------------------
+vpDefault = 0
+vpArrow = 1
+vpCrosshair = 2
+vpIbeam = 3
+vpIconPointer = 4
+vpSizePointer = 5
+vpSizeNESW = 6
+vpSizeNS = 7
+vpSizeNWSE = 8
+vpSizeWE = 9
+vpUpArrow = 10
+vpHourglass = 11
+vpNoDrop = 12
+vpArrowHourglass = 13
+vpArrowQuestion = 14
+vpSizeAll = 15
+vpCustom = 99
+
+# --- Drag and drop -------------------------------------------------------------------
+vpManual = 0  # DragMode
+vpAutomatic = 1
+vpCancelDrag = 0  # Drag's Action (VB's vbCancel: vpCancel is MsgBox's)
+vpBeginDrag = 1
+vpEndDrag = 2
+vpEnter = 0  # DragOver's and OLEDragOver's State
+vpLeave = 1
+vpOver = 2
+vpOLEDropNone = 0  # OLEDropMode
+vpOLEDropManual = 1
+vpCFText = 1  # OLEDragDrop's Data formats
+vpCFFiles = 15
+vpDropEffectNone = 0  # OLEDragOver's Effect
+vpDropEffectCopy = 1
+vpDropEffectMove = 2
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

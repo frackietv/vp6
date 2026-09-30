@@ -269,6 +269,10 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `DockChange` | none |
 | `Close` | none |
 | `Validate` | none |
+| `DragDrop` | Source, X, Y |
+| `DragOver` | Source, X, Y, State |
+| `OLEDragDrop` | Data, Effect, Button, Shift, X, Y |
+| `OLEDragOver` | Data, Effect, Button, Shift, X, Y, State |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -312,7 +316,10 @@ What the arguments mean:
 | `Left` | int | `0` | Screen position; used with StartUpPosition Manual |
 | `MaxButton` | bool | `True` | Show a maximize button (sizable forms) |
 | `MinButton` | bool | `True` | Show a minimize button |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over the form (Custom: its MouseIcon) |
 | `NegotiateMenus` | bool | `True` | The menus of forms shown in this one (ShowIn) join its menu bar while they are visible, placed by their NegotiatePosition |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop |
 | `StartUpPosition` | enum | 2 - CenterScreen | 0 - Manual, 1 - CenterOwner, 2 - CenterScreen, 3 - Windows Default. Where the window first appears |
 | `Tag` | str | `''` | Free for your own use |
 | `Top` | int | `0` | Screen position; used with StartUpPosition Manual |
@@ -393,7 +400,7 @@ self.page.ShowIn(self.picContent)     # back into the pane
 ### Form events
 
 <!-- BEGIN GENERATED: form-events -->
-Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Load`.
+Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Load`.
 <!-- END GENERATED -->
 
 * `Initialize` fires when the object is created.
@@ -444,6 +451,53 @@ def txtAge_Validate(self):
 Set `CausesValidation = False` on controls that mustn't wait for a valid
 value, e.g. a Help or Cancel button. Moving to another window or form doesn't
 validate.
+
+### The mouse: pointers, and drag and drop
+
+Every visible control (not Timer, Line, Shape, ImageList, Menu or Splitter)
+and every form has these, as in VB:
+
+* **`MousePointer`**: the pointer's shape over it: `vpDefault` (its own, e.g.
+  a TextBox's I-beam), `vpArrow`, `vpCrosshair`, `vpIbeam`, `vpSizePointer`,
+  `vpSizeNESW`, `vpSizeNS`, `vpSizeNWSE`, `vpSizeWE`, `vpUpArrow`,
+  `vpHourglass`, `vpNoDrop`, `vpArrowHourglass`, `vpArrowQuestion`,
+  `vpSizeAll`, or `vpCustom`: its **`MouseIcon`** picture.
+  `Screen.MousePointer` sets the pointer over every window of the program
+  (e.g. `vpHourglass` during long work, then `vpDefault`); `Screen.MouseIcon`
+  is its picture for `vpCustom`.
+* **Drag and drop between controls** (VB's own, within the program):
+  `Drag()` (or `Drag(vpBeginDrag)`, usually in `MouseDown`) drags the
+  control; with **`DragMode = vpAutomatic`** pressing the mouse on it drags it
+  (it gets no MouseDown or Click). While it is dragged, the control or form
+  under the mouse gets **`DragOver(Source, X, Y, State)`** (`State`:
+  `vpEnter`, `vpOver`, `vpLeave`; `Source` is the dragged control; return
+  `False` to refuse the drop there), and the one it is dropped on
+  **`DragDrop(Source, X, Y)`** (X, Y in that control or form). **`DragIcon`**
+  is the picture dragged (else an image of the control). `Drag(vpEndDrag)`
+  drops it where it is; `Drag(vpCancelDrag)` stops dragging.
+
+```python
+def picBasket_DragDrop(self, Source, X, Y):
+    Source.Container = self.picBasket     # the dropped control moves into the basket
+    Source.Move(X, Y)
+```
+
+* **Drops from other programs** (OLE drag and drop): with
+  **`OLEDropMode = vpOLEDropManual`**, text and files dropped on the control
+  or form fire **`OLEDragDrop(Data, Effect, Button, Shift, X, Y)`**, and
+  **`OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`** while they are
+  over it (return `vpDropEffectNone` to refuse). `Data.GetFormat(vpCFText)` /
+  `GetFormat(vpCFFiles)` tell what it has, `Data.GetData(vpCFText)` is the
+  text, `Data.GetData(vpCFFiles)` (or `Data.Files`) the files' paths. With
+  `vpOLEDropNone` (the default) a control does what it does itself (a TextBox
+  takes dropped text).
+
+```python
+def lstFiles_OLEDragDrop(self, Data, Effect, Button, Shift, X, Y):
+    if Data.GetFormat(vpCFFiles):
+        for path in Data.Files:
+            self.lstFiles.AddItem(path)
+```
 
 ### Common property groups
 
@@ -607,11 +661,16 @@ Default size 121 × 97. A container: other controls can be placed on it. Propert
 | `Align` | enum | 0 - None | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right, 5 - Fill. Dock to that edge of the form and follow its size, keeping the height (Top, Bottom) or width (Left, Right); Fill takes all the space the others leave; only on the form itself |
 | `AutoSize` | bool | `False` | Resize to fit the picture |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A sunken border around the picture |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Picture` | file path | `''` | Image file (relative to the form's folder) |
 | `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Scroll bars that appear when the controls in it reach beyond its edges (at run time); the picture stays in place |
 | `Stretch` | bool | `False` | Scale the picture to fit the control |
 
-Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Resize`, `Scroll`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Resize`, `Scroll`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Methods: `Cls()` clears the picture.
@@ -683,11 +742,16 @@ Default size 97 × 25. Property groups: Position, Colors, Font, Common.
 | `BackStyle` | enum | 1 - Opaque | 0 - Transparent, 1 - Opaque. Opaque: the label fills its box (with BackColor, or its container's color) and hides what is behind it; Transparent: what is behind it (a picture, other controls) shows through, and BackColor is ignored |
 | `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the label |
 | `Caption` | str (multi-line) | `''` | The text; in plain text an & before a letter underlines it, its access key (&& shows a literal &) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `TextFormat` | enum | 0 - Plain | 0 - Plain, 1 - Rich Text, 2 - Markdown. Plain: the Caption as it is. Rich Text: HTML (bold, headings, links, colors). Markdown: bold, headings, lists and links written the Markdown way |
 | `UseMnemonic` | bool | `True` | An & in the Caption marks an access key: Alt+the letter (on macOS Control+Option+the letter) focuses the next control in the tab order. False: the & is shown as it is |
 | `WordWrap` | bool | `False` | Wrap long text onto several lines |
 
-Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `LinkClick(URL)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `LinkClick(URL)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### TextBox
@@ -702,14 +766,19 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment (single-line only) |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Locked` | bool | `False` | Read-only: the text can't be edited |
 | `MaxLength` | int | `0` | Maximum length; 0 = no limit (single-line) |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `MultiLine` | bool | `False` | A multi-line editor instead of a single line |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `PasswordChar` | str | `''` | Any character masks the input |
 | `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Scroll bars of a multi-line TextBox |
 | `Text` | str (multi-line) | `''` | The contents |
 
-Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 Run-time properties: `SelStart`, `SelLength`, `SelText` (the selection; setting `SelText` replaces it).
@@ -806,12 +875,17 @@ Default size 201 × 121. Property groups: Position, Colors, Font, Common.
 | `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A border around it |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Locked` | bool | `False` | Read-only: the text can't be edited |
 | `MaxLength` | int | `0` | Maximum length; 0 = no limit |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `ScrollBars` | enum | 2 - Vertical | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Its scroll bars (shown when needed); with a horizontal one, lines don't wrap |
 | `Text` | str (multi-line) | `''` | The contents, as plain text |
 
-Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### CodeBox
@@ -884,17 +958,22 @@ Default size 321 × 201. Property groups: Position, Colors, Font, Common.
 | `AutoIndent` | bool | `True` | Enter keeps the line's indentation (Python: one more after a colon) |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `CurrentLineColor` | color | (default) | The current line's shade; unset = a shade of the background |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `HighlightCurrentLine` | bool | `True` | Shade the caret's line |
 | `Language` | enum | 0 - None | 0 - None, 1 - Python. Built-in syntax coloring; add your own in the Highlight event |
 | `LineNumbers` | bool | `True` | Line numbers in the gutter |
 | `Locked` | bool | `False` | Read-only: the code can't be edited |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `ProtectedColor` | color | (default) | The background of protected lines; unset = a tint of the background |
 | `TabWidth` | int | `4` | Columns per indentation level (and tab stop) |
 | `Text` | str (multi-line) | `''` | The code |
 | `UseTabs` | bool | `False` | Indent with tab characters instead of spaces |
 | `WordWrap` | bool | `False` | Wrap long lines instead of scrolling |
 
-Events: `Change`, `SelChange`, `Highlight(Line, Text, State)`, `GutterClick(Line)`, `ProtectedEdit(Line)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `SelChange`, `Highlight(Line, Text, State)`, `GutterClick(Line)`, `ProtectedEdit(Line)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### Frame
@@ -907,8 +986,13 @@ Default size 185 × 129. A container: other controls can be placed on it. Proper
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Caption` | str | `''` | The title shown on the frame |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 
-Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### CommandButton
@@ -938,10 +1022,15 @@ Default size 97 × 33. Property groups: Position, Colors, Font, Common.
 | `Default` | bool | `False` | Clicked when Enter is pressed on the form |
 | `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
 | `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Picture` | file path | `''` | A Graphical button's picture (relative to the form's folder) |
 | `Style` | enum | 0 - Standard | 0 - Standard, 1 - Graphical. Graphical: a button showing its Picture above the Caption |
 
-Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Run-time: setting `Value = True` clicks the button.
@@ -970,11 +1059,16 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
 | `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Picture` | file path | `''` | A Graphical button's picture (relative to the form's folder) |
 | `Style` | enum | 0 - Standard | 0 - Standard, 1 - Graphical. Graphical: a toggle button, pressed while Value is vpChecked, showing its Picture above the Caption |
 | `Value` | enum | 0 - Unchecked | 0 - Unchecked, 1 - Checked, 2 - Grayed. vpUnchecked, vpChecked or vpGrayed; changing it fires Click |
 
-Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 `Click` fires whenever `Value` changes, including from code.
@@ -997,11 +1091,16 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
 | `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Picture` | file path | `''` | A Graphical button's picture (relative to the form's folder) |
 | `Style` | enum | 0 - Standard | 0 - Standard, 1 - Graphical. Graphical: a toggle button, pressed while Value is True (one of its container's option buttons), showing its Picture above the Caption |
 | `Value` | bool | `False` | Selected; option buttons in the same container are exclusive |
 
-Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 `Click` fires when the button becomes selected.
@@ -1016,13 +1115,18 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the items' ItemImage is then a picture's Key or Index in it |
 | `List` | list[str] | `[]` | The items |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Sorted` | bool | `False` | Keep the items in alphabetical order |
 | `Style` | enum | 0 - Dropdown Combo | 0 - Dropdown Combo, 1 - Simple Combo, 2 - Dropdown List. Dropdown Combo: editable text and a list that drops down; Simple Combo: editable text above a list that is always shown (make it tall enough); Dropdown List: choose an item only |
 | `Text` | str | `''` | The edit text or the selected item |
 
-Events: `Change`, `Click`, `DblClick`, `DropDown`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`. Default event (double-click in the designer): `Click`.
+Events: `Change`, `Click`, `DblClick`, `DropDown`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Run-time members:
@@ -1062,13 +1166,18 @@ Default size 121 × 97. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the items' ItemImage is then a picture's Key or Index in it |
 | `List` | list[str] | `[]` | The items |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `MultiSelect` | enum | 0 - None | 0 - None, 1 - Simple, 2 - Extended. Whether several items can be selected |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Sorted` | bool | `False` | Keep the items in alphabetical order |
 | `Style` | enum | 0 - Standard | 0 - Standard, 1 - Checkbox. Checkbox: a check box in front of every item; an item is Selected while it is checked, and ItemCheck fires when the user changes one |
 
-Events: `Click`, `DblClick`, `ItemCheck(Item)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `ItemCheck(Item)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Run-time members:
@@ -1117,13 +1226,18 @@ Default size 121 × 17. Property groups: Position, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `LargeChange` | int | `1` | Step for clicks on the track |
 | `Max` | int | `32767` | Largest Value |
 | `Min` | int | `0` | Smallest Value |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `SmallChange` | int | `1` | Step for the arrow buttons |
 | `Value` | int | `0` | The current position; changing it fires Change |
 
-Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 `Change` fires when the value changes, `Scroll` while the thumb is dragged.
@@ -1138,13 +1252,18 @@ Default size 17 × 121. Property groups: Position, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `LargeChange` | int | `1` | Step for clicks on the track |
 | `Max` | int | `32767` | Largest Value |
 | `Min` | int | `0` | Smallest Value |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `SmallChange` | int | `1` | Step for the arrow buttons |
 | `Value` | int | `0` | The current position; changing it fires Change |
 
-Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### Timer
@@ -1210,8 +1329,13 @@ Default size 161 × 25. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 
-Events: `Change`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: control DirListBox -->
@@ -1220,9 +1344,14 @@ Default size 161 × 145. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `ShowHidden` | bool | `False` | Also list hidden folders (on macOS and Linux, those starting with .) |
 
-Events: `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: control FileListBox -->
@@ -1231,11 +1360,16 @@ Default size 161 × 145. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Hidden` | bool | `False` | Also list hidden files (on macOS and Linux, those starting with .) |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `MultiSelect` | enum | 0 - None | 0 - None, 1 - Simple, 2 - Extended. Whether several files can be selected |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Pattern` | str | `'*.*'` | Which files are listed: wildcards, several separated by ; (*.txt;*.py); *.* lists all |
 
-Events: `Click`, `DblClick`, `PathChange`, `PatternChange`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `PathChange`, `PatternChange`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### Shape
@@ -1340,7 +1474,12 @@ Default size 97 × 97. Property groups: Position.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the image |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Enabled` | bool | `True` | Whether the control responds to the user |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Picture` | file path | `''` | Image file (relative to the form's folder) |
 | `Stretch` | bool | `False` | True: the picture is scaled to fill the control. False: the control takes the size of the picture |
 | `Tag` | str | `''` | Free for your own use |
@@ -1348,7 +1487,7 @@ Default size 97 × 97. Property groups: Position.
 | `Visible` | bool | `True` | Whether the control is shown at run time |
 | `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top. Equal values keep creation order (later on top). |
 
-Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### TreeView
@@ -1411,14 +1550,19 @@ Default size 161 × 193. Property groups: Position, Colors, Font, Common.
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Checkboxes` | bool | `False` | A check box in front of every node |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the nodes' Image is then a picture's Key or Index in it |
 | `Indentation` | int | `20` | How far each level is indented, in pixels |
 | `Items` | list[str] (an indented outline) | `[]` | The nodes, set in the designer: one per line, indented under its parent; a vertical bar and a key at the end give the node that key |
 | `LineStyle` | enum | 1 - Root Lines | 0 - Tree Lines, 1 - Root Lines. Root Lines: the top-level nodes have expand/collapse buttons too |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `PathSeparator` | str | `'\\'` | Separates the texts in a node's FullPath |
 | `Sorted` | bool | `False` | Keep the top-level nodes in alphabetical order |
 
-Events: `NodeClick(Node)`, `Expand(Node)`, `Collapse(Node)`, `NodeCheck(Node)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `NodeClick`.
+Events: `NodeClick(Node)`, `Expand(Node)`, `Collapse(Node)`, `NodeCheck(Node)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `NodeClick`.
 <!-- END GENERATED -->
 
 ### Splitter
@@ -1511,11 +1655,16 @@ Default size 161 × 201. A container: other controls can be placed on it. Proper
 | `Align` | enum | 3 - Left | 1 - Top, 2 - Bottom, 3 - Left, 4 - Right. The edge of the form it docks to; its Width (Left, Right) or Height (Top, Bottom) is its size there |
 | `Caption` | str | `''` | The title in its caption bar |
 | `Closable` | bool | `True` | A close button in its caption bar |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Floatable` | bool | `True` | The user can float it and dock it to another edge (the float button, dragging the caption bar) |
 | `Floating` | bool | `False` | At run time: in a window of its own instead of docked |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Resizable` | bool | `True` | Its inner edge can be dragged to resize it |
 
-Events: `DockChange`, `Close`, `Resize`, `Click`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `DockChange`.
+Events: `DockChange`, `Close`, `Resize`, `Click`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `DockChange`.
 <!-- END GENERATED -->
 
 ### ProgressBar
@@ -1543,9 +1692,14 @@ Default size 161 × 25. Property groups: Position.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Enabled` | bool | `True` | Whether the control responds to the user |
 | `Max` | int | `100` | Value when the bar is full |
 | `Min` | int | `0` | Value when the bar is empty |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Orientation` | enum | 0 - Horizontal | 0 - Horizontal, 1 - Vertical. Horizontal (filling to the right) or Vertical (filling upwards) |
 | `Tag` | str | `''` | Free for your own use |
 | `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
@@ -1553,7 +1707,7 @@ Default size 161 × 25. Property groups: Position.
 | `Visible` | bool | `True` | Whether the control is shown at run time |
 | `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top. Equal values keep creation order (later on top). |
 
-Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### Slider
@@ -1586,16 +1740,21 @@ Default size 161 × 41. Property groups: Position, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `LargeChange` | int | `5` | Step for Page Up / Page Down and clicks beside the thumb |
 | `Max` | int | `10` | Largest Value |
 | `Min` | int | `0` | Smallest Value |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Orientation` | enum | 0 - Horizontal | 0 - Horizontal, 1 - Vertical. Horizontal or Vertical |
 | `SmallChange` | int | `1` | Step for the arrow keys |
 | `TickFrequency` | int | `1` | A tick mark every this many values |
 | `TickStyle` | enum | 0 - Bottom/Right | 0 - Bottom/Right, 1 - Top/Left, 2 - Both, 3 - No Ticks. Where the tick marks are: below (right of) the scale, above (left of) it, on both sides, or none |
 | `Value` | int | `0` | The thumb's position; changing it fires Change |
 
-Events: `Scroll`, `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Scroll`.
+Events: `Scroll`, `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Scroll`.
 <!-- END GENERATED -->
 
 ### UpDown
@@ -1633,10 +1792,15 @@ Default size 17 × 33. Property groups: Position.
 |---|---|---|---|
 | `BuddyControl` | str | `''` | The name of the control that shows the Value (e.g. a TextBox), on the same form |
 | `BuddyProperty` | str | `''` | The buddy's property that shows the Value; empty = its Text, or its Caption |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Enabled` | bool | `True` | Whether the control responds to the user |
 | `Increment` | int | `1` | How much a click on an arrow changes Value |
 | `Max` | int | `10` | Largest Value |
 | `Min` | int | `0` | Smallest Value |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Orientation` | enum | 1 - Vertical | 0 - Horizontal, 1 - Vertical. Vertical (up and down arrows) or Horizontal (left and right arrows) |
 | `SyncBuddy` | bool | `False` | Keep the buddy's property and the Value in step |
 | `Tag` | str | `''` | Free for your own use |
@@ -1646,7 +1810,7 @@ Default size 17 × 33. Property groups: Position.
 | `Wrap` | bool | `False` | Past Max go on from Min (and below Min from Max) instead of stopping |
 | `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top. Equal values keep creation order (later on top). |
 
-Events: `Change`, `UpClick`, `DownClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `UpClick`, `DownClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### ImageList
@@ -1748,14 +1912,19 @@ Default size 400 × 40. Property groups: Position, Font.
 |---|---|---|---|
 | `Align` | enum | 1 - Top | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right. The edge it docks to (Top), like an aligned PictureBox; Left and Right make a vertical toolbar; None: where you put it |
 | `Buttons` | buttons | `['Button1|button1']` | The buttons, set in the designer: one per line, Caption|Key|Image|ToolTipText|options (check, group, pressed, disabled, hidden); - alone is a separator |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Enabled` | bool | `True` | Whether the control responds to the user |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the buttons' Image is then a picture's Key or Index in it |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Tag` | str | `''` | Free for your own use |
 | `TextAlignment` | enum | 0 - Bottom | 0 - Bottom, 1 - Right. Where a button's Caption is: under its picture, or beside it |
 | `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
 | `Visible` | bool | `True` | Whether the control is shown at run time |
 
-Events: `ButtonClick(Button)`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `ButtonClick`.
+Events: `ButtonClick(Button)`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `ButtonClick`.
 <!-- END GENERATED -->
 
 ### ListView
@@ -1821,17 +1990,22 @@ Default size 257 × 177. Property groups: Position, Colors, Font, Common.
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Checkboxes` | bool | `False` | A check box in front of every item |
 | `ColumnHeaders` | columns | `[]` | The Report view's columns, set in the designer: one per line, Text|Key|Width|alignment (left, right or center); the first shows the items' Text, the others their SubItems |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `HideColumnHeaders` | bool | `False` | Hide the Report view's column titles |
 | `Icons` | str | `''` | The name of the ImageList with the items' Icons (the Icon view) |
 | `ListItems` | listitems | `[]` | The items, set in the designer: one per line, Text|Key|Icon|SmallIcon|SubItem 1|SubItem 2... |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `MultiSelect` | bool | `False` | Several items can be selected (Ctrl/Cmd- and Shift-click) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `SmallIcons` | str | `''` | The name of the ImageList with the items' SmallIcons (the other views) |
 | `SortKey` | int | `0` | The column to sort by: 0 = the items' Text, 1 = the first SubItem... |
 | `SortOrder` | enum | 0 - Ascending | 0 - Ascending, 1 - Descending. A to Z, or Z to A |
 | `Sorted` | bool | `False` | Keep the items sorted by the SortKey column |
 | `View` | enum | 0 - Icon | 0 - Icon, 1 - SmallIcon, 2 - List, 3 - Report. How the items are shown: large icons, small icons, a list, or a report with a column per ColumnHeader |
 
-Events: `ItemClick(Item)`, `ColumnClick(ColumnHeader)`, `ItemCheck(Item)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `ItemClick`.
+Events: `ItemClick(Item)`, `ColumnClick(ColumnHeader)`, `ItemCheck(Item)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `ItemClick`.
 <!-- END GENERATED -->
 
 ### FlexGrid
@@ -1904,15 +2078,20 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | `AllowUserResizing` | enum | 1 - Columns | 0 - None, 1 - Columns, 2 - Rows, 3 - Both. What the user can resize by dragging the headings' edges |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Cols` | int | `2` | How many columns, the fixed one included |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Editable` | bool | `False` | The user can edit the cells, each with its column's or its own editor |
 | `FixedCols` | enum | 1 - 1 | 0 - 0, 1 - 1. 1: the first column is the row headings, staying put while scrolling |
 | `FixedRows` | enum | 1 - 1 | 0 - 0, 1 - 1. 1: the first row is the column headings, staying put while scrolling |
 | `FormatString` | str | `''` | Column headings and alignments: <Name|^Qty|>Price (< left, ^ center, > right) |
 | `GridLines` | bool | `True` | Lines between the cells |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Rows` | int | `2` | How many rows, the fixed one included |
 | `SelectionMode` | enum | 0 - Free | 0 - Free, 1 - By Row, 2 - By Column. What a click selects: cells, whole rows or whole columns |
 
-Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### StatusBar
@@ -1964,7 +2143,12 @@ Default size 400 × 25. Property groups: Position, Colors, Font.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Align` | enum | 2 - Bottom | 0 - None, 1 - Top, 2 - Bottom. The edge it docks to (Bottom), like an aligned PictureBox; None: where you put it |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Enabled` | bool | `True` | Whether the control responds to the user |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Panels` | panels | `['|panel1|spring']` | The panels, set in the designer: one per line, Text|Key|options, the options being words: a width in pixels, spring or contents (AutoSize), caps, num, ins, scrl, time or date (Style), center or right (Alignment). E.g. Ready|status|spring |
 | `SimpleText` | str | `''` | The text shown when Style is Simple |
 | `Style` | enum | 0 - Normal | 0 - Normal, 1 - Simple. Normal: the panels; Simple: SimpleText across the whole bar |
@@ -1972,7 +2156,7 @@ Default size 400 × 25. Property groups: Position, Colors, Font.
 | `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
 | `Visible` | bool | `True` | Whether the control is shown at run time |
 
-Events: `PanelClick(Panel)`, `PanelDblClick(Panel)`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `PanelClick`.
+Events: `PanelClick(Panel)`, `PanelDblClick(Panel)`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `PanelClick`.
 <!-- END GENERATED -->
 
 ### TabStrip
@@ -2026,11 +2210,16 @@ Default size 257 × 177. Property groups: Position, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the tabs' Image is then a picture's Key or Index in it |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Placement` | enum | 0 - Top | 0 - Top, 1 - Bottom, 2 - Left, 3 - Right. Which side the tabs are on |
 | `Tabs` | tabs | `['Tab1|tab1']` | The tabs, set in the designer: one per line, Caption|Key|ToolTipText|Image (an & in the Caption underlines its access key; the Image is a Key or Index in the ImageList) |
 
-Events: `Click`, `BeforeClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `BeforeClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### Menu
@@ -2190,7 +2379,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 | Object | Members |
 |---|---|
 | `App` | `Title` (set from the project name), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName` |
-| `Screen` | `Width`, `Height` (primary screen, pixels), `ActiveForm`, `ActiveControl` (the control with the focus, in any form) |
+| `Screen` | `Width`, `Height` (primary screen, pixels), `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
 | `Clipboard` | `GetText()`, `SetText(text)`, `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
 
@@ -2310,6 +2499,8 @@ All constants are plain ints or strings.
 | FlexGrid.SelectionMode | `vpGridSelectionFree`, `vpGridSelectionByRow`, `vpGridSelectionByColumn` | 0, 1, 2 |
 | PopupMenu flags (added together) | `vpPopupMenuLeftAlign`, `vpPopupMenuCenterAlign`, `vpPopupMenuRightAlign`, `vpPopupMenuLeftButton`, `vpPopupMenuRightButton` | 0, 4, 8, 0, 2 |
 | Form_QueryUnload: UnloadMode | `vpFormControlMenu`, `vpFormCode`, `vpAppWindows`, `vpAppTaskManager`, `vpFormMDIForm`, `vpFormOwner` | 0, 1, 2, 3, 4, 5 |
+| MousePointer (controls, forms, Screen) | `vpDefault`, `vpArrow`, `vpCrosshair`, `vpIbeam`, `vpIconPointer`, `vpSizePointer`, `vpSizeNESW`, `vpSizeNS`, `vpSizeNWSE`, `vpSizeWE`, `vpUpArrow`, `vpHourglass`, `vpNoDrop`, `vpArrowHourglass`, `vpArrowQuestion`, `vpSizeAll`, `vpCustom` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 99 |
+| Drag and drop | `vpManual`, `vpAutomatic`, `vpCancelDrag`, `vpBeginDrag`, `vpEndDrag`, `vpEnter`, `vpLeave`, `vpOver`, `vpOLEDropNone`, `vpOLEDropManual`, `vpCFText`, `vpCFFiles`, `vpDropEffectNone`, `vpDropEffectCopy`, `vpDropEffectMove` | 0, 1, 0, 1, 2, 0, 1, 2, 0, 1, 1, 15, 0, 1, 2 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -2479,6 +2670,12 @@ It goes in the project's `dist` folder:
   control can't be a container for the form's controls.
 * **DockPanel** is VP6's own (VB had no docking panels), as are the form's
   `DockLayout` and its events `DockChange` and `Close`.
+* **Drag and drop:** `Drag` starts a drag and waits until it is over (VB's
+  returned at once); Drag's cancel action is `vpCancelDrag` (VB's `vbCancel`
+  clashes with the MsgBox result, `vpCancel`); `DragOver` returning False
+  refusing a drop is VP6's. Controls take drops from other programs
+  (`OLEDropMode` Manual or None), but don't start them (no `OLEDrag`,
+  `OLEDragMode`, `OLEStartDrag`); `vpIconPointer` is the arrow.
 * **FlexGrid** is MSFlexGrid with editing added (`Editable`, the editors
   and the edit events). It has at most one fixed row and one fixed column,
   measures in pixels, and has no `MergeCells`, `FillStyle`, `CellPicture`,

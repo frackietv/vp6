@@ -1,4 +1,10 @@
-"""Kitchen Sink page: mouse events."""
+"""Kitchen Sink page: mouse events, mouse pointers (MousePointer, Screen.MousePointer), VB
+drag and drop (DragMode, DragOver, DragDrop) and drops from other programs (OLEDropMode,
+OLEDragDrop)."""
+
+POINTERS = ("Default", "Arrow", "Cross", "I-Beam", "Icon", "Size", "Size NE SW", "Size N S",
+            "Size NW SE", "Size W E", "Up Arrow", "Hourglass", "No Drop", "Arrow and Hourglass",
+            "Arrow and Question", "Size All")
 
 from vp6 import *
 
@@ -17,7 +23,41 @@ class pgMouse(Form):
                             TabIndex=2)
         self.lblMouse = Label(self, Caption='', Left=330, Top=16, Width=290, Height=160,
                               WordWrap=True, TabIndex=3)
+        self.lblPointer = Label(self, Caption='&Pointer over the pad:', Left=330, Top=186,
+                                Width=150, Height=25, TabIndex=4)
+        self.cboPointer = ComboBox(self, Style=2, Left=484, Top=182, Width=136, Height=25,
+                                   TabIndex=5, ToolTipText="The pad's MousePointer")
+        self.cmdBusy = CommandButton(self, Caption='&Busy for a second', Left=330, Top=216,
+                                     Width=180, Height=30, TabIndex=6,
+                                     ToolTipText='Screen.MousePointer = vpHourglass, everywhere')
+        self.tmrBusy = Timer(self, Left=520, Top=216, Interval=1000, Enabled=False)
+        self.lblToken = ControlArray()
+        self.lblToken[0] = Label(self, Caption='Apple', Left=16, Top=232, Width=70, Height=25,
+                                 Alignment=2, BorderStyle=1, TabIndex=7,
+                                 ToolTipText='Drag it into the basket (DragMode = Automatic)',
+                                 DragMode=1)
+        self.lblToken[1] = Label(self, Caption='Pear', Left=96, Top=232, Width=70, Height=25,
+                                 Alignment=2, BorderStyle=1, TabIndex=8,
+                                 ToolTipText='Drag it into the basket (DragMode = Automatic)',
+                                 DragMode=1)
+        self.lblToken[2] = Label(self, Caption='Plum', Left=176, Top=232, Width=70, Height=25,
+                                 Alignment=2, BorderStyle=1, TabIndex=9,
+                                 ToolTipText='Dragged as a star (its DragIcon)', DragMode=1,
+                                 DragIcon='images/star.png')
+        self.picBasket = PictureBox(self, Left=16, Top=270, Width=300, Height=150, TabIndex=10,
+                                    ToolTipText='DragOver and DragDrop')
+        self.lblBasket = Label(self.picBasket, Caption='Basket: drop fruit here', Left=8, Top=8,
+                               Width=280, Height=25, TabIndex=11)
+        self.lblDropZone = Label(self,
+                                 Caption='Drop text or files here from another program (OLEDropMode = Manual)',
+                                 Left=330, Top=270, Width=290, Height=150, WordWrap=True,
+                                 BorderStyle=1, TabIndex=12, OLEDropMode=1)
     # endregion
+
+    def Form_Load(self):
+        for name in POINTERS:
+            self.cboPointer.AddItem(name)
+        self.cboPointer.ListIndex = 0
 
     def Form_MouseMove(self, Button, Shift, X, Y):
         self.lblMouse.Caption = f"Mouse at {X}, {Y} on the page"
@@ -39,6 +79,47 @@ class pgMouse(Form):
 
     def picPad_DblClick(self):
         self.lblPad.Caption = "Double-click"
+
+    # --- mouse pointers ---------------------------------------------------------------------------
+    def cboPointer_Click(self):
+        self.picPad.MousePointer = self.cboPointer.ListIndex  # vpDefault ... vpSizeAll
+
+    def cmdBusy_Click(self):
+        Screen.MousePointer = vpHourglass  # over every window, until set back
+        self.tmrBusy.Enabled = True
+
+    def tmrBusy_Timer(self):
+        self.tmrBusy.Enabled = False
+        Screen.MousePointer = vpDefault
+
+    # --- VB drag and drop: fruit into the basket --------------------------------------------------
+    def picBasket_DragOver(self, Source, X, Y, State):
+        # While something is dragged over it: lit up (vpEnter), back again (vpLeave)
+        if State == vpEnter:
+            self.picBasket.BackColor = 0xC0F0FF
+        elif State == vpLeave:
+            self.picBasket.BackColor = None
+
+    def picBasket_DragDrop(self, Source, X, Y):
+        self.picBasket.BackColor = None
+        Source.Container = self.picBasket  # into the basket, where it was dropped
+        Source.Move(X, Y)
+        self.lblBasket.Caption = f"Basket: {Source.Caption} dropped at {X}, {Y}"
+
+    def lblBasket_DragDrop(self, Source, X, Y):  # (on the basket's label: the basket)
+        self.picBasket_DragDrop(Source, self.lblBasket.Left + X, self.lblBasket.Top + Y)
+
+    def Form_DragDrop(self, Source, X, Y):
+        Source.Container = self  # dropped on the page: out of the basket
+        Source.Move(X, Y)
+        self.lblBasket.Caption = f"Basket: {Source.Caption} taken out"
+
+    # --- drops from other programs ------------------------------------------------------------------
+    def lblDropZone_OLEDragDrop(self, Data, Effect, Button, Shift, X, Y):
+        if Data.GetFormat(vpCFFiles):
+            self.lblDropZone.Caption = "Files:\n" + "\n".join(Data.GetData(vpCFFiles))
+        elif Data.GetFormat(vpCFText):
+            self.lblDropZone.Caption = f"Text: {Data.GetData(vpCFText)}"
 
 
 if __name__ == "__main__":

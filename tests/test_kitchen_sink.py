@@ -12,10 +12,10 @@ import shutil
 import sys
 
 import pytest
-from PySide6.QtCore import QPoint, Qt, QTimer
-from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QTimer, QUrl
+from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QPixmap
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QLineEdit
+from PySide6.QtWidgets import QApplication, QLineEdit
 
 import vp6
 from vp6 import formfile
@@ -832,12 +832,70 @@ def test_keyboard_page(sink):
     assert page.txtUpper.Text == "TYPED FOR YOU" and page.lblButtons.Caption.startswith("OK")
 
 
-def test_mouse_page(sink):
+def drag_to(target, source, point):
+    """Drag ``source`` over ``target`` and drop it there (what a real drag
+    sends), ``point`` in the target."""
+    from vp6 import controls
+
+    mime = QMimeData()
+    mime.setData(controls._VP6_DRAG_MIME, b"1")
+    controls._DRAGGING.update(source=source, drag=object(), target=None)
+    widget = target._container_widget() if isinstance(target, vp6.Form) else target._widget
+    try:
+        for event in (QDragEnterEvent(point, Qt.MoveAction, mime, Qt.LeftButton, Qt.NoModifier),
+                      QDropEvent(QPointF(point), Qt.MoveAction, mime, Qt.LeftButton,
+                                 Qt.NoModifier)):
+            QApplication.sendEvent(widget, event)
+    finally:
+        controls._DRAGGING.update(source=None, drag=None, target=None)
+
+
+def ole_drop(widget, data):
+    """Text or files dropped from another program."""
+    for event in (QDragEnterEvent(QPoint(5, 5), Qt.CopyAction, data, Qt.LeftButton,
+                                  Qt.NoModifier),
+                  QDropEvent(QPointF(5, 5), Qt.CopyAction, data, Qt.LeftButton, Qt.NoModifier)):
+        QApplication.sendEvent(widget, event)
+
+
+def test_mouse_page(sink, monkeypatch):
     page = _page(sink, "mouse")
     QTest.mousePress(page.picPad._widget, Qt.RightButton, Qt.NoModifier, QPoint(50, 60))
     assert page.lblMouse.Caption == "right button down at 50, 60"
     QTest.mouseRelease(page.picPad._widget, Qt.RightButton, Qt.NoModifier, QPoint(50, 60))
     assert page.lblMouse.Caption.endswith("released")
+    page.cboPointer.ListIndex = vp6.vpCrosshair  # the pad's MousePointer
+    assert page.picPad._widget.cursor().shape() == Qt.CrossCursor
+    page.cmdBusy._widget.click()  # the hourglass everywhere, for a second
+    assert vp6.Screen.MousePointer == vp6.vpHourglass
+    page.tmrBusy_Timer()
+    assert vp6.Screen.MousePointer == vp6.vpDefault
+    # VB drag and drop: a fruit dragged into the basket, and out again
+    apple = page.lblToken[0]
+    dropped = []
+
+    def drag(self, Action=1):  # (instead of the real drag, which follows the mouse)
+        dropped.append(self.Caption)
+        target = page.picBasket if len(dropped) == 1 else page
+        drag_to(target, self, QPoint(40, 50) if len(dropped) == 1 else QPoint(300, 230))
+
+    monkeypatch.setattr(type(apple), "Drag", drag)
+    QTest.mouseClick(apple._widget, Qt.LeftButton)  # DragMode = Automatic: the press drags
+    assert apple.Container is page.picBasket and (apple.Left, apple.Top) == (40, 50)
+    assert page.lblBasket.Caption == "Basket: Apple dropped at 40, 50"
+    assert page.picBasket.BackColor is None  # (lit up while over it)
+    QTest.mouseClick(apple._widget, Qt.LeftButton)
+    assert apple.Container is page and page.lblBasket.Caption == "Basket: Apple taken out"
+    assert page.lblToken[2].DragIcon == "images/star.png"
+    # Dropped from another program
+    data = QMimeData()
+    data.setUrls([QUrl.fromLocalFile("/tmp/notes.txt")])
+    ole_drop(page.lblDropZone._widget, data)
+    assert page.lblDropZone.Caption == "Files:\n/tmp/notes.txt"
+    data = QMimeData()
+    data.setText("hello")
+    ole_drop(page.lblDropZone._widget, data)
+    assert page.lblDropZone.Caption == "Text: hello"
 
 
 def test_control_arrays_page(sink):

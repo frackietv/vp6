@@ -330,6 +330,27 @@ class _Screen:
         widget = QApplication.activeWindow()
         return getattr(widget, "_vp_form", None)
 
+    _pointer = 0
+    MouseIcon = ""  # the picture for MousePointer = vpCustom (a file)
+
+    @property
+    def MousePointer(self) -> int:
+        """The pointer over every window of the program, e.g. vpHourglass during
+        long work; vpDefault (0) gives the controls their own again."""
+        return self._pointer
+
+    @MousePointer.setter
+    def MousePointer(self, value):
+        from .controls import pointer_cursor
+
+        ensure_app()
+        while QApplication.overrideCursor() is not None:
+            QApplication.restoreOverrideCursor()
+        cursor = pointer_cursor(int(value), self.MouseIcon)
+        if cursor is not None:
+            QApplication.setOverrideCursor(cursor)
+        type(self)._pointer = int(value)
+
     @property
     def ActiveControl(self):
         """The control with the focus, in whatever form (a control on a user

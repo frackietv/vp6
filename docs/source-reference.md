@@ -80,7 +80,9 @@ Application-level services.
   it doesn't close the windows first, since closing them would run them.
 * Singleton objects:
   * `App`: `Title`, `Path` (folder of `__main__`), `EXEName`;
-  * `Screen`: `Width`, `Height`, `ActiveForm`, `ActiveControl`
+  * `Screen`: `MousePointer` (`QApplication.setOverrideCursor`, all
+    overrides restored first), `MouseIcon`, `Width`, `Height`, `ActiveForm`,
+    `ActiveControl`
     (`control_of_widget` of the focus widget, `outer_control` for user
     controls);
   * `Clipboard`: `GetText`, `SetText`, `Clear`;
@@ -173,6 +175,21 @@ The intrinsic controls.
     focus events that causes skipped (`_VALIDATION["skip"]`, checked by
     `_skip_focus_event`) and the target's Click held back for a moment
     (`_VALIDATION["blocked"]`, checked in `_fire`).
+  * **The mouse:** `_add_mouse_members` gives the visible control types
+    (`_NO_MOUSE_MEMBERS` aside) MousePointer, MouseIcon, DragMode, DragIcon,
+    OLEDropMode and the drag events. `pointer_cursor(value, icon)` makes the
+    QCursor (`_CURSORS`; None for vpDefault); `_update_cursor` sets it on the
+    control's widgets, remembering their own cursors (`_saved_cursors`) to
+    give back for vpDefault. `Drag` runs a `QDrag` with `_VP6_DRAG_MIME`
+    (its DragIcon or a faded grab of the widget), recording it in
+    `_DRAGGING` (source, the QDrag, the target and position), and ends or
+    cancels it with `QDrag.cancel`. Control widgets accept drops; their drag
+    events go through `_on_qt_event` to `handle_drag_event(owner, event,
+    pos)`, which fires DragOver (enter/over/leave) and DragDrop for a VP6
+    drag, OLEDragOver and OLEDragDrop (a `DataObject`) for others when
+    OLEDropMode is Manual, and `_accept_drag` (refused: accepted with
+    IgnoreAction, so the container doesn't take it). DragMode Automatic
+    starts a drag on the left button's press.
   * `CONTROL_TYPES`, at the end of the file: type name → class, in Toolbox
     order. The designer, form-file parser and Toolbox all use it. `Menu` is
     in it but has `InToolbox = False` (the Menu Editor designs menus).
@@ -373,6 +390,7 @@ visibility asks the form to place its docked controls again
     `VP_FORM_CODE` from `Unload()` (set in `_unload_mode` before closing the
     window), 3 from `app.close_all_windows` (Ctrl+C), `VP_FORM_OWNER` for the
     forms shown in a closing form.
+  * **Drag and drop, the pointer:** `_FormWidget` and `_FormClient` accept drops; their drag events go to `handle_drag_event` with the form (`_form_drag_event`; a user control's surface: the user control); `_apply_MousePointer` sets the window's cursor.
   * **Icon:** `_apply_Icon` sets the window icon from a file relative to
     `_base_dir()` (none or unreadable: an empty QIcon, so the program's).
   * **Construction:**
@@ -1465,6 +1483,12 @@ explorer-style.
     ActiveControl and Screen.ActiveControl shown by a Timer, and SendKeys
     typing into the upper-case box and pressing Enter;
   * `pgMouse.py`: MouseDown/MouseMove/MouseUp with buttons, Click, DblClick;
+    the pad's MousePointer from a list and Screen.MousePointer's hourglass
+    for a second (a Timer); fruit labels (a control array, DragMode
+    Automatic, one with a DragIcon) dragged into a basket (DragOver lighting
+    it, DragDrop moving the fruit in with Container) and out onto the page
+    (Form_DragDrop); a drop zone for text and files from other programs
+    (OLEDropMode Manual, OLEDragDrop);
   * `pgArrays.py`: the `cmdMore` control array loading and unloading
     elements;
   * `pgMenus.py`: the menus, adding bookmarks (a menu control array grown
@@ -1682,6 +1706,7 @@ All tests run headless. `conftest.py`:
 | `test_packaging.py` | The package as published: `pyproject.toml`'s version is `vp6.__version__`, the MIT license and its file, the author without an email, the dependencies and the `make` extra; every data file in `vp6/` (not a module of a package) matched by the package data, so the wheel has it; the `vp6`, `vp6-run` and `vp6-make` commands; the source distribution's docs and tests; the release workflow's version check and trusted publishing. |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the Docking panels page (Float and Dock, Close cancelled, a closed panel shown again, the layout saved and restored, the grid following its panel), the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Buttons page's cmdHop moving into the Basket frame and out (Container), the Keyboard page's Validate (the focus kept, Help regardless), ActiveControl and SendKeys (typed, upper-cased, Enter on the Default button), the Dialogs page's default instance (Result, closed by code or by its close button, the same instance loaded again, its icon), the Your own controls page (ctlRating's stars, a click's Change, Hover, Value from code, Locked, Max and Value kept in range), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order, lines and shapes, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, the popup menu (right-click, the bold default, under a button), globals); closing unloads the pages. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the Docking panels page (Float and Dock, Close cancelled, a closed panel shown again, the layout saved and restored, the grid following its panel), the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Mouse page's pointers, fruit dragged into the basket and out, and drops from other programs, the Buttons page's cmdHop moving into the Basket frame and out (Container), the Keyboard page's Validate (the focus kept, Help regardless), ActiveControl and SendKeys (typed, upper-cased, Enter on the Default button), the Dialogs page's default instance (Result, closed by code or by its close button, the same instance loaded again, its icon), the Your own controls page (ctlRating's stars, a click's Change, Hover, Value from code, Locked, Max and Value kept in range), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order, lines and shapes, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, the popup menu (right-click, the bold default, under a button), globals); closing unloads the pages. |
+| `test_mouse.py` | MousePointer (a control's own pointer given back, a custom MouseIcon, a form's), Screen.MousePointer; which controls have the mouse members and events; VB drag and drop: DragOver's enter, over and leave, DragDrop, refusing in DragOver, dropping on a user control, Drag starting (its data and picture, its DragIcon), ending where it is and cancelling, DragMode Automatic (no MouseDown or Click); drops from other programs (OLEDragOver, OLEDragDrop, refusing, a TextBox's own drop with OLEDropMode None, a form's), the DataObject. |
 | `test_popupmenu.py` | Form.PopupMenu: the chosen item returned after its Click (and the menu's own Click first), the bold DefaultMenu only for that time, None when closed without a choice, nothing recorded outside PopupMenu; left, right and center alignment at X, Y, the mouse's place for what is left out; not a Menu, a menu without items, a visible menu-bar menu; at design time. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (none by default, nothing copied; its own files, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |

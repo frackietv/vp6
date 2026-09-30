@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** Mouse: `MousePointer` / `MouseIcon` properties for cursor shapes such as resize arrows and crosshair, and `Screen.MousePointer` (e.g. an hourglass during long work); drag and drop: `DragMode`, `Drag`, `DragIcon`, `DragDrop` / `DragOver` events, and OLE drag and drop of text and files from other programs (self-hosting: the designer's handles and drawing tool, dragging from the Toolbox)
 - **[Controls]** Common Dialog control (open, save, color, font, print dialogs)
 - **[Controls]** WebView control using QWebView
 - **[Controls]** WebBrowser control using QWebEngineView
