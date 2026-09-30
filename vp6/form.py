@@ -999,6 +999,20 @@ class Form(PropertyHost, metaclass=_FormType):
         else:
             self._widget.move(self._values.get("Left", 0), self._values.get("Top", 0))
 
+    @property
+    def ActiveControl(self):
+        """The form's control with the focus (a control on a user control's
+        surface: the user control), or None if the focus is elsewhere."""
+        widget = QApplication.focusWidget()
+        while widget is not None:
+            control = getattr(widget, "_vp_control", None)
+            if control is not None and control._form is self:
+                return control
+            if getattr(widget, "_vp_form", None) not in (None, self):
+                return None  # (in another form shown in this one: its own)
+            widget = widget.parentWidget()
+        return None
+
     def PopupMenu(self, Menu: MenuControl, Flags: int = 0, X: int | None = None,
                   Y: int | None = None,
                   DefaultMenu: MenuControl | None = None) -> MenuControl | None:

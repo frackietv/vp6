@@ -268,6 +268,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `CellButtonClick` | Row, Col |
 | `DockChange` | none |
 | `Close` | none |
+| `Validate` | none |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -331,6 +332,7 @@ Run-time only properties:
 | `Controls` | list of all controls on the form, including nested ones |
 | `ScaleWidth`, `ScaleHeight` | client area size |
 | `Visible` | whether the form is shown; setting it calls `Show()` / `Hide()` |
+| `ActiveControl` | the form's control with the focus (a control on a [user control](#user-controls): the user control), or `None` |
 | `DockLayout` | where the form's [DockPanels](#dockpanel) are, as text: read it to keep it, set it to put them back |
 
 ### Form methods
@@ -422,6 +424,26 @@ Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `
 
 Setting a property that doesn't exist (e.g. `Command1.Captoin = "x"`) raises
 `AttributeError`, like VB's error 438.
+
+**Validate and CausesValidation** (controls that take the focus: TextBox,
+CommandButton, CheckBox, OptionButton, ComboBox, ListBox, the scroll bars, the
+file system controls, TreeView, ListView, Slider, TabStrip, RichTextBox,
+CodeBox, FlexGrid). When the focus is about to leave a control for another
+control of the same window whose `CausesValidation` is True (the default),
+the first control's `Validate` event fires; returning `True` keeps the focus
+where it is, as if it never left (no LostFocus, no GotFocus, and a button
+clicked to leave isn't clicked):
+
+```python
+def txtAge_Validate(self):
+    if not self.txtAge.Text.isdigit():
+        MsgBox("The age must be a number")
+        return True      # VB's Cancel = True: the focus stays in txtAge
+```
+
+Set `CausesValidation = False` on controls that mustn't wait for a valid
+value, e.g. a Help or Cancel button. Moving to another window or form doesn't
+validate.
 
 ### Common property groups
 
@@ -679,6 +701,7 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 |---|---|---|---|
 | `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment (single-line only) |
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Locked` | bool | `False` | Read-only: the text can't be edited |
 | `MaxLength` | int | `0` | Maximum length; 0 = no limit (single-line) |
 | `MultiLine` | bool | `False` | A multi-line editor instead of a single line |
@@ -686,7 +709,7 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Scroll bars of a multi-line TextBox |
 | `Text` | str (multi-line) | `''` | The contents |
 
-Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 Run-time properties: `SelStart`, `SelLength`, `SelText` (the selection; setting `SelText` replaces it).
@@ -782,12 +805,13 @@ Default size 201 × 121. Property groups: Position, Colors, Font, Common.
 |---|---|---|---|
 | `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A border around it |
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Locked` | bool | `False` | Read-only: the text can't be edited |
 | `MaxLength` | int | `0` | Maximum length; 0 = no limit |
 | `ScrollBars` | enum | 2 - Vertical | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Its scroll bars (shown when needed); with a horizontal one, lines don't wrap |
 | `Text` | str (multi-line) | `''` | The contents, as plain text |
 
-Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### CodeBox
@@ -858,6 +882,7 @@ Default size 321 × 201. Property groups: Position, Colors, Font, Common.
 |---|---|---|---|
 | `AcceptsTab` | bool | `True` | Tab and Shift+Tab indent instead of moving to another control |
 | `AutoIndent` | bool | `True` | Enter keeps the line's indentation (Python: one more after a colon) |
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `CurrentLineColor` | color | (default) | The current line's shade; unset = a shade of the background |
 | `HighlightCurrentLine` | bool | `True` | Shade the caret's line |
 | `Language` | enum | 0 - None | 0 - None, 1 - Python. Built-in syntax coloring; add your own in the Highlight event |
@@ -869,7 +894,7 @@ Default size 321 × 201. Property groups: Position, Colors, Font, Common.
 | `UseTabs` | bool | `False` | Indent with tab characters instead of spaces |
 | `WordWrap` | bool | `False` | Wrap long lines instead of scrolling |
 
-Events: `Change`, `SelChange`, `Highlight(Line, Text, State)`, `GutterClick(Line)`, `ProtectedEdit(Line)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `SelChange`, `Highlight(Line, Text, State)`, `GutterClick(Line)`, `ProtectedEdit(Line)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### Frame
@@ -909,13 +934,14 @@ Default size 97 × 33. Property groups: Position, Colors, Font, Common.
 |---|---|---|---|
 | `Cancel` | bool | `False` | Clicked when Esc is pressed on the form |
 | `Caption` | str | `''` | The text; & marks the access key |
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Default` | bool | `False` | Clicked when Enter is pressed on the form |
 | `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
 | `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
 | `Picture` | file path | `''` | A Graphical button's picture (relative to the form's folder) |
 | `Style` | enum | 0 - Standard | 0 - Standard, 1 - Graphical. Graphical: a button showing its Picture above the Caption |
 
-Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Run-time: setting `Value = True` clicks the button.
@@ -941,13 +967,14 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Caption` | str | `''` | The text; & marks the access key |
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
 | `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
 | `Picture` | file path | `''` | A Graphical button's picture (relative to the form's folder) |
 | `Style` | enum | 0 - Standard | 0 - Standard, 1 - Graphical. Graphical: a toggle button, pressed while Value is vpChecked, showing its Picture above the Caption |
 | `Value` | enum | 0 - Unchecked | 0 - Unchecked, 1 - Checked, 2 - Grayed. vpUnchecked, vpChecked or vpGrayed; changing it fires Click |
 
-Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 `Click` fires whenever `Value` changes, including from code.
@@ -967,13 +994,14 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Caption` | str | `''` | The text; & marks the access key |
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
 | `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
 | `Picture` | file path | `''` | A Graphical button's picture (relative to the form's folder) |
 | `Style` | enum | 0 - Standard | 0 - Standard, 1 - Graphical. Graphical: a toggle button, pressed while Value is True (one of its container's option buttons), showing its Picture above the Caption |
 | `Value` | bool | `False` | Selected; option buttons in the same container are exclusive |
 
-Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 `Click` fires when the button becomes selected.
@@ -987,13 +1015,14 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the items' ItemImage is then a picture's Key or Index in it |
 | `List` | list[str] | `[]` | The items |
 | `Sorted` | bool | `False` | Keep the items in alphabetical order |
 | `Style` | enum | 0 - Dropdown Combo | 0 - Dropdown Combo, 1 - Simple Combo, 2 - Dropdown List. Dropdown Combo: editable text and a list that drops down; Simple Combo: editable text above a list that is always shown (make it tall enough); Dropdown List: choose an item only |
 | `Text` | str | `''` | The edit text or the selected item |
 
-Events: `Change`, `Click`, `DblClick`, `DropDown`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Click`.
+Events: `Change`, `Click`, `DblClick`, `DropDown`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Run-time members:
@@ -1032,13 +1061,14 @@ Default size 121 × 97. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the items' ItemImage is then a picture's Key or Index in it |
 | `List` | list[str] | `[]` | The items |
 | `MultiSelect` | enum | 0 - None | 0 - None, 1 - Simple, 2 - Extended. Whether several items can be selected |
 | `Sorted` | bool | `False` | Keep the items in alphabetical order |
 | `Style` | enum | 0 - Standard | 0 - Standard, 1 - Checkbox. Checkbox: a check box in front of every item; an item is Selected while it is checked, and ItemCheck fires when the user changes one |
 
-Events: `Click`, `DblClick`, `ItemCheck(Item)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `ItemCheck(Item)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 Run-time members:
@@ -1086,13 +1116,14 @@ Default size 121 × 17. Property groups: Position, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `LargeChange` | int | `1` | Step for clicks on the track |
 | `Max` | int | `32767` | Largest Value |
 | `Min` | int | `0` | Smallest Value |
 | `SmallChange` | int | `1` | Step for the arrow buttons |
 | `Value` | int | `0` | The current position; changing it fires Change |
 
-Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 `Change` fires when the value changes, `Scroll` while the thumb is dragged.
@@ -1106,13 +1137,14 @@ Default size 17 × 121. Property groups: Position, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `LargeChange` | int | `1` | Step for clicks on the track |
 | `Max` | int | `32767` | Largest Value |
 | `Min` | int | `0` | Smallest Value |
 | `SmallChange` | int | `1` | Step for the arrow buttons |
 | `Value` | int | `0` | The current position; changing it fires Change |
 
-Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `Scroll`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### Timer
@@ -1175,7 +1207,11 @@ def filFiles_DblClick(self):
 <!-- BEGIN GENERATED: control DriveListBox -->
 Default size 161 × 25. Property groups: Position, Colors, Font, Common.
 
-Events: `Change`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Change`.
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+
+Events: `Change`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `Validate`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: control DirListBox -->
@@ -1183,9 +1219,10 @@ Default size 161 × 145. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `ShowHidden` | bool | `False` | Also list hidden folders (on macOS and Linux, those starting with .) |
 
-Events: `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: control FileListBox -->
@@ -1193,11 +1230,12 @@ Default size 161 × 145. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Hidden` | bool | `False` | Also list hidden files (on macOS and Linux, those starting with .) |
 | `MultiSelect` | enum | 0 - None | 0 - None, 1 - Simple, 2 - Extended. Whether several files can be selected |
 | `Pattern` | str | `'*.*'` | Which files are listed: wildcards, several separated by ; (*.txt;*.py); *.* lists all |
 
-Events: `Click`, `DblClick`, `PathChange`, `PatternChange`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `PathChange`, `PatternChange`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### Shape
@@ -1371,6 +1409,7 @@ Default size 161 × 193. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Checkboxes` | bool | `False` | A check box in front of every node |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the nodes' Image is then a picture's Key or Index in it |
 | `Indentation` | int | `20` | How far each level is indented, in pixels |
@@ -1379,7 +1418,7 @@ Default size 161 × 193. Property groups: Position, Colors, Font, Common.
 | `PathSeparator` | str | `'\\'` | Separates the texts in a node's FullPath |
 | `Sorted` | bool | `False` | Keep the top-level nodes in alphabetical order |
 
-Events: `NodeClick(Node)`, `Expand(Node)`, `Collapse(Node)`, `NodeCheck(Node)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `NodeClick`.
+Events: `NodeClick(Node)`, `Expand(Node)`, `Collapse(Node)`, `NodeCheck(Node)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `NodeClick`.
 <!-- END GENERATED -->
 
 ### Splitter
@@ -1546,6 +1585,7 @@ Default size 161 × 41. Property groups: Position, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `LargeChange` | int | `5` | Step for Page Up / Page Down and clicks beside the thumb |
 | `Max` | int | `10` | Largest Value |
 | `Min` | int | `0` | Smallest Value |
@@ -1555,7 +1595,7 @@ Default size 161 × 41. Property groups: Position, Common.
 | `TickStyle` | enum | 0 - Bottom/Right | 0 - Bottom/Right, 1 - Top/Left, 2 - Both, 3 - No Ticks. Where the tick marks are: below (right of) the scale, above (left of) it, on both sides, or none |
 | `Value` | int | `0` | The thumb's position; changing it fires Change |
 
-Events: `Scroll`, `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Scroll`.
+Events: `Scroll`, `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Scroll`.
 <!-- END GENERATED -->
 
 ### UpDown
@@ -1778,6 +1818,7 @@ Default size 257 × 177. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Checkboxes` | bool | `False` | A check box in front of every item |
 | `ColumnHeaders` | columns | `[]` | The Report view's columns, set in the designer: one per line, Text|Key|Width|alignment (left, right or center); the first shows the items' Text, the others their SubItems |
 | `HideColumnHeaders` | bool | `False` | Hide the Report view's column titles |
@@ -1790,7 +1831,7 @@ Default size 257 × 177. Property groups: Position, Colors, Font, Common.
 | `Sorted` | bool | `False` | Keep the items sorted by the SortKey column |
 | `View` | enum | 0 - Icon | 0 - Icon, 1 - SmallIcon, 2 - List, 3 - Report. How the items are shown: large icons, small icons, a list, or a report with a column per ColumnHeader |
 
-Events: `ItemClick(Item)`, `ColumnClick(ColumnHeader)`, `ItemCheck(Item)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `ItemClick`.
+Events: `ItemClick(Item)`, `ColumnClick(ColumnHeader)`, `ItemCheck(Item)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `ItemClick`.
 <!-- END GENERATED -->
 
 ### FlexGrid
@@ -1861,6 +1902,7 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `AllowUserResizing` | enum | 1 - Columns | 0 - None, 1 - Columns, 2 - Rows, 3 - Both. What the user can resize by dragging the headings' edges |
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Cols` | int | `2` | How many columns, the fixed one included |
 | `Editable` | bool | `False` | The user can edit the cells, each with its column's or its own editor |
 | `FixedCols` | enum | 1 - 1 | 0 - 0, 1 - 1. 1: the first column is the row headings, staying put while scrolling |
@@ -1870,7 +1912,7 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | `Rows` | int | `2` | How many rows, the fixed one included |
 | `SelectionMode` | enum | 0 - Free | 0 - Free, 1 - By Row, 2 - By Column. What a click selects: cells, whole rows or whole columns |
 
-Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### StatusBar
@@ -1983,11 +2025,12 @@ Default size 257 × 177. Property groups: Position, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the tabs' Image is then a picture's Key or Index in it |
 | `Placement` | enum | 0 - Top | 0 - Top, 1 - Bottom, 2 - Left, 3 - Right. Which side the tabs are on |
 | `Tabs` | tabs | `['Tab1|tab1']` | The tabs, set in the designer: one per line, Caption|Key|ToolTipText|Image (an & in the Caption underlines its access key; the Image is a Key or Index in the ImageList) |
 
-Events: `Click`, `BeforeClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `BeforeClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### Menu
@@ -2140,13 +2183,14 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 | `End()` | ends the program immediately; `Form_Unload` handlers do **not** run |
 | Ctrl+C | Not a function, but part of how programs end. Pressed in the terminal that started a program, it closes the program's forms like their close buttons would: an open `MsgBox` or modal form closes first, each `Form_Unload` runs and may cancel, and the program ends when the last form is gone. A console program waiting at `input()` ends with exit code 130. |
 | `Beep()` | system beep |
+| `SendKeys(Keys, Wait=False)` | types keys into the control with the focus, as if pressed (VB's syntax): text as it is; `+` Shift, `^` Ctrl, `%` Alt for the next key or a `(group)`; `~` Enter; `{ENTER}`, `{TAB}`, `{ESC}`, `{BS}`, `{DEL}`, `{HOME}`, `{END}`, `{LEFT}`, `{RIGHT}`, `{UP}`, `{DOWN}`, `{PGUP}`, `{PGDN}`, `{INS}`, `{F1}`..`{F16}` and VB's others; `{LEFT 3}` repeats; `{+}`, `{^}`, `{%}`, `{~}`, `{(}`, `{)}`, `{{}`, `{}}` are those characters. Each key goes to what has the focus when it arrives (`{TAB}` moves on, Enter clicks the Default button), menu shortcuts and Label access keys included. They arrive once the calling code is done; `Wait=True` sends them before returning. |
 
 ### Global objects
 
 | Object | Members |
 |---|---|
 | `App` | `Title` (set from the project name), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName` |
-| `Screen` | `Width`, `Height` (primary screen, pixels), `ActiveForm` |
+| `Screen` | `Width`, `Height` (primary screen, pixels), `ActiveForm`, `ActiveControl` (the control with the focus, in any form) |
 | `Clipboard` | `GetText()`, `SetText(text)`, `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
 

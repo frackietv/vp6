@@ -1,4 +1,5 @@
-"""Kitchen Sink page: KeyPreview, KeyPress and Default/Cancel buttons."""
+"""Kitchen Sink page: KeyPreview, KeyPress, Default/Cancel buttons, Validate and
+CausesValidation, ActiveControl and SendKeys."""
 
 from vp6 import *
 
@@ -30,6 +31,25 @@ class pgKeyboard(Form):
                                        Height=32, Cancel=True, TabIndex=8)
         self.lblButtons = Label(self, Caption='', Left=330, Top=176, Width=290, Height=25,
                                 TabIndex=9)
+        self.lblAge = Label(self, Caption='&Age:', Left=16, Top=230, Width=110, Height=25,
+                            TabIndex=10)
+        self.txtAge = TextBox(self, Text='30', Left=130, Top=226, Width=80, Height=25, TabIndex=11,
+                              ToolTipText='Validate: the focus stays here until it is a number from 0 to 130')
+        self.lblCity = Label(self, Caption='Ci&ty:', Left=16, Top=266, Width=110, Height=25,
+                             TabIndex=12)
+        self.txtCity = TextBox(self, Text='', Left=130, Top=262, Width=200, Height=25, TabIndex=13)
+        self.cmdHelp = CommandButton(self, Caption='&Help', Left=350, Top=224, Width=100,
+                                     Height=30, TabIndex=14,
+                                     ToolTipText="CausesValidation = False: works while Age isn't valid",
+                                     CausesValidation=False)
+        self.lblValid = Label(self, Caption='', Left=16, Top=300, Width=600, Height=25,
+                              TabIndex=15)
+        self.lblActive = Label(self, Caption='', Left=16, Top=330, Width=600, Height=25,
+                               TabIndex=16)
+        self.cmdType = CommandButton(self, Caption='Type &for me', Left=16, Top=370, Width=140,
+                                     Height=32, TabIndex=17,
+                                     ToolTipText='SendKeys: types into the upper-case box, then Enter')
+        self.tmrActive = Timer(self, Left=600, Top=370, Interval=250)
     # endregion
 
     def Form_KeyDown(self, KeyCode, Shift):
@@ -52,6 +72,35 @@ class pgKeyboard(Form):
 
     def cmdCancel_Click(self):
         self.lblButtons.Caption = "Cancel: the Cancel button (Esc)"
+
+    # --- Validate: checked before the focus leaves -----------------------------------------------
+    def txtAge_Validate(self):
+        text = self.txtAge.Text.strip()
+        if not (text.isdigit() and int(text) <= 130):
+            Beep()
+            self.lblValid.Caption = f"{text!r} isn't an age: the focus stays in Age (Validate)"
+            return True  # cancel: the focus doesn't leave
+        self.lblValid.Caption = f"Age {text}: fine"
+        return False
+
+    def cmdHelp_Click(self):
+        # CausesValidation = False: clicking it doesn't wait for a valid Age
+        self.lblValid.Caption = "Help: an age is a whole number from 0 to 130"
+
+    # --- the control with the focus ---------------------------------------------------------------
+    def tmrActive_Timer(self):
+        active = Screen.ActiveControl
+        mine = self.ActiveControl
+        self.lblActive.Caption = (f"Screen.ActiveControl: {active.Name if active else '-'}; "
+                                  f"this page's ActiveControl: {mine.Name if mine else '-'}")
+
+    # --- SendKeys: keys typed for you ------------------------------------------------------------
+    def cmdType_Click(self):
+        self.txtUpper.Text = ""
+        self.txtUpper.SetFocus()
+        # Typed into the box with the focus once this handler is done; its KeyPress
+        # makes them upper case, and ~ (Enter) clicks the Default button
+        SendKeys("typed for you~")
 
 
 if __name__ == "__main__":

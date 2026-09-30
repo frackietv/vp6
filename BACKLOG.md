@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** Focus and keyboard: the `Validate` event and `CausesValidation` (checking a control's value before the focus leaves it); `Form.ActiveControl` and `Screen.ActiveControl` (the control with the focus); `SendKeys` (sending keystrokes to the active form)
 - **[Language and runtime]** Moving a control to another container at run time (assigning `Container`, as VB's `Set Command1.Container = Frame1`)
 - **[Language and runtime]** Mouse: `MousePointer` / `MouseIcon` properties for cursor shapes such as resize arrows and crosshair, and `Screen.MousePointer` (e.g. an hourglass during long work); drag and drop: `DragMode`, `Drag`, `DragIcon`, `DragDrop` / `DragOver` events, and OLE drag and drop of text and files from other programs (self-hosting: the designer's handles and drawing tool, dragging from the Toolbox)
 - **[Controls]** Common Dialog control (open, save, color, font, print dialogs)

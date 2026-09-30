@@ -5,7 +5,7 @@
 
 from .appearance import (vpSchemeDark, vpSchemeIDE, vpSchemeLight, vpSchemeProjectDefault,
                          vpSchemeSystem)
-from .app import App, Beep, Clipboard, Debug, DoEvents, End, Screen
+from .app import App, Beep, Clipboard, Debug, DoEvents, End, Screen, SendKeys
 from .colors import (RGB, QBColor, vpBlack, vpBlue, vpCyan, vpGreen, vpMagenta, vpRed,
                      vpWhite, vpYellow)
 from .constants import *  # noqa: F403
@@ -20,10 +20,10 @@ from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.17"
+__version__ = "0.4.18"
 
 __all__ = [
-    "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen",
+    "App", "Beep", "Clipboard", "Debug", "DoEvents", "End", "Screen", "SendKeys",
     "RGB", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",
     "Button", "CheckBox", "CodeBox", "ColumnHeader", "ComboBox", "CommandButton", "Control",

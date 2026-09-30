@@ -800,6 +800,29 @@ def test_keyboard_page(sink):
     assert page.lblButtons.Caption.startswith("OK")
     QTest.keyClick(page.txtUpper._widget, Qt.Key_Escape)  # its Cancel button
     assert page.lblButtons.Caption.startswith("Cancel")
+    # Validate: an age that isn't one keeps the focus; Help doesn't wait for it
+    sink._widget.activateWindow()
+    page.txtAge.Text = "old"
+    page.txtAge.SetFocus()
+    QTest.qWait(10)
+    page.txtCity.SetFocus()
+    QTest.qWait(20)
+    assert page.ActiveControl is page.txtAge and "isn't an age" in page.lblValid.Caption
+    page.cmdHelp._widget.click()
+    assert page.lblValid.Caption.startswith("Help:")
+    page.txtAge.Text = "42"
+    page.txtAge.SetFocus()
+    page.txtCity.SetFocus()
+    QTest.qWait(20)
+    assert page.ActiveControl is page.txtCity and page.lblValid.Caption == "Age 42: fine"
+    page.tmrActive_Timer()  # ActiveControl
+    assert page.lblActive.Caption == ("Screen.ActiveControl: txtCity; "
+                                      "this page's ActiveControl: txtCity")
+    assert sink.ActiveControl is None  # (the window's own controls don't have the focus)
+    page.cmdType._widget.click()  # SendKeys: typed, upper-cased by KeyPress, then Enter
+    page.lblButtons.Caption = ""
+    QTest.qWait(100)
+    assert page.txtUpper.Text == "TYPED FOR YOU" and page.lblButtons.Caption.startswith("OK")
 
 
 def test_mouse_page(sink):

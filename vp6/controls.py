@@ -13,6 +13,7 @@ import keyword
 import os
 import re
 import sys
+import time
 
 from PySide6.QtCore import (QDate, QEvent, QFileInfo, QItemSelectionModel, QLocale, QObject,
                             QPoint, QPointF, QRect, QRectF, QSize, Qt, QTime, QTimer, QUrl,
@@ -33,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import colors
-from ._props import P, PropertyHost, enum_choices
+from ._props import P, PropertyHost, _make_property, enum_choices
 from .app import call_handler
 
 # Parameters passed to each event handler; used by the IDE to generate stubs.
@@ -43,7 +44,8 @@ EVENT_ARGS = {
     "MouseDown": "Button, Shift, X, Y", "MouseUp": "Button, Shift, X, Y",
     "MouseMove": "Button, Shift, X, Y",
     "KeyDown": "KeyCode, Shift", "KeyUp": "KeyCode, Shift", "KeyPress": "KeyAscii",
-    "Initialize": "", "Load": "", "QueryUnload": "UnloadMode", "Unload": "", "Activate": "", "Deactivate": "",
+    "Initialize": "", "Load": "", "QueryUnload": "UnloadMode", "Unload": "", "Activate": "",
+    "Deactivate": "",
     "Resize": "", "Moved": "", "LinkClick": "URL",
     "NodeClick": "Node", "Expand": "Node", "Collapse": "Node", "NodeCheck": "Node",
     "UpClick": "", "DownClick": "", "PanelClick": "Panel", "PanelDblClick": "Panel",
@@ -53,7 +55,7 @@ EVENT_ARGS = {
     "ProtectedEdit": "Line",
     "EnterCell": "", "LeaveCell": "", "RowColChange": "", "BeforeEdit": "Row, Col",
     "ValidateEdit": "Row, Col, Text", "AfterEdit": "Row, Col", "CellButtonClick": "Row, Col",
-    "DockChange": "", "Close": "",
+    "DockChange": "", "Close": "", "Validate": "",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -180,6 +182,34 @@ _COMMON = (P("Enabled", "bool", True, description="Whether the control responds 
                          "(later on top)."))
 _ALIGNMENT = enum_choices("Left Justify", "Right Justify", "Center")
 _QT_ALIGN = {0: Qt.AlignLeft, 1: Qt.AlignRight, 2: Qt.AlignHCenter}
+
+
+# --- Validate: a control's value checked before the focus leaves it ------------------------------
+
+# Focus events not to report (the focus going back after a Validate cancelled):
+# (id(control), "GotFocus" / "LostFocus"); and the control whose Click a cancelled
+# Validate holds back (the button clicked away to), until when
+_VALIDATION: dict = {"skip": set(), "blocked": None}
+
+
+def control_of_widget(widget) -> "Control | None":
+    """The VP6 control a widget belongs to (it or a widget it is in), or None."""
+    while widget is not None:
+        control = getattr(widget, "_vp_control", None)
+        if control is not None:
+            return control
+        widget = widget.parentWidget()
+    return None
+
+
+def outer_control(control: "Control | None") -> "Control | None":
+    """A control on a user control's surface stands for the user control."""
+    while control is not None:
+        owner = getattr(control._form, "__dict__", {}).get("_owner")
+        if owner is None:
+            return control
+        control = owner
+    return None
 
 
 class _EventBridge(QObject):
@@ -347,6 +377,12 @@ class Control(PropertyHost):
         return getattr(self._form, f"{self._name}_{event}", None)
 
     def _fire(self, event: str, *args):
+        if event == "Click" and _VALIDATION["blocked"] is not None:
+            blocked, until = _VALIDATION["blocked"]
+            if blocked is self:  # (clicked while a Validate kept the focus elsewhere)
+                _VALIDATION["blocked"] = None
+                if time.monotonic() < until:
+                    return None
         handler = self._handler(event)
         if handler is None:
             return None
@@ -380,10 +416,47 @@ class Control(PropertyHost):
                 return True
             self._fire("KeyUp", vp_key_code(event.key()), shift)
         elif etype == QEvent.FocusIn:
-            self._fire("GotFocus")
+            if not self._skip_focus_event("GotFocus"):
+                self._fire("GotFocus")
         elif etype == QEvent.FocusOut:
-            self._fire("LostFocus")
+            if not self._skip_focus_event("LostFocus") and not self._validation_cancels():
+                self._fire("LostFocus")
         return False
+
+    def _skip_focus_event(self, event: str) -> bool:
+        key = (id(self), event)
+        if key in _VALIDATION["skip"]:
+            _VALIDATION["skip"].discard(key)
+            return True
+        return False
+
+    def _validation_cancels(self) -> bool:
+        """The focus is leaving for another control of the same window: if that
+        one's CausesValidation is True, fire Validate; True from it keeps the
+        focus here (as if it never left: no LostFocus, no GotFocus there, and
+        no Click if it was a button being clicked)."""
+        if self._handler("Validate") is None:
+            return False
+        new = QApplication.focusWidget()
+        target = control_of_widget(new)
+        if target is None or target is self or self._widget is None or \
+                new.window() is not self._widget.window() or \
+                not target._values.get("CausesValidation", True):
+            return False
+        if self._fire("Validate") is not True:
+            return False
+        skip = _VALIDATION["skip"]
+        skip.update({(id(target), "GotFocus"), (id(target), "LostFocus"), (id(self), "GotFocus")})
+        _VALIDATION["blocked"] = (target, time.monotonic() + 1.0)
+
+        def back():
+            if self._widget is not None:
+                self._widget.setFocus()
+            skip.difference_update({(id(target), "GotFocus"), (id(target), "LostFocus"),
+                                    (id(self), "GotFocus")})
+
+        QTimer.singleShot(0, back)
+        return True
 
     def _on_key_press(self, watched: QWidget, event: QKeyEvent) -> bool:
         if self._key_resend:
@@ -8425,6 +8498,27 @@ CONTROL_TYPES: dict[str, type[Control]] = {
         RichTextBox, CodeBox, FlexGrid, DockPanel, Menu,
     )
 }
+
+
+_CAUSES_VALIDATION = P(
+    "CausesValidation", "bool", True,
+    description="Moving the focus here first fires the Validate event of the control "
+                "leaving it (False: e.g. a Help or Cancel button that mustn't wait for "
+                "a valid value)")
+
+
+def _add_validation(cls) -> None:
+    """A control that takes the focus gets CausesValidation and Validate."""
+    if "GotFocus" not in cls.Events or "CausesValidation" in cls._specs:
+        return
+    cls.Properties = tuple(cls.Properties) + (_CAUSES_VALIDATION,)
+    cls._specs = {**cls._specs, "CausesValidation": _CAUSES_VALIDATION}
+    cls.CausesValidation = _make_property("CausesValidation")
+    cls.Events = tuple(cls.Events) + ("Validate",)
+
+
+for _cls in CONTROL_TYPES.values():
+    _add_validation(_cls)
 
 
 class ControlArray:

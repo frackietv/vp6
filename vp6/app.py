@@ -11,8 +11,9 @@ import sys
 import threading
 import traceback
 
-from PySide6.QtCore import QEventLoop, QObject, QSocketNotifier, QTimer
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtCore import (QEvent, QEventLoop, QKeyCombination, QObject, QSocketNotifier, Qt,
+                            QTimer)
+from PySide6.QtGui import QAction, QGuiApplication, QIcon, QKeyEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 _interrupt_handler = None  # installed by ensure_app() for VP6 programs
@@ -145,6 +146,135 @@ def close_all_windows() -> None:
         window.close()
 
 
+# --- SendKeys -------------------------------------------------------------------------------
+
+_SPECIAL_KEYS = {
+    "BACKSPACE": Qt.Key_Backspace, "BS": Qt.Key_Backspace, "BKSP": Qt.Key_Backspace,
+    "BREAK": Qt.Key_Pause, "CAPSLOCK": Qt.Key_CapsLock, "DELETE": Qt.Key_Delete,
+    "DEL": Qt.Key_Delete, "DOWN": Qt.Key_Down, "END": Qt.Key_End, "ENTER": Qt.Key_Return,
+    "ESC": Qt.Key_Escape, "HELP": Qt.Key_Help, "HOME": Qt.Key_Home, "INSERT": Qt.Key_Insert,
+    "INS": Qt.Key_Insert, "LEFT": Qt.Key_Left, "NUMLOCK": Qt.Key_NumLock,
+    "PGDN": Qt.Key_PageDown, "PGUP": Qt.Key_PageUp, "PRTSC": Qt.Key_Print,
+    "RIGHT": Qt.Key_Right, "SCROLLLOCK": Qt.Key_ScrollLock, "TAB": Qt.Key_Tab, "UP": Qt.Key_Up,
+    **{f"F{n}": getattr(Qt, f"Key_F{n}") for n in range(1, 17)},
+}
+_KEY_TEXT = {Qt.Key_Return: "\r", Qt.Key_Tab: "\t", Qt.Key_Backspace: "\b",
+             Qt.Key_Escape: "\x1b"}
+_MODIFIER_CHARS = {"+": Qt.ShiftModifier, "^": Qt.ControlModifier, "%": Qt.AltModifier}
+
+
+def _char_stroke(char: str, modifiers) -> tuple:
+    if char.isascii() and char.isalpha():
+        key = getattr(Qt, f"Key_{char.upper()}")
+        if char.isupper():
+            modifiers |= Qt.ShiftModifier
+        elif modifiers & Qt.ShiftModifier:
+            char = char.upper()  # (+c types C)
+    else:
+        try:
+            key = Qt.Key(ord(char))
+        except ValueError:
+            key = Qt.Key_unknown
+    return key, modifiers, char
+
+
+def parse_keys(keys: str) -> list[tuple]:
+    """VB's SendKeys syntax as (key, modifiers, text) strokes: text as it is;
+    + Shift, ^ Ctrl, % Alt for the next key or a (group); ~ Enter; {NAME}
+    for others ({ENTER}, {TAB}, {F1}, {LEFT}...), {NAME n} n times, {+} {^}
+    {%} {~} {(} {)} {{} {}} for those characters."""
+    strokes, modifiers, i = [], Qt.NoModifier, 0
+    while i < len(keys):
+        char = keys[i]
+        if char in _MODIFIER_CHARS:
+            modifiers |= _MODIFIER_CHARS[char]
+            i += 1
+            continue
+        if char == "(":
+            end = keys.find(")", i + 1)
+            if end == -1:
+                raise ValueError(f"SendKeys: no ')' for the '(' at {i} in {keys!r}")
+            for key, mods, text in parse_keys(keys[i + 1:end]):
+                strokes.append((key, mods | modifiers, text))
+        elif char == "{":
+            end = keys.find("}", i + 2)  # (so "{}}" is the } character)
+            if end == -1:
+                raise ValueError(f"SendKeys: no '}}' for the '{{' at {i} in {keys!r}")
+            name, _, count = keys[i + 1:end].rpartition(" ")
+            if not (name and count.isdigit()):
+                name, count = keys[i + 1:end], "1"
+            special = _SPECIAL_KEYS.get(name.upper())
+            if special is None and len(name) != 1:
+                raise ValueError(f"SendKeys: unknown key {{{name}}} in {keys!r}")
+            for _ in range(int(count)):
+                strokes.append((special, modifiers, _KEY_TEXT.get(special, ""))
+                               if special is not None else _char_stroke(name, modifiers))
+        elif char == "~":
+            strokes.append((Qt.Key_Return, modifiers, "\r"))
+            end = i
+        elif char in ")}":
+            raise ValueError(f"SendKeys: '{char}' at {i} in {keys!r} has nothing to close")
+        else:
+            strokes.append(_char_stroke(char, modifiers))
+            end = i
+        modifiers, i = Qt.NoModifier, end + 1
+    return strokes
+
+
+def _send_stroke(stroke) -> None:
+    """One key, pressed and released, to the widget with the focus (now)."""
+    key, modifiers, text = stroke
+    widget = QApplication.focusWidget() or QApplication.activeWindow()
+    if widget is None:
+        return
+    if modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier):
+        sequences = [QKeySequence(QKeyCombination(modifiers, key))]
+        if sys.platform == "darwin" and modifiers & Qt.AltModifier:
+            # (% is Alt; a Label's access key there is Control+Option)
+            sequences.append(QKeySequence(QKeyCombination(modifiers | Qt.MetaModifier, key)))
+        if any(_trigger_shortcut(widget.window(), seq) for seq in sequences):
+            return  # a menu's Shortcut or a Label's access key
+        text = ""  # (a shortcut, not typing)
+    for kind in (QEvent.KeyPress, QEvent.KeyRelease):
+        QApplication.sendEvent(widget, QKeyEvent(kind, key, modifiers, text))
+
+
+def _trigger_shortcut(window, sequence: QKeySequence) -> bool:
+    """Qt handles shortcuts before key events reach widgets, so keys sent by
+    SendKeys look for them: a menu item's or a Label's access key in the window."""
+    for action in [*window.actions(), *window.findChildren(QAction)]:
+        if action.isEnabled() and action.shortcut() == sequence:
+            action.trigger()
+            return True
+    for shortcut in window.findChildren(QShortcut):
+        if shortcut.isEnabled() and shortcut.key() == sequence:
+            shortcut.activated.emit()
+            return True
+    return False
+
+
+def SendKeys(Keys: str, Wait: bool = False) -> None:
+    """Send keystrokes to the control with the focus, as if typed (VB's
+    SendKeys): ``SendKeys("Hello{ENTER}")``. Each key goes to whatever has
+    the focus when it arrives, so {TAB} moves on and Enter clicks a Default
+    button. They arrive once the calling code is done (Wait=True: at once,
+    before SendKeys returns). See parse_keys for the syntax."""
+    ensure_app()
+    strokes = parse_keys(str(Keys))
+    if Wait:
+        for stroke in strokes:
+            _send_stroke(stroke)
+            QApplication.processEvents()
+        return
+
+    def next_stroke(index: int = 0) -> None:
+        if index < len(strokes):
+            _send_stroke(strokes[index])
+            QTimer.singleShot(0, lambda: next_stroke(index + 1))
+
+    QTimer.singleShot(0, next_stroke)
+
+
 def DoEvents() -> None:
     """Process pending GUI events, like VB6's DoEvents."""
     app = QApplication.instance()
@@ -199,6 +329,14 @@ class _Screen:
     def ActiveForm(self):
         widget = QApplication.activeWindow()
         return getattr(widget, "_vp_form", None)
+
+    @property
+    def ActiveControl(self):
+        """The control with the focus, in whatever form (a control on a user
+        control's surface: the user control), or None."""
+        from .controls import control_of_widget, outer_control
+
+        return outer_control(control_of_widget(QApplication.focusWidget()))
 
 
 class _Clipboard:

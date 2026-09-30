@@ -1,5 +1,17 @@
 # VP6 features
 
+**Version:** 0.4.18
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- The `Validate` event and `CausesValidation` property, as in VB, for every control that takes the focus: returning True from Validate keeps the focus in the control (no LostFocus, GotFocus or Click elsewhere); controls with CausesValidation = False (a Help button) don't wait for it
+- `Form.ActiveControl` and `Screen.ActiveControl`: the control with the focus
+- `SendKeys(Keys, Wait)` with VB's syntax (`+` `^` `%`, groups, `~`, `{ENTER}`, `{TAB}`, `{F1}`, `{LEFT 3}`...), reaching whatever has the focus as each key arrives, including menu shortcuts and Label access keys
+- The Kitchen Sink's Keyboard page: a validated Age box, the active control, and keys typed by SendKeys
+
+---
+
 **Version:** 0.4.17
 **Date:** 2026-10-01
 
