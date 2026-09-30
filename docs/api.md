@@ -829,6 +829,73 @@ Default size 32 × 32.
 Events: `Timer`. Default event (double-click in the designer): `Timer`.
 <!-- END GENERATED -->
 
+### DriveListBox, DirListBox and FileListBox
+
+VB's file system controls: a drop-down of the drives, the folders, and the
+files in a folder. Link them in their `Change` events, as in VB:
+
+```python
+def drvDrive_Change(self):
+    self.dirFolder.Path = self.drvDrive.Drive  # a drive was chosen: its folders
+
+def dirFolder_Change(self):
+    self.filFiles.Path = self.dirFolder.Path   # a folder was opened: its files
+
+def filFiles_DblClick(self):
+    path = os.path.join(self.filFiles.Path, self.filFiles.FileName)
+```
+
+* **DriveListBox.** `Drive` is the chosen drive: `"c:\\"` on Windows; on
+  macOS and Linux `/` or a volume users see (`/Volumes/...`, `/media/...`,
+  `/mnt/...`, `/run/media/...`). Setting it to any path chooses the drive
+  holding it. `List`, `ListCount` and `ListIndex` as in a ListBox;
+  `Refresh()` lists the drives again; `Change` fires when the drive changes.
+* **DirListBox.** `Path` is the folder shown, under its parent folders and
+  above its subfolders; setting it (or double-clicking a folder) shows
+  another one and fires `Change`. As in VB, `List(-1)` is `Path` itself,
+  `List(-2)` its parent and so on up, and `List(0)` to
+  `List(ListCount - 1)` are its subfolders (full paths). `ListIndex` is the
+  selected one (`-1` = Path; clicking fires `Click`). `ShowHidden` also lists
+  hidden folders; `Refresh()` reads the folder again.
+* **FileListBox.** The files in `Path` (the program's current folder at
+  first) whose names match `Pattern`: wildcards, several separated by `;`
+  (`"*.png;*.jpg"`), not case-sensitive; `*.*` lists all, also names
+  without an extension. `FileName` is the selected file's name; setting it to
+  a folder sets `Path`, to a pattern sets `Pattern`, to a listed name selects
+  it. `PathChange` and `PatternChange` fire when they change. It is a
+  [ListBox](#listbox) otherwise (`List`, `ListIndex`, `Selected`,
+  `MultiSelect`, `Click`, `DblClick`...), without `AddItem`, `RemoveItem` or
+  `Clear`: its items are the folder's files. `Hidden` also lists hidden
+  files; `Refresh()` reads the folder again.
+
+<!-- BEGIN GENERATED: control DriveListBox -->
+Default size 161 × 25. Property groups: Position, Colors, Font, Common.
+
+Events: `Change`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`. Default event (double-click in the designer): `Change`.
+<!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: control DirListBox -->
+Default size 161 × 145. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `ShowHidden` | bool | `False` | Also list hidden folders (on macOS and Linux, those starting with .) |
+
+Events: `Change`, `Click`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Change`.
+<!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: control FileListBox -->
+Default size 161 × 145. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Hidden` | bool | `False` | Also list hidden files (on macOS and Linux, those starting with .) |
+| `MultiSelect` | enum | 0 - None | 0 - None, 1 - Simple, 2 - Extended. Whether several files can be selected |
+| `Pattern` | str | `'*.*'` | Which files are listed: wildcards, several separated by ; (*.txt;*.py); *.* lists all |
+
+Events: `Click`, `DblClick`, `PathChange`, `PatternChange`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
 ### Line
 
 A straight line, like VB's: from (`X1`, `Y1`) to (`X2`, `Y2`) in its
@@ -1562,7 +1629,8 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 
 `Form`, `Control` (base class), `Label`, `TextBox`, `CommandButton`,
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
-`HScrollBar`, `VScrollBar`, `PictureBox`, [`Line`](#line), [`Image`](#image),
+`HScrollBar`, `VScrollBar`, `PictureBox`,
+[`DriveListBox`, `DirListBox` and `FileListBox`](#drivelistbox-dirlistbox-and-filelistbox), [`Line`](#line), [`Image`](#image),
 [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`Toolbar`](#toolbar) (and its `Button`),
@@ -1818,6 +1886,10 @@ It goes in the project's `dist` folder:
 * **StatusBar** panels have no `Picture` or `Bevel`, and the lock-key
   panels read the key state from the system on Windows (all four keys) and
   macOS (Caps Lock only); elsewhere they show the key as off.
+* **DriveListBox, DirListBox and FileListBox** show drives as root folders
+  on macOS and Linux (`/` and the mounted volumes), list folders with full
+  paths in `List`, and a FileListBox has `Hidden` but no `Archive`,
+  `Normal`, `ReadOnly` or `System` filters.
 * **Making an executable** (File > Make Executable…) bundles Python with the
   program, so it is large (around 100 MB) and made for the system it is made
   on (see [Making an executable](#making-an-executable)).

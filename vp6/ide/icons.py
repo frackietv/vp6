@@ -116,6 +116,38 @@ def _listbox(p):
     p.fillRect(QRectF(4, 9.5, 16, 3), C.blue)
 
 
+def _drivelistbox(p):
+    _combobox(p)
+    p.setBrush(C.face)  # a drive in the box
+    p.drawRect(QRectF(4, 9.5, 9, 5))
+    p.fillRect(QRectF(10.5, 11.5, 1.5, 1.5), QColor("#3cb043"))
+
+
+def _folder_shape(p, x, y, color):
+    p.setBrush(color)
+    p.drawPolygon([QPointF(x, y), QPointF(x + 3, y), QPointF(x + 4, y + 1.5),
+                   QPointF(x + 8, y + 1.5), QPointF(x + 8, y + 6), QPointF(x, y + 6)])
+
+
+def _dirlistbox(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(3, 3, 18, 18))
+    folder = QColor("#e8b730")
+    _folder_shape(p, 5, 5, folder)  # an open folder and one in it
+    p.drawLine(QPointF(7, 11), QPointF(7, 16))
+    p.drawLine(QPointF(7, 16), QPointF(10, 16))
+    _folder_shape(p, 10, 13, folder)
+
+
+def _filelistbox(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(3, 3, 18, 18))
+    for y in (6, 11.5, 17):  # files, each a page with a folded corner, and its name
+        p.drawPolygon([QPointF(5, y - 1.5), QPointF(7.5, y - 1.5), QPointF(9, y),
+                       QPointF(9, y + 2.5), QPointF(5, y + 2.5)])
+        p.drawLine(QPointF(11, y + 0.5), QPointF(18.5, y + 0.5))
+
+
 def _hscroll(p):
     p.setBrush(C.face)
     p.drawRect(QRectF(2, 8, 20, 8))
@@ -400,7 +432,9 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image, "TreeView": _treeview, "Splitter": _splitter,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Line": _line, "Image": _image,
+    "DriveListBox": _drivelistbox, "DirListBox": _dirlistbox, "FileListBox": _filelistbox,
+    "TreeView": _treeview, "Splitter": _splitter,
     "ProgressBar": _progressbar, "Slider": _slider, "UpDown": _updown, "StatusBar": _statusbar,
     "TabStrip": _tabstrip, "ImageList": _imagelist, "Toolbar": _toolbar,
     "ListView": _listview,

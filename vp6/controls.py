@@ -12,7 +12,7 @@ import html
 import os
 import sys
 
-from PySide6.QtCore import (QDate, QEvent, QItemSelectionModel, QLocale, QObject, QPoint,
+from PySide6.QtCore import (QDate, QEvent, QFileInfo, QItemSelectionModel, QLocale, QObject, QPoint,
                             QRect, QSize, Qt, QTime, QTimer, QUrl, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServices, QFont, QIcon,
                            QKeyEvent, QKeySequence, QPainter, QPalette, QPen, QPixmap,
@@ -1674,6 +1674,462 @@ class ComboBox(_ListMixin, Control):
         if 0 <= value < model.rowCount():
             self._widget.view().scrollTo(model.index(value, 0),
                                          QAbstractItemView.PositionAtTop)
+
+
+# --- DriveListBox, DirListBox and FileListBox ------------------------------------------------
+
+def user_drives() -> list[tuple[str, str]]:
+    """(root path, label) of the drives a DriveListBox lists: on Windows every
+    drive letter; elsewhere / and the volumes users see (macOS /Volumes/...,
+    Linux /media, /mnt, /run/media), not the system's own mounts."""
+    from PySide6.QtCore import QStorageInfo
+
+    drives = []
+    for volume in QStorageInfo.mountedVolumes():
+        if not volume.isValid():
+            continue
+        root = volume.rootPath()
+        if sys.platform != "win32" and root != "/" and not root.startswith(
+                ("/Volumes/", "/media/", "/mnt/", "/run/media/")):
+            continue
+        name = volume.displayName()
+        if sys.platform == "win32":
+            root = root.rstrip("/\\")[:2].lower() + "\\"  # c:\\
+            label = root[:2] + (f" [{name}]" if name and name != volume.rootPath() else "")
+        else:
+            label = root + (f"  [{name}]" if name and name not in (root, "/") else "")
+        if root not in [d[0] for d in drives]:
+            drives.append((root, label))
+    if not drives:
+        drives.append((os.path.abspath(os.sep), os.path.abspath(os.sep)))
+    return sorted(drives, key=lambda d: d[0].lower())
+
+
+def _is_hidden_entry(path: str) -> bool:
+    return os.path.basename(path).startswith(".") or QFileInfo(path).isHidden()
+
+
+_FS_EVENTS = ("GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp")
+
+
+class DriveListBox(Control):
+    """A drop-down list of the drives, like VB's DriveListBox: Drive is the
+    chosen one ("c:\\" on Windows, a volume's folder elsewhere); Change fires when
+    it changes. Hand it to a DirListBox in Change: ``Dir1.Path = Drive1.Drive``."""
+
+    TypeName = "DriveListBox"
+    DefaultEvent = "Change"
+    DefaultSize = (161, 25)
+    Events = ("Change", *_FS_EVENTS)
+    _qss_type = "QComboBox"
+    Properties = (*_geometry(*DefaultSize), *_COLORS, *_FONT, *_COMMON)
+
+    def _create_widget(self, parent):
+        self.__dict__["_drives"] = []
+        combo = QComboBox(parent)
+        self.__dict__["_quiet"] = 1  # (filled while being made: no Change)
+        self._widget = combo
+        self.Refresh()
+        start = self._base_dir() if self._design_mode else os.getcwd()
+        combo.setCurrentIndex(self._drive_index(start))
+        self.__dict__["_quiet"] = 0
+        return combo
+
+    def _connect_signals(self):
+        self._widget.currentIndexChanged.connect(self._on_changed)
+
+    def _on_changed(self, _index):
+        if not self._quiet:
+            self._fire("Change")
+
+    def _drive_index(self, path: str) -> int:
+        """The drive holding a path: the longest root it starts with."""
+        path = os.path.normcase(os.path.abspath(path))
+        best, best_length = 0, -1
+        for index, (root, _label) in enumerate(self._drives):
+            root_case = os.path.normcase(root)
+            if path == root_case.rstrip(os.sep) or path.startswith(root_case.rstrip(os.sep) +
+                                                                   os.sep) or root_case == os.sep:
+                if len(root_case) > best_length:
+                    best, best_length = index, len(root_case)
+        return best
+
+    def Refresh(self) -> None:
+        """List the drives again (e.g. after one was plugged in)."""
+        widget = self._widget
+        current = self.Drive if widget is not None and widget.count() else None
+        self.__dict__["_drives"] = user_drives()
+        quiet = self._quiet
+        self.__dict__["_quiet"] = 1
+        widget.clear()
+        for root, label in self._drives:
+            widget.addItem(label, root)
+        if current is not None:
+            widget.setCurrentIndex(self._drive_index(current))
+        self.__dict__["_quiet"] = quiet
+
+    @property
+    def Drive(self) -> str:
+        index = self._widget.currentIndex()
+        return self._drives[index][0] if 0 <= index < len(self._drives) else ""
+
+    @Drive.setter
+    def Drive(self, value):
+        """Choose the drive holding this path (a drive, or any folder on it)."""
+        value = str(value)
+        if sys.platform == "win32" and len(value) >= 2 and value[1] == ":":
+            value = value[:2] + "\\"
+        if not os.path.exists(value):
+            raise FileNotFoundError(f"DriveListBox '{self.Name}': no drive {value!r}")
+        self._widget.setCurrentIndex(self._drive_index(value))
+
+    @property
+    def List(self) -> list[str]:
+        return [label for _root, label in self._drives]
+
+    @property
+    def ListCount(self) -> int:
+        return len(self._drives)
+
+    @property
+    def ListIndex(self) -> int:
+        return self._widget.currentIndex()
+
+    @ListIndex.setter
+    def ListIndex(self, value):
+        self._widget.setCurrentIndex(int(value))
+
+
+class _DirList:
+    """DirListBox.List: ``List(-1)`` is the folder shown (Path), ``List(-2)``
+    its parent and so on up; ``List(0)`` ... ``List(ListCount - 1)`` its
+    subfolders (full paths), as in VB."""
+
+    def __init__(self, box: "DirListBox"):
+        self._box = box
+
+    def __call__(self, index: int) -> str:
+        return self[index]
+
+    def __getitem__(self, index: int) -> str:
+        index = int(index)
+        subfolders, ancestors = self._box._subfolders, self._box._ancestors
+        if 0 <= index < len(subfolders):
+            return subfolders[index]
+        if -len(ancestors) <= index < 0:
+            return ancestors[len(ancestors) + index]
+        raise IndexError(f"DirListBox '{self._box.Name}': no List({index})")
+
+    def __len__(self):
+        return len(self._box._subfolders)
+
+    def __iter__(self):
+        return iter(list(self._box._subfolders))
+
+
+class _DirTree(QTreeWidget):
+    """The DirListBox's tree: indented folders without expand arrows."""
+
+    def drawBranches(self, painter, rect, index):
+        pass
+
+
+class DirListBox(Control):
+    """The folders, like VB's DirListBox: the folder shown (Path) with the
+    folders above it, then its subfolders. Double-clicking a folder opens it
+    (Path changes, Change fires); clicking one selects it (ListIndex, Click).
+    Hand Path to a FileListBox in Change: ``File1.Path = Dir1.Path``."""
+
+    TypeName = "DirListBox"
+    DefaultEvent = "Change"
+    DefaultSize = (161, 145)
+    Events = ("Change", "Click", *_FS_EVENTS, "MouseDown", "MouseMove", "MouseUp")
+    _qss_type = "QTreeWidget"
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("ShowHidden", "bool", False,
+          description="Also list hidden folders (on macOS and Linux, those starting with .)"),
+        *_COLORS, *_FONT, *_COMMON,
+    )
+
+    def _create_widget(self, parent):
+        self.__dict__.update(_path="", _ancestors=[], _subfolders=[], _quiet=0)
+        tree = _DirTree(parent)
+        tree.setHeaderHidden(True)
+        tree.setRootIsDecorated(False)
+        tree.setItemsExpandable(False)
+        tree.setIndentation(14)
+        self._widget = tree
+        self._show(self._base_dir() if self._design_mode else os.getcwd())
+        return tree
+
+    def _event_targets(self):
+        return [self._widget, self._widget.viewport()]
+
+    def _connect_signals(self):
+        self._widget.itemDoubleClicked.connect(self._on_double_click)
+        self._widget.currentItemChanged.connect(self._on_current_changed)
+
+    def _show(self, path: str) -> None:
+        """Fill the tree for a folder: its chain of ancestors, then its subfolders."""
+        path = os.path.abspath(path)
+        ancestors, folder = [], path
+        while True:
+            ancestors.insert(0, folder)
+            parent = os.path.dirname(folder)
+            if parent == folder:
+                break
+            folder = parent
+        try:
+            names = sorted((n for n in os.listdir(path)
+                            if os.path.isdir(os.path.join(path, n))), key=str.lower)
+        except OSError:
+            names = []
+        subfolders = [os.path.join(path, n) for n in names
+                      if self._values.get("ShowHidden") or
+                      not _is_hidden_entry(os.path.join(path, n))]
+        self.__dict__.update(_path=path, _ancestors=ancestors, _subfolders=subfolders)
+        style = QApplication.style()
+        open_icon, closed_icon = (style.standardIcon(QStyle.SP_DirOpenIcon),
+                                  style.standardIcon(QStyle.SP_DirClosedIcon))
+        tree = self._widget
+        self.__dict__["_quiet"] += 1
+        try:
+            tree.clear()
+            parent = None
+            for folder in ancestors:  # each ancestor one level deeper
+                item = QTreeWidgetItem([os.path.basename(folder) or folder])
+                item.setIcon(0, open_icon)
+                item.setData(0, Qt.UserRole, folder)
+                if parent is None:
+                    tree.addTopLevelItem(item)
+                else:
+                    parent.addChild(item)
+                parent = item
+            current = parent
+            for folder in subfolders:
+                item = QTreeWidgetItem([os.path.basename(folder)])
+                item.setIcon(0, closed_icon)
+                item.setData(0, Qt.UserRole, folder)
+                current.addChild(item)
+            tree.expandAll()
+            tree.setCurrentItem(current)
+        finally:
+            self.__dict__["_quiet"] -= 1
+
+    def _on_double_click(self, item, _column):
+        if not self._design_mode:
+            self.Path = item.data(0, Qt.UserRole)
+
+    def _on_current_changed(self, current, _previous):
+        if not self._quiet and current is not None:
+            self._fire("Click")
+
+    @property
+    def Path(self) -> str:
+        return self._path
+
+    @Path.setter
+    def Path(self, value):
+        """Show a folder (Change fires if it's another one)."""
+        path = os.path.abspath(str(value))
+        if not os.path.isdir(path):
+            raise FileNotFoundError(f"DirListBox '{self.Name}': no folder {value!r}")
+        changed = os.path.normcase(path) != os.path.normcase(self._path)
+        self._show(path)
+        if changed:
+            self._fire("Change")
+
+    @property
+    def List(self) -> _DirList:
+        return _DirList(self)
+
+    @property
+    def ListCount(self) -> int:
+        """How many subfolders the folder shown has."""
+        return len(self._subfolders)
+
+    @property
+    def ListIndex(self) -> int:
+        """The selected folder: -1 for Path itself, -2 its parent..., 0... a
+        subfolder."""
+        item = self._widget.currentItem()
+        folder = item.data(0, Qt.UserRole) if item is not None else self._path
+        if folder in self._subfolders:
+            return self._subfolders.index(folder)
+        return self._ancestors.index(folder) - len(self._ancestors)
+
+    @ListIndex.setter
+    def ListIndex(self, value):
+        folder = self.List[int(value)]
+        item = next(i for i in _walk_tree(self._widget) if i.data(0, Qt.UserRole) == folder)
+        self._widget.setCurrentItem(item)
+
+    def Refresh(self) -> None:
+        """Read the folder again (e.g. after a subfolder was made)."""
+        self._show(self._path)
+
+    def _apply_ShowHidden(self, v):
+        if self._path:
+            self._show(self._path)
+
+
+def file_matches(name: str, pattern: str) -> bool:
+    """Whether a file name matches a FileListBox Pattern: wildcards (* and ?),
+    several separated by ; ("*.png;*.jpg"), not case-sensitive; *.* also
+    matches names without an extension, as in VB."""
+    import fnmatch
+
+    name = name.lower()
+    for part in (pattern or "*.*").split(";"):
+        part = part.strip().lower()
+        if not part:
+            continue
+        if part == "*.*":
+            part = "*"
+        if fnmatch.fnmatchcase(name, part):
+            return True
+    return False
+
+
+class FileListBox(ListBox):
+    """The files in a folder, like VB's FileListBox: those in Path whose names
+    match Pattern ("*.*" = all; "*.png;*.jpg"). FileName is the selected one
+    (a name; join it with Path). PathChange and PatternChange fire when those
+    change; Click and DblClick as in a ListBox, whose selection, MultiSelect
+    and per-item properties it has (its items come from the folder, so it has
+    no AddItem, RemoveItem or Clear)."""
+
+    TypeName = "FileListBox"
+    DefaultEvent = "Click"
+    DefaultSize = (161, 145)
+    Events = ("Click", "DblClick", "PathChange", "PatternChange", *_FS_EVENTS, "MouseDown",
+              "MouseMove", "MouseUp")
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Pattern", "str", "*.*",
+          description="Which files are listed: wildcards, several separated by ; "
+                      "(*.txt;*.py); *.* lists all"),
+        P("Hidden", "bool", False,
+          description="Also list hidden files (on macOS and Linux, those starting with .)"),
+        P("MultiSelect", "enum", 0, enum_choices("None", "Simple", "Extended"),
+          description="Whether several files can be selected"),
+        *_COLORS, *_FONT, *_COMMON,
+    )
+
+    def _create_widget(self, parent):
+        widget = super()._create_widget(parent)
+        self.__dict__["_path"] = os.path.abspath(self._base_dir() if self._design_mode
+                                                 else os.getcwd())
+        return widget
+
+    def _fill(self) -> None:
+        path = self._path
+        hidden, pattern = self._values.get("Hidden"), self._values.get("Pattern", "*.*")
+        try:
+            names = sorted((n for n in os.listdir(path)
+                            if os.path.isfile(os.path.join(path, n))), key=str.lower)
+        except OSError:
+            names = []
+        widget = self._widget
+        with self._quietly():
+            widget.blockSignals(True)  # (no Click while refilling)
+            try:
+                widget.clear()
+                for name in names:
+                    if file_matches(name, pattern) and (
+                            hidden or not _is_hidden_entry(os.path.join(path, name))):
+                        self._insert(widget.count(), name)
+            finally:
+                widget.blockSignals(False)
+        self.__dict__["_new_index"] = -1
+
+    def _apply_Pattern(self, v):
+        self._fill()
+        if not self._loading_or_design():
+            self._fire("PatternChange")
+
+    def _apply_Hidden(self, v):
+        self._fill()
+
+    def _loading_or_design(self) -> bool:
+        return self._design_mode or not self.__dict__.get("_ready")
+
+    def __init__(self, parent, Name: str = "", **props):
+        super().__init__(parent, Name, **props)
+        self.__dict__["_ready"] = True  # (Pattern set by the designer: no PatternChange)
+
+    @property
+    def Path(self) -> str:
+        return self._path
+
+    @Path.setter
+    def Path(self, value):
+        """List the files of another folder (PathChange fires if it's another one)."""
+        path = os.path.abspath(str(value))
+        if not os.path.isdir(path):
+            raise FileNotFoundError(f"FileListBox '{self.Name}': no folder {value!r}")
+        changed = os.path.normcase(path) != os.path.normcase(self._path)
+        self.__dict__["_path"] = path
+        self._fill()
+        if changed:
+            self._fire("PathChange")
+
+    @property
+    def FileName(self) -> str:
+        """The selected file's name ("" if none). Setting it to a folder sets
+        Path, to a pattern (with * or ?) sets Pattern, to a folder and a
+        pattern sets both, and to a file's name selects it."""
+        return self.Text
+
+    @FileName.setter
+    def FileName(self, value):
+        value = str(value)
+        folder, name = os.path.split(value)
+        if os.path.isdir(value):
+            self.Path = value
+            return
+        if folder:
+            self.Path = folder
+        if any(c in name for c in "*?;"):
+            self.Pattern = name
+        elif name:
+            items = self._items()
+            match = next((i for i, n in enumerate(items) if n.lower() == name.lower()), None)
+            if match is None:
+                raise FileNotFoundError(f"FileListBox '{self.Name}': no file {name!r} listed")
+            self.ListIndex = match
+
+    @property
+    def List(self) -> list[str]:
+        """The file names listed."""
+        return self._items()
+
+    def Refresh(self) -> None:
+        """Read the folder again (e.g. after a file was saved in it)."""
+        selected = self.FileName
+        self._fill()
+        if selected in self._items():
+            with self._quietly():
+                self._widget.blockSignals(True)
+                self._widget.setCurrentRow(self._items().index(selected))
+                self._widget.blockSignals(False)
+
+    def _no_items(self, *args, **kwargs):
+        raise AttributeError(f"FileListBox '{self.Name}': its items are the files in Path "
+                             "(set Path and Pattern instead)")
+
+    AddItem = RemoveItem = Clear = _no_items
+
+
+def _walk_tree(tree: QTreeWidget):
+    """Every item of a QTreeWidget (by child(), not an iterator)."""
+    def walk(item):
+        yield item
+        for i in range(item.childCount()):
+            yield from walk(item.child(i))
+    for i in range(tree.topLevelItemCount()):
+        yield from walk(tree.topLevelItem(i))
 
 
 # --- Timer ------------------------------------------------------------------------------------
@@ -5146,7 +5602,8 @@ class Menu(Control):
 CONTROL_TYPES: dict[str, type[Control]] = {
     cls.TypeName: cls for cls in (
         PictureBox, Label, TextBox, Frame, CommandButton, CheckBox, OptionButton,
-        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, Line, Image, TreeView, Splitter,
+        ComboBox, ListBox, HScrollBar, VScrollBar, Timer, DriveListBox, DirListBox,
+        FileListBox, Line, Image, TreeView, Splitter,
         ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView, Menu,
     )
 }

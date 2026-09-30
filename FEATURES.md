@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.4.6
+**Date:** 2026-09-30
+
+## Controls
+
+- DriveListBox, DirListBox and FileListBox, VB's file system controls, linked in their Change events (`Dir1.Path = Drive1.Drive`, `File1.Path = Dir1.Path`)
+- DriveListBox: `Drive` (drive letters on Windows; `/` and the mounted volumes on macOS and Linux), `Refresh`, `Change`
+- DirListBox: `Path` under its parent folders and above its subfolders, opened by double-click (`Change`); VB's negative `List` indexes (`List(-1)` is Path, `List(-2)` its parent, `List(0)`... its subfolders), `ListIndex`, `ShowHidden`, `Refresh`, `Click`
+- FileListBox: the files in `Path` matching `Pattern` (`"*.png;*.jpg"`, not case-sensitive), `FileName` (setting it changes Path, Pattern or the selection), `Hidden`, `Refresh`, `PathChange` and `PatternChange`; otherwise a ListBox (selection, MultiSelect, Click, DblClick)
+- Toolbox icons for all three
+- A Kitchen Sink page, "Drives, folders and files": the three linked, a pattern chooser, hidden files, and the chosen file's size and picture
+
+---
+
 **Version:** 0.4.5
 **Date:** 2026-09-30
 

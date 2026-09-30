@@ -6,7 +6,9 @@ guide, "Keep the Kitchen Sink up to date").
 """
 
 import importlib
+import os
 import re
+import shutil
 import sys
 
 import pytest
@@ -426,6 +428,33 @@ def test_tabs_page(sink):
     assert page.lblGreeting.Caption == "Hello, Ada!"
     page.optColor[1].Value = True
     assert page.lblSwatch.BackColor == 0x00C000
+
+
+def test_files_page(sink, tmp_path):
+    page = _page(sink, "files")
+    assert page.dirFolder.Path == page.filFiles.Path == os.getcwd()
+    folder = tmp_path / "Pictures"
+    (folder / "Holidays").mkdir(parents=True)
+    (folder / "notes.txt").write_text("hello")
+    shutil.copy(sink._base_dir() + "/images/sun.png", folder / "sun.png")
+    page.dirFolder.Path = str(folder)  # Change: the FileListBox follows (PathChange)
+    assert page.filFiles.Path == str(folder) and page.filFiles.List == ["notes.txt", "sun.png"]
+    assert "PathChange" in page.lblEvent.Caption and "2 matching" in page.lblEvent.Caption
+    page.cboPattern.ListIndex = 2  # pictures: PatternChange
+    assert page.filFiles.Pattern == "*.png;*.jpg" and page.filFiles.List == ["sun.png"]
+    assert "PatternChange" in page.lblEvent.Caption
+    page.filFiles.ListIndex = 0  # Click: its size and picture
+    assert page.lblChosen.Caption.startswith("sun.png\n") and page.imgPreview.Picture
+    page.dirFolder.ListIndex = 0  # a subfolder (Click), then the folder's parent
+    assert "List(0): Holidays" in page.lblEvent.Caption
+    page.dirFolder.ListIndex = -2
+    assert f"List(-2): {tmp_path.name}" in page.lblEvent.Caption
+    page.drvDrive.Drive = str(folder)  # (the same drive: no Change)
+    assert page.dirFolder.Path == str(folder)
+    page.drvDrive_Change()
+    assert page.dirFolder.Path == os.path.abspath(page.drvDrive.Drive)  # its folders
+    page.chkHidden.Value = vp6.vpChecked
+    assert page.dirFolder.ShowHidden and page.filFiles.Hidden
 
 
 def test_timer_page(sink):
