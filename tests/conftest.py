@@ -11,6 +11,9 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 @pytest.fixture(scope="session")
 def qapp():
+    from PySide6.QtCore import Qt
+
+    QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)  # (as ensure_app: web views)
     app = QApplication.instance() or QApplication([])
     yield app
 

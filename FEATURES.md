@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.4.23
+**Date:** 2026-10-01
+
+## Controls
+
+- WebBrowser: a web browser in the form, Qt WebEngine (Chromium), with the WebView's VB WebBrowser names and more: `BeforeNavigate(URL)` (return True to stay), `NewWindow(URL)` (new windows open in it, unless True), `StatusTextChange(Text)` (the link under the mouse), GotFocus and LostFocus
+- The Kitchen Sink's Web pages page shows a WebView or a WebBrowser, with the browser's own events
+
+---
+
 **Version:** 0.4.22
 **Date:** 2026-10-01
 

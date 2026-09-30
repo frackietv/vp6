@@ -61,7 +61,8 @@ EVENT_ARGS = {
     "OLEDragDrop": "Data, Effect, Button, Shift, X, Y",
     "OLEDragOver": "Data, Effect, Button, Shift, X, Y, State",
     "DocumentComplete": "URL", "NavigateError": "URL, Description", "TitleChange": "Text",
-    "ProgressChange": "Progress",
+    "ProgressChange": "Progress", "BeforeNavigate": "URL", "NewWindow": "URL",
+    "StatusTextChange": "Text",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -8687,11 +8688,12 @@ class WebView(Control):
         return widget
 
     def _on_loading(self, info) -> None:
+        # (Qt WebView's statuses are Succeeded, Failed...; WebEngine's LoadSucceededStatus...)
         status = getattr(info.status(), "name", str(info.status()))
         url = info.url().toString()
-        if status == "Succeeded":
+        if "Succeeded" in status:
             self._fire("DocumentComplete", url)
-        elif status == "Failed":
+        elif "Failed" in status:
             self._fire("NavigateError", url, info.errorString())
 
     # -- where it is -----------------------------------------------------------------------
@@ -8782,6 +8784,152 @@ class WebView(Control):
     @property
     def CanGoForward(self) -> bool:
         return bool(self._view is not None and self._view.canGoForward())
+
+
+# --- WebBrowser ----------------------------------------------------------------------------
+
+class _EngineView:
+    """A QWebEngineView with the method names WebView uses for Qt WebView's
+    QWebView (so WebBrowser shares WebView's code)."""
+
+    def __init__(self, view):
+        self.view = view
+        self.progress = 0  # (WebEngine tells it only as it changes)
+
+    def setUrl(self, url):
+        self.view.setUrl(url)
+
+    def url(self):
+        return self.view.url()
+
+    def title(self):
+        return self.view.title()
+
+    def isLoading(self):
+        return self.view.page().isLoading()
+
+    def loadProgress(self):
+        return self.progress
+
+    def canGoBack(self):
+        return self.view.history().canGoBack()
+
+    def canGoForward(self):
+        return self.view.history().canGoForward()
+
+    def goBack(self):
+        self.view.back()
+
+    def goForward(self):
+        self.view.forward()
+
+    def reload(self):
+        self.view.reload()
+
+    def stop(self):
+        self.view.stop()
+
+    def loadHtml(self, html, base):
+        self.view.setHtml(html, base)
+
+    def runJavaScript(self, script, callback=None):
+        if callback is None:
+            self.view.page().runJavaScript(script)
+        else:
+            self.view.page().runJavaScript(script, 0, callback)
+
+
+def _new_web_engine_view(parent: QWidget, browser: "WebBrowser"):
+    """A QWebEngineView (Chromium, part of Qt) with a page that asks the
+    WebBrowser before navigating and about new windows: (widget, view)."""
+    try:
+        from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+    except ImportError as exc:
+        raise RuntimeError("WebBrowser needs Qt WebEngine (part of the PySide6 package; "
+                           "pip install PySide6)") from exc
+
+    class _Page(QWebEnginePage):
+        def acceptNavigationRequest(self, url, kind, main_frame):
+            # BeforeNavigate: True from it stays here (not for the page's own HTML)
+            if main_frame and url.scheme() not in ("data", "about"):
+                return browser._fire("BeforeNavigate", url.toString()) is not True
+            return True
+
+        def createWindow(self, kind):
+            # A link opening a new window: NewWindow, then (unless True) here
+            pending = QWebEnginePage(self.profile(), self)
+
+            def opened(url):
+                pending.deleteLater()
+                if browser._fire("NewWindow", url.toString()) is not True:
+                    view.setUrl(url)
+
+            pending.urlChanged.connect(opened)
+            return pending
+
+    view = QWebEngineView(parent)
+    page = _Page(view)
+    view.setPage(page)
+    settings = page.settings()
+    for name in ("LocalContentCanAccessFileUrls", "LocalContentCanAccessRemoteUrls"):
+        attribute = getattr(QWebEngineSettings.WebAttribute, name, None)
+        if attribute is not None:
+            settings.setAttribute(attribute, True)
+    return view, _EngineView(view)
+
+
+class WebBrowser(WebView):
+    """A web browser in the form (Qt WebEngine: Chromium, part of Qt), with
+    VB's WebBrowser names, like WebView, and more: BeforeNavigate (return
+    True to stay), NewWindow (a link opening a new window: return True to
+    ignore it, else it opens here) and StatusTextChange (the link under the
+    mouse). It is a widget of the form like others."""
+
+    TypeName = "WebBrowser"
+    DefaultEvent = "DocumentComplete"
+    Events = ("DocumentComplete", "NavigateError", "BeforeNavigate", "NewWindow", "TitleChange",
+              "ProgressChange", "StatusTextChange", "GotFocus", "LostFocus")
+    Properties = WebView.Properties
+
+    def _create_widget(self, parent):
+        self.__dict__["_view"] = None
+        if self._design_mode:
+            return _web_design_widget(parent, self.TypeName)
+        widget, view = _new_web_engine_view(parent, self)
+        self.__dict__["_view"] = view
+        page = widget.page()
+        page.loadingChanged.connect(self._on_loading)
+        widget.titleChanged.connect(lambda title: self._fire("TitleChange", title))
+        widget.loadProgress.connect(self._on_progress)
+        page.linkHovered.connect(lambda url: self._fire("StatusTextChange", url))
+        return widget
+
+    def _on_progress(self, progress: int) -> None:
+        self._view.progress = progress
+        self._fire("ProgressChange", progress)
+
+    def _on_loading(self, info) -> None:
+        self._watch_focus_proxy()
+        super()._on_loading(info)
+
+    def _on_qt_event(self, watched, event):
+        # (Chromium may make a new widget for the page, e.g. for another site: watch it)
+        if watched is self._widget and event.type() == QEvent.ChildAdded:
+            QTimer.singleShot(0, self._widget, self._watch_focus_proxy)
+        return super()._on_qt_event(watched, event)
+
+    def SetFocus(self) -> None:
+        self._watch_focus_proxy()
+        super().SetFocus()
+
+    def _watch_focus_proxy(self) -> None:
+        """The page takes the keyboard focus in a widget of its own (made once a
+        page loads): its focus events are the WebBrowser's GotFocus and LostFocus."""
+        proxy = self._widget.focusProxy() if self._widget is not None else None
+        if proxy is not None and not proxy.property("_vp_watched"):
+            proxy.setProperty("_vp_watched", True)
+            proxy.installEventFilter(self._bridge)
 
 
 # --- CommonDialog -------------------------------------------------------------------------------
@@ -9040,7 +9188,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, DriveListBox, DirListBox,
         FileListBox, Shape, Line, Image, TreeView, Splitter,
         ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView,
-        RichTextBox, CodeBox, FlexGrid, DockPanel, CommonDialog, WebView, Menu,
+        RichTextBox, CodeBox, FlexGrid, DockPanel, CommonDialog, WebView, WebBrowser, Menu,
     )
 }
 
@@ -9107,7 +9255,7 @@ _MOUSE_PROPERTIES = (
 )
 _DRAG_EVENTS = ("DragDrop", "DragOver", "OLEDragDrop", "OLEDragOver")
 _NO_MOUSE_MEMBERS = ("Timer", "Line", "Shape", "ImageList", "Menu", "Splitter", "CommonDialog",
-                     "WebView")  # (a native page: the system has its mouse)
+                     "WebView", "WebBrowser")  # (a web page has its own mouse)
 
 
 def _add_mouse_members(cls) -> None:

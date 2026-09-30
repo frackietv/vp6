@@ -277,6 +277,9 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `NavigateError` | URL, Description |
 | `TitleChange` | Text |
 | `ProgressChange` | Progress |
+| `BeforeNavigate` | URL |
+| `NewWindow` | URL |
+| `StatusTextChange` | Text |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -2217,6 +2220,48 @@ Default size 321 × 241. Property groups: Position, Common.
 Events: `DocumentComplete(URL)`, `NavigateError(URL, Description)`, `TitleChange(Text)`, `ProgressChange(Progress)`, `GotFocus`, `LostFocus`, `Validate`. Default event (double-click in the designer): `DocumentComplete`.
 <!-- END GENERATED -->
 
+### WebBrowser
+
+A web browser in the form: Qt WebEngine (Chromium, part of Qt), with the same
+names as the [WebView](#webview) (`URL`, `Navigate`, `GoBack`, `GoForward`,
+`Refresh`, `Stop`, `LoadHTML`, `RunScript`, `LocationURL`, `LocationName`,
+`Busy`, `Progress`, `CanGoBack`, `CanGoForward`, `DocumentComplete`,
+`NavigateError`, `TitleChange`, `ProgressChange`) and more:
+
+```python
+def brwHelp_BeforeNavigate(self, URL):
+    return not URL.startswith("https://docs.example.com")   # True: stay where it is
+
+def brwHelp_NewWindow(self, URL):
+    return False                    # a link for a new window opens here (True: ignored)
+
+def brwHelp_StatusTextChange(self, Text):
+    self.sbStatus.SimpleText = Text # the link under the mouse
+```
+
+* `BeforeNavigate(URL)` before it goes to another page (a link, a form,
+  `Navigate`, Back): returning `True` keeps it where it is.
+* `NewWindow(URL)` when a link or script opens a new window: the page opens
+  in this browser, unless the handler returns `True`.
+* `StatusTextChange(Text)`: the address of the link under the mouse (`""`
+  when it leaves it).
+* Unlike a WebView it is an ordinary widget of the form (it can be
+  overlapped, and screenshots show it), it is the same Chromium on every
+  system, and it behaves as Chromium does (e.g. Back skips a page left by a
+  script without the user). It takes longer to start the first time and
+  makes executables bigger. In the designer it is a placeholder.
+
+<!-- BEGIN GENERATED: control WebBrowser -->
+Default size 321 × 241. Property groups: Position, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `URL` | str | `''` | The page shown: a web address (https://...), a file (relative to the form's folder) or about:blank; setting it at run time goes there |
+
+Events: `DocumentComplete(URL)`, `NavigateError(URL, Description)`, `BeforeNavigate(URL)`, `NewWindow(URL)`, `TitleChange(Text)`, `ProgressChange(Progress)`, `StatusTextChange(Text)`, `GotFocus`, `LostFocus`, `Validate`. Default event (double-click in the designer): `DocumentComplete`.
+<!-- END GENERATED -->
+
 ### StatusBar
 
 A bar of panels along the bottom of a form, showing texts, the time, the date
@@ -2515,7 +2560,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 [`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`CommonDialog`](#commondialog) (and `DialogCancelled`), [`Toolbar`](#toolbar) (and its `Button`),
-[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`WebView`](#webview),
+[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`WebView`](#webview), [`WebBrowser`](#webbrowser),
 [`StatusBar`](#statusbar) (and its
 `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
 [`Menu`](#menu), and
@@ -2794,9 +2839,10 @@ It goes in the project's `dist` folder:
   control can't be a container for the form's controls.
 * **DockPanel** is VP6's own (VB had no docking panels), as are the form's
   `DockLayout` and its events `DockChange` and `Close`.
-* **WebView** has VB's WebBrowser names, but no `BeforeNavigate2` (a
-  navigation can't be cancelled), `NewWindow2` or `Document` object; use
-  `RunScript` to reach the page.
+* **WebView** and **WebBrowser** have VB's WebBrowser names; `BeforeNavigate`
+  and `NewWindow` (the WebBrowser's) return True to cancel, instead of VB's
+  `BeforeNavigate2`/`NewWindow2` Cancel argument; there is no `Document`
+  object: use `RunScript` to reach the page.
 * **CommonDialog** methods return True or False (VB's returned nothing);
   cancelling with CancelError raises `DialogCancelled` (VB's error 32755); a
   multiple selection is `FileNames` (VB packed the names into FileName);

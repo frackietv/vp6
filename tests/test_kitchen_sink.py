@@ -651,6 +651,18 @@ def test_web_page(sink, monkeypatch):
     assert page.lblStatus.Caption == "RunScript: the page has 42 links"
     page.cmdRefresh._widget.click()
     assert view.calls[-1] == ("reload",)
+    # The WebBrowser (Chromium) instead: the same buttons, and its own events
+    page.optEngine[1].Value = True
+    assert page.web is page.brwPage and page.brwPage.Visible and not page.webPage.Visible
+    assert page.brwPage_BeforeNavigate("https://example.org/") is True  # kept away
+    assert "kept the browser away" in page.lblStatus.Caption
+    assert page.brwPage_BeforeNavigate("https://python.org/") is False
+    page.brwPage_NewWindow("https://doc.qt.io/")
+    assert page.lblStatus.Caption == "NewWindow: https://doc.qt.io/ (opened here)"
+    page.brwPage._widget.page().linkHovered.emit("https://www.python.org/")
+    assert page.lblStatus.Caption == "Link: https://www.python.org/"
+    page.optEngine[0].Value = True
+    assert page.web is page.webPage
 
 
 def test_tabs_page(sink):
