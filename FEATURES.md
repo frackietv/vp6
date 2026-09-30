@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.4.12
+**Date:** 2026-10-01
+
+## Controls
+
+- DockPanel, a dockable tool window (a container with a caption bar):
+  - Docked to an edge of its form (`Align`), sharing the edges with the form's other docked controls; its inner edge resizes it (`Resizable`)
+  - Floating in a window of its own (`Floating`, `Float()`, `Dock(Align)`, `FloatLeft`, `FloatTop`, `FloatWidth`, `FloatHeight`, `FloatMove`), showing and hiding with its form
+  - Dragging its caption bar floats it and docks it on the edge it is dropped near (a frame shows where); double-clicking it or its float button floats or docks it (`Floatable`)
+  - Its close button hides it (`Closable`; the `Close` event can cancel); `Visible = True` shows it again where it was
+  - `DockChange` and `Resize` events
+- The form's `DockLayout`: where all its DockPanels are, as text to keep and set again
+- A Kitchen Sink page, "Docking panels": Tools, Properties and Output panels to float, dock, close, show again and save the layout of
+
+---
+
 **Version:** 0.4.11
 **Date:** 2026-10-01
 

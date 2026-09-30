@@ -649,6 +649,36 @@ def test_layout_page(sink):
     assert page.chkNav.Value == vp6.vpUnchecked
 
 
+def test_docking_page(sink):
+    page = _page(sink, "docking")
+    tools, props, output = page.dckTools, page.dckProps, page.dckOutput
+    assert [page.grdProps.TextMatrix(r, 1) for r in (1, 2, 3)] == ["left", "right", "bottom"]
+    page.cmdSave_Click()
+    assert page.cmdRestore.Enabled and "Layout saved" in page.rtbLog.Text
+    page.cmdFloat_Click()  # Float: the Output panel in its own window
+    assert output.Floating and page.cmdFloat.Caption == "&Dock output"
+    assert "Output: floating (DockChange)" in page.rtbLog.Text
+    assert page.grdProps.TextMatrix(3, 1) == "floating"
+    page.cmdFloat_Click()
+    assert not output.Floating and output.Align == vp6.vpAlignBottom
+    page.chkKeep.Value = vp6.vpChecked  # Close cancelled
+    output._caption_button("close")
+    assert output.Visible and "stays open" in page.rtbLog.Text
+    tools._caption_button("close")  # closed, then back from the list
+    assert not tools.Visible and page.grdProps.TextMatrix(1, 1) == "closed"
+    assert "double-click its row" in page.lblHelp.Caption
+    page.grdProps.Row = 1
+    page.grdProps_DblClick()
+    assert tools.Visible and page.grdProps.TextMatrix(1, 1) == "left"
+    props.Dock(vp6.vpAlignTop)  # moved, then the saved layout back
+    page.cmdRestore_Click()
+    assert props.Align == vp6.vpAlignRight and "Layout restored" in page.rtbLog.Text
+    props.Width = 200  # the grid follows its panel
+    assert page.grdProps.Width == 188
+    page.cmdShowAll_Click()
+    assert all(p.Visible for p in (tools, props, output))
+
+
 def test_scrolling_page(sink):
     page = _page(sink, "scrolling")
     assert page.ScaleHeight == 1000  # taller than the pane

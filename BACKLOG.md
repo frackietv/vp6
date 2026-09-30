@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Dockable tool windows (docking, floating, closing and restoring panels) (self-hosting: Toolbox, Project Explorer, Properties and Immediate panels)
 - **[Controls]** Shape
 - **[Controls]** UserControl: designing your own reusable controls in VP6 (VB's UserControl), with their own properties and events, placed from the Toolbox
 - **[Language and runtime]** `PopupMenu` for right-click context menus (self-hosting: designer, Project Explorer and Immediate window context menus)

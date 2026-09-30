@@ -40,6 +40,7 @@ NAME_PREFIX = {
     "VScrollBar": "VScroll", "Timer": "Timer", "Line": "Line", "Image": "Image",
     "TreeView": "TreeView", "Splitter": "Splitter", "DriveListBox": "Drive",
     "DirListBox": "Dir", "FileListBox": "File", "CodeBox": "Code", "FlexGrid": "Grid",
+    "DockPanel": "Dock",
 }
 
 _clipboard: list[ControlDef] = []

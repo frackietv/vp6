@@ -23,12 +23,12 @@ from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QDesktopServic
                            QTextDocumentFragment, QTextFormat)
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QFrame,
-    QGroupBox, QHeaderView, QStyledItemDelegate, QStyleOptionViewItem,
-    QTableWidget, QTableWidgetItem, QTableWidgetSelectionRange,
-    QHBoxLayout, QLabel, QLineEdit, QListView, QListWidget, QMenu, QPlainTextEdit, QProgressBar,
-    QPushButton, QRadioButton, QScrollArea, QScrollBar, QSlider, QStackedLayout, QStyle,
-    QStyleOptionTabWidgetFrame, QTabWidget, QTextEdit, QToolBar, QToolButton, QTreeView,
-    QTreeWidget, QTreeWidgetItem, QListWidgetItem, QVBoxLayout, QWidget,
+    QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListView, QListWidget,
+    QListWidgetItem, QMenu, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QRubberBand,
+    QScrollArea, QScrollBar, QSizeGrip, QSlider, QStackedLayout, QStyle, QStyledItemDelegate,
+    QStyleOptionTabWidgetFrame, QStyleOptionViewItem, QTableWidget, QTableWidgetItem,
+    QTableWidgetSelectionRange, QTabWidget, QTextEdit, QToolBar, QToolButton, QTreeView,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from . import colors
@@ -52,6 +52,7 @@ EVENT_ARGS = {
     "ProtectedEdit": "Line",
     "EnterCell": "", "LeaveCell": "", "RowColChange": "", "BeforeEdit": "Row, Col",
     "ValidateEdit": "Row, Col, Text", "AfterEdit": "Row, Col", "CellButtonClick": "Row, Col",
+    "DockChange": "", "Close": "",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -4287,6 +4288,529 @@ class Splitter(_Docked, Control):
                                    Qt.SplitHCursor if self._vertical() else Qt.SplitVCursor)
 
 
+# --- DockPanel -------------------------------------------------------------------------
+
+_DOCK_ALIGN = ((1, "1 - Top"), (2, "2 - Bottom"), (3, "3 - Left"), (4, "4 - Right"))
+_DOCK_CAPTION = 22  # the caption bar's height
+_DOCK_SIZER = 5  # the resizing edge of a docked panel
+_DOCK_ZONE = 40  # how near an edge a dragged panel docks there
+
+
+class _DockCaption(QWidget):
+    """A DockPanel's caption bar: its Caption, a float button and a close
+    button. Dragging it tears the panel off (floating) and docks it where it
+    is dropped; double-clicking it floats or docks it."""
+
+    def __init__(self, panel: "DockPanel", parent):
+        super().__init__(parent)
+        self.panel = panel
+        self.setMouseTracking(True)
+        self._press = None  # (global point, point in the bar) while the button is down
+        self._pressed_button = None
+        self._dragging = False
+
+    def button_rects(self) -> dict:
+        size = self.height() - 6
+        right = self.width() - 4
+        rects = {}
+        if self.panel._values.get("Closable", True):
+            rects["close"] = QRect(right - size, 3, size, size)
+            right -= size + 2
+        if self.panel._values.get("Floatable", True):
+            rects["float"] = QRect(right - size, 3, size, size)
+        return rects
+
+    def _button_at(self, point):
+        return next((name for name, rect in self.button_rects().items()
+                     if rect.contains(point)), None)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        palette = self.palette()
+        window = palette.color(QPalette.Window)
+        dark = window.lightness() < 128
+        painter.fillRect(self.rect(), window.lighter(125) if dark else window.darker(112))
+        ink = palette.color(QPalette.WindowText)
+        painter.setPen(ink)
+        font = QFont(self.font())
+        font.setBold(True)
+        painter.setFont(font)
+        rects = self.button_rects()
+        right = min((r.left() for r in rects.values()), default=self.width()) - 4
+        painter.drawText(QRect(6, 0, max(right - 6, 0), self.height()),
+                         Qt.AlignLeft | Qt.AlignVCenter,
+                         painter.fontMetrics().elidedText(self.panel._values.get("Caption", ""),
+                                                          Qt.ElideRight, max(right - 6, 0)))
+        pen = QPen(ink, 1.2)
+        painter.setPen(pen)
+        painter.setRenderHint(QPainter.Antialiasing)
+        if "close" in rects:
+            r = rects["close"].adjusted(4, 4, -4, -4)
+            painter.drawLine(r.topLeft(), r.bottomRight())
+            painter.drawLine(r.topRight(), r.bottomLeft())
+        if "float" in rects:
+            r = rects["float"].adjusted(4, 4, -4, -4)
+            if self.panel._floating:  # (dock it: one box)
+                painter.drawRect(r)
+            else:  # (float it: two boxes)
+                painter.drawRect(r.adjusted(3, 0, 0, -3))
+                painter.drawRect(r.adjusted(0, 3, -3, 0))
+        painter.end()
+
+    def mousePressEvent(self, event):
+        if self.panel._design_mode or event.button() != Qt.LeftButton:
+            return
+        point = event.position().toPoint()
+        self._pressed_button = self._button_at(point)
+        self._press = (event.globalPosition().toPoint(), point)
+        self._dragging = False
+
+    def mouseMoveEvent(self, event):
+        if self._press is None or self._pressed_button is not None:
+            return
+        where = event.globalPosition().toPoint()
+        if not self._dragging:
+            if (where - self._press[0]).manhattanLength() < QApplication.startDragDistance():
+                return
+            self._dragging = self.panel._drag_start(where, self._press[1])
+            if self._dragging:
+                self.grabMouse()
+        if self._dragging:
+            self.panel._drag_move(where)
+
+    def mouseReleaseEvent(self, event):
+        if self._press is None:
+            return
+        point = event.position().toPoint()
+        if self._dragging:
+            self.releaseMouse()
+            self.panel._drag_end(event.globalPosition().toPoint())
+        elif self._pressed_button is not None and self._button_at(point) == self._pressed_button:
+            self.panel._caption_button(self._pressed_button)
+        self._press, self._pressed_button, self._dragging = None, None, False
+
+    def mouseDoubleClickEvent(self, event):
+        if not self.panel._design_mode and self._button_at(event.position().toPoint()) is None:
+            self.panel._toggle_floating()
+
+
+class _DockSizer(QWidget):
+    """The inner edge of a docked DockPanel: dragging it resizes the panel."""
+
+    def __init__(self, panel: "DockPanel", parent):
+        super().__init__(parent)
+        self.panel = panel
+        self._start = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and not self.panel._design_mode:
+            align = self.panel._values.get("Align", 3)
+            size = self.panel._values.get("Height" if align in (1, 2) else "Width")
+            self._start = (event.globalPosition().toPoint(), size)
+
+    def mouseMoveEvent(self, event):
+        if self._start is not None:
+            point, size = self._start
+            delta = event.globalPosition().toPoint() - point
+            align = self.panel._values.get("Align", 3)
+            change = {1: delta.y(), 2: -delta.y(), 3: delta.x(), 4: -delta.x()}[align]
+            self.panel._resize_docked(size + change)
+
+    def mouseReleaseEvent(self, event):
+        self._start = None
+
+
+class _DockFrame(QFrame):
+    """A DockPanel: its caption bar, the area its controls are in, and (docked)
+    the edge that resizes it."""
+
+    def __init__(self, panel: "DockPanel", parent):
+        super().__init__(parent)
+        self.panel = panel
+        self.setFrameShape(QFrame.StyledPanel)
+        self.setAutoFillBackground(True)  # (opaque over whatever it is docked on)
+        self.caption = _DockCaption(panel, self)
+        self.content = QWidget(self)
+        self.sizer = _DockSizer(panel, self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.panel._place_parts()
+
+
+class _FloatWindow(QWidget):
+    """The small window a floating DockPanel is in (the caption bar is its
+    title bar; the corner grip resizes it)."""
+
+    def __init__(self, panel: "DockPanel", parent):
+        super().__init__(parent, Qt.Tool | Qt.FramelessWindowHint)
+        self.panel = panel
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.grip = QSizeGrip(self)
+        self.grip.resize(14, 14)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.grip.move(self.width() - self.grip.width(), self.height() - self.grip.height())
+        self.grip.raise_()
+
+    def closeEvent(self, event):  # (e.g. the window manager's close): as the X button
+        if self.panel._closing or not self.panel._ask_close():
+            event.accept() if self.panel._closing else event.ignore()
+        else:
+            event.ignore()
+            self.panel.Visible = False
+
+
+class DockPanel(_Docked, Control):
+    """A tool window docked to an edge of its form (Align), like the IDE's
+    panels: its caption bar has a float and a close button; dragging it tears
+    the panel off into a window of its own (Floating) and drops it on another
+    edge (or the same), double-clicking it floats or docks it, and its inner
+    edge resizes it. Closing hides it (Close can cancel); Visible = True
+    shows it again where it was. Put controls in it like in a Frame. The
+    form's DockLayout saves and restores where all its panels are."""
+
+    TypeName = "DockPanel"
+    DefaultEvent = "DockChange"
+    DefaultSize = (161, 201)
+    IsContainer = True
+    Events = ("DockChange", "Close", "Resize", "Click", "MouseDown", "MouseMove", "MouseUp")
+    Properties = (
+        *_geometry(*DefaultSize),
+        P("Caption", "str", "", always=True, description="The title in its caption bar"),
+        P("Align", "enum", 3, _DOCK_ALIGN,
+          description="The edge of the form it docks to; its Width (Left, Right) or Height "
+                      "(Top, Bottom) is its size there"),
+        P("Floating", "bool", False,
+          description="At run time: in a window of its own instead of docked"),
+        P("Floatable", "bool", True,
+          description="The user can float it and dock it to another edge (the float button, "
+                      "dragging the caption bar)"),
+        P("Closable", "bool", True, description="A close button in its caption bar"),
+        P("Resizable", "bool", True, description="Its inner edge can be dragged to resize it"),
+        *_COLORS, *_FONT, *_COMMON,
+    )
+
+    def _create_widget(self, parent):
+        self.__dict__.update(_floating=False, _float_window=None, _float_rect=None,
+                             _drag_offset=None, _band=None, _closing=False, _watching=None,
+                             _was_visible=None)
+        return _DockFrame(self, parent)
+
+    def _container_widget(self) -> QWidget:
+        return self._widget.content
+
+    def _event_targets(self):
+        return [self._widget, self._widget.content]
+
+    def _on_qt_event(self, watched, event):
+        if watched is self._widget and event.type() == QEvent.Resize:
+            self._fire("Resize")
+        return super()._on_qt_event(watched, event)
+
+    def _place_parts(self) -> None:
+        frame = self._widget
+        rect = frame.contentsRect()
+        docked = not self._floating and not self._design_mode and \
+            self._values.get("Resizable", True)
+        align = self._values.get("Align", 3)
+        sizer = _DOCK_SIZER if docked else 0
+        inner = QRect(rect)  # (the inner edge: the side facing the form's middle)
+        if sizer:
+            if align == 1:
+                frame.sizer.setGeometry(rect.left(), rect.bottom() - sizer + 1, rect.width(),
+                                        sizer)
+                inner.setBottom(rect.bottom() - sizer)
+                frame.sizer.setCursor(Qt.SizeVerCursor)
+            elif align == 2:
+                frame.sizer.setGeometry(rect.left(), rect.top(), rect.width(), sizer)
+                inner.setTop(rect.top() + sizer)
+                frame.sizer.setCursor(Qt.SizeVerCursor)
+            elif align == 3:
+                frame.sizer.setGeometry(rect.right() - sizer + 1, rect.top(), sizer,
+                                        rect.height())
+                inner.setRight(rect.right() - sizer)
+                frame.sizer.setCursor(Qt.SizeHorCursor)
+            else:
+                frame.sizer.setGeometry(rect.left(), rect.top(), sizer, rect.height())
+                inner.setLeft(rect.left() + sizer)
+                frame.sizer.setCursor(Qt.SizeHorCursor)
+        frame.sizer.setVisible(bool(sizer))
+        frame.caption.setGeometry(inner.left(), inner.top(), inner.width(), _DOCK_CAPTION)
+        frame.content.setGeometry(inner.left(), inner.top() + _DOCK_CAPTION, inner.width(),
+                                  max(inner.height() - _DOCK_CAPTION, 0))
+        frame.caption.update()
+
+    def _apply_Caption(self, v):
+        self._widget.caption.update()
+        if self._float_window is not None:
+            self._float_window.setWindowTitle(v)
+
+    def _apply_Closable(self, v):
+        self._widget.caption.update()
+
+    _apply_Floatable = _apply_Closable
+
+    def _apply_Resizable(self, v):
+        self._place_parts()
+
+    def _apply_Align(self, v):
+        self._place_parts()
+        if not self._floating:
+            super()._apply_Align(v)
+
+    # (floating: its size and place are the window's, not the form's)
+    def _apply_Width(self, v):
+        if not self._floating:
+            super()._apply_Width(v)
+
+    def _apply_Height(self, v):
+        if not self._floating:
+            super()._apply_Height(v)
+
+    def _apply_Left(self, v):
+        if not self._floating:
+            super()._apply_Left(v)
+
+    def _apply_Top(self, v):
+        if not self._floating:
+            super()._apply_Top(v)
+
+    def _apply_Visible(self, v):
+        self._watch_form()
+        if self._floating:
+            if not self._design_mode:
+                self._float_window.setVisible(bool(v) and self._form._widget.isVisible())
+        else:
+            super()._apply_Visible(v)
+        was = self._was_visible
+        self.__dict__["_was_visible"] = bool(v)
+        if was is not None and was != bool(v) and not self._design_mode:
+            self._fire("DockChange")  # (closed, or shown again)
+
+    def _apply_Floating(self, v):
+        if self._design_mode:
+            return
+        if v and not self._floating:
+            self._float()
+        elif not v and self._floating:
+            self._dock()
+
+    # -- floating and docking ---------------------------------------------------------------
+    def _watch_form(self) -> None:
+        """Follow the form's showing and hiding (a floating panel's window too)."""
+        if self._watching is None and not self._design_mode:
+            self.__dict__["_watching"] = _DockWatcher(self)
+            self._form._widget.installEventFilter(self._watching)
+
+    def _float(self, rect: QRect | None = None) -> None:
+        """Into a window of its own: ``rect`` (on the screen), else where it
+        last floated, else beside where it is docked."""
+        frame, form_widget = self._widget, self._form._widget
+        if rect is None:
+            rect = self._float_rect
+        if rect is None:
+            corner = frame.mapToGlobal(QPoint(0, 0)) if frame.isVisible() else \
+                form_widget.mapToGlobal(QPoint(40, 40))
+            rect = QRect(corner + QPoint(24, 24), frame.size().expandedTo(QSize(120, 80)))
+        window = _FloatWindow(self, form_widget.window())
+        window.setWindowTitle(self._values.get("Caption", ""))
+        self.__dict__.update(_floating=True, _float_window=window)
+        self._values["Floating"] = True
+        frame.setParent(window)
+        window.layout().addWidget(frame)
+        frame.show()
+        window.setGeometry(rect)
+        self._place_parts()
+        self._form._layout_aligned()  # (its edge's space goes to the others)
+        self._watch_form()
+        if self._values.get("Visible", True) and form_widget.isVisible():
+            window.show()
+        self._fire("DockChange")
+
+    def _dock(self, align: int | None = None) -> None:
+        """Back into the form, at an edge (``align``, else the one it had)."""
+        frame = self._widget
+        if align is not None:
+            self._values["Align"] = int(align)
+        if self._floating:
+            window = self._float_window
+            self.__dict__.update(_float_rect=window.geometry(), _floating=False,
+                                 _float_window=None, _closing=True)
+            frame.setParent(self._parent_widget())
+            window.close()
+            window.deleteLater()
+            self.__dict__["_closing"] = False
+            if self._values.get("Visible", True):
+                frame.show()
+            frame.raise_()
+        self._values["Floating"] = False
+        self._place_parts()
+        self._form._layout_aligned()
+        self._fire("DockChange")
+
+    def Float(self) -> None:
+        """Float it in a window of its own (where it last floated)."""
+        self.Floating = True
+
+    def Dock(self, Align: int | None = None) -> None:
+        """Dock it: to an edge (vpAlignTop, vpAlignBottom, vpAlignLeft,
+        vpAlignRight), else the one it had. Already docked elsewhere, it moves."""
+        if self._floating:
+            self._dock(Align)
+        elif Align is not None and int(Align) != self._values.get("Align"):
+            self.Align = int(Align)
+            self._fire("DockChange")
+
+    def _toggle_floating(self) -> None:
+        if self._values.get("Floatable", True):
+            self.Floating = not self._floating
+
+    def _caption_button(self, name: str) -> None:
+        if name == "close":
+            if self._ask_close():
+                self.Visible = False
+        elif name == "float":
+            self._toggle_floating()
+
+    def _ask_close(self) -> bool:
+        """Close fires: its handler returns True to keep the panel open."""
+        return self._fire("Close") is not True
+
+    def _resize_docked(self, size: int) -> None:
+        area = self._parent_widget().rect()
+        align = self._values.get("Align", 3)
+        limit = (area.height() if align in (1, 2) else area.width()) - 40
+        size = max(_DOCK_CAPTION + 20, min(int(size), max(limit, _DOCK_CAPTION + 20)))
+        if align in (1, 2):
+            self.Height = size
+        else:
+            self.Width = size
+
+    # -- dragging the caption bar ------------------------------------------------------------
+    def _drag_start(self, point: QPoint, offset: QPoint) -> bool:
+        """The caption bar is being dragged (``point`` on the screen, ``offset``
+        where it was grabbed in the bar): float the panel under the mouse."""
+        if not self._values.get("Floatable", True):
+            return False
+        if not self._floating:
+            size = self._widget.size().expandedTo(QSize(120, 80))
+            self._float(QRect(point - offset, size))
+        self.__dict__["_drag_offset"] = offset
+        return True
+
+    def _drop_edge(self, point: QPoint) -> int | None:
+        """The edge of the form a panel dropped at ``point`` would dock to."""
+        area = self._parent_widget()
+        local = area.mapFromGlobal(point)
+        rect = area.rect()
+        if not rect.contains(local):
+            return None
+        distances = {3: local.x(), 4: rect.width() - local.x(), 1: local.y(),
+                     2: rect.height() - local.y()}
+        edge = min(distances, key=distances.get)
+        return edge if distances[edge] < _DOCK_ZONE else None
+
+    def _drop_rect(self, edge: int) -> QRect:
+        area = self._parent_widget().rect()
+        align_size = self._values.get("Height" if edge in (1, 2) else "Width")
+        size = min(align_size, (area.height() if edge in (1, 2) else area.width()) // 2)
+        return {1: QRect(0, 0, area.width(), size),
+                2: QRect(0, area.height() - size, area.width(), size),
+                3: QRect(0, 0, size, area.height()),
+                4: QRect(area.width() - size, 0, size, area.height())}[edge]
+
+    def _drag_move(self, point: QPoint) -> None:
+        if self._float_window is not None and self._drag_offset is not None:
+            self._float_window.move(point - self._drag_offset)
+        edge = self._drop_edge(point)
+        band = self._band
+        if edge is None:
+            if band is not None:
+                band.hide()
+            return
+        if band is None:
+            band = QRubberBand(QRubberBand.Rectangle, self._parent_widget())
+            self.__dict__["_band"] = band
+        band.setGeometry(self._drop_rect(edge))
+        band.show()
+        band.raise_()
+
+    def _drag_end(self, point: QPoint) -> None:
+        if self._band is not None:
+            self._band.hide()
+        edge = self._drop_edge(point)
+        self.__dict__["_drag_offset"] = None
+        if edge is not None:
+            self._move_outermost()
+            self._dock(edge)
+
+    def _move_outermost(self) -> None:
+        """First of the form's DockPanels: dropped on an edge, it goes next to
+        the edge (inside the form's other docked panes, e.g. a Toolbar)."""
+        controls = self._form._controls
+        panels = [c for c in controls if isinstance(c, DockPanel) and c.Parent is self.Parent]
+        if panels and panels[0] is not self:
+            controls.remove(self)
+            controls.insert(controls.index(panels[0]), self)
+
+    # -- floating geometry --------------------------------------------------------------------
+    def _float_geometry(self) -> QRect | None:
+        if self._float_window is not None:
+            return self._float_window.geometry()
+        return self._float_rect
+
+    @property
+    def FloatLeft(self) -> int:
+        """Where its window is (or was, last time it floated) on the screen."""
+        rect = self._float_geometry()
+        return rect.x() if rect is not None else 0
+
+    @property
+    def FloatTop(self) -> int:
+        rect = self._float_geometry()
+        return rect.y() if rect is not None else 0
+
+    @property
+    def FloatWidth(self) -> int:
+        rect = self._float_geometry()
+        return rect.width() if rect is not None else self._values.get("Width", 0)
+
+    @property
+    def FloatHeight(self) -> int:
+        rect = self._float_geometry()
+        return rect.height() if rect is not None else self._values.get("Height", 0)
+
+    def FloatMove(self, Left: int, Top: int, Width: int | None = None,
+                  Height: int | None = None) -> None:
+        """Place its floating window (on the screen); docked, where it will float."""
+        rect = QRect(int(Left), int(Top), int(Width if Width is not None else self.FloatWidth),
+                     int(Height if Height is not None else self.FloatHeight))
+        if self._float_window is not None:
+            self._float_window.setGeometry(rect)
+        else:
+            self.__dict__["_float_rect"] = rect
+
+
+class _DockWatcher(QObject):
+    """Shows and hides a floating DockPanel's window with its form."""
+
+    def __init__(self, panel: DockPanel):
+        super().__init__(panel._form._widget)
+        self.panel = panel
+
+    def eventFilter(self, watched, event):
+        if event.type() in (QEvent.Show, QEvent.Hide):
+            panel = self.__dict__.get("panel")  # (gone while the form is torn down)
+            window = panel.__dict__.get("_float_window") if panel is not None else None
+            if window is not None:
+                window.setVisible(event.type() == QEvent.Show and
+                                  panel._values.get("Visible", True))
+        return False
+
+
 # --- Keyed collections (ListImages, Panels, Tabs) ------------------------------------------------
 
 class _KeyedItem:
@@ -7752,7 +8276,7 @@ CONTROL_TYPES: dict[str, type[Control]] = {
         ComboBox, ListBox, HScrollBar, VScrollBar, Timer, DriveListBox, DirListBox,
         FileListBox, Line, Image, TreeView, Splitter,
         ProgressBar, Slider, UpDown, StatusBar, TabStrip, ImageList, Toolbar, ListView,
-        RichTextBox, CodeBox, FlexGrid, Menu,
+        RichTextBox, CodeBox, FlexGrid, DockPanel, Menu,
     )
 }
 

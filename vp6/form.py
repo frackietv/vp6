@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -401,7 +402,8 @@ class Form(PropertyHost):
         for control in self._controls:
             align = control._values.get("Align", 0) if "Align" in control._specs else 0
             widget = control._widget
-            if not align or widget is None or control.Parent is not self:
+            if not align or widget is None or control.Parent is not self or \
+                    control.__dict__.get("_floating"):  # (a DockPanel in its own window)
                 continue
             if not self._design_mode and not control._values.get("Visible", True):
                 continue
@@ -436,6 +438,57 @@ class Form(PropertyHost):
         places.sort(key=lambda place: place[0].size() != place[1].size())
         for widget, rect in places:
             widget.setGeometry(rect)
+
+    # -- dock panels ------------------------------------------------------------------------------
+    def _dock_panels(self) -> list:
+        return [c for c in self._controls if c.TypeName == "DockPanel" and c.Parent is self]
+
+    @staticmethod
+    def _dock_key(panel) -> str:
+        return panel._name if panel._index is None else f"{panel._name}({panel._index})"
+
+    @property
+    def DockLayout(self) -> str:
+        """Where the form's DockPanels are: each one's edge, size, place among
+        the others, floating window and visibility, as text (JSON). Keep it
+        (e.g. in a file) and set it again to put them back."""
+        panels = []
+        for panel in self._dock_panels():
+            rect = panel._float_geometry()
+            panels.append({
+                "name": self._dock_key(panel), "align": panel._values.get("Align", 3),
+                "width": panel._values.get("Width"), "height": panel._values.get("Height"),
+                "floating": bool(panel._floating),
+                "float": [rect.x(), rect.y(), rect.width(), rect.height()] if rect else None,
+                "visible": bool(panel._values.get("Visible", True)),
+            })
+        return json.dumps({"dock_panels": panels})
+
+    @DockLayout.setter
+    def DockLayout(self, value) -> None:
+        try:
+            entries = json.loads(value)["dock_panels"] if value else []
+        except (ValueError, KeyError, TypeError) as exc:
+            raise ValueError(f"Form {type(self).__name__}: not a DockLayout ({exc})") from None
+        panels = {self._dock_key(p): p for p in self._dock_panels()}
+        ordered = [panels[e["name"]] for e in entries if e.get("name") in panels]
+        # Their order (each edge's panels from the outside in): in the same slots
+        slots = [i for i, c in enumerate(self._controls) if c in ordered]
+        for slot, panel in zip(slots, ordered):
+            self._controls[slot] = panel
+        for entry in entries:
+            panel = panels.get(entry.get("name"))
+            if panel is None:
+                continue
+            if entry.get("float"):
+                panel.FloatMove(*entry["float"])
+            panel.Align = int(entry.get("align", 3))  # (floating: where it docks back to)
+            panel.Floating = bool(entry.get("floating"))
+            for name in ("width", "height"):
+                if entry.get(name):
+                    setattr(panel, name.title(), int(entry[name]))
+            panel.Visible = bool(entry.get("visible", True))
+        self._layout_aligned()
 
     def _base_dir(self) -> str:
         module = sys.modules.get(type(self).__module__)

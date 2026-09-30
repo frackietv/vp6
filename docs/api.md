@@ -167,6 +167,8 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `ValidateEdit` | Row, Col, Text |
 | `AfterEdit` | Row, Col |
 | `CellButtonClick` | Row, Col |
+| `DockChange` | none |
+| `Close` | none |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -229,6 +231,7 @@ Run-time only properties:
 | `Controls` | list of all controls on the form, including nested ones |
 | `ScaleWidth`, `ScaleHeight` | client area size |
 | `Visible` | whether the form is shown; setting it calls `Show()` / `Hide()` |
+| `DockLayout` | where the form's [DockPanels](#dockpanel) are, as text: read it to keep it, set it to put them back |
 
 ### Form methods
 
@@ -1262,6 +1265,65 @@ Default size 6 × 97. Property groups: Position.
 Events: `Moved`. Default event (double-click in the designer): `Moved`.
 <!-- END GENERATED -->
 
+### DockPanel
+
+A tool window docked to an edge of its form, like the IDE's Toolbox and
+Properties panels: a container with a caption bar. Put controls in it as in
+a Frame.
+
+```python
+self.dckTools = DockPanel(self, Caption="Tools", Align=vpAlignLeft, Width=160)
+self.cmdRun = CommandButton(self.dckTools, Caption="Run", Left=8, Top=8)
+
+self.dckOutput.Float()                  # into a window of its own
+self.dckOutput.Dock(vpAlignBottom)      # back, to an edge
+self.dckTools.Visible = True            # closed: shown again where it was
+
+def Form_Unload(self):
+    with open("docks.json", "w") as f:  # where they all are, for the next time
+        f.write(self.DockLayout)
+```
+
+* **Docked** (`Align`: `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`,
+  `vpAlignRight`), it takes its edge of the form like an aligned PictureBox:
+  its `Width` (Left, Right) or `Height` (Top, Bottom) is its size there, and
+  panels and other docked controls share the edges in the order they come in
+  the form. Dragging its inner edge resizes it (`Resizable`). A PictureBox
+  with `Align = vpAlignFill` takes the space the panels leave.
+* **Floating** (`Floating = True`, `Float()`): it is in a small window of its
+  own, which its caption bar moves and its corner resizes; `FloatLeft`,
+  `FloatTop`, `FloatWidth`, `FloatHeight` and `FloatMove(Left, Top, Width,
+  Height)` are that window's place on the screen (kept for the next time it
+  floats). It shows and hides with its form. `Dock(Align)` docks it again,
+  to an edge or the one it had.
+* **The user** (`Floatable`): dragging the caption bar tears a docked panel
+  off and moves a floating one; dropped near an edge of the form (a frame
+  shows where), it docks there, next to the edge. Double-clicking the caption
+  bar, or its float button, floats or docks it.
+* **Closing** (`Closable`): the close button fires `Close`; return True to
+  keep it open, else it is hidden (`Visible = False`). `Visible = True` shows
+  it again, docked or floating as it was.
+* `DockChange` fires after it is docked, floated, moved to another edge,
+  closed or shown again; `Resize` when its size changes.
+* The form's `DockLayout` is where all its DockPanels are (their edges,
+  sizes, order, floating windows and visibility) as text: keep it, and set it
+  to put them back.
+
+<!-- BEGIN GENERATED: control DockPanel -->
+Default size 161 × 201. A container: other controls can be placed on it. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Align` | enum | 3 - Left | 1 - Top, 2 - Bottom, 3 - Left, 4 - Right. The edge of the form it docks to; its Width (Left, Right) or Height (Top, Bottom) is its size there |
+| `Caption` | str | `''` | The title in its caption bar |
+| `Closable` | bool | `True` | A close button in its caption bar |
+| `Floatable` | bool | `True` | The user can float it and dock it to another edge (the float button, dragging the caption bar) |
+| `Floating` | bool | `False` | At run time: in a window of its own instead of docked |
+| `Resizable` | bool | `True` | Its inner edge can be dragged to resize it |
+
+Events: `DockChange`, `Close`, `Resize`, `Click`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`. Default event (double-click in the designer): `DockChange`.
+<!-- END GENERATED -->
+
 ### ProgressBar
 
 Shows how far an operation has got: the bar fills from `Min` to `Max` as
@@ -1904,7 +1966,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
 `HScrollBar`, `VScrollBar`, `PictureBox`,
 [`DriveListBox`, `DirListBox` and `FileListBox`](#drivelistbox-dirlistbox-and-filelistbox), [`Line`](#line), [`Image`](#image),
-[`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter),
+[`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`Toolbar`](#toolbar) (and its `Button`),
 [`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid),
@@ -2167,6 +2229,8 @@ It goes in the project's `dist` folder:
 * **RichTextBox** formatted text is HTML instead of RTF (`TextHTML`,
   `SelHTML`, `vpRtfHTML` files), and `GetLineFromChar` counts paragraphs, not
   wrapped lines.
+* **DockPanel** is VP6's own (VB had no docking panels), as are the form's
+  `DockLayout` and its events `DockChange` and `Close`.
 * **FlexGrid** is MSFlexGrid with editing added (`Editable`, the editors
   and the edit events). It has at most one fixed row and one fixed column,
   measures in pixels, and has no `MergeCells`, `FillStyle`, `CellPicture`,

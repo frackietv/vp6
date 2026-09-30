@@ -180,6 +180,16 @@ def _flexgrid(p):
     p.fillRect(QRectF(8, 12.5, 5.5, 3), C.blue)  # the current cell
 
 
+def _dockpanel(p):
+    p.setBrush(C.face)
+    p.drawRect(QRectF(2, 3, 20, 18))  # the form
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 3, 8, 18))  # a panel docked to its left
+    p.fillRect(QRectF(2.5, 3.5, 7, 3.5), C.blue)  # its caption bar
+    p.drawRect(QRectF(12, 8, 8, 9))  # and one floating
+    p.fillRect(QRectF(12.5, 8.5, 7, 3), C.blue)
+
+
 def _hscroll(p):
     p.setBrush(C.face)
     p.drawRect(QRectF(2, 8, 20, 8))
@@ -471,6 +481,7 @@ _DRAWERS = {
     "TabStrip": _tabstrip, "ImageList": _imagelist, "Toolbar": _toolbar,
     "ListView": _listview, "RichTextBox": _richtextbox,
     "CodeBox": _codebox, "FlexGrid": _flexgrid,
+    "DockPanel": _dockpanel,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,

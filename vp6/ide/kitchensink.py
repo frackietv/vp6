@@ -30,8 +30,9 @@ FORMS = (  # the window, its pages (in the index's order) and the modal dialog
     "Form1.py", "pgIntro.py", "pgText.py", "pgRichText.py", "pgEditing.py", "pgCode.py",
     "pgButtons.py", "pgLists.py", "pgScrollBars.py", "pgValues.py", "pgPictures.py", "pgZOrder.py",
     "pgTree.py", "pgListView.py", "pgGrid.py", "pgTabs.py", "pgFiles.py", "pgTimer.py",
-    "pgLayout.py", "pgScrolling.py", "pgEmbedded.py", "pgDialogs.py", "pgSchemes.py",
-    "pgKeyboard.py", "pgMouse.py", "pgArrays.py", "pgMenus.py", "pgGlobals.py", "frmDialog.py",
+    "pgLayout.py", "pgDocking.py", "pgScrolling.py", "pgEmbedded.py", "pgDialogs.py",
+    "pgSchemes.py", "pgKeyboard.py", "pgMouse.py", "pgArrays.py", "pgMenus.py", "pgGlobals.py",
+    "frmDialog.py",
 )
 MODULES = ("Module1.py",)
 PICTURE = "vp6.png"  # shown on the Pictures page
