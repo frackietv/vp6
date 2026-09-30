@@ -464,9 +464,9 @@ architecture §6.2).
     `icon`, `path`;
   * **the icon:** `icon` lists image files relative to the project (`load`
     turns a single string into a list); `icon_paths()` gives them as absolute
-    paths. `add_default_icon()` copies the VP6 icon (`VP6_ICON_FILES`, four
-    sizes in the package's `images` folder) into the project's
-    `ICON_FOLDER` (`icons`), keeping files already there, and lists them;
+    paths. An empty `icon` (new projects) means the VP6 icon,
+    `VP6_ICON_FILES` (four sizes in the package's `images` folder), used from
+    the installation, never copied into the project;
   * helpers `directory`, `abspath(relative)` and `kind_of(relative)`
     (`"form"`, `"module"` or None);
   * **groups** (`groups`, how the Project panel shows the files; not folders
@@ -747,8 +747,8 @@ Module functions:
   Main. The console template's `Main` uses `print()`/`input()`; the Standard
   EXE template's `Main` shows Form1. `"kitchensink"` delegates to
   `kitchensink.create`, which also adds its pages (`pg*.py`), `frmDialog.py`
-  and `vp6.png`. Every template's project gets the VP6 icon
-  (`Project.add_default_icon`: the `icons` folder).
+  and `vp6.png`. No template's project gets an icon of its own: they show
+  the installed VP6 icon until one is set.
 * `main(argv)` is the application entry point. It gives the application the
   VP6 icon (`app.vp6_icon`: the Dock or taskbar); `MainWindow` sets it on
   itself too. Unless `--no-splash` is given, it shows the splash screen
@@ -1556,4 +1556,4 @@ All tests run headless. `conftest.py`:
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
 | `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order and lines, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, globals); closing unloads the pages. |
-| `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (the VP6 icon copied into a project, your own copy kept, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |
+| `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (none by default, nothing copied; its own files, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |

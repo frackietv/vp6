@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.4.11
+**Date:** 2026-10-01
+
+## Projects
+
+- New projects (and the Kitchen Sink) no longer get a copy of the VP6 icon in an `icons` folder: without an icon of their own they use the VP6 icon from the VP6 installation (their windows, the Dock or taskbar, and executables made with vp6-make)
+
+---
+
 **Version:** 0.4.10
 **Date:** 2026-10-01
 

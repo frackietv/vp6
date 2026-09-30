@@ -121,7 +121,8 @@ can also be in subfolders of the project's folder (organize them in the
 Project panel's Files view); they import each other by file name wherever
 they are, so their file names are unique in a project. The program's icon
 (its windows, and the Dock or taskbar) is the project's `icon`: new projects
-get the VP6 icon in an `icons` folder, to replace with your own. The project file is
+have none and show the VP6 icon from the VP6 installation until you set your
+own (the project's `Icon` in the Properties window). The project file is
 also an executable launcher script, so it starts the program by itself:
 
 ```bash

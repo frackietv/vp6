@@ -47,8 +47,7 @@ def project(tmp_path):
 def test_what_goes_in(project):
     assert make.project_files(project) == [
         "Broken.py", "Form1.py", "Hello.vp6p", "Module1.py", "Unused.py", "data/message.txt",
-        "icons/vp6icon-128x128.png", "icons/vp6icon-256x256.png", "icons/vp6icon-32x32.png",
-        "icons/vp6icon-64x64.png", "lib/Greeting.py"]
+        "lib/Greeting.py"]
     # What the code imports, but not its own forms and modules (nor relative imports)
     assert make.imported_modules(project) == ["csv", "io", "json", "os", "vp6"]
 
@@ -91,8 +90,12 @@ def test_the_pyinstaller_command(project, monkeypatch):
     assert make.vp6_search_path(site_folders=["/elsewhere"]) == vp6_folder  # (editable)
     assert make.vp6_search_path(site_folders=[vp6_folder]) is None  # installed
     assert ("--paths" in command) == (make.vp6_search_path() is not None)
-    # The executable's icon: the project's largest (with Pillow)
+    # The executable's icon: the project's largest (with Pillow), else VP6's
     monkeypatch.setattr(make.importlib.util, "find_spec", lambda name: object())
+    assert project.icon == [] and make.icon_file(project) == make.VP6_ICON_FILES[-1]
+    for name in ("logo-32.png", "logo-256.png"):
+        open(project.abspath(name), "wb").close()
+    project.icon = ["logo-32.png", "logo-256.png"]
     assert make.icon_file(project) == project.icon_paths()[-1]
     windowed = Project(name="Calc", type="exe", path=project.path)
     command = make.pyinstaller_command(windowed, "/w/l.py", "/d", "/w", onefile=True,

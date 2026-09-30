@@ -2,6 +2,7 @@
 
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -9,7 +10,7 @@ import sys
 import pytest
 
 from vp6.formfile import new_module_source
-from vp6.project import SUB_MAIN, Project, ProjectFileError, parse
+from vp6.project import SUB_MAIN, VP6_ICON_FILES, Project, ProjectFileError, parse
 
 VP6_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -208,21 +209,18 @@ def test_groups_are_saved_and_loaded(tmp_path):
 # --- the icon -------------------------------------------------------------------------------
 
 def test_icon_field(tmp_path):
-    from vp6.project import ICON_FOLDER, VP6_ICON_FILES
+    from vp6.project import VP6_ICON_FILES
     project = Project(name="Iconic", forms=["Form1.py"])
+    # None of its own: the VP6 icon, from the installation (nothing copied)
     assert project.icon == [] and all(os.path.isfile(f) for f in VP6_ICON_FILES)
     path = tmp_path / "Iconic.vp6p"
     project.path = str(path)
-    project.add_default_icon()  # copies of the VP6 icon, in several sizes
-    assert project.icon == [f"{ICON_FOLDER}/vp6icon-{n}x{n}.png" for n in (32, 64, 128, 256)]
-    assert all(os.path.isfile(p) for p in project.icon_paths())
+    project.icon = ["art/logo-32.png", "art/logo-256.png"]  # its own, two sizes
+    assert project.icon_paths() == [str(tmp_path / "art" / "logo-32.png"),
+                                    str(tmp_path / "art" / "logo-256.png")]
     project.save(str(path))
-    assert '"icon": ["icons/vp6icon-32x32.png"' in path.read_text()
+    assert '"icon": ["art/logo-32.png", "art/logo-256.png"]' in path.read_text()
     assert Project.load(str(path)) == project
-    # Your own icon replaces a copy: it isn't overwritten when added again
-    (tmp_path / ICON_FOLDER / "vp6icon-32x32.png").write_bytes(b"mine")
-    project.add_default_icon()
-    assert (tmp_path / ICON_FOLDER / "vp6icon-32x32.png").read_bytes() == b"mine"
     # One file is enough, written as a string by hand
     text = path.read_text()
     path.write_text(re.sub(r'"icon": \[[^\]]*\]', '"icon": "logo.png"', text))
@@ -241,8 +239,10 @@ def test_a_program_shows_its_projects_icon(tmp_path):
         "    print('sizes', sorted(s.width() for s in icon.availableSizes()))\n")
     project = Project(name="Iconic", type="exe", startup=SUB_MAIN, modules=["Module1.py"],
                       path=str(tmp_path / "Iconic.vp6p"))
-    project.add_default_icon()
-    project.icon = project.icon[:2]  # its own: two sizes
+    (tmp_path / "art").mkdir()
+    for source in VP6_ICON_FILES[:2]:  # its own: two sizes
+        shutil.copy(source, tmp_path / "art")
+    project.icon = [f"art/{os.path.basename(f)}" for f in VP6_ICON_FILES[:2]]
     project.save()
     result = subprocess.run([sys.executable, str(tmp_path / "Iconic.vp6p")],
                             capture_output=True, text=True, timeout=60, env=_env())

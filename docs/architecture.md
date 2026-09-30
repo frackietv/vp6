@@ -633,8 +633,7 @@ PROJECT = {
     "forms": ["frmCalculator.py"],
     "modules": [],
     "color_scheme": "system",           # "system", "light", "dark" or "ide"; forms inherit it
-    "icon": ["icons/vp6icon-32x32.png", "icons/vp6icon-64x64.png",    # the program's icon
-             "icons/vp6icon-128x128.png", "icons/vp6icon-256x256.png"],
+    "icon": ["art/calc-32.png", "art/calc-256.png"],   # the program's icon; [] = VP6's
     "groups": [                         # how the Project panel shows them (not folders)
         {"group": "Forms", "items": ["frmCalculator.py"]},
         {"group": "Modules", "items": []}
@@ -661,9 +660,10 @@ if __name__ == "__main__":
   picture in several sizes, from which Qt picks the best for each place (a
   single string is one file). The runner makes it the application's icon
   (`app.set_program_icon`) for windowed projects: its windows, and the Dock or
-  taskbar. New projects get the VP6 icon's four sizes in an `icons` folder
-  (`Project.add_default_icon`); without an icon, a program shows the VP6
-  icon, which `ensure_app` gives every VP6 application.
+  taskbar. New projects have none (`[]`): without an icon, a program shows
+  the VP6 icon from the VP6 installation, which `ensure_app` gives every VP6
+  application (and `vp6-make` uses for the executable), so nothing is copied
+  into the project.
 * **Forms, modules and groups.** `forms` and `modules` say what each file
   is; that's all the runner needs. `groups` only organizes the Project
   panel, and doesn't reflect where the files are on disk. It is a list of

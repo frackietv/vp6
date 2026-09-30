@@ -89,8 +89,8 @@ class ProjectTarget(QObject):
             P("Icon", "file", "",
               description="The program's icon (its windows, and the Dock or taskbar): an "
                           "image file in the project's folder, square, e.g. 256 x 256 "
-                          "pixels. Empty: the VP6 icon. New projects get the VP6 icon in "
-                          "several sizes in their icons folder."),
+                          "pixels. Empty (as in new projects): the VP6 icon, from the VP6 "
+                          "installation."),
             P("ColorScheme", "enum", "system", COLOR_SCHEME_CHOICES,
               description="Light or dark appearance of every form whose ColorScheme is "
                           "'0 - Project Default'."),

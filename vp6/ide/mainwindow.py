@@ -1681,7 +1681,6 @@ def create_project(location: str, name: str, template: str) -> str:
     if template == "kitchensink":
         project = kitchensink.create(directory, name)
         project.path = path
-        project.add_default_icon()  # the VP6 icon, to replace with your own
         project.save(path)
         return path
     console = template == "console"
@@ -1692,8 +1691,7 @@ def create_project(location: str, name: str, template: str) -> str:
                                            startup_form=None if console else "Form1"))
     project = Project(name=name, type="console" if console else "exe", startup=SUB_MAIN,
                       forms=["Form1.py"], modules=["Module1.py"], path=path)
-    project.add_default_icon()  # the VP6 icon, to replace with your own
-    project.save(path)
+    project.save(path)  # (no icon of its own: the installed VP6 icon until it gets one)
     return path
 
 

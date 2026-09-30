@@ -14,7 +14,7 @@ A project file is an executable Python script that starts the program::
         "forms": ["Form1.py"],
         "modules": ["Module1.py"],
         "color_scheme": "system",     # "system", "light", "dark" or "ide"
-        "icon": ["icons/vp6icon-32x32.png", ...],   # the program's icon
+        "icon": [],                   # the program's icon; [] = the VP6 icon
         "groups": [                   # how the Project panel shows them
             {"group": "Forms", "items": ["Form1.py"]},
             {"group": "Modules", "items": ["Module1.py"]},
@@ -36,9 +36,9 @@ rewrites the region when saving, so code added elsewhere is kept.
 
 ``forms`` and ``modules`` say which files are forms and modules (the runner
 needs nothing else). ``icon`` is the program's icon: image files relative to
-the project, sizes of one picture (a single string is one file); new
-projects get the VP6 icon's sizes in an ``icons`` folder, and without any the
-program shows the VP6 icon. ``groups`` organizes them in the Project panel,
+the project, sizes of one picture (a single string is one file); without any
+(as in new projects) the program shows the VP6 icon, from the VP6
+installation. ``groups`` organizes them in the Project panel,
 independently of where the files are on disk: a list of entries, each a file
 (its path relative to the project) or a group ``{"group": name, "items":
 [entries]}``, so groups can hold files and other groups, and files can also
@@ -52,7 +52,6 @@ import ast
 import json
 import os
 import re
-import shutil
 import sys
 from dataclasses import asdict, dataclass, field
 
@@ -95,12 +94,11 @@ if __name__ == "__main__":
 '''
 
 
-# The VP6 icon, in several sizes (the package's images/ folder). New projects get
-# a copy in their ICON_FOLDER; a program without an icon of its own shows it.
+# The VP6 icon, in several sizes (the package's images/ folder): the icon of every
+# program without one of its own (new projects have none), used from the installation.
 VP6_ICON_DIR = os.path.join(os.path.dirname(__file__), "images")
 VP6_ICON_FILES = tuple(os.path.join(VP6_ICON_DIR, f"vp6icon-{n}x{n}.png")
                        for n in (32, 64, 128, 256))
-ICON_FOLDER = "icons"
 
 
 class ProjectFileError(ValueError):
@@ -140,19 +138,6 @@ class Project:
     def icon_paths(self) -> list[str]:
         """The icon's files, as absolute paths."""
         return [self.abspath(relative) for relative in self.icon]
-
-    def add_default_icon(self) -> None:
-        """Copy the VP6 icon into the project (its ICON_FOLDER) and make it the
-        program's icon: a new project's default, to replace with your own.
-        Files already there are kept."""
-        folder = os.path.join(self.directory, ICON_FOLDER)
-        os.makedirs(folder, exist_ok=True)
-        self.icon = []
-        for source in VP6_ICON_FILES:
-            target = os.path.join(folder, os.path.basename(source))
-            if not os.path.exists(target):
-                shutil.copyfile(source, target)
-            self.icon.append(f"{ICON_FOLDER}/{os.path.basename(source)}")
 
     # -- groups: how the Project panel shows the files ----------------------------------------
     # A group is found by its path: the names from the top, e.g. ("Forms", "Pages");
