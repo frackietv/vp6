@@ -86,8 +86,7 @@ class Form1(Form):
         self.imlToolbar = ImageList(self, Left=860, Top=540,
                                     ListImages=['images/back.png|back', 'images/forward.png|forward', 'images/sidebar.png|sidebar', 'images/system.png|system', 'images/sun.png|sun', 'images/moon.png|moon'])
         self.mnuFile = Menu(self, Caption='&File')
-        self.mnuFileEnd = Menu(self.mnuFile, Caption='&End (no questions asked)',
-                               Shortcut='Ctrl+Q')
+        self.mnuFileEnd = Menu(self.mnuFile, Caption='&End (at once)', Shortcut='Ctrl+Q')
         self.mnuFileSep = Menu(self.mnuFile, Caption='-')
         self.mnuFileClose = Menu(self.mnuFile, Caption='&Close')
         self.mnuView = Menu(self, Caption='&View')
@@ -116,9 +115,6 @@ class Form1(Form):
         Debug.Print("Form_Load:", App.Title, "- screen", Screen.Width, "x", Screen.Height)
 
     def Form_Unload(self):
-        # Returning True cancels closing (VB's Cancel = 1)
-        if MsgBox("Close the Kitchen Sink?", vpYesNo + vpQuestion) == vpNo:
-            return True
         # The pages shown in this window are unloaded with it; a page popped out
         # into a window of its own too
         for page in self.pages.values():

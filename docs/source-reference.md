@@ -1333,7 +1333,7 @@ explorer-style.
   * `set_scheme(index)` keeps the window's ColorScheme, the View menu and
     the Color schemes page in step; `show_navigation(visible)` hides or
     shows the navigation pane and its Splitter.
-  * `Form_Unload` asks first, then unloads the pages (also one popped out).
+  * `Form_Unload` unloads the pages (also one popped out).
 * **The pages** (one form each, shown in the content pane):
   * `pgIntro.py`: the introduction, a Markdown Label whose links show pages;
   * `pgText.py`: Labels (alignment, AutoSize, access keys) and TextBoxes

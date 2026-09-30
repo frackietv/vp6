@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.4.16
+**Date:** 2026-10-01
+
+## Kitchen Sink
+
+- Closing the Kitchen Sink no longer asks for confirmation; its File > End menu item is now "End (at once)"
+
+---
+
 **Version:** 0.4.15
 **Date:** 2026-10-01
 
