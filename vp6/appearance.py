@@ -6,8 +6,15 @@
 * ``vpSchemeSystem`` (1) - native look, follows the OS appearance live,
 * ``vpSchemeLight`` (2) / ``vpSchemeDark`` (3) - forced light or dark,
 * ``vpSchemeIDE`` (4) - follow the VP6 IDE's appearance: live in the
-  designer; when run from the IDE, the IDE's appearance at launch (passed in
-  the ``VP6_IDE_SCHEME`` environment variable); otherwise System.
+  designer; when run from the IDE, the IDE's, live too (the IDE writes it to
+  the file the ``VP6_IDE_SCHEME_FILE`` environment variable names, and
+  ``VP6_IDE_SCHEME`` has it at launch); otherwise System.
+
+``watcher()`` tells when the appearance may have changed (``changed``): the
+OS switching between light and dark (Qt's signal; while the IDE forces its
+scheme, Qt reports no change, so the OS is asked every two seconds), or the
+IDE's scheme file changing. Forms follow it (``Form_ColorSchemeChanged``),
+and so do the designers.
 
 Native styles (notably macOS) ignore widget palettes, so forced schemes use
 Qt's Fusion style with a fixed light or dark palette on the form, its
@@ -38,6 +45,8 @@ PROJECT_SCHEMES = {"system": vpSchemeSystem, "light": vpSchemeLight, "dark": vpS
                    "ide": vpSchemeIDE}
 SCHEME_NAMES = {v: k for k, v in PROJECT_SCHEMES.items()}
 IDE_SCHEME_ENV = "VP6_IDE_SCHEME"
+IDE_SCHEME_FILE_ENV = "VP6_IDE_SCHEME_FILE"  # a file the IDE keeps its scheme in
+OS_POLL_MS = 2000  # how often the OS is asked while the app's scheme is forced
 
 # Set by the IDE (inside the IDE process): returns System, Light or Dark
 ide_scheme_provider = None
@@ -57,8 +66,28 @@ def ide_scheme() -> int:
     """What vpSchemeIDE currently means: System, Light or Dark."""
     if ide_scheme_provider is not None:
         return ide_scheme_provider()
-    scheme = PROJECT_SCHEMES.get(os.environ.get(IDE_SCHEME_ENV, "").lower(), vpSchemeSystem)
+    name = _ide_scheme_file_text() or os.environ.get(IDE_SCHEME_ENV, "")
+    scheme = PROJECT_SCHEMES.get(name.strip().lower(), vpSchemeSystem)
     return scheme if scheme != vpSchemeIDE else vpSchemeSystem
+
+
+def _ide_scheme_file_text() -> str:
+    """The IDE's scheme as it wrote it to its file (run from the IDE), or ""."""
+    path = os.environ.get(IDE_SCHEME_FILE_ENV)
+    if not path:
+        return ""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def write_ide_scheme_file(path: str, scheme: int) -> None:
+    """The IDE: keep its scheme (System, Light or Dark) in the file programs
+    it runs read (in place, so their file watchers see the change)."""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(SCHEME_NAMES.get(scheme, "system"))
 
 
 def resolve(scheme: int) -> int:
@@ -111,6 +140,8 @@ def set_app_override(active: bool) -> None:
         _os_dark_before_override = _qt_scheme_is_dark()
     _override_active = active
     _os_query_cache = None
+    if _watcher is not None:
+        _watcher._poll_while_forced()
 
 
 def app_override_active() -> bool:
@@ -152,6 +183,67 @@ def system_is_dark() -> bool:
 def is_dark(scheme: int) -> bool:
     """Whether a resolved scheme (System/Light/Dark) renders dark right now."""
     return scheme == vpSchemeDark or (scheme == vpSchemeSystem and system_is_dark())
+
+
+_watcher = None
+
+
+def watcher():
+    """The application's appearance watcher: its ``changed`` signal fires when
+    the OS switches between light and dark, or the IDE's scheme changes; its
+    ``dark`` is the OS appearance it last saw. Made when first asked for (the
+    application must exist)."""
+    global _watcher
+    if _watcher is None:
+        _watcher = _make_watcher()
+    return _watcher
+
+
+def _make_watcher():
+    from PySide6.QtCore import QFileSystemWatcher, QObject, QTimer, Signal
+
+    class AppearanceWatcher(QObject):
+        changed = Signal()
+
+        def __init__(self):
+            super().__init__(QGuiApplication.instance())
+            self.dark = system_is_dark()
+            self._ide = _ide_scheme_file_text()
+            QGuiApplication.styleHints().colorSchemeChanged.connect(self.check)
+            self._timer = QTimer(self)
+            self._timer.setInterval(OS_POLL_MS)
+            self._timer.timeout.connect(self.check)
+            self._files = None
+            path = os.environ.get(IDE_SCHEME_FILE_ENV)
+            if path:
+                self._files = QFileSystemWatcher([path], self)
+                self._files.fileChanged.connect(self._on_ide_file)
+            self._poll_while_forced()
+
+        def _poll_while_forced(self):
+            if _override_active:
+                self._timer.start()
+            else:
+                self._timer.stop()
+
+        def check(self, *_):
+            """Look again: tell if the OS appearance changed."""
+            global _os_query_cache
+            _os_query_cache = None  # (ask the OS now)
+            dark = system_is_dark()
+            if dark != self.dark:
+                self.dark = dark
+                self.changed.emit()
+
+        def _on_ide_file(self, path):
+            if path not in self._files.files():  # (replaced, not written: watch it again)
+                self._files.addPath(path)
+            text = _ide_scheme_file_text()
+            if text and text != self._ide:
+                self._ide = text
+                self.changed.emit()
+
+    return AppearanceWatcher()
 
 
 def fusion_style():

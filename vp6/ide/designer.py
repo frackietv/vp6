@@ -14,8 +14,7 @@ import keyword
 from typing import Callable
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import (QAction, QBrush, QColor, QGuiApplication, QPainter, QPalette, QPen,
-                           QPixmap)
+from PySide6.QtGui import QAction, QBrush, QColor, QPainter, QPalette, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QMenu, QMessageBox, QScrollArea, QVBoxLayout,
                                QWidget)
 
@@ -497,8 +496,9 @@ class FormDesigner(QWidget):
         self.load_def(document.form_def)
         document.designReloaded.connect(self._on_document_reloaded)
         theme_manager().changed.connect(self._on_ide_theme_changed)  # light/dark, frame
-        # A bound method, not a lambda: disconnected when the designer is deleted
-        QGuiApplication.styleHints().colorSchemeChanged.connect(self._on_os_scheme_changed)
+        # A bound method, not a lambda: disconnected when the designer is deleted. The
+        # watcher also sees the OS switch while the IDE forces its own scheme
+        appearance.watcher().changed.connect(self._on_os_scheme_changed)
 
     # -- color schemes -------------------------------------------------------------------------
     def set_project_scheme(self, scheme: int) -> None:

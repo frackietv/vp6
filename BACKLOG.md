@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** Light and dark: an event when the OS switches between light and dark and a way to ask which one is active (self-hosting: repainting custom-drawn surfaces and icons); picking up a macOS light/dark change live for System forms in the designer while the IDE is forced to Light or Dark (today they update on the next redraw); programs started from the IDE with the "IDE" color scheme following later IDE theme changes (today: its appearance at launch only)
 - **[Language and runtime]** Form kinds: MDI forms (MDI parent and child forms); borderless popup forms that don't take the focus from the form that opened them (self-hosting: the code completion list)
 - **[Language and runtime]** Starting a program asynchronously with output, exit and error events and a way to write to its stdin (a Process object beyond VB's `Shell`) (self-hosting: F5 and the Immediate window)
 - **[Language and runtime]** Twips and VB's `ScaleMode`; VP6 uses pixels only

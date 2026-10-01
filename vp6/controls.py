@@ -43,6 +43,7 @@ from .app import call_handler
 # Parameters passed to each event handler; used by the IDE to generate stubs.
 EVENT_ARGS = {
     "Click": "", "DblClick": "", "Change": "", "Scroll": "", "Timer": "",
+    "ColorSchemeChanged": "Dark",
     "GotFocus": "", "LostFocus": "",
     "MouseDown": "Button, Shift, X, Y", "MouseUp": "Button, Shift, X, Y",
     "MouseMove": "Button, Shift, X, Y",

@@ -126,12 +126,15 @@ Light/dark color schemes for forms (see architecture §4.5).
   * `vpSchemeProjectDefault` (0), `vpSchemeSystem` (1), `vpSchemeLight` (2),
     `vpSchemeDark` (3), `vpSchemeIDE` (4);
   * `PROJECT_SCHEMES` (`"system"` → 1, …) and its inverse `SCHEME_NAMES`;
-  * `IDE_SCHEME_ENV = "VP6_IDE_SCHEME"`.
+  * `IDE_SCHEME_ENV = "VP6_IDE_SCHEME"`, `IDE_SCHEME_FILE_ENV =
+    "VP6_IDE_SCHEME_FILE"`, `OS_POLL_MS`.
 * **Resolution:**
   * `resolve(scheme)` turns IDE into its current meaning and anything that
     isn't Light/Dark into System;
   * `ide_scheme()` uses `ide_scheme_provider` (set by the IDE), else the
-    `VP6_IDE_SCHEME` environment variable, else System;
+    file `VP6_IDE_SCHEME_FILE` names (`_ide_scheme_file_text`: run from the
+    IDE, as it is now), else the `VP6_IDE_SCHEME` environment variable, else
+    System; `write_ide_scheme_file(path, scheme)` is the IDE's side;
   * `project_scheme_for(directory)` uses `project_scheme` (set by the
     runner), else the first `*.vp6p` in the form's folder (cached), else
     System;
@@ -140,7 +143,14 @@ Light/dark color schemes for forms (see architecture §4.5).
   * `system_is_dark()` answers from Qt's color scheme normally, or from the
     OS (`_query_os_dark`) while the IDE forces the application's scheme;
   * `set_app_override()` and `app_override_active()` are the IDE's switch
-    for that.
+    for that (it starts or stops the watcher's polling);
+  * `watcher()`: the application's one `AppearanceWatcher` (a QObject child
+    of the application, made by `_make_watcher`): `changed` when `check()`
+    sees `system_is_dark()` flip (from Qt's `colorSchemeChanged`, or a
+    `QTimer` every `OS_POLL_MS` while the scheme is forced, Qt being silent
+    then; the OS query cache cleared first), or when the IDE's scheme file
+    changes (a `QFileSystemWatcher`, watching again a replaced file); `dark`
+    is the OS appearance it last saw.
 * **Styling:**
   * `fusion_style()` returns the shared Fusion style, parented to the app.
     Don't keep what it returns: PySide invalidates the style's wrapper when a
@@ -505,6 +515,14 @@ visibility asks the form to place its docked controls again
   * keys → KeyDown, KeyPress and KeyUp, plus the Default/Cancel buttons;
   * paint → the graphics methods' drawing and Paint (`drawing.Drawing`, a base
     class of Form; `_FormClient` too when the controls are on it).
+  * the appearance watcher's `changed` → `Form._appearance_changed` (a slot
+    of the widget: disconnected when it goes): the scheme applied again when
+    forced (an IDE scheme may now mean another), then `_dark_changed`, which
+    fires `ColorSchemeChanged(Dark)` when `_is_dark()` differs from
+    `_was_dark` (not while loading) and tells the forms shown in it.
+    `DarkMode` is `_is_dark()`: a System form shown in another (`ShowIn`)
+    looks like its window (`_menu_window()`); ShowIn and leaving the container
+    note the new look quietly.
 * **`_FormType`**, Form's metaclass: default instances. For a form class (not
   `Form` itself, `_vp_base`; not one with `_vp_no_default`, the designer's
   `DesignForm` and user controls' surfaces), `__getattribute__` forwards
@@ -1024,7 +1042,10 @@ prepended to `PYTHONPATH` for programs started with F5.
   * `_view_current`.
 * **Running:**
   * `run_project` (F5, ⌘/Ctrl+Enter: the project file, with
-    `run_arguments()`, the project's `arguments` split as a shell would),
+    `run_arguments()`, the project's `arguments` split as a shell would; the
+    IDE's scheme in `VP6_IDE_SCHEME` and, live, in the file
+    `_write_ide_scheme` keeps (`VP6_IDE_SCHEME_FILE`: rewritten whenever the
+    theme manager changes, removed when the IDE closes)),
     `stop_project`, `restart_project`;
   * `_send_input` (stdin), `_on_process_finished` / `_on_process_error`;
   * `running`, `_update_title`, `_update_actions`.
@@ -1110,7 +1131,8 @@ The form designer (architecture §5.3).
     scroll area viewport's resize, so the canvas fills the window after
     maximize and restore.
   * **Scheme and frame:** `set_project_scheme`, `refresh_scheme` (also on
-    OS light/dark changes, via `_on_os_scheme_changed`),
+    OS light/dark changes, via `_on_os_scheme_changed` on the appearance
+    watcher, which sees them while the IDE forces its scheme too),
     `frame_style()`, `frame_info()`, `_on_ide_theme_changed`.
   * **Geometry:** `form_widget`, `form_canvas_rect`, `canvas_rect(name)`,
     `parent_rect(name)`, `control_at(pos)`, `container_at(pos)`.
@@ -1770,7 +1792,9 @@ explorer-style.
     (`Printer.OutputFile`), and a ComboBox of `Printers` choosing
     `Printer.DeviceName`;
   * `pgSchemes.py`: the color schemes as the option-button control array
-    `optScheme` (`SCHEMES`);
+    `optScheme` (`SCHEMES`); the page's DarkMode and Screen.DarkMode, and
+    Form_ColorSchemeChanged counting the changes and drawing a sun or a moon
+    again (`show_mode`) in an AutoRedraw PictureBox;
   * `pgKeyboard.py`: KeyPreview, KeyDown/KeyUp, KeyPress replacing or
     swallowing keys, Default and Cancel buttons, an Age box checked in
     Validate with a Help button that has CausesValidation = False,
@@ -2007,6 +2031,7 @@ All tests run headless. `conftest.py`:
 | `test_command_line.py` | `--help`: the IDE's (its options and environment variables, exit 0; Qt's options left alone), the runner's (and no project: exit 2); a program's help text (name, version, description, usage, the project's ArgumentsHelp, the VP6 version), a message box without stdout; a real program showing its help from its project file and from `vp6.runner` without starting, and starting with other arguments; ArgumentsHelp saved and in the Project Properties dialog. |
 | `test_categories_and_lock.py` | Property categories (VB's by name, a spec's own, a user control Property's, Misc otherwise); the Properties window's Categorized view (the tabs, headings in order, (Name) first in Misc, the same properties as Alphabetic, editing there, collapsing and expanding, kept across selections, opened by select_property, the heading's description, the view remembered); Lock Controls in the designer (no dragging, resizing or arrow keys; the Properties window and form resizing still work; unlocked again) and in the IDE (the Format menu's checkable item, enabled only for forms, remembered for the form when the project is opened again). |
 | `test_objectbrowser.py` | VP6's classes (properties with types, descriptions and choices, events with their arguments, methods with signatures, run-time properties), objects (App's plain attributes), Globals, constants groups, colors and schemes; the project's forms (controls, methods, not InitializeComponent), modules (constants, variables, functions with their lines, classes, a syntax error) and user controls (their Properties and Events); search; the window (libraries, details, search results choosing a class and member); in the IDE: View > Object Browser (F2), all libraries, the project's, going to a member's code or a control in its designer, refreshed with new code. |
+| `test_light_dark.py` | Form.DarkMode and Form_ColorSchemeChanged (not while loading, on ColorScheme changes, on the OS switching for System forms only), Screen.DarkMode; the watcher polling only while the scheme is forced; the IDE's scheme file (over the environment variable); designers refreshed by the watcher; the IDE writing its scheme file and rewriting it when its theme changes (removed when it closes); a real program's IDE form following the file live; a form shown in another looking like it. |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |

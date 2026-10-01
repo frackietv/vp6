@@ -227,6 +227,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `Change` | none |
 | `Scroll` | none |
 | `Timer` | none |
+| `ColorSchemeChanged` | Dark |
 | `GotFocus` | none |
 | `LostFocus` | none |
 | `MouseDown` | Button, Shift, X, Y |
@@ -353,6 +354,7 @@ Run-time only properties:
 | `Name` | the form's class name |
 | `Controls` | list of all controls on the form, including nested ones |
 | `ScaleWidth`, `ScaleHeight` | client area size |
+| `DarkMode` | whether the form looks dark now (see [color schemes](#7-color-schemes-lightdark)) |
 | `CurrentX`, `CurrentY` | where the [graphics methods](#drawing-on-forms-and-pictureboxes) draw next |
 | `Visible` | whether the form is shown; setting it calls `Show()` / `Hide()` |
 | `ActiveControl` | the form's control with the focus (a control on a [user control](#user-controls): the user control), or `None` |
@@ -417,7 +419,7 @@ self.page.ShowIn(self.picContent)     # back into the pane
 ### Form events
 
 <!-- BEGIN GENERATED: form-events -->
-Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`, `Paint`. Default event (double-click in the designer): `Load`.
+Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`, `Paint`, `ColorSchemeChanged(Dark)`. Default event (double-click in the designer): `Load`.
 <!-- END GENERATED -->
 
 * `Initialize` fires when the object is created.
@@ -429,6 +431,8 @@ Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `
   is closing; it can't cancel then). Returning `True` keeps it open; else
   `Unload` follows (and can cancel too). `vpAppWindows` and `vpFormMDIForm`
   are VB's other values, not reported yet.
+* `ColorSchemeChanged(Dark)` fires when the form turns light or dark; see
+  [color schemes](#7-color-schemes-lightdark).
 * `Paint` fires when the form needs drawing again (AutoRedraw False); see
   [drawing](#drawing-on-forms-and-pictureboxes).
 
@@ -2757,7 +2761,7 @@ A picture dropped from another program is in `OLEDragDrop`'s Data too:
 | Object | Members |
 |---|---|
 | `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started) |
-| `Screen` | `Width`, `Height` (primary screen, pixels), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
+| `Screen` | `Width`, `Height` (primary screen, pixels), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
 | `Clipboard` | `GetText(Format=vpCFText)`, `SetText(text, Format=vpCFText)` (`vpCFRTF`: rich text, as RTF source), `GetFormat(Format)` (`vpCFText`, `vpCFBitmap` / `vpCFDIB`, `vpCFRTF`, `vpCFFiles`), `GetData(Format=vpCFBitmap)` (a [Picture](#picture-objects), or with `vpCFFiles` the files' paths; `None` when there is none), `SetData(Picture)` (a Picture or a picture file), `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
 
@@ -2811,7 +2815,7 @@ file's `color_scheme` sets the default for forms left on Project Default.
 | 1 | `vpSchemeSystem` | native look, follows the OS light/dark appearance live |
 | 2 | `vpSchemeLight` | always light |
 | 3 | `vpSchemeDark` | always dark |
-| 4 | `vpSchemeIDE` | follow the VP6 IDE's light/dark setting. When run from the IDE, the setting at launch; when run on its own, System. |
+| 4 | `vpSchemeIDE` | follow the VP6 IDE's light/dark setting. When run from the IDE, live (changing the IDE's theme changes the program's forms); when run on its own, System. |
 
 * **The look of forced schemes.** Light and Dark use Qt's Fusion style with a
   fixed palette, because native styles (macOS) can't be forced per window.
@@ -2824,6 +2828,21 @@ The scheme can be changed at run time:
 
 ```python
 self.ColorScheme = vpSchemeDark
+```
+
+**Light or dark now.** A form's `DarkMode` (read-only) is whether it looks
+dark now: its scheme as it applies (System: the OS appearance; a form shown
+in another with `ShowIn`: like that form). `Screen.DarkMode` is whether the
+OS appearance is dark. `Form_ColorSchemeChanged(Dark)` fires when the form
+turns light or dark, for any reason: its `ColorScheme` (or its window's)
+changing, the OS switching between light and dark (for System forms), or
+the IDE's theme changing (for IDE forms run from the IDE). It is the place to
+draw again what the form draws itself in colors of its own:
+
+```python
+def Form_ColorSchemeChanged(self, Dark):
+    self.picChart.BackColor = RGB(30, 30, 30) if Dark else vpWhite
+    self.draw_chart()
 ```
 
 ---

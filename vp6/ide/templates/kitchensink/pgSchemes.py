@@ -1,4 +1,7 @@
-"""Kitchen Sink page: light and dark color schemes."""
+"""Kitchen Sink page: light and dark color schemes; DarkMode (the page's and
+Screen's) and Form_ColorSchemeChanged redrawing a picture of its own."""
+
+from math import cos, sin
 
 from vp6 import *
 
@@ -26,9 +29,52 @@ class pgSchemes(Form):
         self.lblSchemes = Label(self,
                                 Caption='The scheme applies to the whole window (the View menu has the same choices). A form can also have its own: the modal dialog on the Dialogs page is always Dark.',
                                 Left=290, Top=22, Width=330, Height=120, WordWrap=True, TabIndex=6)
+        self.picBadge = PictureBox(self, Left=16, Top=176, Width=96, Height=96, BorderStyle=0,
+                                   AutoRedraw=True, TabIndex=7,
+                                   ToolTipText='Drawn again in Form_ColorSchemeChanged')
+        self.lblMode = Label(self, Caption='', Left=126, Top=180, Width=494, Height=44,
+                             WordWrap=True, TabIndex=8)
+        self.lblChanges = Label(self, Caption='Form_ColorSchemeChanged: not yet', Left=126,
+                                Top=230, Width=494, Height=25, TabIndex=9)
     # endregion
 
     shell = None  # the Kitchen Sink window showing this page (None when run on its own)
+
+    def Form_Load(self):
+        self.changes = 0
+        self.show_mode()
+
+    def Form_ColorSchemeChanged(self, Dark):
+        # The page turned light or dark (its window's scheme, or the OS switching): what
+        # it draws itself is drawn again in the new colors
+        self.changes += 1
+        self.lblChanges.Caption = (f"Form_ColorSchemeChanged: {self.changes} time"
+                                   f"{'s' if self.changes != 1 else ''}, last Dark = {Dark}")
+        self.show_mode()
+
+    def show_mode(self):
+        dark = self.DarkMode
+        self.lblMode.Caption = (f"This page is {'dark' if dark else 'light'} now (DarkMode); "
+                                f"the system's appearance is "
+                                f"{'dark' if Screen.DarkMode else 'light'} (Screen.DarkMode).")
+        pic = self.picBadge  # a moon on dark, a sun on light
+        pic.BackColor = RGB(40, 44, 60) if dark else RGB(200, 230, 255)
+        pic.Cls()
+        pic.FillStyle = vpFSSolid
+        if dark:
+            pic.FillColor = RGB(240, 230, 170)
+            pic.Circle(48, 48, 30, RGB(240, 230, 170))
+            pic.FillColor = pic.BackColor  # (a bite out of it: a crescent)
+            pic.Circle(62, 38, 26, pic.BackColor)
+        else:
+            pic.FillColor = RGB(255, 200, 40)
+            pic.Circle(48, 48, 22, RGB(255, 170, 0))
+            pic.DrawWidth = 3
+            for ray in range(8):
+                angle = ray * 0.785398
+                pic.Line(48 + 28 * cos(angle), 48 + 28 * sin(angle),
+                         48 + 40 * cos(angle), 48 + 40 * sin(angle), RGB(255, 170, 0))
+            pic.DrawWidth = 1
 
     def optScheme_Click(self, Index):
         # optScheme is a control array: one handler for its four option buttons,

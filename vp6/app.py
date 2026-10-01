@@ -394,6 +394,15 @@ class _Screen:
         return len(_font_families())
 
     @property
+    def DarkMode(self) -> bool:
+        """Whether the operating system's appearance is dark now (a form's
+        DarkMode tells how that form looks)."""
+        from . import appearance
+
+        ensure_app()
+        return appearance.system_is_dark()
+
+    @property
     def ActiveForm(self):
         widget = QApplication.activeWindow()
         return getattr(widget, "_vp_form", None)

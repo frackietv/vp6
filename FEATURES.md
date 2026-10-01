@@ -1,5 +1,24 @@
 # VP6 features
 
+**Version:** 0.4.35
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- `Form.DarkMode` (whether the form looks dark now; a form shown in another: like it) and `Screen.DarkMode` (the OS appearance)
+- `Form_ColorSchemeChanged(Dark)`: the form turned light or dark (its ColorScheme or its window's, the OS switching, the IDE's theme), to draw again what it draws itself
+- Programs run from the IDE with the "IDE" color scheme follow the IDE's theme live, not only its theme at launch
+
+## IDE
+
+- The designers pick up the OS switching between light and dark live for System forms, also while the IDE is forced to Light or Dark
+
+## Kitchen Sink
+
+- The Color schemes page shows DarkMode and Screen.DarkMode, and redraws its picture (a sun or a moon) in Form_ColorSchemeChanged
+
+---
+
 **Version:** 0.4.34
 **Date:** 2026-10-01
 

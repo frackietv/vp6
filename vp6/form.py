@@ -65,6 +65,11 @@ class _FormWidget(QWidget):
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.ClickFocus)
         self.setAcceptDrops(True)  # (drag and drop: the form's events)
+        # (the widget's own slot: disconnected when it goes)
+        appearance.watcher().changed.connect(self._on_appearance_changed)
+
+    def _on_appearance_changed(self):
+        self._vp_form._appearance_changed()
 
     def closeEvent(self, event):
         # Why it closes: Unload() in code, Ctrl+C (close_all_windows), else the user
@@ -248,7 +253,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
     Events = ("Load", "QueryUnload", "Unload", "Initialize", "Activate", "Deactivate", "Resize",
               "Click", "DblClick", "MouseDown", "MouseMove", "MouseUp",
               "KeyDown", "KeyPress", "KeyUp", "DragDrop", "DragOver", "OLEDragDrop",
-              "OLEDragOver", "Paint")
+              "OLEDragOver", "Paint", "ColorSchemeChanged")
     Properties = (
         P("Caption", "str", "", always=True,
           description="The window title; defaults to the form's class name"),
@@ -622,7 +627,10 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         return appearance.resolve(self._values.get("ColorScheme", 0) or self._project_scheme())
 
     def _is_dark(self) -> bool:
-        return appearance.is_dark(self._effective_scheme())
+        scheme = self._effective_scheme()
+        if scheme == appearance.vpSchemeSystem and self._container is not None:
+            return self._menu_window()._is_dark()  # (shown in a form: it looks like it)
+        return appearance.is_dark(scheme)
 
     def _render_scheme(self) -> int:
         """The scheme used to draw the form (the designer may force System)."""
@@ -638,6 +646,33 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         self.__dict__["_scheme_forced"] = self._render_scheme() != appearance.vpSchemeSystem
         appearance.style_tree(self._widget, self._scheme_style)
         self._apply_colors()
+        self._dark_changed()
+
+    @property
+    def DarkMode(self) -> bool:
+        """Whether the form is light or dark now: its ColorScheme as it applies
+        (System: the OS appearance, which Screen.DarkMode tells)."""
+        return self._is_dark()
+
+    def _appearance_changed(self) -> None:
+        """The OS switched between light and dark, or the IDE's scheme changed:
+        draw the form again with its scheme (a forced one may have changed: IDE),
+        and tell it (ColorSchemeChanged) if it is now the other way."""
+        if self._render_scheme() != appearance.vpSchemeSystem or self._scheme_forced:
+            self._apply_ColorScheme()
+        else:
+            self._dark_changed()
+        self._widget.update()
+
+    def _dark_changed(self) -> None:
+        """Fire ColorSchemeChanged(Dark) when the form turned light or dark."""
+        dark = self._is_dark()
+        before = self.__dict__.get("_was_dark")
+        self.__dict__["_was_dark"] = dark
+        if before is not None and before != dark and self._loaded:
+            self._fire("ColorSchemeChanged", dark)
+        for form in self.__dict__.get("_embedded", ()):  # (forms shown in it look like it)
+            form._dark_changed()
 
     def _style_widget(self, widget: QWidget) -> None:
         if self._scheme_style is not None:
@@ -1032,6 +1067,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             self._menubar.setNativeMenuBar(False)
             self._layout_menu_bar()
         widget.setParent(parent, Qt.Widget)  # a child widget, no longer a window
+        self.__dict__["_was_dark"] = self._is_dark()  # (it looks like its host now)
         if visible:
             widget.show()
 
@@ -1053,6 +1089,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             watcher.parent().removeEventFilter(watcher)
             watcher.deleteLater()
         self.__dict__.update(_container=None, _watcher=None, _shown_once=False)
+        self.__dict__["_was_dark"] = self._is_dark()  # (its own look again)
         self._widget.hide()
         self._widget.setParent(None, Qt.Window)
         bar = self._menubar

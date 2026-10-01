@@ -952,6 +952,16 @@ def test_schemes_page_and_menu(sink):
     assert sink._effective_scheme() == vp6.vpSchemeLight and page.optScheme[1].Value
     page.optScheme(0).Value = True
     assert sink._effective_scheme() == vp6.vpSchemeSystem
+    # DarkMode and Form_ColorSchemeChanged: the page redraws its picture
+    light = page.DarkMode
+    page.optScheme[2].Value = True  # the window turns dark: the page in it too
+    assert page.DarkMode and "last Dark = True" in page.lblChanges.Caption
+    assert "This page is dark now" in page.lblMode.Caption
+    assert page.picBadge.Point(30, 60) == vp6.RGB(240, 230, 170)  # a moon
+    page.optScheme[1].Value = True
+    assert not page.DarkMode and "last Dark = False" in page.lblChanges.Caption
+    assert page.picBadge.Point(48, 48) == vp6.RGB(255, 200, 40)  # a sun
+    assert isinstance(light, bool)
 
 
 def test_keyboard_page(sink):

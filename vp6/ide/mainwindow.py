@@ -20,7 +20,8 @@ import vp6
 
 from .. import formfile
 from ..app import install_interrupt_handler, vp6_icon
-from ..appearance import IDE_SCHEME_ENV, SCHEME_NAMES, scheme_from_name
+from ..appearance import (IDE_SCHEME_ENV, IDE_SCHEME_FILE_ENV, SCHEME_NAMES, scheme_from_name,
+                          write_ide_scheme_file)
 from ..project import EXTENSION, SUB_MAIN, Project, copy_project
 from ..runner import import_folders
 from ..usercontrol import (load_user_control, register_user_control,
@@ -1726,8 +1727,10 @@ class MainWindow(QMainWindow):
         env.insert("PYTHONPATH", VP6_ROOT + (os.pathsep + python_path if python_path else ""))
         env.insert("PYTHONUNBUFFERED", "1")
         env.insert("PYTHONIOENCODING", "utf-8")
-        # Forms set to the "IDE" color scheme take the IDE's appearance at launch
+        # Forms set to the "IDE" color scheme take the IDE's appearance: at launch...
         env.insert(IDE_SCHEME_ENV, SCHEME_NAMES[theme_manager().ide_scheme()])
+        # ...and live: the file the IDE keeps its scheme in (_write_ide_scheme)
+        env.insert(IDE_SCHEME_FILE_ENV, self._write_ide_scheme())
         process.setProcessEnvironment(env)
         process.setWorkingDirectory(self.project.directory)
         pump_process_output(process, self.immediate)
@@ -1870,10 +1873,37 @@ class MainWindow(QMainWindow):
             self._update_actions()
 
     # -- closing ---------------------------------------------------------------------------------------------------
+    def _write_ide_scheme(self, *_) -> str:
+        """Keep the IDE's scheme in a file of its own, which the programs it runs
+        watch: forms set to the "IDE" color scheme follow it live. Returns the
+        file's path (written on the first run, then whenever the theme changes)."""
+        path = self.__dict__.get("_ide_scheme_file")
+        if path is None:
+            import tempfile
+
+            path = os.path.join(tempfile.gettempdir(), f"vp6-ide-scheme-{os.getpid()}.txt")
+            self.__dict__["_ide_scheme_file"] = path
+            theme_manager().changed.connect(self._write_ide_scheme)
+        try:
+            write_ide_scheme_file(path, theme_manager().ide_scheme())
+        except OSError:
+            pass
+        return path
+
     def closeEvent(self, event):
         if not self.close_project():
             event.ignore()
             return
+        path = self.__dict__.get("_ide_scheme_file")
+        if path is not None:
+            try:
+                theme_manager().changed.disconnect(self._write_ide_scheme)
+            except (RuntimeError, TypeError):
+                pass
+            try:
+                os.remove(path)
+            except OSError:
+                pass
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("state", self.saveState())
         event.accept()
