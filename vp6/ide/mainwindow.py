@@ -21,7 +21,7 @@ import vp6
 from .. import formfile
 from ..app import install_interrupt_handler, vp6_icon
 from ..appearance import IDE_SCHEME_ENV, SCHEME_NAMES, scheme_from_name
-from ..project import EXTENSION, SUB_MAIN, Project
+from ..project import EXTENSION, SUB_MAIN, Project, copy_project
 from ..runner import import_folders
 from ..usercontrol import (load_user_control, register_user_control,
                            unregister_user_controls, user_control_types)
@@ -236,6 +236,7 @@ class MainWindow(QMainWindow):
         self.act_new = a("&New Project…", self.new_project, QKeySequence.New, "New")
         self.act_open = a("&Open Project…", self.open_project_dialog, QKeySequence.Open, "Open")
         self.act_save = a("&Save Project", self.save_all, QKeySequence.Save, "Save")
+        self.act_save_as = a("Save Project &As…", lambda: self.save_project_as())
         self.act_close = a("&Close Project", self.close_project)
         self.act_add_form = a("Add &Form", self.add_form, None, "Form")
         self.act_add_module = a("Add &Module", self.add_module, None, "Module")
@@ -301,8 +302,8 @@ class MainWindow(QMainWindow):
     def _create_menus(self):
         bar = self.menuBar()
         file_menu = bar.addMenu("&File")
-        for act in (self.act_new, self.act_open, None, self.act_save, self.act_close, None,
-                    self.act_make, None, self.act_exit):
+        for act in (self.act_new, self.act_open, None, self.act_save, self.act_save_as,
+                    self.act_close, None, self.act_make, None, self.act_exit):
             file_menu.addSeparator() if act is None else file_menu.addAction(act)
         self.recent_menu = file_menu.addMenu("Recent Projects")
         self.recent_menu.aboutToShow.connect(self._fill_recent_menu)
@@ -493,7 +494,8 @@ class MainWindow(QMainWindow):
 
     def _update_actions(self):
         has_project = self.project is not None
-        for act in (self.act_save, self.act_close, self.act_add_form, self.act_add_module,
+        for act in (self.act_save, self.act_save_as, self.act_close, self.act_add_form,
+                    self.act_add_module,
                     self.act_add_user_control, self.act_add_file, self.act_add_folder,
                     self.act_project_props):
             act.setEnabled(has_project)
@@ -582,6 +584,35 @@ class MainWindow(QMainWindow):
                                               f"VP6 projects (*{EXTENSION})")
         if path and self.close_project():
             self.open_project(path)
+
+    def save_project_as(self, path: str | None = None) -> bool:
+        """File > Save Project As…: copy the project, unsaved changes included,
+        to a new folder (named after the new project file, unless the folder
+        chosen is empty), then work on the copy; the original stays as it was
+        last saved."""
+        if self.project is None:
+            return False
+        if path is None:
+            start = os.path.join(os.path.dirname(self.project.directory),
+                                 self.project.name + "Copy" + EXTENSION)
+            path, _ = QFileDialog.getSaveFileName(self, "Save Project As", start,
+                                                  f"VP6 projects (*{EXTENSION})")
+            if not path:
+                return False
+        if not path.endswith(EXTENSION):
+            path += EXTENSION
+        texts = {self._relative(p): d.text for p, d in self.documents.items()}
+        try:
+            copy = copy_project(self.project, path, texts)
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, "Save Project As", f"The project couldn't be copied:\n{exc}")
+            return False
+        for doc in self.documents.values():  # (the changes are in the copy now)
+            doc.text_document.setModified(False)
+        self.close_project()
+        self.open_project(copy.path)
+        self.statusBar().showMessage(f"Saved the project as {copy.path}", 6000)
+        return True
 
     def _handle_project_dialog(self, dialog: NewProjectDialog):
         if dialog.result_action == "open":

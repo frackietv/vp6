@@ -713,6 +713,16 @@ architecture §6.2).
   invalid files.
 * `make_executable(path)` adds `x` for every class of user that can read the
   file. It does nothing on Windows.
+* **Save Project As:** `copy_destination(project_file)` is (folder, project
+  file) for a copy: the folder chosen if it's empty or new, else a new folder
+  in it named after the file. `copy_project(project, project_file, texts)`
+  copies `make.project_files` (not build, dist, caches, hidden files) there,
+  the given texts (the IDE's documents, unsaved changes included) in their
+  files' place and the project file under its new name (keeping code of its
+  own around the region), then saves the project's fields as they are with
+  the new name (the file's stem: an identifier) and returns the new
+  `Project`. A ValueError for a bad name, a folder in the project's, or one
+  that isn't empty.
 * Constants: `EXTENSION = ".vp6p"`, `REGION_START` / `REGION_END`, and
   `_FIELDS` (the order the fields are written in).
 
@@ -915,6 +925,10 @@ prepended to `PYTHONPATH` for programs started with F5.
     `open_project(path)`, `close_project()`;
   * `save_all()`, `_confirm_save`, `project_properties`, `_set_startup`,
     `_project_scheme`;
+  * `save_project_as(path=None)` (File > Save Project As…, `act_save_as`;
+    asks with a save dialog, `.vp6p` added): `copy_project` with every
+    document's text, then marks them unchanged (their changes are in the
+    copy), closes the project and opens the copy;
   * `add_form`, `add_module`, `add_file` (new files go in
     `explorer.selected_group(kind)`, else where the project puts that kind),
     `remove_file`;
@@ -1533,7 +1547,9 @@ Captures the IDE process's stdout and stderr for the Output window.
     settings;
   * View Code / View Object buttons, and double-click to open;
   * `context_menu(item)` builds the context menu (testable without showing
-    it): View Code / View Object / Set as Start Up / Remove for a file;
+    it): View Code / View Object / Set as Start Up / Remove for a file, and
+    in the Project view Rename File… and Delete File… (`renamePath` and
+    `deletePath`, which the main window handles as in the Files view);
     Rename Group… / Delete Group for a group; a **Move to** submenu for files
     and groups ("(Project)" and every group but the current one and, for a
     group, its own subgroups); New Group…, Add Form, Add Module;
@@ -2010,4 +2026,5 @@ All tests run headless. `conftest.py`:
 | `test_popupmenu.py` | Form.PopupMenu: the chosen item returned after its Click (and the menu's own Click first), the bold DefaultMenu only for that time, None when closed without a choice, nothing recorded outside PopupMenu; left, right and center alignment at X, Y, the mouse's place for what is left out; not a Menu, a menu without items, a visible menu-bar menu; at design time. |
 | `test_picture.py` | Picture objects: one in memory (the graphics methods on it, transparent and filled, Cls, Image a copy, no unknown properties), LoadPicture (empty, a missing file, not a picture), SavePicture (by extension, BMP without one, a file's picture, an empty one failing); Pictures as a PictureBox's, Image's, button's Picture, the Icon, a MouseIcon, an ImageList's picture, clearing with LoadPicture(); a PictureBox's Image and PaintPicture (at its size, scaled part, a file, an empty one), a form's Image; a form's background Picture (a file relative to its folder, under the drawing, a Picture, cleared; the form file); the clipboard (pictures, files' pictures, text, RTF, files); a dropped picture in a DataObject; the exports. |
 | `test_printer.py` | The Printer, to PDF files (rendered back with QtPdf): the page's size in VP6's pixels and its margins, a box, a filled circle, a Picture and text in points where they belong; pages, NewPage first, Orientation from the next page, A4; KillDoc printing nothing; a document for the printer redirected (conftest) and printed when the program ends; no printer (RuntimeError); no Cls, Point, Image or unknown properties; Printers and choosing DeviceName; ShowPrinter's choices with and without PrinterDefault; the exports. |
+| `test_project_files.py` | Save Project As: where the copy goes (an empty or new folder, else one named after the file), what it holds (the project's files, unsaved texts, the project file renamed with its own code, the project's fields with the new name; not dist, caches or hidden files), the original untouched, errors (a bad name, the project's own folder or one in it, a folder that isn't empty), File > Save Project As in the IDE working on the copy; renaming and deleting a module's file from the Project view's menu (out of the project, to the Trash). |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (none by default, nothing copied; its own files, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |

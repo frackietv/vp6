@@ -841,6 +841,9 @@ class ProjectExplorer(QWidget):
             menu.addAction(f"Remove {os.path.basename(path)}" +
                            (" from the Project" if self.files_mode else ""),
                            lambda: self.removeFile.emit(path))
+            if not self.files_mode:  # (the Files view has its own Rename and Delete)
+                menu.addAction("Rename File…", lambda: self.renamePath.emit(path))
+                menu.addAction("Delete File…", lambda: self.deletePath.emit(path))
         if kind == "group":
             group = tuple(item.data(0, Qt.UserRole + 3))
             menu.addAction("Rename Group…", lambda: self.renameGroup.emit(group))

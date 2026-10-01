@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.4.34
+**Date:** 2026-10-01
+
+## IDE
+
+- File > Save Project As…: a copy of the project in a new folder (named after the new project file, or the empty folder chosen), unsaved changes included, without its dist, build or hidden files; the IDE then works on the copy, and the original stays as it was last saved
+- The Project Explorer's Project view renames and deletes a form's or module's file too (Rename File…, Delete File…: imports follow a new name; a deleted file goes to the Trash and leaves the project)
+
+---
+
 **Version:** 0.4.33
 **Date:** 2026-10-01
 

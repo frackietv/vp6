@@ -434,6 +434,59 @@ class Project:
         make_executable(self.path)
 
 
+def copy_destination(project_file: str) -> tuple[str, str]:
+    """Where Save Project As puts a copy chosen as ``project_file``: (its folder,
+    its project file). The chosen folder when it is empty (or doesn't exist
+    yet), else a new folder in it named after the file, as New Project makes."""
+    folder, filename = os.path.split(os.path.abspath(project_file))
+    stem = os.path.splitext(filename)[0]
+    if os.path.isdir(folder) and os.listdir(folder):
+        folder = os.path.join(folder, stem)
+    return folder, os.path.join(folder, stem + EXTENSION)
+
+
+def copy_project(project: Project, project_file: str, texts: dict[str, str] | None = None
+                 ) -> Project:
+    """Save Project As: copy the project's files (those an executable would
+    get: not build, dist, caches or hidden files) to ``copy_destination``,
+    named after the new project file (its name: the file's, which must be a
+    Python identifier). ``texts`` (relative path -> text) are the forms' and
+    modules' text as they are in the IDE, unsaved changes included. Returns
+    the new project; raises ValueError (the reason) or OSError."""
+    import shutil
+
+    from .make import project_files
+
+    folder, path = copy_destination(project_file)
+    name = os.path.splitext(os.path.basename(path))[0]
+    if not name.isidentifier():
+        raise ValueError(f"'{name}' is not a valid project name (letters, digits and _)")
+    inside = os.path.abspath(folder) + os.sep
+    if inside.startswith(project.directory + os.sep):
+        raise ValueError("The copy needs a folder of its own, not in the project's folder")
+    if os.path.isdir(folder) and os.listdir(folder):
+        raise ValueError(f"{folder} already exists and isn't empty")
+    os.makedirs(folder, exist_ok=True)
+    texts = texts or {}
+    for relative in project_files(project):
+        target = os.path.join(folder, relative)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        if os.path.abspath(project.abspath(relative)) == os.path.abspath(project.path):
+            shutil.copyfile(project.path, path)  # (code of its own around the region kept)
+        elif relative in texts:
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(texts[relative])
+        else:
+            shutil.copy2(project.abspath(relative), target)
+    copy = Project.load(project.path) if os.path.isfile(project.path) else Project()
+    for field_name in _FIELDS:  # (as it is in the IDE: unsaved project changes too)
+        setattr(copy, field_name, getattr(project, field_name))
+    copy.groups = project.tree()
+    copy.name = name
+    copy.save(path)
+    return copy
+
+
 def parse(text: str) -> dict:
     """The PROJECT dict of a project script, read without executing it."""
     start, end = _START_RE.search(text), _END_RE.search(text)
