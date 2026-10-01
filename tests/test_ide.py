@@ -641,7 +641,8 @@ def test_project_panel_sorts_by_name(window, tmp_path):
     window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
     window.add_module()  # Module2: with a form selected, into the modules' group
     explorer = window.explorer
-    assert _listed(window, "Forms") == ["Pages", "Form1", "frmDialog"]  # groups first
+    forms = ["Form1", "frmDialog", "frmMDI", "frmNote", "frmSuggest"]
+    assert _listed(window, "Forms") == ["Pages"] + forms  # groups first
     pages = _listed(window, "Forms", "Pages")
     assert pages == sorted(pages, key=str.lower)  # A to Z by default, not the project's order
     assert pages[0] == "pgArrays" and pages[-1] == "pgZOrder"
@@ -650,13 +651,13 @@ def test_project_panel_sorts_by_name(window, tmp_path):
     # The Name button cycles: A to Z with the groups among the files...
     explorer.sort_button.click()
     assert explorer.sort_button.text() == "Name ▲"
-    assert _listed(window, "Forms") == ["Form1", "frmDialog", "Pages"]
+    assert _listed(window, "Forms") == forms + ["Pages"]
     assert _listed(window, "Forms", "Pages") == pages
     # ...Z to A, groups first...
     explorer.sort_button.click()
     assert explorer.sort_button.text() == "Groups, Name ▼"
     assert _listed(window, "Forms", "Pages") == pages[::-1]
-    assert _listed(window, "Forms") == ["Pages", "frmDialog", "Form1"]
+    assert _listed(window, "Forms") == ["Pages"] + forms[::-1]
     assert _listed(window, "Modules") == ["Module2", "Module1"]
     assert explorer._current()[0].endswith("pgLists.py")  # still selected
     window.add_form()  # with a page selected: into the Pages group, in its place
@@ -667,7 +668,7 @@ def test_project_panel_sorts_by_name(window, tmp_path):
     assert explorer.sort_button.text() == "Name ▼"
     window.project.add_group(("Forms",), "Gadgets")
     window._refresh_explorer()
-    assert _listed(window, "Forms") == ["Pages", "Gadgets", "frmDialog", "Form1"]
+    assert _listed(window, "Forms") == ["Pages", "Gadgets"] + forms[::-1]
     assert explorer._current()[0].endswith("Form2.py")
     # The IDE remembers the order
     other = MainWindow()
@@ -675,7 +676,7 @@ def test_project_panel_sorts_by_name(window, tmp_path):
     other.close()
     explorer.sort_button.click()  # and back to the start
     assert explorer.sort_button.text() == "Groups, Name ▲"
-    assert _listed(window, "Forms") == ["Gadgets", "Pages", "Form1", "frmDialog"]
+    assert _listed(window, "Forms") == ["Gadgets", "Pages"] + forms
     other = MainWindow()
     assert (other.explorer.sort_descending, other.explorer.groups_first) == (False, True)
     other.close()

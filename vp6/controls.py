@@ -8556,6 +8556,9 @@ class Menu(Control):
           description="The text shown; & marks the access key (&File), and '-' makes a "
                       "separator line"),
         P("Checked", "bool", False, description="Shows a check mark next to the item"),
+        P("WindowList", "bool", False,
+          description="An MDI form's menu (or its children's): lists the open child forms, "
+                      "the active one checked, to activate one"),
         P("Enabled", "bool", True, description="Whether the item can be chosen"),
         P("Visible", "bool", True, description="Whether the item is shown"),
         P("NegotiatePosition", "enum", 0, enum_choices("None", "Left", "Middle", "Right"),
@@ -8626,6 +8629,28 @@ class Menu(Control):
 
     def _on_about_to_show(self):
         self._fire("Click")
+        if self._values.get("WindowList"):
+            self._fill_window_list()
+
+    def _fill_window_list(self) -> None:
+        """WindowList: the MDI child forms at the end of this menu."""
+        from .mdi import window_list_actions
+
+        submenu = self._submenu
+        for action in self.__dict__.get("_window_actions", []):
+            submenu.removeAction(action)
+            action.deleteLater()
+        actions = []
+        entries = window_list_actions(self)
+        if entries and submenu.actions():
+            actions.append(submenu.addSeparator())
+        for number, (caption, checked, child) in enumerate(entries, 1):
+            action = submenu.addAction(f"&{number} {caption}" if number < 10 else caption)
+            action.setCheckable(True)
+            action.setChecked(checked)
+            action.triggered.connect(lambda _=False, c=child: c._mdi_parent._activate_child(c))
+            actions.append(action)
+        self.__dict__["_window_actions"] = actions
 
     # -- properties ---------------------------------------------------------------------------
     def _apply_Caption(self, v):

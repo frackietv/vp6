@@ -20,16 +20,17 @@ from .controls import (Button, CheckBox, CodeBox, ColumnHeader, ComboBox, Comman
                        UpDown, VScrollBar, WebBrowser, WebView)
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
+from .mdi import MDIForm
 from .picture import LoadPicture, Picture, SavePicture
 from .printer import Printer, Printers
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.35"
+__version__ = "0.4.36"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Command", "Debug", "DeleteSetting", "DoEvents", "End",
     "GetAllSettings", "GetSetting", "SaveSetting", "Screen", "SendKeys",
-    "LoadPicture", "Picture", "SavePicture", "Printer", "Printers",
+    "LoadPicture", "Picture", "SavePicture", "Printer", "Printers", "MDIForm",
     "RGB", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",
     "Button", "CheckBox", "CodeBox", "ColumnHeader", "CommonDialog", "DialogCancelled", "ComboBox",

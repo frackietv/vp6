@@ -1,5 +1,23 @@
 # VP6 features
 
+**Version:** 0.4.36
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- MDI forms, as VB's: an `MDIForm` is a window whose workspace holds the forms with `MDIChild = True` (showing or loading one shows it there, loading the MDI form first; AutoShowChildren); aligned controls stay around the workspace; `ActiveForm`, `Arrange` (vpCascade, vpTileHorizontal, vpTileVertical, vpArrangeIcons), the children's Activate and Deactivate; the active child's menus replace the MDI form's; a Menu's `WindowList` lists the children; closing the MDI form unloads its children first (vpFormMDIForm); handlers `MDIForm_Load` and so on
+- `Form.ShowPopup(X, Y, Owner)`: a form shown as a popup, borderless and on top, without taking the focus from the form that opened it (e.g. suggestions under a TextBox)
+
+## IDE
+
+- Project > Add MDI Form (one a project), designed with its workspace; MDIChild in a form's properties; WindowList in the Menu Editor
+
+## Kitchen Sink
+
+- An MDI and popup forms page: a Notes window (an MDI form with note forms, their menus, Window list, tiling) and fruit suggestions in a popup under a TextBox
+
+---
+
 **Version:** 0.4.35
 **Date:** 2026-10-01
 

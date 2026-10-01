@@ -32,8 +32,9 @@ FORMS = (  # the window, its pages (in the index's order) and the modal dialog
     "pgZOrder.py", "pgTree.py", "pgListView.py", "pgGrid.py", "pgWeb.py", "pgTabs.py", "pgFiles.py",
     "pgTimer.py",
     "pgLayout.py", "pgDocking.py", "pgScrolling.py", "pgEmbedded.py", "pgDialogs.py",
-    "pgSchemes.py", "pgKeyboard.py", "pgMouse.py", "pgArrays.py", "pgMenus.py", "pgUserControl.py",
-    "pgGlobals.py", "frmDialog.py",
+    "pgSchemes.py", "pgKeyboard.py", "pgMouse.py", "pgMDI.py", "pgArrays.py", "pgMenus.py",
+    "pgUserControl.py", "pgGlobals.py", "frmDialog.py", "frmMDI.py", "frmNote.py",
+    "frmSuggest.py",
 )
 MODULES = ("Module1.py",)
 USER_CONTROLS = ("ctlRating.py",)  # a control of its own (pgUserControl.py uses it)

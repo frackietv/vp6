@@ -265,7 +265,7 @@ vpFormControlMenu = 0  # the user closed it (its close button, Alt+F4, Cmd+W)
 vpFormCode = 1  # Unload in code
 vpAppWindows = 2  # the session is ending (not reported yet)
 vpAppTaskManager = 3  # the program is being stopped (Ctrl+C in its terminal)
-vpFormMDIForm = 4  # its MDI parent form is closing (no MDI forms yet)
+vpFormMDIForm = 4  # its MDI form is closing
 vpFormOwner = 5  # the form it is shown in (ShowIn) is closing
 
 # --- MousePointer (controls, forms, Screen) ------------------------------------------
@@ -298,6 +298,12 @@ vpLeave = 1
 vpOver = 2
 vpOLEDropNone = 0  # OLEDropMode
 vpOLEDropManual = 1
+
+# --- MDIForm.Arrange -------------------------------------------------------------------
+vpCascade = 0
+vpTileHorizontal = 1
+vpTileVertical = 2
+vpArrangeIcons = 3
 
 # --- Printer.Orientation ---------------------------------------------------------------
 vpPRORPortrait = 1

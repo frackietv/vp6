@@ -404,8 +404,11 @@ class _Screen:
 
     @property
     def ActiveForm(self):
+        """The active form (of an active MDI form: its active child, as in VB)."""
         widget = QApplication.activeWindow()
-        return getattr(widget, "_vp_form", None)
+        form = getattr(widget, "_vp_form", None)
+        child = getattr(form, "ActiveForm", None) if form is not None else None
+        return child or form
 
     _pointer = 0
     MouseIcon = ""  # the picture for MousePointer = vpCustom (a file)

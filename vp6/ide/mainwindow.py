@@ -239,8 +239,9 @@ class MainWindow(QMainWindow):
         self.act_save = a("&Save Project", self.save_all, QKeySequence.Save, "Save")
         self.act_save_as = a("Save Project &As…", lambda: self.save_project_as())
         self.act_close = a("&Close Project", self.close_project)
-        self.act_add_form = a("Add &Form", self.add_form, None, "Form")
+        self.act_add_form = a("Add &Form", lambda: self.add_form(), None, "Form")
         self.act_add_module = a("Add &Module", self.add_module, None, "Module")
+        self.act_add_mdi_form = a("Add MDI F&orm", self.add_mdi_form, None, "Form")
         self.act_add_user_control = a("Add &User Control", self.add_user_control, None,
                                       "UserControl")
         self.act_add_file = a("Add F&ile…", self.add_file, "Ctrl+D")
@@ -332,8 +333,9 @@ class MainWindow(QMainWindow):
         self.view_menu = view
 
         project = bar.addMenu("&Project")
-        for act in (self.act_add_form, self.act_add_module, self.act_add_user_control,
-                    self.act_add_file, self.act_add_folder, None, self.act_wheel, None,
+        for act in (self.act_add_form, self.act_add_mdi_form, self.act_add_module,
+                    self.act_add_user_control, self.act_add_file, self.act_add_folder, None,
+                    self.act_wheel, None,
                     self.act_project_props):
             project.addSeparator() if act is None else project.addAction(act)
 
@@ -496,7 +498,7 @@ class MainWindow(QMainWindow):
     def _update_actions(self):
         has_project = self.project is not None
         for act in (self.act_save, self.act_save_as, self.act_close, self.act_add_form,
-                    self.act_add_module,
+                    self.act_add_mdi_form, self.act_add_module,
                     self.act_add_user_control, self.act_add_file, self.act_add_folder,
                     self.act_project_props):
             act.setEnabled(has_project)
@@ -960,19 +962,32 @@ class MainWindow(QMainWindow):
         return {os.path.splitext(os.path.basename(path))[0].lower()
                 for path in self.documents if path != ignore}
 
-    def add_form(self):
+    def add_form(self, base: str = "Form"):
         if self.project is None:
             return
-        name, filename = self._unique_file("Form")
+        name, filename = self._unique_file(base)
         path = self.project.abspath(filename)
         with open(path, "w", encoding="utf-8") as f:
-            f.write(formfile.new_form_source(name))
+            f.write(formfile.new_form_source(name, base=base))
         self.project.forms.append(filename)
         self.project.place_file(filename, self.explorer.selected_group("form"))
         self.project.save()
         self._add_document(open_document(path))
         self._refresh_explorer()
         self.view_object(path)
+
+    def add_mdi_form(self):
+        """Project > Add MDI Form: the window for the project's MDI child forms
+        (one a project, as in VB)."""
+        if self.project is None:
+            return
+        if any(formfile.find_form_base(d.text) == "MDIForm" for d in self.documents.values()
+               if isinstance(d, FormDocument)):
+            QMessageBox.information(self, "Add MDI Form", "The project has an MDI form already "
+                                    "(a project has one): set a form's MDIChild to show it "
+                                    "in there")
+            return
+        self.add_form("MDIForm")
 
     def add_user_control(self):
         """Project > Add User Control: a new control of your own, designed like a

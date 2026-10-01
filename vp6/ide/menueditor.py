@@ -3,7 +3,7 @@
 Like VB's, it edits the menus as one indented list: an item's level is how
 deep it is (0 = the menu bar, 1 = an item of a menu bar menu, ...). Each
 entry has a Caption ("-" for a separator), a Name, an optional Index (menu
-control arrays), a Shortcut and the Checked, Enabled and Visible flags.
+control arrays), a Shortcut and the Checked, Enabled, Visible and WindowList flags.
 
 ``entries_from(form_def)`` reads a form's menus as ``MenuEntry``s,
 ``validate(entries, ...)`` checks them, and ``menu_defs(entries)`` turns them
@@ -153,6 +153,9 @@ class MenuEditorDialog(QDialog):
         self.checked = QCheckBox("&Checked")
         self.enabled = QCheckBox("&Enabled")
         self.visible = QCheckBox("&Visible")
+        self.window_list = QCheckBox("&WindowList")
+        self.window_list.setToolTip("An MDI form's menu (or its children's): lists the open "
+                                    "child forms")
 
         fields = QGridLayout()
         for row, (text, widget) in enumerate((("Ca&ption:", self.caption),
@@ -173,7 +176,7 @@ class MenuEditorDialog(QDialog):
         fields.addWidget(negotiate_label, 3, 2, Qt.AlignRight)
         fields.addWidget(self.negotiate, 3, 3)
         flags = QHBoxLayout()
-        for box in (self.checked, self.enabled, self.visible):
+        for box in (self.checked, self.enabled, self.visible, self.window_list):
             flags.addWidget(box)
         flags.addStretch(1)
 
@@ -214,7 +217,7 @@ class MenuEditorDialog(QDialog):
         self.index.textEdited.connect(self._store)
         self.shortcut.activated.connect(self._store)
         self.negotiate.activated.connect(self._store)
-        for box_ in (self.checked, self.enabled, self.visible):
+        for box_ in (self.checked, self.enabled, self.visible, self.window_list):
             box_.toggled.connect(self._store)
         if not self.entries:
             self.entries.append(MenuEntry())
@@ -256,6 +259,7 @@ class MenuEditorDialog(QDialog):
         self.checked.setChecked(entry.checked)
         self.enabled.setChecked(entry.enabled)
         self.visible.setChecked(entry.visible)
+        self.window_list.setChecked(bool(entry.props.get("WindowList")))
         self._loading = False
         self._update_buttons()
         self.caption.setFocus()
@@ -287,6 +291,10 @@ class MenuEditorDialog(QDialog):
         entry.checked = self.checked.isChecked()
         entry.enabled = self.enabled.isChecked()
         entry.visible = self.visible.isChecked()
+        if self.window_list.isChecked():
+            entry.props["WindowList"] = True
+        else:
+            entry.props.pop("WindowList", None)  # the default
         self.list.item(self.row).setText(self._text(entry))
 
     def outdent(self) -> None:

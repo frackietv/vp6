@@ -329,6 +329,7 @@ What the arguments mean:
 | `Icon` | file path | `''` | The window's icon: an image file (relative to the form's folder); unset = the program's icon |
 | `KeyPreview` | bool | `False` | Form receives key events before its controls |
 | `Left` | int | `0` | Screen position; used with StartUpPosition Manual |
+| `MDIChild` | bool | `False` | An MDI child form: shown inside the project's MDIForm |
 | `MaxButton` | bool | `True` | Show a maximize button (sizable forms) |
 | `MinButton` | bool | `True` | Show a minimize button |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
@@ -373,6 +374,7 @@ Run-time only properties:
 | `Refresh()` | Repaints (with AutoRedraw False, `Form_Paint` fires). |
 | `Line`, `Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`, `PaintPicture` | The [graphics methods](#drawing-on-forms-and-pictureboxes); `Image` is a [Picture](#picture-objects) of what the form shows. |
 | `SetFocus()` | Activates the window. |
+| `ShowPopup(X=None, Y=None, Owner=None)` | Shows the form as a [popup](#popup-forms): borderless, on top, without taking the focus. |
 | `ShowIn(Container, Fill=True)` | Shows the form inside a container of another form (a PictureBox or Frame) or inside another form; see [Forms inside forms](#forms-inside-forms). `ShowIn(None)` makes it a window again. |
 | `Container` | Read-only: where `ShowIn` put the form, or `None` for a form in its own window. |
 | `Form1.Run()` | Classmethod: `run(Form1)`. |
@@ -416,6 +418,78 @@ self.page.ShowIn(self.picContent)     # back into the pane
   they become (hidden) windows again, so they can be shown elsewhere.
 * A form can't be shown inside itself, or inside a form it holds.
 
+### MDI forms
+
+An MDI form (`MDIForm`, VB's MDI parent) is a window whose client area is a
+workspace for its child forms, the forms whose `MDIChild` is True. A
+project has one (Project > Add MDI Form).
+
+```python
+class frmMain(MDIForm):
+    def InitializeComponent(self):
+        self.picTools = PictureBox(self, Align=vpAlignTop, Height=36)  # around the workspace
+        self.mnuWindow = Menu(self, Caption="&Window", WindowList=True)
+        self.mnuWindowTile = Menu(self.mnuWindow, Caption="&Tile")
+
+    def MDIForm_Load(self):              # (an MDI form's handlers: MDIForm_...)
+        frmDocument().Show()             # a child, in the workspace
+
+    def mnuWindowTile_Click(self):
+        self.Arrange(vpTileVertical)
+
+class frmDocument(Form):
+    def InitializeComponent(self):
+        self.MDIChild = True
+```
+
+* **Children:** showing a child (`Show()`) shows it in the workspace,
+  loading and showing the MDI form first if needed (the project's MDIForm,
+  by its default instance); `Load` of a child shows it too while the MDI
+  form's `AutoShowChildren` is True. A child can't be shown modally. Its
+  `Left`, `Top` are in the workspace; `Width`, `Height` its inside;
+  `WindowState` minimizes or maximizes it there. Several children of one
+  form class are instances of it (`frmDocument()`).
+* **The MDI form:** controls aligned to its edges (Align: toolbars, status
+  bars, PictureBoxes) stay around the workspace, which fills the rest; its
+  `BackColor` and `Picture` (tiled) are the workspace's. `ActiveForm` is the
+  active child (`Screen.ActiveForm` too); a child's Activate and Deactivate
+  fire as it becomes the active child or stops. `Arrange(vpCascade /
+  vpTileHorizontal / vpTileVertical / vpArrangeIcons)`. `ScrollBars`:
+  scroll bars when children reach beyond the workspace.
+* **Menus:** while the active child has menus, they replace the MDI form's
+  on its menu bar, as in VB (give the child the menus it needs, e.g. its own
+  Window menu). A Menu with `WindowList` (the Menu Editor's check box) lists
+  the open children at its end, the active one checked; choosing one
+  activates it.
+* **Closing:** unloading the MDI form (or closing its window) unloads its
+  children first: each one's `Form_QueryUnload(UnloadMode)` gets
+  `vpFormMDIForm`, and any of them can cancel it.
+* The MDI form's events are `MDIForm_Load`, `MDIForm_QueryUnload`,
+  `MDIForm_Unload`, `MDIForm_Resize` and so on, as in VB (`Form_...` names
+  work too). It has no BorderStyle (always sizable), font, ForeColor,
+  KeyPreview or drawing properties.
+
+### Popup forms
+
+`ShowPopup(X=None, Y=None, Owner=None)` shows a form as a popup: without a
+border, on top, and without taking the focus from the form that opened it,
+e.g. a list of suggestions under a TextBox that keeps the typing (VP6's
+own; the IDE's completion list is one). X, Y are in the owner's client area
+(default: the active form), or on the screen without an owner; left out, at
+the mouse pointer. Its events work as usual (Click, DblClick...); it hides
+with `Hide`, or when the program goes to the background. `Show()` makes it a
+window again.
+
+```python
+def txtFruit_Change(self):
+    frmSuggest.fill(matches)
+    frmSuggest.ShowPopup(self.txtFruit.Left, self.txtFruit.Top + self.txtFruit.Height, self)
+
+def txtFruit_KeyDown(self, KeyCode, Shift):   # the TextBox keeps the keys
+    if KeyCode == vpKeyDown:
+        frmSuggest.move(1)
+```
+
 ### Form events
 
 <!-- BEGIN GENERATED: form-events -->
@@ -429,8 +503,9 @@ Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `
   `vpFormCode` (`Unload` in code), `vpAppTaskManager` (Ctrl+C in the
   program's terminal), `vpFormOwner` (the form it is shown in with `ShowIn`
   is closing; it can't cancel then). Returning `True` keeps it open; else
-  `Unload` follows (and can cancel too). `vpAppWindows` and `vpFormMDIForm`
-  are VB's other values, not reported yet.
+  `Unload` follows (and can cancel too). `vpFormMDIForm`: the MDI form the
+  child is in is closing (see [MDI forms](#mdi-forms)). `vpAppWindows` is
+  VB's other value, not reported yet.
 * `ColorSchemeChanged(Dark)` fires when the form turns light or dark; see
   [color schemes](#7-color-schemes-lightdark).
 * `Paint` fires when the form needs drawing again (AutoRedraw False); see
@@ -2549,6 +2624,7 @@ Not in the Toolbox: designed with the Menu Editor.
 | `Shortcut` | shortcut key | `''` | A key that chooses the item without opening the menu, from VB's list: Ctrl+A..Z, F1..F12, Ctrl+, Shift+ and Ctrl+Shift+F1..F12, Ctrl+Shift+A..Z, Ctrl+Ins, Shift+Ins, Del, Shift+Del, Alt+Backspace |
 | `Tag` | str | `''` | Free for your own use |
 | `Visible` | bool | `True` | Whether the item is shown |
+| `WindowList` | bool | `False` | An MDI form's menu (or its children's): lists the open child forms, the active one checked, to activate one |
 
 Events: `Click`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
@@ -2899,6 +2975,7 @@ All constants are plain ints or strings.
 | Form_QueryUnload: UnloadMode | `vpFormControlMenu`, `vpFormCode`, `vpAppWindows`, `vpAppTaskManager`, `vpFormMDIForm`, `vpFormOwner` | 0, 1, 2, 3, 4, 5 |
 | MousePointer (controls, forms, Screen) | `vpDefault`, `vpArrow`, `vpCrosshair`, `vpIbeam`, `vpIconPointer`, `vpSizePointer`, `vpSizeNESW`, `vpSizeNS`, `vpSizeNWSE`, `vpSizeWE`, `vpUpArrow`, `vpHourglass`, `vpNoDrop`, `vpArrowHourglass`, `vpArrowQuestion`, `vpSizeAll`, `vpCustom` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 99 |
 | Drag and drop | `vpManual`, `vpAutomatic`, `vpCancelDrag`, `vpBeginDrag`, `vpEndDrag`, `vpEnter`, `vpLeave`, `vpOver`, `vpOLEDropNone`, `vpOLEDropManual` | 0, 1, 0, 1, 2, 0, 1, 2, 0, 1 |
+| MDIForm.Arrange | `vpCascade`, `vpTileHorizontal`, `vpTileVertical`, `vpArrangeIcons` | 0, 1, 2, 3 |
 | Printer.Orientation | `vpPRORPortrait`, `vpPRORLandscape` | 1, 2 |
 | Printer.PaperSize | `vpPRPSLetter`, `vpPRPSTabloid`, `vpPRPSLedger`, `vpPRPSLegal`, `vpPRPSExecutive`, `vpPRPSA3`, `vpPRPSA4`, `vpPRPSA5`, `vpPRPSB5`, `vpPRPSEnv10`, `vpPRPSEnvDL` | 1, 3, 4, 5, 7, 8, 9, 11, 13, 20, 27 |
 | Printer.ColorMode and Printer.Duplex | `vpPRCMMonochrome`, `vpPRCMColor`, `vpPRDPSimplex`, `vpPRDPHorizontal`, `vpPRDPVertical` | 1, 2, 1, 2, 3 |
@@ -3078,6 +3155,10 @@ It goes in the project's `dist` folder:
   a Paint handler stays (as with AutoRedraw) instead of going when the form is
   covered. There is no `DrawMode`, `FontTransparent` (text is drawn without
   a background) or `ScaleMode` (pixels only).
+* **MDI forms:** an MDI form's Picture is tiled over the workspace; a
+  project's MDI form is found by its class (the project's one MDIForm), and
+  several children of one form class are made as instances of it
+  (`frmDocument()`, VB's `New frmDocument`). `ShowPopup` is VP6's own.
 * **Printer** measures in VP6's pixels (1/96 inch), not twips, and
   `Set Printer = Printers(1)` is `Printer.DeviceName = Printers(1).DeviceName`.
   It has no `Zoom`, `PrintQuality`, `TrackDefault`, `hDC` or `DrawMode`;

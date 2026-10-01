@@ -71,6 +71,11 @@ class _FormWidget(QWidget):
     def _on_appearance_changed(self):
         self._vp_form._appearance_changed()
 
+    def _on_application_state(self, state):
+        # A popup (ShowPopup) hides when the program goes to the background
+        if self._vp_form.__dict__.get("_popup") and state != Qt.ApplicationActive:
+            self.hide()
+
     def closeEvent(self, event):
         # Why it closes: Unload() in code, Ctrl+C (close_all_windows), else the user
         mode = self._vp_form.__dict__.pop("_unload_mode", None)
@@ -105,7 +110,8 @@ class _FormWidget(QWidget):
         super().changeEvent(event)
         # Only a window follows window activation; a form shown in a container
         # is activated by being shown there (Form._embedded_visibility)
-        if event.type() == QEvent.ActivationChange and self._vp_form._container is None:
+        if event.type() == QEvent.ActivationChange and self._vp_form._container is None and \
+                self._vp_form.__dict__.get("_mdi_parent") is None:  # (MDI: the workspace's)
             self._vp_form._fire("Activate" if self.isActiveWindow() else "Deactivate")
 
     def _mouse(self, name, event, buttons):
@@ -196,7 +202,8 @@ class _FormClient(QWidget):
         self.parentWidget().mouseDoubleClickEvent(event)
 
     def event(self, event):  # drag and drop over it: the form's
-        if self.parentWidget()._form_drag_event(event, self):
+        parent = self.parentWidget()
+        if isinstance(parent, _FormWidget) and parent._form_drag_event(event, self):
             return True
         return super().event(event)
 
@@ -261,6 +268,8 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         P("Height", "int", 360, always=True, description="Client area height in pixels"),
         P("Left", "int", 0, description="Screen position; used with StartUpPosition Manual"),
         P("Top", "int", 0, description="Screen position; used with StartUpPosition Manual"),
+        P("MDIChild", "bool", False,
+          description="An MDI child form: shown inside the project's MDIForm"),
         P("StartUpPosition", "enum", 2,
           enum_choices("Manual", "CenterOwner", "CenterScreen", "Windows Default"),
           description="Where the window first appears"),
@@ -395,8 +404,9 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             bar = QMenuBar(self._widget)
             self.__dict__.update(_menubar=bar, _native_menu_bar=bar.isNativeMenuBar())
             self._style_widget(bar)
-            if self._container is not None:
-                bar.setNativeMenuBar(False)  # in a container: never the system's
+            if self._container is not None or self._values.get("MDIChild"):
+                bar.setNativeMenuBar(False)  # in a container or MDI: never the system's
+                bar.hide()  # (its menus are on its window's, or MDI form's, menu bar)
             elif not bar.isNativeMenuBar():  # macOS: the system menu bar, no room needed
                 self._make_client()
         return self._menubar
@@ -427,7 +437,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         while form._container is not None:
             container = form._container
             form = container if isinstance(container, Form) else container._owner_form()
-        return form
+        return form.__dict__.get("_mdi_parent") or form  # (an MDI child: its MDI form's)
 
     def _negotiate(self, visible: bool) -> None:
         """A form in a container became visible or hidden there: its menus join
@@ -490,7 +500,8 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
     def _layout_menu_bar(self) -> None:
         """Keep an in-window menu bar at the top and the client area below it.
         The form's Height stays the client area's, so the window grows."""
-        if self._menubar is not None and self._container is not None:
+        if self._menubar is not None and (self._container is not None or
+                                          self._values.get("MDIChild")):
             self._menubar.hide()  # in a container: its menus are on its window's bar
         if self._client is None:
             return
@@ -732,8 +743,8 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             QWidget.setTabOrder(first, second)
 
     def _apply_window_flags(self) -> None:
-        if self._container is not None:  # shown in a container: not a window
-            return
+        if self._container is not None or self.__dict__.get("_mdi_sub") is not None:
+            return  # shown in a container or an MDI form: not a window
         style = self.BorderStyle
         if style in (4, 5):
             flags = Qt.Tool
@@ -754,7 +765,8 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         self._apply_fixed_size()
 
     def _apply_fixed_size(self) -> None:
-        if self._design_mode or self._container is not None:
+        if self._design_mode or self._container is not None or \
+                self.__dict__.get("_mdi_sub") is not None:
             return
         if self.BorderStyle in (1, 3, 4):
             self._widget.setFixedSize(self._widget.size())
@@ -821,6 +833,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         self._widget.setMinimumSize(0, 0)
         self._widget.setMaximumSize(16777215, 16777215)
         self._widget.resize(max(v, 1), self._widget.height())
+        self._fit_mdi_sub()
         if self._shown_once:
             self._apply_fixed_size()
 
@@ -828,24 +841,41 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         self._widget.setMinimumSize(0, 0)
         self._widget.setMaximumSize(16777215, 16777215)
         self._widget.resize(self._widget.width(), max(v, 1) + self._menu_height)
+        self._fit_mdi_sub()
         if self._shown_once:
             self._apply_fixed_size()
 
+    def _frame(self) -> QWidget:
+        """What Left and Top move: the window, or an MDI child's subwindow."""
+        return self.__dict__.get("_mdi_sub") or self._widget
+
     def _read_Left(self):
-        return self._widget.x() if self._shown_once else self._values.get("Left", 0)
+        return self._frame().x() if self._shown_once else self._values.get("Left", 0)
 
     def _read_Top(self):
-        return self._widget.y() if self._shown_once else self._values.get("Top", 0)
+        return self._frame().y() if self._shown_once else self._values.get("Top", 0)
 
     def _apply_Left(self, v):
         if self._shown_once:
-            self._widget.move(v, self._widget.y())
+            self._frame().move(v, self._frame().y())
 
     def _apply_Top(self, v):
         if self._shown_once:
-            self._widget.move(self._widget.x(), v)
+            self._frame().move(self._frame().x(), v)
+
+    def _fit_mdi_sub(self) -> None:
+        """An MDI child resized: its subwindow fits it (Width, Height: its inside)."""
+        sub = self.__dict__.get("_mdi_sub")
+        if sub is not None and sub.widget() is not None:
+            from .mdi import _framed
+
+            sub.resize(_framed(sub, self._widget.size()))
 
     def _apply_WindowState(self, v):
+        sub = self.__dict__.get("_mdi_sub")
+        if sub is not None:  # an MDI child: its subwindow
+            {1: sub.showMinimized, 2: sub.showMaximized}.get(v, sub.showNormal)()
+            return
         if not self._shown_once or self._design_mode or self._container is not None:
             return
         state = {1: Qt.WindowMinimized, 2: Qt.WindowMaximized}.get(v, Qt.WindowNoState)
@@ -931,11 +961,32 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             self.__dict__["_loaded"] = True
             _loaded_forms.append(self)
             self._fire("Load")
+            if self._values.get("MDIChild") and not self._design_mode and self._loaded and \
+                    not self.__dict__.get("_showing"):  # (Load of an MDI child: shown too)
+                from .mdi import mdi_form_for
+
+                if mdi_form_for(self).AutoShowChildren:
+                    self.Show()
 
     def Show(self, Modal: int = 0, OwnerForm: "Form | None" = None) -> None:
-        self.Load()
+        self.__dict__["_showing"] = True
+        try:
+            self.Load()
+        finally:
+            self.__dict__["_showing"] = False
         if not self._loaded:  # Form_Load unloaded the form
             return
+        if self._values.get("MDIChild") and not self._design_mode:
+            if Modal:
+                raise RuntimeError(f"'{type(self).__name__}' is an MDI child form: it can't "
+                                   "be shown modally")
+            from .mdi import show_child
+
+            show_child(self)  # (in the MDI form's workspace)
+            return
+        if self.__dict__.pop("_popup", False):  # (shown as a popup before: a window again)
+            self.__dict__["_shown_once"] = False
+            self._widget.setAttribute(Qt.WA_ShowWithoutActivating, False)
         widget = self._widget
         if self._container is not None:  # shown in a container (ShowIn)
             self._fit_to_container()
@@ -967,11 +1018,52 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
                 widget.setWindowModality(Qt.NonModal)
 
     def Hide(self) -> None:
+        sub = self.__dict__.get("_mdi_sub")
+        if sub is not None:  # (an MDI child: its subwindow)
+            sub.hide()
         self._widget.hide()
+
+    def ShowPopup(self, X=None, Y=None, Owner: "Form | None" = None) -> None:
+        """Show the form as a popup: borderless, on top, without taking the focus
+        from the form that opened it (e.g. a list of choices under a TextBox
+        that keeps the typing). X, Y: in the owner's client area (default: the
+        active form), or on the screen without one; left out: at the mouse. It
+        hides when the program goes to the background, or with Hide."""
+        self.Load()
+        if not self._loaded:
+            return
+        if Owner is None:
+            Owner = getattr(QApplication.activeWindow(), "_vp_form", None)
+        widget = self._widget
+        widget.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint |
+                              Qt.WindowDoesNotAcceptFocus)
+        widget.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        if X is None or Y is None:
+            position = QCursor.pos()
+        elif Owner is not None:
+            position = Owner._container_widget().mapToGlobal(QPoint(int(X), int(Y)))
+        else:
+            position = QPoint(int(X), int(Y))
+        widget.move(position)
+        self.__dict__.update(_popup=True, _shown_once=True)
+        if not self.__dict__.get("_popup_watch"):
+            QGuiApplication.instance().applicationStateChanged.connect(
+                widget._on_application_state)
+            self.__dict__["_popup_watch"] = True
+        widget.show()
+        widget.raise_()
+
+    def _mdi_sub_visible(self) -> bool:
+        sub = self.__dict__.get("_mdi_sub")
+        return sub is not None and sub.isVisible()
 
     def Unload(self) -> bool:
         """Close the form. Returns False if Form_QueryUnload or Form_Unload
         cancelled it."""
+        sub = self.__dict__.get("_mdi_sub")
+        if sub is not None and sub.isVisible():  # (an MDI child: its subwindow closes)
+            self.__dict__["_unload_mode"] = VP_FORM_CODE
+            return sub.close()
         if self._widget.isVisible():
             self.__dict__["_unload_mode"] = VP_FORM_CODE
             return self._widget.close()
@@ -980,9 +1072,13 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
     def _query_unload(self, force: bool = False, mode: int = VP_FORM_CODE) -> bool:
         """Fire Form_QueryUnload(UnloadMode), then Form_Unload (each can cancel,
         unless ``force``), then unload the forms shown in this one."""
+        if self._loaded and self._fire("QueryUnload", mode) and not force:  # True -> Cancel
+            return False
+        return self._finish_unload(force)
+
+    def _finish_unload(self, force: bool = False) -> bool:
+        """Form_Unload (it can cancel, unless ``force``), then the unloading."""
         if self._loaded:
-            if self._fire("QueryUnload", mode) and not force:  # True -> Cancel
-                return False
             result = self._fire("Unload")
             if result and not force:  # Form_Unload returned True -> Cancel
                 return False
@@ -996,6 +1092,10 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             form._query_unload(force=True, mode=VP_FORM_OWNER)
             form._widget.hide()
             form._leave_container()
+        if self.__dict__.get("_mdi_parent") is not None:  # out of its MDI form's workspace
+            from .mdi import after_unload
+
+            after_unload(self)
         return True
 
     # -- showing a form inside another ------------------------------------------------------

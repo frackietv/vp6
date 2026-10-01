@@ -22,6 +22,7 @@ from .. import appearance, colors, formfile
 from .._props import normalize
 from ..controls import CONTROL_TYPES, Control
 from ..form import Form
+from ..mdi import MDIForm
 from ..formfile import ControlDef, FormDef, control_key, set_index_parameter
 from . import chrome, menueditor
 from .documents import FormDocument
@@ -64,7 +65,9 @@ def is_identifier(name: str) -> bool:
     return name.isidentifier() and not keyword.iskeyword(name)
 
 
-class DesignForm(Form):
+class _Designed:
+    """What makes a form the designer's (DesignForm, DesignMDIForm)."""
+
     _design_mode = True
     _vp_no_default = True  # (the designer's: never a program's default instance)
 
@@ -118,6 +121,24 @@ class DesignForm(Form):
         self._widget.setAutoFillBackground(True)
 
     _apply_BackColor = _apply_ForeColor = _apply_colors
+
+
+class DesignForm(_Designed, Form):
+    """The form being designed."""
+
+    _vp_no_default = True
+
+
+class DesignMDIForm(_Designed, MDIForm):
+    """An MDI form being designed: its workspace shows where the children go."""
+
+    _vp_no_default = True
+
+    def _apply_colors(self, _=None):
+        _Designed._apply_colors(self)
+        self._apply_workspace_look()  # (its BackColor: the workspace's)
+
+    _apply_BackColor = _apply_colors
 
 
 # The workspace around the form follows the IDE's light/dark appearance
@@ -539,7 +560,8 @@ class FormDesigner(QWidget):
             old.setParent(None)
             old.deleteLater()
         self.controls = {}
-        self.form = DesignForm(self)
+        mdi = formfile.find_form_base(self.document.text) == "MDIForm"
+        self.form = DesignMDIForm(self) if mdi else DesignForm(self)
         if self.form_def.kind == "usercontrol":  # its surface: only its own properties
             self.form.__dict__["_specs"] = formfile.surface_specs()
         for prop, value in self.form_def.props.items():

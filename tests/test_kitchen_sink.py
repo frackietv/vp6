@@ -964,6 +964,42 @@ def test_schemes_page_and_menu(sink):
     assert isinstance(light, bool)
 
 
+def test_mdi_page(sink):
+    page = _page(sink, "mdi")
+    page.cmdOpenMDI._widget.click()  # the Notes window, an MDI form, with two notes
+    notes = sys.modules["frmMDI"].frmMDI._vp_default_instance()
+    try:
+        assert notes.Visible and [c.Caption for c in notes._mdi_children] == ["Note 1", "Note 2"]
+        for note in notes._mdi_children:  # (opened in MDIForm_Load: their full size)
+            assert (note._widget.width(), note._widget.height()) == (280, 160)
+        assert notes.ActiveForm.Caption == "Note 2" and notes.lblActive.Caption == \
+            "ActiveForm: Note 2"
+        bar = [a.text() for a in notes._menubar.actions()]
+        assert bar == ["&Note", "&Window"]  # (the active note's menus)
+        notes.cmdNew._widget.click()
+        assert notes.ActiveForm.Caption == "Note 3"
+        notes.mnuNotesClose._on_triggered()
+        QTest.qWait(10)
+        assert [c.Caption for c in notes._mdi_children] == ["Note 1", "Note 2"]
+        notes.cmdTile._widget.click()
+        subs = [c._mdi_sub for c in notes._mdi_children]
+        assert subs[0].y() == subs[1].y() and subs[0].x() < subs[1].x()  # side by side
+    finally:
+        notes.Unload()
+    assert not notes._mdi_children
+    # The popup: suggestions under the TextBox, which keeps the focus
+    suggest = sys.modules["frmSuggest"].frmSuggest._vp_default_instance()
+    page.txtFruit.Text = "gr"
+    assert suggest.Visible and suggest.lstChoices.List == \
+        ["Grape", "Grapefruit"]
+    page.txtFruit_KeyDown(vp6.vpKeyDown, 0)
+    page.txtFruit_KeyDown(vp6.vpKeyReturn, 0)
+    assert page.txtFruit.Text == "Grapefruit" and not suggest.Visible
+    assert page.lblChosen.Caption == "Chosen: Grapefruit"
+    page.txtFruit.Text = "x"  # nothing: no list
+    assert not suggest.Visible
+
+
 def test_keyboard_page(sink):
     page = _page(sink, "keyboard")
     QTest.keyClicks(page.txtDigits._widget, "a1b2")

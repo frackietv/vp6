@@ -272,7 +272,7 @@ def test_designer_canvas_ignores_menus(designer):
     window.set_designer(d)
     rows = [window.table.item(r, 0).text() for r in range(window.table.rowCount())]
     assert rows == ["(Name)", "Index", "Caption", "Checked", "Enabled", "NegotiatePosition",
-                    "Shortcut", "Tag", "Visible"]
+                    "Shortcut", "Tag", "Visible", "WindowList"]
     assert d.set_property("Caption", "&Open File...") is None
     assert "Caption='&Open File...'" in d.document.text
     d.select(["mnuFile"])
