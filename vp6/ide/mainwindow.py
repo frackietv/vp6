@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
         self._designers: dict[str, FormDesigner] = {}
         self.code_windows: dict[str, QMdiSubWindow] = {}
         self.process: QProcess | None = None
-        self.make_process: QProcess | None = None  # File > Make Executable…, while it runs
+        self.make_process: QProcess | None = None  # Make Executable, Build Wheel: while it runs
         self._made_path: str | None = None
         self.current_tool: str | None = None
         self._last_designer: FormDesigner | None = None
@@ -243,6 +243,7 @@ class MainWindow(QMainWindow):
         self.act_add_folder = a("Add F&older…", self.add_folder)
         self.act_project_props = a("Project P&roperties…", self.project_properties)
         self.act_make = a("&Make Executable…", self.make_executable)
+        self.act_wheel = a("Build &Wheel", self.build_wheel)
         self.act_exit = a("E&xit", self.close, QKeySequence.Quit)
 
         self.act_undo = a("&Undo", lambda: self._edit("undo"), QKeySequence.Undo)
@@ -322,7 +323,8 @@ class MainWindow(QMainWindow):
 
         project = bar.addMenu("&Project")
         for act in (self.act_add_form, self.act_add_module, self.act_add_user_control,
-                    self.act_add_file, self.act_add_folder, None, self.act_project_props):
+                    self.act_add_file, self.act_add_folder, None, self.act_wheel, None,
+                    self.act_project_props):
             project.addSeparator() if act is None else project.addAction(act)
 
         fmt = bar.addMenu("F&ormat")
@@ -491,6 +493,7 @@ class MainWindow(QMainWindow):
         # (it may be called while the window is being built)
         making = getattr(self, "make_process", None) is not None
         self.act_make.setEnabled(has_project and not making)
+        self.act_wheel.setEnabled(has_project and not making)
 
     def _doc_display_name(self, doc: Document) -> str:
         return doc.name
@@ -1662,13 +1665,24 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             self.start_make(dialog.onefile.isEnabled() and dialog.onefile.isChecked())
 
-    def _make_command(self, onefile: bool) -> tuple[str, list[str]]:
-        return sys.executable, ["-u", "-m", "vp6.make", self.project.path] + \
-            (["--onefile"] if onefile else [])
+    def build_wheel(self):
+        """Project > Build Wheel: saves, then builds the project's wheel (vp6.make)
+        in the background, showing its output in the Output window."""
+        if self.project is None or self.make_process is not None:
+            return
+        if not self.save_all():  # the wheel has what is on disk
+            return
+        self.start_make(wheel=True)
 
-    def start_make(self, onefile: bool = False):
+    def _make_command(self, onefile: bool, wheel: bool = False) -> tuple[str, list[str]]:
+        return sys.executable, ["-u", "-m", "vp6.make", self.project.path] + \
+            ([] if wheel else ["--exe"]) + (["--onefile"] if onefile else [])
+
+    def start_make(self, onefile: bool = False, wheel: bool = False):
+        self._make_title = "Build Wheel" if wheel else "Make Executable"
+        self._make_what = "the wheel" if wheel else "the executable"
         self._show_dock(self.output_dock)
-        self.output.append(f"▶ Making an executable of {self.project.name}…\n", "info")
+        self.output.append(f"▶ Making {self._make_what} of {self.project.name}…\n", "info")
         process = QProcess(self)
         env = QProcessEnvironment.systemEnvironment()
         python_path = env.value("PYTHONPATH", "")
@@ -1683,7 +1697,7 @@ class MainWindow(QMainWindow):
         process.errorOccurred.connect(self._on_make_error)
         self.make_process = process
         self._made_path = None
-        process.start(*self._make_command(onefile))
+        process.start(*self._make_command(onefile, wheel))
         self.statusBar().showMessage(f"Making {self.project.name}…")
         self._update_actions()
 
@@ -1704,15 +1718,16 @@ class MainWindow(QMainWindow):
         self._update_actions()
         if code == 0 and self._made_path:
             self.output.append(f"■ Made {self._made_path}\n", "info")
-            box = QMessageBox(QMessageBox.Information, "Make Executable",
+            box = QMessageBox(QMessageBox.Information, self._make_title,
                               f"Made {self._made_path}", QMessageBox.Ok, self)
             show = box.addButton("Show in Folder", QMessageBox.ActionRole)
             box.exec()
             if box.clickedButton() is show:
                 QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(self._made_path)))
         else:
-            self.output.append(f"■ Making the executable failed (exit code {code}).\n", "err")
-            QMessageBox.warning(self, "Make Executable", "Making the executable failed: its "
+            self.output.append(f"■ Making {self._make_what} failed (exit code {code}).\n",
+                               "err")
+            QMessageBox.warning(self, self._make_title, f"Making {self._make_what} failed: its "
                                 "messages are in the Output window.")
 
     def _on_make_error(self, error):
@@ -1800,7 +1815,7 @@ def argument_parser() -> argparse.ArgumentParser:
                "its Output window\n"
                "  VP6_SETTINGS_DIR       keep the IDE's settings in an INI file in this folder\n\n"
                "Other commands: vp6-run PROJECT.vp6p (run a project), vp6-make PROJECT.vp6p "
-               "(make an executable); both take --help.",
+               "(build a wheel; --exe: an executable); both take --help.",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("project", metavar="PROJECT.vp6p", nargs="?",
                         help="a project file to open")

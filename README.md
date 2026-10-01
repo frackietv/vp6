@@ -17,7 +17,7 @@ From PyPI:
 
 ```bash
 pip install vp6                      # then: vp6 (the IDE), vp6-run Project.vp6p
-pip install "vp6[make]"              # also vp6-make: standalone executables
+pip install "vp6[make]"              # also vp6-make --exe: standalone executables
 ```
 
 From the source:
@@ -31,7 +31,9 @@ python3 -m venv .venv
 .venv/bin/vp6 --help                # the command line options (vp6-run and vp6-make too)
 ```
 
-To make standalone executables (File > Make Executable…, or `vp6-make
+To package a program as a wheel for pip (Project > Build Wheel, or `vp6-make
+Project.vp6p`), nothing more is needed; see [Building a wheel](docs/api.md#building-a-wheel).
+To make standalone executables (File > Make Executable…, or `vp6-make --exe
 Project.vp6p`), install PyInstaller too: `.venv/bin/pip install -e ".[dev,make]"`.
 Executables are made for the system they are made on (macOS, Windows,
 Linux); see [Making an executable](docs/api.md#making-an-executable).

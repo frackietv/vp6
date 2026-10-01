@@ -1,9 +1,11 @@
-"""Making standalone executables (vp6.make, vp6-make, File > Make Executable...)."""
+"""Packaging projects (vp6.make, vp6-make): wheels (the default, Project > Build
+Wheel) and standalone executables (--exe, File > Make Executable...)."""
 
 import ast
 import os
 import subprocess
 import sys
+import zipfile
 
 import pytest
 
@@ -110,7 +112,7 @@ def test_without_pyinstaller(project, monkeypatch, capsys):
     monkeypatch.setattr(make.importlib.util, "find_spec", lambda name: None)
     with pytest.raises(make.MakeError, match="needs PyInstaller"):
         make.make(project.path)
-    assert make.main([project.path]) == 1
+    assert make.main([project.path, "--exe"]) == 1
     assert 'pip install "vp6[make]"' in capsys.readouterr().err
 
 
@@ -152,20 +154,125 @@ def test_make_in_the_ide(qapp, project, monkeypatch, tmp_path):
     script.write_text("import sys\nprint('making...')\nprint('Made /x/Hello')\n"
                       "sys.exit(int(sys.argv[1]))\n")
     monkeypatch.setattr(window, "_make_command",
-                        lambda onefile: (sys.executable, [str(script), "0"]))
+                        lambda onefile, wheel=False: (sys.executable, [str(script), "0"]))
     window.start_make()
     assert window.make_process is not None and not window.act_make.isEnabled()
     wait_for(lambda: window.make_process is None, timeout_ms=10000)
     assert shown == ["Made /x/Hello"] and window.act_make.isEnabled()
     assert "making..." in window.output.output.toPlainText()
     monkeypatch.setattr(window, "_make_command",
-                        lambda onefile: (sys.executable, [str(script), "1"]))
+                        lambda onefile, wheel=False: (sys.executable, [str(script), "1"]))
     window.start_make()
     wait_for(lambda: window.make_process is None, timeout_ms=10000)
     assert warned and "Output window" in warned[0]
     command = MainWindow._make_command(window, True)[1]
-    assert command[-3:] == ["vp6.make", window.project.path, "--onefile"]
+    assert command[-4:] == ["vp6.make", window.project.path, "--exe", "--onefile"]
+    assert MainWindow._make_command(window, False, wheel=True)[1][-2:] == \
+        ["vp6.make", window.project.path]
     window.close()
+
+
+def test_build_wheel_in_the_ide(qapp, project, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    shown = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: shown.append(self.text()) or 0)
+    window = MainWindow()
+    window.open_project(project.path)
+    project_menu = [m for m in window.menuBar().actions() if m.text() == "&Project"][0].menu()
+    assert window.act_wheel in project_menu.actions() and window.act_wheel.isEnabled()
+    window.act_wheel.trigger()  # (the real vp6.make: a wheel takes a moment)
+    assert window.make_process is not None and not window.act_wheel.isEnabled()
+    wait_for(lambda: window.make_process is None, timeout_ms=30000)
+    wheel = os.path.join(project.directory, "dist", "Hello-1.0.0-py3-none-any.whl")
+    assert shown == [f"Made {wheel}"] and os.path.isfile(wheel)
+    assert window._make_title == "Build Wheel"  # (the box's title; macOS shows none)
+    assert "Building the wheel of Hello" in window.output.output.toPlainText()
+    window.close()
+
+
+# --- wheels ------------------------------------------------------------------------------
+
+def test_the_wheel(project, tmp_path):
+    project.version, project.description, project.company_name = "2.3", "Says hello", "Acme"
+    project.save()
+    lines = []
+    path = make.make_wheel(project.path, log=lines.append)
+    assert path == os.path.join(project.directory, "dist", "Hello-2.3.0-py3-none-any.whl")
+    assert lines[-1] == f"Made {path}"
+    with zipfile.ZipFile(path) as wheel:
+        names = wheel.namelist()
+        info = "Hello-2.3.0.dist-info"
+        # The project's files (as in an executable) in the package "hello", and its launcher
+        assert sorted(n for n in names if n.startswith("hello/")) == sorted(
+            [f"hello/{f}" for f in make.project_files(project)] +
+            ["hello/__init__.py", "hello/__main__.py"])
+        metadata = wheel.read(f"{info}/METADATA").decode()
+        assert "Name: Hello\nVersion: 2.3.0\nSummary: Says hello\nAuthor: Acme" in metadata
+        from vp6 import __version__
+
+        assert f"Requires-Dist: vp6>={__version__}" in metadata
+        assert "csv" not in metadata  # (the standard library)
+        entry = wheel.read(f"{info}/entry_points.txt").decode()
+        assert entry == "[console_scripts]\nHello = hello.__main__:main\n"  # (console)
+        assert "Tag: py3-none-any" in wheel.read(f"{info}/WHEEL").decode()
+        record = wheel.read(f"{info}/RECORD").decode().splitlines()
+        assert len(record) == len(names) and record[-1] == f"{info}/RECORD,,"
+        ast.parse(wheel.read("hello/__main__.py"))
+    windowed = Project.load(project.path)
+    windowed.type = "exe"
+    windowed.save()
+    with zipfile.ZipFile(make.make_wheel(project.path, str(tmp_path), log=lambda s: None)) \
+            as wheel:
+        assert wheel.read("Hello-2.3.0.dist-info/entry_points.txt").startswith(b"[gui_scripts]")
+
+
+def test_wheel_requirements(project, monkeypatch):
+    monkeypatch.setattr(make, "imported_modules",
+                        lambda p: ["csv", "PySide6", "vp6", "yaml", "nowhere"])
+    monkeypatch.setattr(make.importlib.metadata, "packages_distributions",
+                        lambda: {"yaml": ["PyYAML"]})
+    notes = []
+    from vp6 import __version__
+
+    assert make.wheel_requirements(project, notes.append) == [f"vp6>={__version__}", "PyYAML"]
+    assert notes and "'nowhere'" in notes[0]
+
+
+def test_wheel_errors(project):
+    with open(project.abspath("__main__.py"), "w") as f:
+        f.write("")
+    with pytest.raises(make.MakeError, match="__main__.py"):
+        make.make_wheel(project.path)
+
+
+def test_the_command_line(project, monkeypatch):
+    calls = []
+    monkeypatch.setattr(make, "make_wheel", lambda *args: calls.append(("wheel", args)))
+    monkeypatch.setattr(make, "make", lambda *args: calls.append(("exe", args)))
+    assert make.main([project.path]) == 0  # a wheel, by default
+    assert make.main([project.path, "--exe"]) == 0
+    assert make.main([project.path, "--onefile", "--dist", "/d"]) == 0  # (--exe implied)
+    assert calls == [("wheel", (project.path, None)), ("exe", (project.path, None, False)),
+                     ("exe", (project.path, "/d", True))]
+
+
+def test_installed_from_the_wheel(project, tmp_path):
+    # pip installs the wheel; its command and python -m run the program
+    path = make.make_wheel(project.path, log=lambda line: None)
+    site = tmp_path / "site"
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps",
+                    "--disable-pip-version-check", "--target", str(site), path],
+                   check=True, timeout=120)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(make.__file__)))
+    env = dict(os.environ, PYTHONPATH=f"{site}{os.pathsep}{root}", QT_QPA_PLATFORM="offscreen")
+    script = site / "bin" / "Hello"
+    commands = [[sys.executable, "-m", "hello"]] + ([[str(script)]] if script.exists() else [])
+    for command in commands:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60, env=env,
+                                cwd=str(tmp_path))
+        assert result.returncode == 7, result.stderr
+        assert result.stdout.split("\n")[:2] == ["Hello from a subfolder module",
+                                                  "and a data file"]
 
 
 @pytest.mark.skipif(not os.environ.get("VP6_TEST_MAKE"),

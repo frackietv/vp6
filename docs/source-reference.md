@@ -748,12 +748,28 @@ Your own controls (VB's UserControl).
   text as a module named after the file (as forms import it) and sets the
   class's DefaultSize to its designed surface.
 
-### `vp6/make.py` (≈200 lines)
+### `vp6/make.py` (≈330 lines)
 
-Makes a standalone executable of a project with PyInstaller: `vp6-make
-Name.vp6p [--onefile] [--dist DIR]`, `python -m vp6.make`, and the IDE's
-File > Make Executable…. PyInstaller makes executables for the system it
-runs on only.
+Packages a project: a wheel (`vp6-make Name.vp6p [--dist DIR]`, the IDE's
+Project > Build Wheel) or a standalone executable with PyInstaller
+(`vp6-make --exe Name.vp6p [--onefile] [--dist DIR]`, the IDE's File > Make
+Executable…); `python -m vp6.make` is the same. PyInstaller makes
+executables for the system it runs on only.
+
+* **Wheels** (written with `zipfile`, no build tools): `make_wheel(project_path,
+  dist, log)` puts `project_files` into the package `wheel_package(project)`
+  (the name in lowercase), adds an `__init__.py` (unless the project has
+  one) and `__main__.py` (`_wheel_launcher`: `main()` runs the project file
+  next to it with `run_project`; a project's own `__main__.py` is a
+  MakeError), and the `.dist-info`: METADATA (`_metadata`: name, version
+  `wheel_version` from `version_numbers`, summary, author, Python 3.10+,
+  `wheel_requirements`: `vp6>=` this version and the distributions
+  `importlib.metadata.packages_distributions()` gives for the imported
+  modules, not `sys.stdlib_module_names`, PySide6 or VP6, noting those not
+  installed), WHEEL (`py3-none-any`), entry_points.txt (`gui_scripts` for a
+  windowed project, `console_scripts` for a console one) and RECORD
+  (`_record_line`: sha256, size). `wheel_name(project)` is its file name.
+  Its last line is `Made <path>`.
 
 * `project_files(project)`: the files that go in (relative, with `/`), all
   but `EXCLUDED_FOLDERS` (`build`, `dist`, `__pycache__`, `venv`), hidden
@@ -783,8 +799,8 @@ runs on only.
   returns `output_path(...)`; `MakeError` without PyInstaller (`pip install
   "vp6[make]"`), when PyInstaller fails, or when the result isn't there.
   Its last line is `Made <path>`, which the IDE reads.
-* `main(argv)`: the `vp6-make` command (exit code 1 with the reason on
-  stderr).
+* `main(argv)`: the `vp6-make` command: a wheel, or with `--exe` (or
+  `--onefile`) an executable (exit code 1 with the reason on stderr).
 
 ### `vp6/runner.py` (≈95 lines)
 
@@ -797,8 +813,8 @@ Starts a project. `run_project(path)`:
 
 1. loads the project; with `--help` (`HELP_OPTION`) among the program's
    arguments, shows `program_help(project, prog)` (name, version,
-   description, usage, the project's `arguments_help`, VP6_PYTHON unless
-   frozen) with `show_help` (stdout, or a MsgBox when there is none: a
+   description, usage, the project's `arguments_help`, VP6_PYTHON when
+   run by its project file) with `show_help` (stdout, or a MsgBox when there is none: a
    windowed executable on Windows) and returns 0 without starting anything;
 2. puts `import_folders(project)` on `sys.path` (the project's folder, then
    every folder holding a form or module, so files in subfolders import each
@@ -922,9 +938,12 @@ prepended to `PYTHONPATH` for programs started with F5.
     (`_forget_document`, shared with `remove_file`). `_unique_file` picks a
     new form's or module's name and file in `explorer.selected_folder()`;
     `_relative(path)` is a path as the project lists it;
-  * **File > Make Executable…** (`act_make`, `make_executable`): saves
-    everything, asks with a `MakeDialog`, then `start_make(onefile)` runs
-    `python -u -m vp6.make` (`_make_command`) in a `QProcess` of its own
+  * **File > Make Executable…** (`act_make`, `make_executable`) and
+    **Project > Build Wheel** (`act_wheel`, `build_wheel`): save everything
+    (the executable asks with a `MakeDialog`), then `start_make(onefile,
+    wheel)` runs `python -u -m vp6.make` (`_make_command`: `--exe`, `--onefile`
+    for an executable; `_make_title`, `_make_what` name it in messages) in a
+    `QProcess` of its own
     (`make_process`; the action is disabled meanwhile) with VP6 on its
     PYTHONPATH, its output merged into the Output window
     (`_on_make_output`, which notes the `Made <path>` line). When it ends
@@ -1886,7 +1905,7 @@ All tests run headless. `conftest.py`:
 | `test_richtextbox.py` | The RichTextBox: text and selection (SelText across lines, replacing, clamping, Change and SelChange); formatting the selection (every Sel... property, None when mixed, the ForeColor where no color was set, None resetting the color); the format of what is typed next; paragraph alignment (one, mixed); AppendText (its own format, the selection kept, the view following the end only when it was there); Find (after the selection, match case, whole word, End, no highlight); GetLineFromChar; TextHTML, SelHTML, SaveFile/LoadFile by extension and FileType; MaxLength trimming; Locked against typing; pasting HTML without pictures or tables; ScrollBars and BorderStyle; Toolbox, icon and constants. |
 | `test_list_items.py` | ListBox and ComboBox per-item properties: ItemData read and set (any value, None until set, `IndexError` past the end), values and fonts moving with their items when sorted or another is removed, VB's `ItemData(ListIndex)`, ItemBold, ItemItalic and ItemForeColor (and None again), ItemImage by Key or Index in the ImageList (an unknown one raising, following its changes, cleared), a picture file without one.; NewIndex (at an Index, sorted in, the mark removed, -1 after RemoveItem and Clear), TopIndex, Selected set and SelCount with MultiSelect, a Checkbox ListBox (ItemCheck from the user only, not for other item changes, new items checkable, back to Standard), a Simple Combo (its list shown, choosing an item, free text, ItemData, changing Style keeping everything without Click), DropDown. |
 | `test_listview.py` | The ListView: its designer lines (`parse_column`, `parse_list_item`); ListItems (Index and Key, SubItems read and set, Add at an Index, Text, Key changes, errors, Remove, Clear); ColumnHeaders (labels, widths, alignments of existing and new cells, a new column, HideColumnHeaders); the four views keeping one selection, MultiSelect; sorting by the Text or a SubItem (as text), new and renamed items sorted in; ItemClick, HitTest and ColumnClick from the mouse, ItemCheck from the user but not code, Checkboxes off; Icons in the Icon view and SmallIcons in the others, unknown ones raising, an ImageList's changes; the form file round trip; the designer (the Properties window's Columns and Items); Toolbox, icon and constants. |
-| `test_make.py` | Making executables: the files that go in (not `dist`, `build`, caches or hidden files), the modules their code imports (not the project's own, nor relative imports; files with syntax errors skipped), the launcher, where the result goes on each system (apps, folders, one file, `.exe`), the PyInstaller command (console or windowed, one file, the project's or VP6's icon and none without Pillow, `--add-data` into the same folders with `os.pathsep`, hidden imports, VP6's folder and icons), the message without PyInstaller, `make()` with PyInstaller faked, File > Make Executable… with the process faked (success with the path, failure); with `VP6_TEST_MAKE=1` a real one-file executable made and run (its output, its data file, a module in a subfolder, its exit code). |
+| `test_make.py` | Wheels: the package of the project's files and its launcher, METADATA (version, summary, author, requirements: VP6, not the standard library), console or GUI scripts, WHEEL and RECORD; requirements from the installed distributions (noting missing ones); a project's own `__main__.py`; the command line (a wheel by default, `--exe`, `--onefile` implying it); a wheel installed with pip run by its command and `python -m`; Project > Build Wheel. Making executables: the files that go in (not `dist`, `build`, caches or hidden files), the modules their code imports (not the project's own, nor relative imports; files with syntax errors skipped), the launcher, where the result goes on each system (apps, folders, one file, `.exe`), the PyInstaller command (console or windowed, one file, the project's or VP6's icon and none without Pillow, `--add-data` into the same folders with `os.pathsep`, hidden imports, VP6's folder and icons), the message without PyInstaller, `make()` with PyInstaller faked, File > Make Executable… with the process faked (success with the path, failure); with `VP6_TEST_MAKE=1` a real one-file executable made and run (its output, its data file, a module in a subfolder, its exit code). |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line. |
 | `test_app_settings.py` | SaveSetting, GetSetting (its Default), GetAllSettings, DeleteSetting of a setting, a section or everything (in INI files of the test's own); App's title, version and descriptions from a project; the new project fields saved and loaded, and older projects' defaults; Command(); Screen.Fonts and FontCount; the Project Properties dialog's version and text fields; PrevInstance in real programs (a second copy sees the first, a third after it ends doesn't); a project's arguments reaching Command() and `sys.argv` from the project file and from `vp6.runner`. |

@@ -2961,6 +2961,36 @@ The IDE maintains this dict; code you add elsewhere in the file is kept. See
 [architecture.md §6.2](architecture.md#62-project-files-vp6p) for the full
 format.
 
+### Building a wheel
+
+A program can be packaged as a wheel, to install with pip wherever Python
+is: in the IDE **Project > Build Wheel**, or
+
+```bash
+vp6-make Calculator.vp6p                            # or: python -m vp6.make ...
+vp6-make Calculator.vp6p --dist /some/folder        # elsewhere than the project's dist
+
+pip install dist/Calculator-1.2.0-py3-none-any.whl  # then, wherever it is installed:
+Calculator                                          # its command (or: python -m calculator)
+```
+
+* **What it is:** `Name-major.minor.revision-py3-none-any.whl` in the
+  project's `dist` folder, its version the project's `Version`, its summary
+  the `Description`, its author the `CompanyName`. It works on every system
+  with Python 3.10 or later.
+* **What goes in:** the project's files, as for an executable (below), in a
+  package named after the project in lowercase (`calculator`), so the
+  program runs as from its project's folder. The command, named after the
+  project, starts it: a windowed program without a console window on
+  Windows, a console program in the terminal. `--help` and the program's
+  arguments work as with the project file.
+* **What it needs:** pip installs VP6 (this version or later, with PySide6)
+  and the packages its code imports that are installed where the wheel is
+  built (the standard library's modules aside). A module imported but not
+  installed there is mentioned and left out.
+* Nothing more is needed to build one (no PyInstaller). A project with a
+  `__main__.py` of its own can't be built: the wheel's launcher goes there.
+
 ### Making an executable
 
 A program can be made a standalone executable that runs without Python,
@@ -2969,9 +2999,9 @@ PySide6 or VP6 installed, like VB's **File > Make Project1.exe**: in the IDE
 
 ```bash
 pip install "vp6[make]"                             # PyInstaller and Pillow
-vp6-make Calculator.vp6p                            # or: python -m vp6.make ...
-vp6-make Calculator.vp6p --onefile                  # one file instead of a folder
-vp6-make Calculator.vp6p --dist /some/folder        # elsewhere than the project's dist
+vp6-make --exe Calculator.vp6p                      # or: python -m vp6.make --exe ...
+vp6-make --onefile Calculator.vp6p                  # one file instead of a folder
+vp6-make --exe Calculator.vp6p --dist /some/folder  # elsewhere than the project's dist
 ```
 
 It goes in the project's `dist` folder:

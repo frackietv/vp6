@@ -42,15 +42,18 @@ def test_the_runner(capsys):
     assert exit_.value.code == 2
 
 
-def test_program_help():
+def test_program_help(monkeypatch):
     project = Project(name="Calc", version="2.1.0", description="Adds up")
+    monkeypatch.setattr(sys, "argv", ["/apps/Calc.vp6p"])  # (run by its project file)
     text = runner.program_help(project, "Calc.vp6p")
     assert text.startswith("Calc 2.1.0 - Adds up\n")
     assert "usage: Calc.vp6p [--help] [ARGUMENTS...]" in text and "Command()" in text
     assert "VP6_PYTHON" in text and text.endswith(f"Made with VP6 {vp6.__version__}.")
     project.product_name = "Calculator"
     project.arguments_help = "--sum A B    adds A and B\n--quiet      no window"
+    monkeypatch.setattr(sys, "argv", ["/usr/bin/Calc"])  # (installed from a wheel, or made)
     text = runner.program_help(project, "Calc")
+    assert "VP6_PYTHON" not in text
     assert text.startswith("Calculator 2.1.0 - Adds up\n")
     assert "arguments:\n  --sum A B    adds A and B\n  --quiet      no window\n" in text
 

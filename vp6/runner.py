@@ -76,7 +76,7 @@ def program_help(project: Project, prog: str) -> str:
     else:
         lines += ["The program reads its arguments with Command() (sys.argv[1:]).", ""]
     lines += ["options:", f"  {HELP_OPTION:<10}show this help and exit", ""]
-    if not getattr(sys, "frozen", False):  # (the project file, not a made executable)
+    if str(sys.argv[0]).endswith(".vp6p"):  # (the project file: not a made executable or wheel)
         lines += ["environment:",
                   "  VP6_PYTHON  the Python that runs the project file (default: python3)", ""]
     from . import __version__

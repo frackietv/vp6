@@ -1,5 +1,16 @@
 # VP6 features
 
+**Version:** 0.4.30
+**Date:** 2026-10-01
+
+## Packaging
+
+- `vp6-make Name.vp6p` builds a wheel by default: the program as a Python package to install with pip, with a command named after the project (a GUI script for a windowed program, a console script for a console one; also `python -m name`), requiring VP6 and the packages its code imports; its version, summary and author from the project's Version, Description and CompanyName; built by VP6 itself, no extra tools
+- Project > Build Wheel in the IDE builds it too, its output in the Output window
+- Standalone executables are now `vp6-make --exe` (or `--onefile`); File > Make Executable is unchanged
+
+---
+
 **Version:** 0.4.29
 **Date:** 2026-10-01
 
