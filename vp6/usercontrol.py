@@ -73,17 +73,18 @@ _EVENT_RE = re.compile(r"^\s*(\w+)\s*(?:\((.*)\))?\s*$")
 
 
 def Property(Name: str, Kind: str = "str", Default=None, description: str = "",
-             choices=None) -> PropSpec:
+             choices=None, category: str = "") -> PropSpec:
     """A user control's property: its name, kind ("str", "text", "int",
     "bool", "enum", "color", "font", "file"), default value and the
     description the Properties window shows. An "enum" takes ``choices``:
-    names (numbered from 0) or (value, label) pairs."""
+    names (numbered from 0) or (value, label) pairs. ``category``: where the
+    Categorized view lists it (e.g. "Appearance"; else by its name, or Misc)."""
     if Kind == "enum" and choices and not isinstance(choices[0], tuple):
         choices = tuple((i, f"{i} - {label}") for i, label in enumerate(choices))
     if Default is None:
         Default = {"str": "", "text": "", "int": 0, "bool": False, "enum": 0,
                    "file": "", "list": []}.get(Kind)
-    return P(Name, Kind, Default, choices or (), description=description)
+    return P(Name, Kind, Default, choices or (), description=description, category=category)
 
 
 def parse_events(events) -> tuple[tuple[str, ...], dict[str, str]]:

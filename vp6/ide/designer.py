@@ -173,14 +173,16 @@ class _Overlay(QWidget):
                 if rect is None:
                     continue
                 primary = name == selection[-1]
+                # Locked controls (Format > Lock Controls) have hollow handles, as in VB
+                filled = (single or primary) and not d.locked
                 if d.is_line(name):  # a Line: handles at its two ends only
                     for handle_rect in self._line_handles(name).values():
-                        self._draw_handle(p, handle_rect, filled=single or primary)
+                        self._draw_handle(p, handle_rect, filled=filled)
                     continue
                 if not single:
                     self._draw_outline(p, rect.adjusted(-1, -1, 0, 0), Qt.DotLine)
                 for handle_rect in self._handles(rect).values():
-                    self._draw_handle(p, handle_rect, filled=single or primary)
+                    self._draw_handle(p, handle_rect, filled=filled)
         if self._drag and self._drag["kind"] in ("band", "draw") and self._drag.get("moved"):
             rect = QRect(self._drag["start"], self._drag["pos"]).normalized()
             p.fillRect(rect, QColor(0, 120, 215, 40))
@@ -232,7 +234,11 @@ class _Overlay(QWidget):
                 for key, point in zip(("p1", "p2"), self.d.line_points(name))}
 
     def _handle_at(self, pos: QPoint) -> tuple[str | None, str] | None:
+        """The handle under the mouse: (a control's name, or None for the form;
+        which handle). Locked controls have none to drag (the form has)."""
         d = self.d
+        if d.locked and d.selection:
+            return None
         if len(d.selection) == 1 and d.is_line(d.selection[0]):
             for key, handle_rect in self._line_handles(d.selection[0]).items():
                 if handle_rect.adjusted(-2, -2, 2, 2).contains(pos):
@@ -328,6 +334,8 @@ class _Overlay(QWidget):
         else:
             # Clicking an already selected control makes it the primary one
             d.select([n for n in d.selection if n != name] + [name])
+        if d.locked:  # (Format > Lock Controls: selected, not moved)
+            return
         self._drag = {"kind": "move", "start": pos, "moved": False, "primary": name,
                       "orig": {n: d.parent_rect(n) for n in d.selection},
                       "anchor": d.snap_anchor(name)}
@@ -468,6 +476,8 @@ class FormDesigner(QWidget):
         self.form_def = FormDef(document.form_def.class_name)
         self.selection: list[str] = []  # empty = the form itself
         self.tool: str | None = None
+        # Format > Lock Controls: the mouse and arrow keys don't move or resize them
+        self.locked = False
         self._undo: list[FormDef] = []
         self._redo: list[FormDef] = []
         # Set by the IDE: whether another form of the project has this name
@@ -1200,8 +1210,18 @@ class FormDesigner(QWidget):
             self.controls[name]._widget.move(rect.x() + dx, rect.y() + dy)
         self.commit_geometry(self.selection)
 
+    def set_locked(self, locked: bool) -> None:
+        """Format > Lock Controls: the controls stay where they are (the mouse
+        and the arrow keys don't move or resize them; the Properties window and
+        the Format menu still do)."""
+        self.locked = bool(locked)
+        self.overlay.update()
+
     def nudge(self, dx: int, dy: int, resize: bool = False) -> None:
         if self.menu_selected():
+            return
+        if self.locked:
+            self.statusMessage.emit("The controls are locked (Format > Lock Controls)")
             return
         for name, rect in self._selected_rects():
             if resize:

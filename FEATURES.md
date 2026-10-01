@@ -1,5 +1,16 @@
 # VP6 features
 
+**Version:** 0.4.32
+**Date:** 2026-10-01
+
+## IDE
+
+- The Properties window's Alphabetic and Categorized tabs, as VB's: Categorized lists the properties under Appearance, Behavior, Font, List, Misc, Position and Text headings, which collapse and expand with a click; the view chosen is remembered
+- A user control's `Property(..., category="Appearance")` chooses its category
+- Format > Lock Controls: the form's controls can't be moved or resized with the mouse or the arrow keys (hollow handles, as in VB); the Properties window and the Format menu still place them; remembered for each form
+
+---
+
 **Version:** 0.4.31
 **Date:** 2026-10-01
 

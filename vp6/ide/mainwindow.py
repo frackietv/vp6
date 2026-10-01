@@ -244,6 +244,9 @@ class MainWindow(QMainWindow):
         self.act_project_props = a("Project P&roperties…", self.project_properties)
         self.act_make = a("&Make Executable…", self.make_executable)
         self.act_wheel = a("Build &Wheel", self.build_wheel)
+        self.act_lock = a("&Lock Controls", self.lock_controls)
+        self.act_lock.setCheckable(True)
+        self.act_lock.setEnabled(False)  # (a form's designer or code window)
         self.act_exit = a("E&xit", self.close, QKeySequence.Quit)
 
         self.act_undo = a("&Undo", lambda: self._edit("undo"), QKeySequence.Undo)
@@ -344,6 +347,8 @@ class MainWindow(QMainWindow):
                                      lambda: self._designer_call("z_order", True), "Ctrl+J"))
         order.addAction(self._action("&Send to Back",
                                      lambda: self._designer_call("z_order", False), "Ctrl+K"))
+        fmt.addSeparator()
+        fmt.addAction(self.act_lock)
 
         run = bar.addMenu("&Run")
         for act in (self.act_run, self.act_end, self.act_restart):
@@ -1345,6 +1350,7 @@ class MainWindow(QMainWindow):
                 lambda d=designer: self._on_designer_selection(d))
             designer.formRenamed.connect(self._on_form_renamed)
             designer.statusMessage.connect(lambda m: self.statusBar().showMessage(m, 5000))
+            designer.set_locked(self.settings.value(_lock_key(path), False, type=bool))
             self._designers[path] = designer
         return designer
 
@@ -1476,6 +1482,25 @@ class MainWindow(QMainWindow):
             widget.set_tool(self.current_tool)
         # A form's code window shows the form's properties, like VB
         self._update_properties_target()
+        self._update_lock_action()
+
+    # -- Format > Lock Controls ----------------------------------------------------------------
+    def lock_controls(self, locked: bool) -> None:
+        """Lock (or unlock) the current form's controls in its designer: kept in
+        the IDE's settings for that form."""
+        designer = self._current_designer()
+        if designer is None:
+            self.act_lock.setChecked(False)
+            return
+        designer.set_locked(locked)
+        self.settings.setValue(_lock_key(designer.document.path), bool(locked))
+        self.statusBar().showMessage("The controls are locked" if locked
+                                     else "The controls can be moved again", 4000)
+
+    def _update_lock_action(self) -> None:
+        designer = self._current_designer()
+        self.act_lock.setEnabled(designer is not None)
+        self.act_lock.setChecked(designer is not None and designer.locked)
 
     def eventFilter(self, watched, event):
         # A closed MDI window is only hidden (kept for reuse), and QMdiArea
@@ -1781,6 +1806,11 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("state", self.saveState())
         event.accept()
+
+
+def _lock_key(path: str) -> str:
+    """The IDE settings key of a form's Lock Controls."""
+    return "designer/locked/" + os.path.abspath(path).replace(os.sep, "/")
 
 
 class _ProjectFiles(ProjectFiles):

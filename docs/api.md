@@ -155,9 +155,11 @@ from ctlCounter import ctlCounter
 ```
 
 * **Properties:** `Properties` lists them with `Property(Name, Kind, Default,
-  description=..., choices=...)`. Kinds are the Properties window's: `"str"`,
+  description=..., choices=..., category=...)`. Kinds are the Properties window's: `"str"`,
   `"text"`, `"int"`, `"bool"`, `"enum"` (with `choices`: names numbered from
-  0), `"color"`, `"font"`, `"file"`. They are set in the Properties window and
+  0), `"color"`, `"font"`, `"file"`; `category` is where the Properties
+  window's Categorized view lists it (`"Appearance"`, `"Behavior"`...; else
+  as VB's property of that name, or Misc). They are set in the Properties window and
   in code (`self.Value`); `UserControl_PropertyChanged(PropertyName)` follows
   every change, including each initial value and at design time, so it can
   show them. As a control it also has Left, Top, Width, Height, Visible,

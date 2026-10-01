@@ -35,8 +35,9 @@ The declarative property system shared by forms and controls.
 
 | Name | Purpose |
 |---|---|
-| `PropSpec(name, kind, default, choices, always, description)` | Frozen dataclass describing one designable property. |
+| `PropSpec(name, kind, default, choices, always, description, category)` | Frozen dataclass describing one designable property. |
 | `P(...)` | Short constructor for `PropSpec`. |
+| `category_of(spec)` | Its category in the Properties window's Categorized view: `spec.category`, else `PROPERTY_CATEGORIES` (VB's: Appearance, Behavior, Font, List, Position, Text, by property name), else Misc. |
 | `enum_choices(*labels)` | `((0, "0 - None"), (1, "1 - Fixed Single"), ...)` for `enum` properties. |
 | `normalize(kind, value)` | Coerces a value to its kind (`str`, `int`, `bool`, `color` via `colors.normalize`, `list` from a list or newline-separated string). A `file` value that is a Picture object (it has `_pixmap`) is kept as it is. |
 | `PropertyHost` | Base class. `__init_subclass__` builds `cls._specs` (name → spec) and generates a Python `property` per spec (unless the class defines one). `_init_values(props)` applies defaults and values in spec order and rejects unknown names. `_set_prop` normalizes, stores in `self._values` and calls `_apply_<Name>`. |
@@ -993,7 +994,12 @@ prepended to `PYTHONPATH` for programs started with F5.
   * `_on_subwindow_activated` binds the Properties window to the active
     designer, or to the designer of the active code window's form.
 * **Command routing:**
-  * `_designer_call(method, *args)` for the Format menu;
+  * `_designer_call(method, *args)` for the Format menu; Format > Lock
+    Controls (`act_lock`, checkable; `lock_controls`) locks the current
+    form's designer (`_current_designer`: also from its code window) and keeps
+    it in the IDE's settings (`_lock_key(path)`), read when the designer is
+    made (`_designer_for`); `_update_lock_action` checks or disables it as
+    windows are activated;
   * `_edit(op)` for the Edit menu: to the designer, the code editor, or a
     focused text field outside the MDI area;
   * `_view_current`.
@@ -1069,6 +1075,10 @@ The form designer (architecture §5.3).
     event's code; right-click opens the context menu.
   * **Keyboard:** arrows move by the grid (Ctrl: 1 px), Shift+arrows resize,
     Esc cancels the tool or selects the parent, Delete/Backspace deletes.
+  * **Locked** (`FormDesigner.locked`, `set_locked`; Format > Lock Controls):
+    `_handle_at` gives no control handles (the form's still resize), a press
+    on a control selects it without starting a move, the handles are drawn
+    hollow, and `nudge` refuses with a status message.
 * **`FormDesigner(QWidget)`** (signals: see architecture §5.3):
   * **Keys:** controls are identified by their key (`formfile.control_key`):
     `Command1`, or `cmdDigit(3)` for a control array element. `controls`,
@@ -1231,6 +1241,14 @@ Window frames painted around the designed form.
   * `select_property(name)` focuses a property's row and editor.
   * The window is bound to a target with `set_designer(target)`: a
     `FormDesigner`, or the `ProjectTarget` (see `projectprops.py`).
+  * **Alphabetic / Categorized:** `view_tabs` (a `QTabBar`; the choice kept
+    in the IDE's settings, `properties/view`); `categorized()`. Categorized,
+    `refresh` puts a heading row (`_add_heading`: bold, across both columns,
+    ▾ or ▸) before each category's properties (`category_of`, (Name) first);
+    `_specs` has the category's name in a heading's place. Clicking a heading
+    (`_on_cell_clicked`) calls `toggle_category`, which hides or shows its
+    rows; `collapsed` keeps the closed ones across refreshes, and
+    `select_property` opens a property's category.
 
 ### `vp6/ide/projectprops.py` (≈250 lines)
 
@@ -1930,6 +1948,7 @@ All tests run headless. `conftest.py`:
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line; in the whole project: Find Next and Previous from file to file and round (the designer region found too), the only match, not found; Find All (the list, going to a match, just the module); Replace All in every file (not designer regions, unsaved, one undo step each) and Replace going on to the next match; no project scope without a project. |
 | `test_app_settings.py` | SaveSetting, GetSetting (its Default), GetAllSettings, DeleteSetting of a setting, a section or everything (in INI files of the test's own); App's title, version and descriptions from a project; the new project fields saved and loaded, and older projects' defaults; Command(); Screen.Fonts and FontCount; the Project Properties dialog's version and text fields; PrevInstance in real programs (a second copy sees the first, a third after it ends doesn't); a project's arguments reaching Command() and `sys.argv` from the project file and from `vp6.runner`. |
 | `test_command_line.py` | `--help`: the IDE's (its options and environment variables, exit 0; Qt's options left alone), the runner's (and no project: exit 2); a program's help text (name, version, description, usage, the project's ArgumentsHelp, the VP6 version), a message box without stdout; a real program showing its help from its project file and from `vp6.runner` without starting, and starting with other arguments; ArgumentsHelp saved and in the Project Properties dialog. |
+| `test_categories_and_lock.py` | Property categories (VB's by name, a spec's own, a user control Property's, Misc otherwise); the Properties window's Categorized view (the tabs, headings in order, (Name) first in Misc, the same properties as Alphabetic, editing there, collapsing and expanding, kept across selections, opened by select_property, the heading's description, the view remembered); Lock Controls in the designer (no dragging, resizing or arrow keys; the Properties window and form resizing still work; unlocked again) and in the IDE (the Format menu's checkable item, enabled only for forms, remembered for the form when the project is opened again). |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |

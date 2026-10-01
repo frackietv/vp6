@@ -1,22 +1,41 @@
-"""The Properties window: object combo, property grid and description pane."""
+"""The Properties window: object combo, Alphabetic / Categorized tabs, property
+grid and description pane.
+
+Categorized (VB's) lists the properties under their categories (Appearance,
+Behavior, Font, List, Misc, Position, Text: ``_props.category_of``), each a
+heading row that collapses or expands its properties when clicked (and stays
+so while the window shows other objects). The view chosen is remembered in
+the IDE's settings."""
 
 from __future__ import annotations
 
 import os
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFontDatabase, QIntValidator, QPixmap, QIcon
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QIntValidator, QPalette, QPixmap, QIcon
 from PySide6.QtWidgets import (
     QColorDialog, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QHeaderView,
-    QLabel, QLineEdit, QMenu, QPlainTextEdit, QPushButton, QSplitter, QTableWidget,
+    QLabel, QLineEdit, QMenu, QPlainTextEdit, QPushButton, QSplitter, QTabBar, QTableWidget,
     QTableWidgetItem, QToolButton, QVBoxLayout, QWidget,
 )
 
 from .. import colors
-from .._props import PropSpec
+from .._props import PropSpec, category_of
 from ..formfile import format_value
 
 _MIXED = object()
+
+
+def _settings_value(key: str):
+    from .theme import ide_settings
+
+    return ide_settings().value(key)
+
+
+def _set_settings_value(key: str, value) -> None:
+    from .theme import ide_settings
+
+    ide_settings().setValue(key, value)
 
 INDEX_SPEC = PropSpec(
     "Index", "index", None,
@@ -93,6 +112,16 @@ class PropertiesWindow(QWidget):
         self.designer = None
         self.object_combo = QComboBox()
         self.object_combo.activated.connect(self._on_object_chosen)
+        # VB's tabs: the properties alphabetically, or under their categories
+        self.view_tabs = QTabBar()
+        self.view_tabs.addTab("Alphabetic")
+        self.view_tabs.addTab("Categorized")
+        self.view_tabs.setExpanding(False)
+        self.view_tabs.setDocumentMode(True)
+        self.view_tabs.setCurrentIndex(1 if _settings_value("properties/view") ==
+                                       "categorized" else 0)
+        self.view_tabs.currentChanged.connect(self._on_view_changed)
+        self.collapsed: set[str] = set()  # the categories collapsed
         self.table = QTableWidget(0, 2)
         self.table.horizontalHeader().hide()
         self.table.verticalHeader().hide()
@@ -104,6 +133,7 @@ class PropertiesWindow(QWidget):
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.verticalHeader().setDefaultSectionSize(22)
         self.table.currentCellChanged.connect(self._on_row_changed)
+        self.table.cellClicked.connect(self._on_cell_clicked)
         self.description = QLabel()
         self.description.setWordWrap(True)
         self.description.setAlignment(Qt.AlignTop | Qt.AlignLeft)
@@ -119,8 +149,9 @@ class PropertiesWindow(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
         layout.addWidget(self.object_combo)
+        layout.addWidget(self.view_tabs)
         layout.addWidget(splitter)
-        self._specs: list[PropSpec] = []
+        self._specs: list[PropSpec | str] = []  # a row's spec, or its category heading
         self._error_label = None
 
     # -- binding ------------------------------------------------------------------------
@@ -167,15 +198,66 @@ class PropertiesWindow(QWidget):
             supports_index = getattr(designer, "supports_index", None)
             if supports_index is not None and supports_index(objects[0]):
                 specs.insert(1, INDEX_SPEC)  # right after (Name), like VB
-        self._specs = specs
-        self.table.setRowCount(len(specs))
-        for row, spec in enumerate(specs):
+        rows: list[PropSpec | str] = list(specs)
+        if self.categorized():  # headings, then their properties (alphabetically)
+            rows = []
+            for category in sorted({category_of(spec) for spec in specs}):
+                rows.append(category)
+                rows += sorted((s for s in specs if category_of(s) == category),
+                               key=lambda s: "" if s.name == "Name" else s.name)
+        self._specs = rows
+        self.table.clearSpans()
+        self.table.setRowCount(len(rows))
+        for row, spec in enumerate(rows):
+            if isinstance(spec, str):
+                self._add_heading(row, spec)
+                continue
             label = QTableWidgetItem("(Name)" if spec.name == "Name" else spec.name)
             label.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             self.table.setItem(row, 0, label)
             self.table.setCellWidget(row, 1, self._editor(spec, self._value(objects, spec)))
-        if 0 <= current_row < len(specs):
+            self.table.setRowHidden(row, self.categorized() and
+                                    category_of(spec) in self.collapsed)
+        if 0 <= current_row < len(rows):
             self.table.setCurrentCell(current_row, 0)
+
+    # -- Alphabetic / Categorized ---------------------------------------------------------------
+    def categorized(self) -> bool:
+        return self.view_tabs.currentIndex() == 1
+
+    def _on_view_changed(self, index: int) -> None:
+        _set_settings_value("properties/view", "categorized" if index == 1 else "alphabetic")
+        self.refresh()
+
+    def _add_heading(self, row: int, category: str) -> None:
+        """A category's heading row: its name across both columns, with a
+        collapse / expand mark."""
+        mark = "\u25b8" if category in self.collapsed else "\u25be"  # (closed, open)
+        item = QTableWidgetItem(f"{mark}  {category}")
+        item.setFlags(Qt.ItemIsEnabled)
+        font = QFont(item.font())
+        font.setBold(True)
+        item.setFont(font)
+        item.setBackground(self.palette().color(QPalette.AlternateBase))
+        item.setData(Qt.UserRole, category)
+        self.table.setItem(row, 0, item)
+        self.table.setSpan(row, 0, 1, 2)
+
+    def _on_cell_clicked(self, row: int, _column: int) -> None:
+        if 0 <= row < len(self._specs) and isinstance(self._specs[row], str):
+            self.toggle_category(self._specs[row])
+
+    def toggle_category(self, category: str) -> None:
+        """Collapse an expanded category, or expand a collapsed one."""
+        if category in self.collapsed:
+            self.collapsed.discard(category)
+        else:
+            self.collapsed.add(category)
+        for row, spec in enumerate(self._specs):
+            if spec == category:
+                self._add_heading(row, category)
+            elif not isinstance(spec, str) and category_of(spec) == category:
+                self.table.setRowHidden(row, category in self.collapsed)
 
     def _value(self, objects, spec: PropSpec):
         if spec.name == "Name":  # a control array's elements share their (Name)
@@ -195,6 +277,9 @@ class PropertiesWindow(QWidget):
     def _on_row_changed(self, row, *_):
         if 0 <= row < len(self._specs):
             spec = self._specs[row]
+            if isinstance(spec, str):  # a category's heading
+                self.description.setText(f"<b>{spec}</b>")
+                return
             doc = spec.description or {
                 "name": getattr(self.designer, "name_description",
                                 "Returns the name used in code to identify an object."),
@@ -203,7 +288,9 @@ class PropertiesWindow(QWidget):
 
     def select_property(self, name: str) -> None:
         for row, spec in enumerate(self._specs):
-            if spec.name == name:
+            if not isinstance(spec, str) and spec.name == name:
+                if self.table.isRowHidden(row):  # (in a collapsed category: open it)
+                    self.toggle_category(category_of(spec))
                 self.table.setCurrentCell(row, 0)
                 editor = self.table.cellWidget(row, 1)
                 if editor is not None:

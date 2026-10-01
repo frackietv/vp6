@@ -32,10 +32,43 @@ class PropSpec:
     choices: tuple = ()  # enum: ((value, "label"), ...)
     always: bool = False  # always written to the designer region
     description: str = ""
+    # The Properties window's Categorized view; "" = from PROPERTY_CATEGORIES
+    category: str = ""
 
 
-def P(name, kind="str", default=None, choices=(), always=False, description=""):
-    return PropSpec(name, kind, default, tuple(choices), always, description)
+def P(name, kind="str", default=None, choices=(), always=False, description="", category=""):
+    return PropSpec(name, kind, default, tuple(choices), always, description, category)
+
+
+# The Properties window's Categorized view (VB's categories), by property name
+_CATEGORY_NAMES = {
+    "Appearance": "Alignment BackColor BackStyle BorderColor BorderStyle BorderWidth Caption "
+                  "Checkboxes ColorScheme CurrentLineColor DisabledPicture DownPicture "
+                  "FillColor FillStyle ForeColor GridLines HideColumnHeaders "
+                  "HighlightCurrentLine Icon Indentation LineNumbers LineStyle Orientation "
+                  "Picture Placement ProtectedColor Shape Stretch Style TextAlignment "
+                  "TickFrequency TickStyle View",
+    "Behavior": "AcceptsTab AllowUserResizing AutoIndent AutoRedraw AutoSize Cancel "
+                "CausesValidation Checked Closable Default DragMode DrawStyle DrawWidth "
+                "Editable Enabled Floatable Floating Hidden Increment Interval KeyPreview "
+                "LargeChange Locked Max Min MinSize MultiSelect NegotiateMenus "
+                "NegotiatePosition OLEDropMode Resizable ScrollBars SelectionMode ShowHidden "
+                "SmallChange SortKey SortOrder Sorted SyncBuddy TabWidth UseMnemonic UseTabs "
+                "Value Visible WindowState WordWrap Wrap",
+    "Font": "FontBold FontItalic FontName FontSize FontStrikethru FontUnderline",
+    "List": "Buttons Cols ColumnHeaders FixedCols FixedRows FormatString Icons ImageHeight "
+            "ImageList ImageWidth Items List ListImages ListItems Panels Rows SmallIcons Tabs",
+    "Position": "Align Height Left StartUpPosition Top Width X1 X2 Y1 Y2 ZIndex",
+    "Text": "Language MaxLength MultiLine PasswordChar SimpleText Text TextFormat",
+}
+PROPERTY_CATEGORIES = {name: category for category, names in _CATEGORY_NAMES.items()
+                       for name in names.split()}
+
+
+def category_of(spec: PropSpec) -> str:
+    """The spec's category in the Properties window: its own, else VB's for
+    its name, else Misc (Name, Tag, TabIndex, ToolTipText, MousePointer...)."""
+    return spec.category or PROPERTY_CATEGORIES.get(spec.name, "Misc")
 
 
 def enum_choices(*labels: str) -> tuple:
