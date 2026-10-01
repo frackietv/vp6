@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.4.31
+**Date:** 2026-10-01
+
+## IDE
+
+- Find and Replace in the whole project, as VB's Search: Current project: Find Next and Find Previous go from file to file (opening each code window), Replace All replaces in every form, user control and module (not in designer regions; unsaved, one undo step a file); Find All lists every match (in the module or the project), a double-click goes there
+
+---
+
 **Version:** 0.4.30
 **Date:** 2026-10-01
 

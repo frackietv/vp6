@@ -1,10 +1,15 @@
-"""Find and Replace in the code window, and Go to Line.
+"""Find and Replace in the code window or the whole project, and Go to Line.
 
 The search itself is plain Python (``SearchOptions``, ``compile_pattern``,
 ``find_in``, ``replacement``); ``find_as_you_type``, ``find_next``,
 ``replace_one`` and ``replace_all`` apply it to a ``CodeEditor``;
-``FindReplaceDialog`` is the non-modal Edit > Find / Replace window (it
-highlights the first match as you type) and ``ask_line`` the Go to Line box.
+``find_next_in_project``, ``find_all``, ``replace_one_in_project`` and
+``replace_all_in_project`` to every code file of the project (a
+``ProjectFiles``: its documents, and a code window for one when a match is
+shown); ``FindReplaceDialog`` is the non-modal Edit > Find / Replace window (it
+highlights the first match as you type; Search: Current module or Current
+project, as VB's; Find All lists the matches) and ``ask_line`` the Go to Line
+box.
 
 Options:
 
@@ -22,13 +27,17 @@ found, but skipped when replacing.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from typing import Callable
 
-from PySide6.QtGui import QTextCursor
-from PySide6.QtWidgets import (QCheckBox, QDialog, QGridLayout, QHBoxLayout, QInputDialog,
-                               QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget)
+from PySide6.QtGui import QTextCursor, QTextDocument
+from PySide6.QtWidgets import (QCheckBox, QDialog, QGridLayout, QGroupBox, QHBoxLayout,
+                               QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+                               QPushButton, QRadioButton, QVBoxLayout, QWidget)
+
+from .. import formfile
 
 _ASTRAL = re.compile("[\U00010000-\U0010FFFF]")
 
@@ -173,6 +182,13 @@ def find_as_you_type(editor, options: SearchOptions) -> Result:
 
 def replace_one(editor, options: SearchOptions) -> Result:
     """Replace the selection if it is a match, then find the next one."""
+    result = _replace_selection(editor, options)
+    return result if result is not None else find_next(editor, options)
+
+
+def _replace_selection(editor, options: SearchOptions) -> Result | None:
+    """Replace the editor's selection if it is a match; a Result when that
+    can't be done (else None: go on to the next match)."""
     if not options.find:
         return Result(False, "Enter the text to find")
     try:
@@ -195,7 +211,7 @@ def replace_one(editor, options: SearchOptions) -> Result:
         cursor = editor.textCursor()
         cursor.insertText(new_text)
         editor.setTextCursor(cursor)  # the cursor is now after the replacement
-    return find_next(editor, options)
+    return None
 
 
 def replace_all(editor, options: SearchOptions) -> Result:
@@ -206,33 +222,224 @@ def replace_all(editor, options: SearchOptions) -> Result:
         pattern = compile_pattern(options)
     except re.error as exc:
         return Result(False, f"Invalid regular expression: {exc}")
-    text = editor.document().toPlainText()
-    positions = _Positions(text)
-    edits, skipped = [], 0
     try:
-        for match in pattern.finditer(text):
-            start, end = positions.to_qt(match.start()), positions.to_qt(match.end())
-            if editor.range_editable(start, end):
-                edits.append((start, end, replacement(match, options)))
-            else:
-                skipped += 1
+        count, skipped = _replace_in_document(editor.document(), pattern, options,
+                                              editor.range_editable)
     except (re.error, IndexError) as exc:
         return Result(False, f"Invalid replacement: {exc}")
+    message = f"Replaced {count} occurrence{'s' if count != 1 else ''}"
+    if skipped:
+        message += f"; skipped {skipped} in the designer region"
+    if not count and not skipped:
+        return Result(False, f"'{options.find}' was not found")
+    return Result(bool(count), message)
+
+
+def _replace_in_document(document: QTextDocument, pattern: re.Pattern, options: SearchOptions,
+                         editable: Callable[[int, int], bool]) -> tuple[int, int]:
+    """Replace every match where ``editable(start, end)`` allows, as one undo
+    step. Returns (replaced, skipped). Raises re.error / IndexError for a bad
+    replacement (before changing anything)."""
+    text = document.toPlainText()
+    positions = _Positions(text)
+    edits, skipped = [], 0
+    for match in pattern.finditer(text):
+        start, end = positions.to_qt(match.start()), positions.to_qt(match.end())
+        if editable(start, end):
+            edits.append((start, end, replacement(match, options)))
+        else:
+            skipped += 1
     if edits:
-        cursor = QTextCursor(editor.document())
+        cursor = QTextCursor(document)
         cursor.beginEditBlock()
         for start, end, new_text in reversed(edits):  # later ones first: positions stay valid
             cursor.setPosition(start)
             cursor.setPosition(end, QTextCursor.KeepAnchor)
             cursor.insertText(new_text)
         cursor.endEditBlock()
-    count = len(edits)
-    message = f"Replaced {count} occurrence{'s' if count != 1 else ''}"
+    return len(edits), skipped
+
+
+# --- in the whole project ----------------------------------------------------------------------
+
+class ProjectFiles:
+    """What a project-wide search needs of the IDE (the main window gives one):
+    ``documents()``, the project's code files as (path, QTextDocument) in the
+    project's order; ``current_path()``, the file of the current code window
+    (or None); ``editor_for(path)``, its code window's editor (opened and
+    shown)."""
+
+    def documents(self) -> list[tuple[str, QTextDocument]]:
+        raise NotImplementedError
+
+    def current_path(self) -> str | None:
+        raise NotImplementedError
+
+    def editor_for(self, path: str):
+        raise NotImplementedError
+
+
+@dataclass
+class Found:
+    """A match in a file: its Qt positions, line (from 1) and that line's text."""
+    path: str
+    start: int
+    end: int
+    line: int
+    text: str
+
+
+def region_span(document: QTextDocument) -> tuple[int, int] | None:
+    """The Qt positions of a form's designer region in a document, or None."""
+    try:
+        region = formfile.find_region(document.toPlainText())
+    except formfile.FormFileError:
+        return None
+    if region is None:
+        return None
+    first = document.findBlockByNumber(region[0])
+    last = document.findBlockByNumber(region[1])
+    return first.position(), last.position() + last.length() - 1
+
+
+def _matches(path: str, document: QTextDocument, pattern: re.Pattern) -> list[Found]:
+    text = document.toPlainText()
+    positions = _Positions(text)
+    found = []
+    for match in pattern.finditer(text):
+        start, end = positions.to_qt(match.start()), positions.to_qt(match.end())
+        block = document.findBlock(start)
+        found.append(Found(path, start, end, block.blockNumber() + 1, block.text().strip()))
+    return found
+
+
+def _pattern_or_result(options: SearchOptions):
+    if not options.find:
+        return Result(False, "Enter the text to find")
+    try:
+        return compile_pattern(options)
+    except re.error as exc:
+        return Result(False, f"Invalid regular expression: {exc}")
+
+
+def find_all(files: ProjectFiles, options: SearchOptions,
+             only: str | None = None) -> tuple[list[Found], Result]:
+    """Every match in the project's code files (or in the file ``only``)."""
+    pattern = _pattern_or_result(options)
+    if isinstance(pattern, Result):
+        return [], pattern
+    found = []
+    for path, document in files.documents():
+        if only is None or path == only:
+            found += _matches(path, document, pattern)
+    if not found:
+        return [], Result(False, f"'{options.find}' was not found")
+    count = len({f.path for f in found})
+    return found, Result(True, f"{len(found)} match{'es' if len(found) != 1 else ''} in "
+                               f"{count} file{'s' if count != 1 else ''}")
+
+
+def show_found(files: ProjectFiles, found: Found) -> None:
+    """Open the match's code window and select it."""
+    editor = files.editor_for(found.path)
+    if editor is not None:
+        length = editor.document().characterCount() - 1
+        editor.select_range(min(found.start, length), min(found.end, length))
+
+
+def find_next_in_project(files: ProjectFiles, options: SearchOptions,
+                         backward: bool = False) -> Result:
+    """The next (or previous) match: in the current code window after (before)
+    the selection, then in the project's other code files in turn, then
+    round to the start (end) of the current one."""
+    pattern = _pattern_or_result(options)
+    if isinstance(pattern, Result):
+        return pattern
+    documents = files.documents()
+    if not documents:
+        return Result(False, "The project has no code files")
+    by_path = dict(documents)
+    paths = list(by_path)
+    current = files.current_path()
+
+    def pick(found):
+        return found[-1] if backward else found[0]
+
+    if current not in by_path:  # no code window of the project: from its first (last) file
+        for path in (reversed(paths) if backward else paths):
+            found = _matches(path, by_path[path], pattern)
+            if found:
+                show_found(files, pick(found))
+                return Result(True)
+        return Result(False, f"'{options.find}' was not found in the project")
+    cursor = files.editor_for(current).textCursor()
+    selection = (cursor.selectionStart(), cursor.selectionEnd())
+    here = [f for f in _matches(current, by_path[current], pattern)
+            if (f.start, f.end) != selection]
+    onward = [f for f in here if f.end <= selection[0]] if backward else \
+        [f for f in here if f.start >= selection[1]]
+    if onward:
+        show_found(files, pick(onward))
+        return Result(True)
+    index = paths.index(current)
+    order = list(reversed(paths[:index])) + list(reversed(paths[index + 1:])) if backward \
+        else paths[index + 1:] + paths[:index]
+    where = "beginning" if backward else "end"
+    wrapped = Result(True, f"Passed the {where} of the project, continued from the other end")
+    for path in order:
+        found = _matches(path, by_path[path], pattern)
+        if found:
+            show_found(files, pick(found))
+            # (past the last file, or before the first: round the project)
+            return wrapped if (paths.index(path) > index) == backward else Result(True)
+    if here:  # round to the other end of this file
+        show_found(files, pick(here))
+        return wrapped
+    if selection[0] != selection[1]:
+        text = by_path[current].toPlainText()
+        positions = _Positions(text)
+        if pattern.fullmatch(text, positions.from_qt(selection[0]),
+                             positions.from_qt(selection[1])):
+            return Result(True, "This is the only match")
+    return Result(False, f"'{options.find}' was not found in the project")
+
+
+def replace_one_in_project(files: ProjectFiles, options: SearchOptions) -> Result:
+    """Replace the selection in the current code window if it is a match, then
+    find the next match in the project."""
+    path = files.current_path()
+    if path is not None:
+        editor = files.editor_for(path)
+        result = _replace_selection(editor, options)
+        if result is not None:
+            return result
+    return find_next_in_project(files, options)
+
+
+def replace_all_in_project(files: ProjectFiles, options: SearchOptions) -> Result:
+    """Replace every match in the project's code files (each file one undo
+    step, the files left unsaved), except in forms' designer regions."""
+    pattern = _pattern_or_result(options)
+    if isinstance(pattern, Result):
+        return pattern
+    count = skipped = changed = 0
+    for path, document in files.documents():
+        span = region_span(document)
+        try:
+            done, missed = _replace_in_document(
+                document, pattern, options,
+                lambda start, end: span is None or end < span[0] or start > span[1])
+        except (re.error, IndexError) as exc:
+            return Result(False, f"Invalid replacement: {exc}")
+        count, skipped = count + done, skipped + missed
+        changed += bool(done)
+    if not count and not skipped:
+        return Result(False, f"'{options.find}' was not found in the project")
+    message = (f"Replaced {count} occurrence{'s' if count != 1 else ''} in {changed} "
+               f"file{'s' if changed != 1 else ''}")
     if skipped:
-        message += f"; skipped {skipped} in the designer region"
-    if not edits and not skipped:
-        return Result(False, f"'{options.find}' was not found")
-    return Result(bool(edits), message)
+        message += f"; skipped {skipped} in designer regions"
+    return Result(bool(count), message)
 
 
 # --- the dialogs --------------------------------------------------------------------------------
@@ -241,13 +448,17 @@ class FindReplaceDialog(QDialog):
     """Edit > Find / Replace: stays open while you work in the code window.
 
     ``get_editor()`` returns the code editor to search (or None), so the
-    dialog always works on the current code window."""
+    dialog always works on the current code window; ``files`` (a
+    ProjectFiles) gives the project's code files for Search: Current project
+    (without it, only Current module)."""
 
-    def __init__(self, get_editor: Callable[[], object], parent: QWidget | None = None):
+    def __init__(self, get_editor: Callable[[], object], parent: QWidget | None = None,
+                 files: ProjectFiles | None = None):
         super().__init__(parent)
         self.setWindowTitle("Find")
         self.setModal(False)
         self._get_editor = get_editor
+        self._files = files
 
         self.find_edit = QLineEdit()
         self.replace_edit = QLineEdit()
@@ -262,17 +473,34 @@ class FindReplaceDialog(QDialog):
                               "groups (\\1, \\g<name>) in the find and replace text")
         self.status = QLabel()
         self.status.setWordWrap(True)
+        # VB's Search: where Find Next, Replace and Replace All look
+        self.scope_module = QRadioButton("Current &module")
+        self.scope_project = QRadioButton("Current pro&ject")
+        self.scope_module.setChecked(True)
+        self.scope_project.setEnabled(files is not None)
+        scope = QGroupBox("Search")
+        scope_layout = QVBoxLayout(scope)
+        scope_layout.addWidget(self.scope_module)
+        scope_layout.addWidget(self.scope_project)
+        # Find All: every match, listed; double-click (or Enter) on one goes there
+        self.results = QListWidget()
+        self.results.setVisible(False)
+        self.results.itemActivated.connect(self._show_result)
+        self.found: list[Found] = []
 
         self.find_next_button = QPushButton("&Find Next")
         self.find_previous_button = QPushButton("Find Pre&vious")
         self.replace_button = QPushButton("&Replace")
         self.replace_all_button = QPushButton("Replace &All")
+        self.find_all_button = QPushButton("Find A&ll")
+        self.find_all_button.setToolTip("List every match (in the module or the project)")
         close_button = QPushButton("Close")
         self.find_next_button.setDefault(True)
         self.find_next_button.clicked.connect(self.find_next)
         self.find_previous_button.clicked.connect(self.find_previous)
         self.replace_button.clicked.connect(self.replace)
         self.replace_all_button.clicked.connect(self.replace_all)
+        self.find_all_button.clicked.connect(self.find_all)
         close_button.clicked.connect(self.close)
 
         fields = QGridLayout()
@@ -282,18 +510,27 @@ class FindReplaceDialog(QDialog):
         fields.addWidget(self.replace_edit, 1, 1)
         left = QVBoxLayout()
         left.addLayout(fields)
+        options = QHBoxLayout()
+        boxes = QVBoxLayout()
         for box in (self.match_case, self.whole_word, self.regex):
-            left.addWidget(box)
+            boxes.addWidget(box)
+        boxes.addStretch(1)
+        options.addLayout(boxes, 1)
+        options.addWidget(scope)
+        left.addLayout(options)
         left.addWidget(self.status)
         left.addStretch(1)
         buttons = QVBoxLayout()
-        for button in (self.find_next_button, self.find_previous_button, self.replace_button,
-                       self.replace_all_button, close_button):
+        for button in (self.find_next_button, self.find_previous_button, self.find_all_button,
+                       self.replace_button, self.replace_all_button, close_button):
             buttons.addWidget(button)
         buttons.addStretch(1)
-        layout = QHBoxLayout(self)
-        layout.addLayout(left, 1)
-        layout.addLayout(buttons)
+        top = QHBoxLayout()
+        top.addLayout(left, 1)
+        top.addLayout(buttons)
+        layout = QVBoxLayout(self)
+        layout.addLayout(top)
+        layout.addWidget(self.results, 1)
         self.find_edit.textChanged.connect(self._on_find_text_changed)
         for box in (self.match_case, self.whole_word, self.regex):
             box.toggled.connect(self._on_option_toggled)
@@ -331,26 +568,62 @@ class FindReplaceDialog(QDialog):
         self.find_edit.setFocus()
         self.find_edit.selectAll()
 
-    def _run(self, action) -> Result:
-        editor = self._get_editor()
-        if editor is None:
-            result = Result(False, "Open a code window to search in")
+    def in_project(self) -> bool:
+        """Search: Current project (else Current module)."""
+        return self._files is not None and self.scope_project.isChecked()
+
+    def _run(self, action, project_action=None) -> Result:
+        if project_action is not None and self.in_project():
+            result = project_action(self._files, self.options())
         else:
-            result = action(editor, self.options())
+            editor = self._get_editor()
+            if editor is None:
+                result = Result(False, "Open a code window to search in")
+            else:
+                result = action(editor, self.options())
         self.status.setText(result.message)
         return result
 
     def find_next(self) -> Result:
-        return self._run(find_next)
+        return self._run(find_next, find_next_in_project)
 
     def find_previous(self) -> Result:
-        return self._run(lambda editor, options: find_next(editor, options, backward=True))
+        return self._run(lambda editor, options: find_next(editor, options, backward=True),
+                         lambda files, options: find_next_in_project(files, options,
+                                                                     backward=True))
 
     def replace(self) -> Result:
-        return self._run(replace_one)
+        return self._run(replace_one, replace_one_in_project)
 
     def replace_all(self) -> Result:
-        return self._run(replace_all)
+        return self._run(replace_all, replace_all_in_project)
+
+    def find_all(self) -> Result:
+        """List every match (the module's, or the project's) under the dialog."""
+        self.results.clear()
+        if self._files is None:
+            result = Result(False, "Find All needs a project")
+            self.found = []
+        else:
+            only = None if self.in_project() else self._files.current_path()
+            if not self.in_project() and only is None:
+                self.found, result = [], Result(False, "Open a code window to search in")
+            else:
+                self.found, result = find_all(self._files, self.options(), only)
+        for found in self.found:
+            name = os.path.basename(found.path)
+            item = QListWidgetItem(f"{name}:{found.line}:  {found.text}")
+            item.setToolTip(found.path)
+            self.results.addItem(item)
+        self.results.setVisible(bool(self.found))
+        if self.found and self.height() < 460:  # (room for the list)
+            self.resize(max(self.width(), 640), 460)
+        self.status.setText(result.message)
+        return result
+
+    def _show_result(self, item: QListWidgetItem) -> None:
+        found = self.found[self.results.row(item)]
+        show_found(self._files, found)
 
 
 def ask_line(editor, parent: QWidget | None = None) -> int | None:

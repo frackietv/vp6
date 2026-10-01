@@ -31,7 +31,7 @@ from .designer import FormDesigner, is_identifier
 from .dialogs import AboutDialog, MakeDialog, NewProjectDialog, ProjectPropertiesDialog
 from .splash import SplashScreen
 from .documents import Document, FormDocument, open_document
-from .findreplace import FindReplaceDialog, ask_line
+from .findreplace import FindReplaceDialog, ProjectFiles, ask_line
 from .options import OptionsDialog
 from .outline import OutlineWindow
 from .outputcapture import OutputCapture
@@ -1561,7 +1561,7 @@ class MainWindow(QMainWindow):
 
     def _find_dialog(self) -> FindReplaceDialog:
         if self.find_dialog is None:
-            self.find_dialog = FindReplaceDialog(self._code_editor, self)
+            self.find_dialog = FindReplaceDialog(self._code_editor, self, _ProjectFiles(self))
         return self.find_dialog
 
     def show_find(self):
@@ -1781,6 +1781,29 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("state", self.saveState())
         event.accept()
+
+
+class _ProjectFiles(ProjectFiles):
+    """The open project's code files, for Find / Replace in the whole project."""
+
+    def __init__(self, window: "MainWindow"):
+        self._window = window
+
+    def documents(self):
+        window = self._window
+        if window.project is None:
+            return []
+        paths = [window.project.abspath(relative) for relative in window.project.files()]
+        return [(path, window.documents[path].text_document) for path in paths
+                if path in window.documents]
+
+    def current_path(self):
+        sub = self._window.mdi.currentSubWindow()  # (also while the dialog is active)
+        return self._window._path_of(sub.widget()) if sub is not None else None
+
+    def editor_for(self, path):
+        window = self._window.view_code(path)
+        return window.editor if window is not None else None
 
 
 def create_project(location: str, name: str, template: str) -> str:

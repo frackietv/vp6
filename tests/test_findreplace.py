@@ -242,3 +242,100 @@ def test_goto_line(ide, tmp_path, monkeypatch):
     monkeypatch.setattr(QInputDialog, "getInt", staticmethod(lambda *args: (1, False)))
     ide.act_goto_line.trigger()  # cancelled: stays
     assert editor.current_line() == 3
+
+
+# --- in the whole project ---------------------------------------------------------------------
+
+@pytest.fixture
+def project_ide(ide, tmp_path):
+    """The Demo project with "needle" in Form1 (its code and its designer region),
+    Module1 and a second module."""
+    folder = os.path.join(tmp_path, "Demo")
+    form1, module1 = os.path.join(folder, "Form1.py"), os.path.join(folder, "Module1.py")
+    form = ide.documents[form1]
+    text = form.text.replace("    # endregion", "        self.Caption = 'needle'\n"
+                             "    # endregion", 1)
+    form.replace_text(text + "\n# needle in the form's code\n")
+    ide.documents[module1].replace_text(ide.documents[module1].text +
+                                        "\n# a needle\n# another NEEDLE\n")
+    ide.add_module()  # Module2 (after Module1 in the project)
+    module2 = next(p for p in ide.documents if p.endswith("Module2.py"))
+    ide.documents[module2].replace_text("# the last needle\n")
+    ide.view_code(form1).editor.moveCursor(QTextCursor.Start)
+    dialog = ide._find_dialog()
+    dialog.show_find()
+    dialog.find_edit.setText("needle")
+    dialog.scope_project.setChecked(True)
+    yield ide, dialog, form1, module1, module2
+    dialog.close()
+
+
+def _where(ide):
+    """The current code window's file and selection."""
+    sub = ide.mdi.currentSubWindow()
+    path = ide._path_of(sub.widget())
+    return os.path.basename(path), sub.widget().editor.textCursor().selectedText()
+
+
+def test_find_next_and_previous_through_the_project(project_ide):
+    ide, dialog, form1, module1, module2 = project_ide
+    ide.view_code(form1).editor.moveCursor(QTextCursor.Start)
+    seen = []
+    for _ in range(6):
+        result = dialog.find_next()
+        seen.append(_where(ide))
+    # Form1 (the region's caption, its code), Module1 (twice), Module2, then round again
+    assert [name for name, _ in seen] == ["Form1.py", "Form1.py", "Module1.py", "Module1.py",
+                                          "Module2.py", "Form1.py"]
+    assert seen[3][1] == "NEEDLE" and "Passed the end of the project" in result.message
+    result = dialog.find_previous()  # back round to the last one
+    assert _where(ide) == ("Module2.py", "needle") and "beginning" in result.message
+    dialog.find_previous()
+    assert _where(ide) == ("Module1.py", "NEEDLE")
+    dialog.match_case.setChecked(True)
+    dialog.find_edit.setText("NEEDLE")
+    assert dialog.find_next().message == "This is the only match"
+    dialog.find_edit.setText("nowhere")
+    assert "not found in the project" in dialog.find_next().message
+
+
+def test_find_all(project_ide):
+    ide, dialog, form1, module1, module2 = project_ide
+    result = dialog.find_all()
+    assert result.message == "5 matches in 3 files" and dialog.results.isVisible()
+    rows = [dialog.results.item(i).text() for i in range(dialog.results.count())]
+    assert rows[0] == "Form1.py:" + str(dialog.found[0].line) + ":  self.Caption = 'needle'"
+    assert rows[-1].startswith("Module2.py:1:") and "the last needle" in rows[-1]
+    dialog.results.itemActivated.emit(dialog.results.item(3))  # goes there
+    assert _where(ide) == ("Module1.py", "NEEDLE")
+    dialog.scope_module.setChecked(True)  # just the current module
+    assert dialog.find_all().message == "2 matches in 1 file"
+    dialog.find_edit.setText("nowhere")
+    dialog.find_all()
+    assert not dialog.results.isVisible()
+
+
+def test_replace_in_the_project(project_ide):
+    ide, dialog, form1, module1, module2 = project_ide
+    dialog.replace_edit.setText("pin")
+    result = dialog.replace_all()  # not in the designer region
+    assert result.message == "Replaced 4 occurrences in 3 files; skipped 1 in designer regions"
+    assert "# a pin\n# another pin" in ide.documents[module1].text
+    assert "self.Caption = 'needle'" in ide.documents[form1].text
+    assert "# pin in the form's code" in ide.documents[form1].text
+    assert ide.documents[module2].modified and ide.documents[module2].text == "# the last pin\n"
+    ide.documents[module1].text_document.undo()  # one undo step a file
+    assert "# a needle\n# another NEEDLE" in ide.documents[module1].text
+    # Replace: the selected match, then on to the next one in the project
+    ide.view_code(module1).editor.moveCursor(QTextCursor.Start)
+    dialog.find_next()
+    assert _where(ide) == ("Module1.py", "needle")
+    dialog.replace()
+    assert "# a pin\n# another NEEDLE" in ide.documents[module1].text
+    assert _where(ide) == ("Module1.py", "NEEDLE")
+
+
+def test_scope_needs_a_project():
+    dialog = FindReplaceDialog(lambda: None)
+    assert not dialog.scope_project.isEnabled() and not dialog.in_project()
+    assert dialog.find_all().message == "Find All needs a project"
