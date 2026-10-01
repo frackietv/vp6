@@ -51,6 +51,7 @@ vp6/                    runtime library - "from vp6 import *"
     panels.py           Toolbox, Project Explorer, Immediate and Output windows
     outputcapture.py    captures the IDE's own stdout/stderr for the Output window
     outline.py          the Outline window: structure of the current file
+    objectbrowser.py    the Object Browser: VP6's and the project's classes and members
     documents.py        Document / FormDocument (open files)
     dialogs.py          New Project, Project Properties, About
     splash.py           the splash screen shown while the IDE starts

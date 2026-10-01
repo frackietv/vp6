@@ -1,5 +1,17 @@
 # VP6 features
 
+**Version:** 0.4.33
+**Date:** 2026-10-01
+
+## IDE
+
+- The Object Browser (View > Object Browser, F2), as VB's: a library list (All Libraries, VP6, the project), the classes and their members, and each member's declaration and description in the details pane
+- VP6: the controls and Form (properties with their types, choices and defaults, methods with their arguments, events with theirs), the other classes (Picture, ControlArray...), the objects (App, Screen, Clipboard, Debug, Printer, Printers, Forms), the functions (Globals) and every group of constants
+- The project: its forms and user controls (controls, methods, a user control's properties and events) and modules (functions, classes, constants, variables), read from the code as it is; double-click one to go to its code, or a control to its form's designer
+- Search lists the classes and members whose names match
+
+---
+
 **Version:** 0.4.32
 **Date:** 2026-10-01
 

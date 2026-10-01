@@ -32,6 +32,7 @@ from .dialogs import AboutDialog, MakeDialog, NewProjectDialog, ProjectPropertie
 from .splash import SplashScreen
 from .documents import Document, FormDocument, open_document
 from .findreplace import FindReplaceDialog, ProjectFiles, ask_line
+from .objectbrowser import ObjectBrowser
 from .options import OptionsDialog
 from .outline import OutlineWindow
 from .outputcapture import OutputCapture
@@ -62,6 +63,7 @@ class MainWindow(QMainWindow):
         self.current_tool: str | None = None
         self._last_designer: FormDesigner | None = None
         self.find_dialog: FindReplaceDialog | None = None  # created when first needed
+        self.object_browser: ObjectBrowser | None = None  # (View > Object Browser)
         self._pending_fits: list = []  # subwindows to fit once the window is shown
         # The project's user controls are loaded again a moment after one is edited
         self._user_control_timer = QTimer(self)
@@ -272,6 +274,8 @@ class MainWindow(QMainWindow):
 
         self.act_view_code = a("&Code", lambda: self._view_current("code"), "F7")
         self.act_view_object = a("O&bject", lambda: self._view_current("object"), "Shift+F7")
+        self.act_view_browser = a("Object Bro&wser", self.show_object_browser, "F2",
+                                  tip="VP6's and the project's classes, members and constants")
         self.act_view_project = a("Project E&xplorer", lambda: self._show_dock(
             self.explorer_dock), "Ctrl+R")
         self.act_view_props = a("Properties &Window", self._show_properties, "F4")
@@ -311,7 +315,8 @@ class MainWindow(QMainWindow):
             edit.addSeparator() if act is None else edit.addAction(act)
 
         view = bar.addMenu("&View")
-        for act in (self.act_view_code, self.act_view_object, None, self.act_view_immediate,
+        for act in (self.act_view_code, self.act_view_object, self.act_view_browser, None,
+                    self.act_view_immediate,
                     self.act_view_output, self.act_view_project, self.act_view_props,
                     self.act_view_outline, self.act_view_toolbox):
             view.addSeparator() if act is None else view.addAction(act)
@@ -1483,6 +1488,41 @@ class MainWindow(QMainWindow):
         # A form's code window shows the form's properties, like VB
         self._update_properties_target()
         self._update_lock_action()
+
+    # -- View > Object Browser ------------------------------------------------------------------
+    def show_object_browser(self) -> ObjectBrowser:
+        """The Object Browser, showing the project as it is now."""
+        if self.object_browser is None:
+            self.object_browser = ObjectBrowser(self._browser_project, self._browser_goto, self)
+        else:
+            self.object_browser.refresh()
+        self.object_browser.show()
+        self.object_browser.raise_()
+        self.object_browser.activateWindow()
+        return self.object_browser
+
+    def _browser_project(self):
+        if self.project is None:
+            return None
+        paths = [self.project.abspath(relative) for relative in self.project.files()]
+        return self.project.name, [self.documents[p] for p in paths if p in self.documents]
+
+    def _browser_goto(self, path: str, line: int | None, control: str | None) -> None:
+        """Show a project member from the Object Browser: a control on its form's
+        designer, else its line in the code."""
+        doc = self.documents.get(path)
+        if doc is None:
+            return
+        if control is not None and isinstance(doc, FormDocument):
+            designer = self.view_object(path)
+            keys = [c.key for c in designer.form_def.controls if c.name == control]
+            if keys:
+                designer.select(keys[:1])
+            return
+        if line is None:
+            self.view_code(path)
+        else:
+            self.open_location(path, line)
 
     # -- Format > Lock Controls ----------------------------------------------------------------
     def lock_controls(self, locked: bool) -> None:

@@ -994,6 +994,11 @@ prepended to `PYTHONPATH` for programs started with F5.
   * `_on_subwindow_activated` binds the Properties window to the active
     designer, or to the designer of the active code window's form.
 * **Command routing:**
+  * View > Object Browser (`act_view_browser`, F2; `show_object_browser`,
+    made once and refreshed when shown again): `_browser_project` gives the
+    project's name and documents in its order, `_browser_goto` shows a member
+    (a control selected in its form's designer, else its line with
+    `open_location`, or the file's code window);
   * `_designer_call(method, *args)` for the Format menu; Format > Lock
     Controls (`act_lock`, checkable; `lock_controls`) locks the current
     form's designer (`_current_designer`: also from its code window) and keeps
@@ -1337,6 +1342,42 @@ Find and Replace in the code window or the whole project, and Go to Line.
   type.
 * **`ask_line(editor, parent)`**, the Go to Line box (`QInputDialog.getInt`,
   1 to the line count, the current line suggested).
+
+### `vp6/ide/objectbrowser.py` (≈480 lines)
+
+The Object Browser (View > Object Browser, F2).
+
+* **The model** (plain Python): `ClassInfo` (name, kind: Class, Object,
+  Globals, Constants, Form, UserControl, Module; library, description, path
+  and line for the project's, `type_name` for a control class) whose
+  `members()` (made when first asked, alphabetical) are `Member`s (name,
+  kind: Property, Method, Event, Constant, Variable, Control, Class;
+  declaration, description, path and line, `type_name` for a control).
+* `vp6_library()` (made once): every class in `vp6.__all__`
+  (`_class_members`: spec'd properties with their kind's type
+  (`_KIND_TYPES`), description, choices and default (`_property_member`);
+  other properties with their docstrings, read-only marked; methods with
+  `inspect.signature` and their docstring's first paragraph; plain data
+  attributes; events with `EVENT_ARGS`; not `_NOT_MEMBERS`), the global
+  objects (by their types), "Globals" (the functions), a Constants class per
+  `constants.py` group (`_constant_groups`: its `# --- title ---` comments),
+  Colors and Color schemes.
+* `project_library(name, documents)`: modules (`_module_members`: functions,
+  classes, constants in capitals, variables with their values from the
+  source) and forms and user controls (`_form_class`: their controls from
+  `form_def`, once per control array; a user control's Properties and Events
+  from its registered class; methods but `InitializeComponent`), parsed with
+  `ast` from the documents' current text (`_parse`: before a syntax error,
+  what can be parsed).
+* `search(classes, text)`: classes and members whose names contain it.
+* **`ObjectBrowser(get_project, goto, parent)`**, a window of its own: the
+  library combo (All Libraries, VP6, the project; `library_classes()`), the
+  search field and Search button (`run_search`: the results list, choosing
+  one selects its class and member), the Classes and Members lists with
+  `kind_icon`s (a control's Toolbox icon, else a colored letter badge), and
+  the details pane (declaration, "Member of Library.Class", description).
+  `show_class(name, member)` selects them; `refresh()` reads the project
+  again; activating a project member calls `goto(path, line, control)`.
 
 ### `vp6/ide/menueditor.py` (≈330 lines)
 
@@ -1949,6 +1990,7 @@ All tests run headless. `conftest.py`:
 | `test_app_settings.py` | SaveSetting, GetSetting (its Default), GetAllSettings, DeleteSetting of a setting, a section or everything (in INI files of the test's own); App's title, version and descriptions from a project; the new project fields saved and loaded, and older projects' defaults; Command(); Screen.Fonts and FontCount; the Project Properties dialog's version and text fields; PrevInstance in real programs (a second copy sees the first, a third after it ends doesn't); a project's arguments reaching Command() and `sys.argv` from the project file and from `vp6.runner`. |
 | `test_command_line.py` | `--help`: the IDE's (its options and environment variables, exit 0; Qt's options left alone), the runner's (and no project: exit 2); a program's help text (name, version, description, usage, the project's ArgumentsHelp, the VP6 version), a message box without stdout; a real program showing its help from its project file and from `vp6.runner` without starting, and starting with other arguments; ArgumentsHelp saved and in the Project Properties dialog. |
 | `test_categories_and_lock.py` | Property categories (VB's by name, a spec's own, a user control Property's, Misc otherwise); the Properties window's Categorized view (the tabs, headings in order, (Name) first in Misc, the same properties as Alphabetic, editing there, collapsing and expanding, kept across selections, opened by select_property, the heading's description, the view remembered); Lock Controls in the designer (no dragging, resizing or arrow keys; the Properties window and form resizing still work; unlocked again) and in the IDE (the Format menu's checkable item, enabled only for forms, remembered for the form when the project is opened again). |
+| `test_objectbrowser.py` | VP6's classes (properties with types, descriptions and choices, events with their arguments, methods with signatures, run-time properties), objects (App's plain attributes), Globals, constants groups, colors and schemes; the project's forms (controls, methods, not InitializeComponent), modules (constants, variables, functions with their lines, classes, a syntax error) and user controls (their Properties and Events); search; the window (libraries, details, search results choosing a class and member); in the IDE: View > Object Browser (F2), all libraries, the project's, going to a member's code or a control in its designer, refreshed with new code. |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
