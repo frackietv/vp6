@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import sys
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QTimer, QUrl
@@ -18,6 +19,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLineEdit, QWidget
 
 import vp6
+import vp6.printer
 from vp6 import formfile
 from vp6.controls import CONTROL_TYPES
 from vp6.ide import kitchensink
@@ -916,8 +918,29 @@ def test_common_dialogs(sink, monkeypatch, tmp_path):
     assert page.lblSample.FontName == "Courier New" and page.lblSample.FontSize == 20
     monkeypatch.setattr(QPrintDialog, "exec",
                         lambda d: (d.printer().setCopyCount(2), QDialog.Accepted)[1])
-    page.cmdPrint._widget.click()
-    assert page.lblResult.Caption == "ShowPrinter: 2 copies of pages 1 to 3"
+    page.cmdPrint._widget.click()  # printed (here: to a PDF file, see conftest)
+    assert page.lblResult.Caption.startswith("Printed 2 copies of pages 1 to 3 on ")
+    assert vp6.Printer.Copies == 2  # (the dialog's choices: PrinterDefault)
+    printed = list(Path(vp6.printer.REDIRECT_DIR).glob("*.pdf"))
+    assert len(printed) == 1 and _pdf_pages(printed[0]) == 3
+    monkeypatch.setattr(QFileDialog, "exec", lambda d: (
+        d.selectFile(str(tmp_path / "pages.pdf")), QDialog.Accepted)[1])
+    page.cmdPdf._widget.click()  # Printer.OutputFile
+    assert _pdf_pages(tmp_path / "pages.pdf") == 3 and vp6.Printer.OutputFile == ""
+    assert page.lblResult.Caption == "Printed 3 pages to pages.pdf"
+    # The system's printers (none, where there are none)
+    assert page.cboPrinter.ListCount == vp6.Printers.Count
+    if vp6.Printers.Count:
+        page.cboPrinter.ListIndex = vp6.Printers.Count - 1
+        assert vp6.Printer.DeviceName == vp6.Printers(vp6.Printers.Count - 1).DeviceName
+
+
+def _pdf_pages(path) -> int:
+    from PySide6.QtPdf import QPdfDocument
+
+    document = QPdfDocument()
+    document.load(str(path))
+    return document.pageCount()
 
 
 def test_schemes_page_and_menu(sink):

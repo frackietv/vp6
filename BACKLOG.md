@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** `Printer` object and `Printers` collection: printing text and graphics (with the drawing methods above)
 - **[IDE]** Find and Replace in all files of the project (today: the current code window only)
 - **[IDE]** Designer and Properties window: the Properties window's Categorized view (VB's Alphabetic / Categorized tabs); locking controls in the designer (Format > Lock Controls)
 - **[IDE]** Object Browser: the classes, members, events and constants of `vp6` and of the project's forms and modules

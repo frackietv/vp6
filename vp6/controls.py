@@ -9068,6 +9068,9 @@ class CommonDialog(Control):
         P("Max", "int", 9999, description="The last page there is"),
         P("Orientation", "enum", 1, ((1, "1 - Portrait"), (2, "2 - Landscape")),
           description="Portrait or landscape (the Print dialog)"),
+        P("PrinterDefault", "bool", True,
+          description="The Print dialog's choices (the printer, copies, orientation...) become "
+                      "the Printer object's"),
         P("HelpFile", "file", "", description="What ShowHelp opens: a file or web address"),
         P("Tag", "str", "", description="Free for your own use"),
     )
@@ -9189,12 +9192,22 @@ class CommonDialog(Control):
 
     def ShowPrinter(self) -> bool:
         """The Print dialog: Copies, the page range (with vpPDPageNums: FromPage,
-        ToPage, between Min and Max) and Orientation are what was chosen."""
+        ToPage, between Min and Max) and Orientation are what was chosen; with
+        PrinterDefault, the Printer object prints with those choices (the
+        printer, copies, orientation, colors, paper, two-sided)."""
         from PySide6.QtGui import QPageLayout
         from PySide6.QtPrintSupport import QAbstractPrintDialog, QPrintDialog, QPrinter
 
         values = self._values
         printer = QPrinter()
+        if values.get("PrinterDefault", True):  # (starting with the Printer's printer)
+            from PySide6.QtPrintSupport import QPrinterInfo
+
+            from .printer import Printer
+
+            info = QPrinterInfo.printerInfo(Printer.DeviceName)
+            if not info.isNull():
+                printer.setPrinterName(info.printerName())
         printer.setCopyCount(max(1, values.get("Copies", 1)))
         printer.setPageOrientation(QPageLayout.Landscape if values.get("Orientation") == 2
                                    else QPageLayout.Portrait)
@@ -9212,6 +9225,10 @@ class CommonDialog(Control):
                       ToPage=dialog.toPage(),
                       Orientation=2 if printer.pageLayout().orientation() ==
                       QPageLayout.Landscape else 1)
+        if values.get("PrinterDefault", True):
+            from .printer import Printer
+
+            Printer._adopt(printer)
         return True
 
     def ShowHelp(self) -> bool:

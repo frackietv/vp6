@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.4.29
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- The `Printer` object: printing text and graphics with the graphics methods (`Print`, `Line`, `Circle`, `PSet`, `PaintPicture`, `TextWidth` / `TextHeight`) page by page (`NewPage`, `EndDoc`, `KillDoc`, `Page`), with `Orientation`, `PaperSize`, `Copies`, `ColorMode`, `Duplex`, the page's `Width` / `Height` / `ScaleWidth` / `ScaleHeight` (96 an inch) and fonts in points; `OutputFile` prints to a PDF file
+- The `Printers` collection: the system's printers; `Printer.DeviceName` chooses one
+- `CommonDialog.ShowPrinter` with `PrinterDefault`: the Printer prints with the Print dialog's choices
+- The `VP6_PRINT_TO_PDF` environment variable sends every document to PDF files in a folder instead of the printer
+
+## Kitchen Sink
+
+- The Dialogs page prints: Print (ShowPrinter, then the pages chosen), Print to PDF, and a list of the printers
+
+---
+
 **Version:** 0.4.28
 **Date:** 2026-10-01
 

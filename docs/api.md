@@ -1994,7 +1994,9 @@ def cmdColor_Click(self):
   `FontItalic`, `FontUnderline`, `FontStrikethru` and sets them.
 * **Printer:** `ShowPrinter()` sets `Copies`, `Orientation`, and with
   `vpPDPageNums` the page range `FromPage` to `ToPage` (between `Min` and
-  `Max`). Printing itself is the backlog's `Printer` object.
+  `Max`). With `PrinterDefault` (True by default) the [Printer](#printer)
+  then prints with the dialog's choices: its printer (or the PDF file chosen
+  in it), copies, orientation, paper, colors and two-sided printing.
 * **Help:** `ShowHelp()` opens `HelpFile` (a file or a web address) with the
   program the system has for it.
 * `DialogTitle` titles any of them. Each `Show...` returns True, or False if
@@ -2024,6 +2026,7 @@ Default size 32 × 32. Property groups: Font.
 | `Max` | int | `9999` | The last page there is |
 | `Min` | int | `1` | The first page there is |
 | `Orientation` | enum | 1 - Portrait | 1 - Portrait, 2 - Landscape. Portrait or landscape (the Print dialog) |
+| `PrinterDefault` | bool | `True` | The Print dialog's choices (the printer, copies, orientation...) become the Printer object's |
 | `Tag` | str | `''` | Free for your own use |
 | `ToPage` | int | `0` | The last page to print (with vpPDPageNums) |
 | `Top` | int | `0` | Position in the designer only |
@@ -2656,6 +2659,56 @@ registry, under `HKEY_CURRENT_USER\Software\VP6 Program Settings\AppName\Section
 `~/Library/Preferences/com.vp6-program-settings.AppName.plist`; on Linux
 `~/.config/VP6 Program Settings/AppName.conf`.
 
+### Printer
+
+`Printer` prints with the [graphics methods](#drawing-on-forms-and-pictureboxes),
+page by page, on the system's default printer unless another is chosen:
+
+```python
+def cmdPrint_Click(self):
+    if self.cdlPrint.ShowPrinter():          # the printer, copies... (PrinterDefault)
+        Printer.FontSize = 18
+        Printer.Print("Sales report")
+        Printer.FontSize = 11
+        for line in self.lstSales.List:
+            Printer.Print(line)
+            if Printer.CurrentY > Printer.ScaleHeight - 96:
+                Printer.NewPage()            # the next page
+        Printer.Line(0, 0, Printer.ScaleWidth - 1, Printer.ScaleHeight - 1, Box="B")
+        Printer.EndDoc()                     # off to the printer
+```
+
+* **Units:** VP6's pixels, 1/96 inch (96 is an inch), from the top left of
+  the page's printable area. `ScaleWidth`, `ScaleHeight` are that area,
+  `Width`, `Height` the paper (as it is turned). Font sizes are points, as on
+  screen.
+* **Methods:** `Print`, `Line`, `Circle`, `PSet`, `PaintPicture`,
+  `TextWidth`, `TextHeight` (as on a form), `NewPage()` (the next page; the
+  current point goes back to the top left), `EndDoc()` (send the document),
+  `KillDoc()` (throw it away). The first graphics method starts a document;
+  one still open when the program ends is printed then. It has no `Cls`,
+  `Point` or `Image`.
+* **Properties:** `CurrentX`, `CurrentY`, `DrawWidth`, `DrawStyle`,
+  `FillStyle`, `FillColor`, `ForeColor` (unset: black), `FontName`,
+  `FontSize`, `FontBold`, `FontItalic`, `FontUnderline`; `Orientation`
+  (`vpPRORPortrait`, `vpPRORLandscape`; a change applies from the next
+  page), `PaperSize` (`vpPRPSLetter`, `vpPRPSLegal`, `vpPRPSA4`, `vpPRPSA3`,
+  `vpPRPSA5`... ; unset: the printer's own paper), `Copies`, `ColorMode`
+  (`vpPRCMMonochrome`, `vpPRCMColor`), `Duplex` (`vpPRDPSimplex`,
+  `vpPRDPHorizontal`, `vpPRDPVertical`); `Page` (the page being printed,
+  from 1), `DeviceName`, `DriverName`, `Port`.
+* **`OutputFile`** (VP6's own): a PDF file name to print to instead of the
+  printer (`""`: the printer).
+* **`Printers`**: the system's printers, `Printers(0)` (or `[0]`),
+  `Printers.Count`, `for p in Printers`; each has `DeviceName`,
+  `DriverName`, `Port` and `IsDefault`. `Printer.DeviceName =
+  Printers(1).DeviceName` prints on that one (VB's `Set Printer =
+  Printers(1)`).
+* Printing where there is no printer raises `RuntimeError` (unless
+  `OutputFile` is set). The environment variable `VP6_PRINT_TO_PDF` (a
+  folder) sends every document there as a PDF file instead of to the printer,
+  e.g. to try a program's printing without paper.
+
 ### Picture objects
 
 A `Picture` is a picture in memory, VB's Picture object. Every picture
@@ -2825,6 +2878,9 @@ All constants are plain ints or strings.
 | Form_QueryUnload: UnloadMode | `vpFormControlMenu`, `vpFormCode`, `vpAppWindows`, `vpAppTaskManager`, `vpFormMDIForm`, `vpFormOwner` | 0, 1, 2, 3, 4, 5 |
 | MousePointer (controls, forms, Screen) | `vpDefault`, `vpArrow`, `vpCrosshair`, `vpIbeam`, `vpIconPointer`, `vpSizePointer`, `vpSizeNESW`, `vpSizeNS`, `vpSizeNWSE`, `vpSizeWE`, `vpUpArrow`, `vpHourglass`, `vpNoDrop`, `vpArrowHourglass`, `vpArrowQuestion`, `vpSizeAll`, `vpCustom` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 99 |
 | Drag and drop | `vpManual`, `vpAutomatic`, `vpCancelDrag`, `vpBeginDrag`, `vpEndDrag`, `vpEnter`, `vpLeave`, `vpOver`, `vpOLEDropNone`, `vpOLEDropManual` | 0, 1, 0, 1, 2, 0, 1, 2, 0, 1 |
+| Printer.Orientation | `vpPRORPortrait`, `vpPRORLandscape` | 1, 2 |
+| Printer.PaperSize | `vpPRPSLetter`, `vpPRPSTabloid`, `vpPRPSLedger`, `vpPRPSLegal`, `vpPRPSExecutive`, `vpPRPSA3`, `vpPRPSA4`, `vpPRPSA5`, `vpPRPSB5`, `vpPRPSEnv10`, `vpPRPSEnvDL` | 1, 3, 4, 5, 7, 8, 9, 11, 13, 20, 27 |
+| Printer.ColorMode and Printer.Duplex | `vpPRCMMonochrome`, `vpPRCMColor`, `vpPRDPSimplex`, `vpPRDPHorizontal`, `vpPRDPVertical` | 1, 2, 1, 2, 3 |
 | Clipboard and OLEDragDrop's Data: formats | `vpCFText`, `vpCFBitmap`, `vpCFDIB`, `vpCFFiles`, `vpCFRTF` | 1, 2, 8, 15, -16639 |
 | Picture.Type | `vpPicTypeNone`, `vpPicTypeBitmap`, `vpDropEffectNone`, `vpDropEffectCopy`, `vpDropEffectMove` | 0, 1, 0, 1, 2 |
 | CommonDialog Flags (added together) | `vpOFNReadOnly`, `vpOFNOverwritePrompt`, `vpOFNHideReadOnly`, `vpOFNNoChangeDir`, `vpOFNAllowMultiselect`, `vpOFNPathMustExist`, `vpOFNFileMustExist`, `vpOFNCreatePrompt`, `vpOFNExplorer`, `vpCCRGBInit`, `vpCCFullOpen`, `vpCFScreenFonts`, `vpCFEffects`, `vpPDAllPages`, `vpPDSelection`, `vpPDPageNums`, `vpCdlCancel` | 1, 2, 4, 8, 512, 2048, 4096, 8192, 524288, 1, 2, 1, 256, 0, 1, 2, 32755 |
@@ -2971,6 +3027,10 @@ It goes in the project's `dist` folder:
   a Paint handler stays (as with AutoRedraw) instead of going when the form is
   covered. There is no `DrawMode`, `FontTransparent` (text is drawn without
   a background) or `ScaleMode` (pixels only).
+* **Printer** measures in VP6's pixels (1/96 inch), not twips, and
+  `Set Printer = Printers(1)` is `Printer.DeviceName = Printers(1).DeviceName`.
+  It has no `Zoom`, `PrintQuality`, `TrackDefault`, `hDC` or `DrawMode`;
+  `OutputFile` (a PDF) is VP6's own.
 * **Picture objects** measure `Width` and `Height` in pixels (VB: HiMetric
   units), are drawn on directly (in VB through a PictureBox), and have no
   `Handle`, `hPal` or `Render`. `Set` isn't needed: `self.Picture1.Picture =

@@ -299,6 +299,30 @@ vpOver = 2
 vpOLEDropNone = 0  # OLEDropMode
 vpOLEDropManual = 1
 
+# --- Printer.Orientation ---------------------------------------------------------------
+vpPRORPortrait = 1
+vpPRORLandscape = 2
+
+# --- Printer.PaperSize ----------------------------------------------------------------
+vpPRPSLetter = 1
+vpPRPSTabloid = 3
+vpPRPSLedger = 4
+vpPRPSLegal = 5
+vpPRPSExecutive = 7
+vpPRPSA3 = 8
+vpPRPSA4 = 9
+vpPRPSA5 = 11
+vpPRPSB5 = 13
+vpPRPSEnv10 = 20
+vpPRPSEnvDL = 27
+
+# --- Printer.ColorMode and Printer.Duplex ------------------------------------------------
+vpPRCMMonochrome = 1
+vpPRCMColor = 2
+vpPRDPSimplex = 1
+vpPRDPHorizontal = 2
+vpPRDPVertical = 3
+
 # --- Clipboard and OLEDragDrop's Data: formats ---------------------------------------
 vpCFText = 1
 vpCFBitmap = 2  # a picture
@@ -327,7 +351,7 @@ vpCCRGBInit = 0x1  # Color
 vpCCFullOpen = 0x2
 vpCFScreenFonts = 0x1  # Font
 vpCFEffects = 0x100
-vpPDAllPages = 0x0  # Printer
+vpPDAllPages = 0x0  # ShowPrinter
 vpPDSelection = 0x1
 vpPDPageNums = 0x2
 vpCdlCancel = 32755  # the error a cancelled dialog raises with CancelError (DialogCancelled)

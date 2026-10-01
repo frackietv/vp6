@@ -54,6 +54,19 @@ def _program_settings_in_a_temporary_folder(tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _printing_to_pdf_files(tmp_path_factory, monkeypatch):
+    """The Printer never reaches a real printer: documents go to PDF files in a
+    folder of the test's own."""
+    from vp6 import printer
+
+    monkeypatch.setattr(printer, "REDIRECT_DIR", str(tmp_path_factory.mktemp("printed")))
+    yield
+    if printer.Printer._painter is not None:  # (a test that left a document open)
+        printer.Printer.KillDoc()
+    printer.Printer.__init__()  # (its settings back to the defaults)
+
+
+@pytest.fixture(autouse=True)
 def _fail_on_errors_in_qt_callbacks(monkeypatch):
     """An exception raised in Python code that Qt calls (an event handler
     override like mouseMoveEvent, a slot) doesn't reach the test: PySide

@@ -1,10 +1,15 @@
-"""Kitchen Sink page: MsgBox, InputBox, a modal form (by its default instance), Beep, and
-the system's dialogs through a CommonDialog (Open, Save As, Color, Font, Print)."""
+"""Kitchen Sink page: MsgBox, InputBox, a modal form (by its default instance), Beep, the
+system's dialogs through a CommonDialog (Open, Save As, Color, Font, Print), and printing
+with the Printer object (Printers, NewPage, EndDoc; to a PDF file with OutputFile)."""
 
 import os
 
 from vp6 import *
 from frmDialog import frmDialog
+
+PRINT_PAGES = 3  # the pages of the document the Print buttons print
+# (the Printer has no form folder: a file for it is a full path)
+LOGO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vp6.png")
 
 
 class pgDialogs(Form):
@@ -36,15 +41,33 @@ class pgDialogs(Form):
         self.cmdFont = CommandButton(self, Caption='Fo&nt...', Left=16, Top=316, Width=180,
                                      Height=32, TabIndex=9,
                                      ToolTipText="CommonDialog.ShowFont: the sample's font")
-        self.cmdPrint = CommandButton(self, Caption='&Print setup...', Left=16, Top=356, Width=180,
+        self.cmdPrint = CommandButton(self, Caption='&Print...', Left=16, Top=356, Width=180,
                                       Height=32, TabIndex=10,
-                                      ToolTipText='CommonDialog.ShowPrinter: copies and pages')
+                                      ToolTipText='CommonDialog.ShowPrinter, then the Printer prints the pages chosen')
         self.lblSample = Label(self, Caption='The quick brown fox jumps over the lazy dog',
                                Left=210, Top=196, Width=410, Height=80, WordWrap=True, TabIndex=11)
         self.cdlFiles = CommonDialog(self, Left=588, Top=400)
+        self.cmdPdf = CommandButton(self, Caption='Print to P&DF...', Left=210, Top=356, Width=180,
+                                    Height=32, TabIndex=12,
+                                    ToolTipText='Printer.OutputFile: the same pages, as a PDF file')
+        self.lblPrinter = Label(self, Caption='Printer:', Left=210, Top=300, Width=60, Height=20,
+                                TabIndex=13)
+        self.cboPrinter = ComboBox(self, Style=2, Left=270, Top=296, Width=350, Height=25,
+                                   TabIndex=14, ToolTipText="Printers: the system's printers")
     # endregion
 
     shell = None  # the Kitchen Sink window showing this page (None when run on its own)
+
+    def Form_Load(self):
+        for printer in Printers:  # the system's printers
+            self.cboPrinter.AddItem(printer.DeviceName)
+            if printer.DeviceName == Printer.DeviceName:
+                self.cboPrinter.ListIndex = self.cboPrinter.NewIndex
+
+    def cboPrinter_Click(self):
+        Printer.DeviceName = self.cboPrinter.Text  # (VB's Set Printer = Printers(i))
+        self.lblResult.Caption = (f"Printer: {Printer.DeviceName}, {Printer.Width} x "
+                                  f"{Printer.Height} (1/96 inch), paper {Printer.PaperSize}")
 
     def cmdMsgBox_Click(self):
         answer = MsgBox("Do you like VP6?", vpYesNoCancel + vpQuestion, "MsgBox")
@@ -117,9 +140,51 @@ class pgDialogs(Form):
         cdl = self.cdlFiles
         cdl.Flags = vpPDPageNums  # a page range: FromPage to ToPage, of Min to Max
         cdl.Min, cdl.Max, cdl.FromPage, cdl.ToPage = 1, 10, 1, 3
-        if cdl.ShowPrinter():
-            self.lblResult.Caption = (f"ShowPrinter: {cdl.Copies} copies of pages "
-                                      f"{cdl.FromPage} to {cdl.ToPage}")
+        cdl.Min, cdl.Max = 1, PRINT_PAGES
+        cdl.FromPage, cdl.ToPage = 1, PRINT_PAGES
+        if cdl.ShowPrinter():  # (PrinterDefault: the Printer prints with what was chosen)
+            self.print_pages(cdl.FromPage, cdl.ToPage)
+            self.lblResult.Caption = (f"Printed {cdl.Copies} copies of pages {cdl.FromPage} "
+                                      f"to {cdl.ToPage} on {Printer.DeviceName}")
+
+    def cmdPdf_Click(self):
+        cdl = self.cdlFiles
+        cdl.DialogTitle = "Print to a PDF file"
+        cdl.Filter = "PDF Files (*.pdf)|*.pdf"
+        cdl.FilterIndex = 1
+        cdl.DefaultExt = "pdf"
+        cdl.Flags = vpOFNOverwritePrompt
+        if cdl.ShowSave():
+            Printer.OutputFile = cdl.FileName  # a PDF file instead of the printer
+            try:
+                self.print_pages(1, PRINT_PAGES)
+            finally:
+                Printer.OutputFile = ""
+            self.lblResult.Caption = f"Printed {PRINT_PAGES} pages to {cdl.FileTitle}"
+
+    def print_pages(self, first, last):
+        """A small document: a heading, the sample in its font, a frame and a picture."""
+        width, height = Printer.ScaleWidth, Printer.ScaleHeight  # (96 an inch)
+        for page in range(first, last + 1):
+            if page > first:
+                Printer.NewPage()
+            Printer.FontName, Printer.FontSize, Printer.FontBold = None, 20, True
+            Printer.Print(f"The Kitchen Sink, page {page} of {PRINT_PAGES}")
+            Printer.FontBold = False
+            Printer.FontName = self.lblSample.FontName  # the sample, in its font
+            Printer.FontSize = self.lblSample.FontSize or 12
+            Printer.ForeColor = self.lblSample.ForeColor
+            Printer.Print(self.lblSample.Caption)
+            Printer.ForeColor = None
+            Printer.DrawWidth = 2
+            Printer.Line(0, 0, width - 1, height - 1, QBColor(9), "B")  # a frame
+            Printer.FillStyle, Printer.FillColor = vpFSSolid, QBColor(14)
+            Printer.Circle(width / 2, height / 2, 48 * page, QBColor(12))
+            Printer.FillStyle, Printer.DrawWidth = vpFSTransparent, 1
+            Printer.PaintPicture(LOGO, width - 170, height - 130, 160, 120)
+            Printer.CurrentX, Printer.CurrentY = 10, height - 30
+            Printer.Print(f"Printed on {Printer.DeviceName or Printer.OutputFile}")
+        Printer.EndDoc()  # off to the printer
 
     def cmdBeep_Click(self):
         Beep()

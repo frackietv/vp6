@@ -200,6 +200,36 @@ Properties.
   point), `Cls`, `Point` (renders that one pixel of the surface without its
   children: `DrawWindowBackground`), `TextWidth`, `TextHeight`.
 
+### `vp6/printer.py` (≈420 lines)
+
+VB's `Printer` object and `Printers` collection.
+
+* `_Printer(Drawing, PropertyHost)`, the one `Printer`: the drawing
+  properties without AutoRedraw, ForeColor, the font's, Orientation,
+  PaperSize, Copies, ColorMode, Duplex and OutputFile (`__setattr__`
+  refuses others). `_drawing_surface()` is a `_PrinterSurface` (the
+  printable area's size, the font with its size in VP6's pixels: points * 96
+  / 72, a no-op `update`); `_draw_text_color` is black without a ForeColor.
+* **The page:** `_page_size()` (PaperSize, else the printer's default paper,
+  else Letter or A4 by the locale, `_default_paper`), `_layout()` (a
+  `QPageLayout` with the printer's margins, probed with a `QPrinter`, or half
+  an inch for a PDF); `Width`, `Height`, `ScaleWidth`, `ScaleHeight` from it in
+  VP6's pixels (`_units`).
+* **The document:** `_draw_painter()` is the document's painter: `_begin()`
+  makes a high-resolution `QPrinter` for the printer (`_info()`, by
+  DeviceName: `_device`, None for the default) or, when `_target()` names one
+  (OutputFile, else a file in `REDIRECT_DIR`), a PDF file; sets its layout,
+  copies, colors, duplex; begins a `QPainter` scaled from VP6's pixels to the
+  printer's resolution (`_scale`), and connects `aboutToQuit` to
+  `_end_at_exit`. `NewPage` applies the layout again, `newPage()`, rescales;
+  `EndDoc` ends the painter; `KillDoc` aborts (and removes a PDF begun).
+  `Page` counts pages.
+* `Cls`, `Point` and `Image` raise AttributeError; `_adopt(qprinter)` takes a
+  Print dialog's choices (CommonDialog.ShowPrinter with PrinterDefault).
+* `Printers` (`_Printers`): `QPrinterInfo.availablePrinters()` as
+  `PrinterInfo` objects (DeviceName, DriverName, Port, IsDefault), by index,
+  `Count`, iteration. `PAPER_SIZES` maps VB's paper numbers to `QPageSize`.
+
 ### `vp6/picture.py` (≈210 lines)
 
 VB's Picture objects.
@@ -376,7 +406,7 @@ The intrinsic controls.
 | `UpDown` | `_UpDownWidget` (two auto-repeating, `NoFocus` `QToolButton`s in a `QBoxLayout`; `set_vertical` swaps up/down for right/left arrows) | `_step(±1)` (not while designing): `_value_from_buddy` first (a number typed into the buddy, clamped, becomes the Value without a Change), then `Value ± Increment`, wrapping with `Wrap`, then `_sync_to_buddy` and UpClick/DownClick. `_apply_Value` clamps and fires `Change` when the value really changed (`_shown_value`), syncing the buddy. `Buddy` looks `BuddyControl` up on the form by name when needed (it may be created after the UpDown); `_buddy_property` is `BuddyProperty`, else the buddy's `Text` or `Caption`. |
 | `WebView` | `_new_web_view`: Qt WebView's `QWebView` (a native `QWindow`, imported only here; a clear error before PySide6 6.11) in `QWidget.createWindowContainer`; in the designer a placeholder label (`_web_design_widget`) | `_allow_local_files` turns on its file access settings. `_url` makes a QUrl of a web address, an existing file (relative to the form's folder) or a domain (`fromUserInput`, http made https). `loadingChanged` gives DocumentComplete (Succeeded) and NavigateError (Failed, its error string); `titleChanged` TitleChange; `loadProgressChanged` ProgressChange. URL applied at run time navigates; reading it is LocationURL. Not given the mouse members (`_NO_MOUSE_MEMBERS`): the system has its mouse. `app.ensure_app` sets `AA_ShareOpenGLContexts` before the application exists, which Qt's web views need. |
 | `WebBrowser` | a `QWebEngineView` (`_new_web_engine_view`; Qt WebEngine imported only there) with its own `QWebEnginePage` subclass; in the designer a placeholder | A subclass of `WebView`: `_EngineView` gives the QWebEngineView the method names WebView uses (the history's canGoBack, `setHtml`, the page's `runJavaScript`, the progress it last reported). The page's `acceptNavigationRequest` fires BeforeNavigate (not for its own HTML: data and about URLs), its `createWindow` returns a page waiting for its URL, then fires NewWindow and opens it here unless cancelled. The page's `loadingChanged` (WebEngine's LoadSucceededStatus...) goes to WebView's `_on_loading`; `linkHovered` is StatusTextChange. `_watch_focus_proxy` puts the event filter on the widget Chromium takes the focus in (after each load, a new child widget, SetFocus), for GotFocus and LostFocus. Its local file settings allow file pages to use files and the web. |
-| `CommonDialog` | none at run time (a small-dialog icon while designing, `_commondialog_design_widget`) | Its `Show...` methods make the Qt dialog each time: `_file_dialog(save)` (a `QFileDialog`: `parse_filter` turns VB's Filter into name filters, InitDir or FileName's folder, `DefaultExt` as the default suffix, multi-select and overwrite prompt from Flags; FileName, FileNames and FilterIndex from the result), `QColorDialog`, `QFontDialog` (the current color and font when accepted), `QPrintDialog` on a `QPrinter` (copies, orientation, page range from Min/Max/FromPage/ToPage), and `QDesktopServices.openUrl` for ShowHelp. `_cancelled` raises `DialogCancelled` with CancelError, else gives False. Its Font... properties don't touch a widget (`_apply_font` does nothing). |
+| `CommonDialog` | none at run time (a small-dialog icon while designing, `_commondialog_design_widget`) | Its `Show...` methods make the Qt dialog each time: `_file_dialog(save)` (a `QFileDialog`: `parse_filter` turns VB's Filter into name filters, InitDir or FileName's folder, `DefaultExt` as the default suffix, multi-select and overwrite prompt from Flags; FileName, FileNames and FilterIndex from the result), `QColorDialog`, `QFontDialog` (the current color and font when accepted), `QPrintDialog` on a `QPrinter` (starting with the Printer's printer; copies, orientation, page range from Min/Max/FromPage/ToPage; with PrinterDefault its choices go to `printer.Printer._adopt`), and `QDesktopServices.openUrl` for ShowHelp. `_cancelled` raises `DialogCancelled` with CancelError, else gives False. Its Font... properties don't touch a widget (`_apply_font` does nothing). |
 | `ImageList` | none at run time (a stack-of-pictures icon while designing, `_imagelist_design_widget`) | `ListImages` is a `_ListImages` collection of `ListImage` objects (`Picture` a file path, resolved like a PictureBox's; `_pixmap()` scaled to `_size()`: ImageWidth × ImageHeight, or the first picture's size while 0); the designer's `ListImages` (kind `images`) is `path\|key` lines (`parse_list_image`). Any change `_notify`s the controls whose `ImageList` is its name (`_refresh_images`). |
 | `Toolbar` | `QToolBar` (not movable or floatable), a `QAction` per shown button (`addSeparator` for separators; `NoFocus` tool buttons) | Docked like an aligned PictureBox (`_Docked`, Align None/Top/Bottom/Left/Right, Top by default; Left and Right make it vertical) and shows ImageList pictures (`_UsesImageList`). `Buttons` is a `_Buttons` collection of `Button` objects; the designer's `Buttons` (kind `buttons`) is lines parsed by `parse_button` (`Caption\|Key\|Image\|ToolTipText\|options`, `-` a separator). Any change calls `_update_buttons`, which rebuilds the actions: check and group buttons are checkable, each run of adjacent ButtonGroup buttons shares a `QActionGroup` (`ExclusiveOptional`, so code can leave none pressed; `_on_triggered` re-presses a clicked pressed one, as in VB); the icon size is the ImageList's; `TextAlignment` picks the tool button style; then `_fit` makes it as tall (or wide) as its `sizeHint`. `_on_triggered` updates `Value`s (`_group_of`) and fires `ButtonClick`. A Button's `Left`… come from `widgetForAction` (after activating the layout). |
 | `ListView` | a `QWidget` with a `QStackedLayout`: a `QListView` (Icon, SmallIcon and List views: `_QT_VIEWS` modes and flows) and a `QTreeView` (Report), sharing one `QStandardItemModel` (`_model`: a row per item, column 0 the Text, then the SubItems) and one selection model | `ListItems` is a `_ListItems` collection kept by the model itself (Index = row + 1, so sorting re-numbers, as in VB; `_by_key`); each `ListItem` is stored in its first cell (`UserRole`); `SubItems` is a `_SubItems` view (call or `[]` to read, `[n] =` to set, creating cells with their column's alignment). `ColumnHeaders` is a `_ColumnHeaders` keyed collection of `ColumnHeader` objects; `_update_columns` sets the header labels, widths and alignments and hides any extra model columns. The designer's `ColumnHeaders` and `ListItems` (kinds `columns` and `listitems`) are lines parsed by `parse_column` and `parse_list_item`. Two ImageLists (`_IMAGE_LIST_PROPS = ("Icons", "SmallIcons")`): `_show_icon` puts the Icon in the Icon view, the SmallIcon in the others. `_keep_sorted` sorts the model by `SortKey` when `Sorted`. `clicked` fires `ItemClick`, the header's `sectionClicked` `ColumnClick`, `itemChanged` of a check state `ItemCheck` (not for code: `_quietly`). |
@@ -1619,8 +1649,12 @@ explorer-style.
     instance (`frmDialog.Show(vpModal)`, `frmDialog.Result`), Beep, and the
     CommonDialog `cdlFiles`: Open (a Filter, several files), Save As (the
     sample written to the file, DefaultExt, the overwrite prompt), Color
-    (CancelError and DialogCancelled), Font and Print setup (a page range),
-    applied to a sample label;
+    (CancelError and DialogCancelled), Font and Print (a page range), applied
+    to a sample label; printing (`print_pages`: a heading, the sample in its
+    font, a frame, a circle and the logo with PaintPicture, NewPage, EndDoc)
+    after ShowPrinter, or to a PDF file chosen with ShowSave
+    (`Printer.OutputFile`), and a ComboBox of `Printers` choosing
+    `Printer.DeviceName`;
   * `pgSchemes.py`: the color schemes as the option-button control array
     `optScheme` (`SCHEMES`);
   * `pgKeyboard.py`: KeyPreview, KeyDown/KeyUp, KeyPress replacing or
@@ -1806,7 +1840,11 @@ All tests run headless. `conftest.py`:
 * sets `QT_QPA_PLATFORM=offscreen` and `VP6_NO_ERROR_DIALOG=1`;
 * provides the session `qapp` fixture;
 * redirects `QSettings` to a per-test INI file in `tmp_path`, and asserts
-  that `ide_settings()` is really isolated;
+  that `ide_settings()` is really isolated; the programs' settings
+  (`app.SETTINGS_DIR`) to a folder of the test's own;
+* sends every Printer document to PDF files in a folder of the test's own
+  (`printer.REDIRECT_DIR`), so nothing is printed, and puts the Printer back
+  as it was (`_printing_to_pdf_files`);
 * resets the theme manager before and after each test (undoing any
   application-wide scheme a test forced);
 * fails a test when Python code called by Qt raised (an event handler
@@ -1871,4 +1909,5 @@ All tests run headless. `conftest.py`:
 | `test_mouse.py` | MousePointer (a control's own pointer given back, a custom MouseIcon, a form's), Screen.MousePointer; which controls have the mouse members and events; VB drag and drop: DragOver's enter, over and leave, DragDrop, refusing in DragOver, dropping on a user control, Drag starting (its data and picture, its DragIcon), ending where it is and cancelling, DragMode Automatic (no MouseDown or Click); drops from other programs (OLEDragOver, OLEDragDrop, refusing, a TextBox's own drop with OLEDropMode None, a form's), the DataObject. |
 | `test_popupmenu.py` | Form.PopupMenu: the chosen item returned after its Click (and the menu's own Click first), the bold DefaultMenu only for that time, None when closed without a choice, nothing recorded outside PopupMenu; left, right and center alignment at X, Y, the mouse's place for what is left out; not a Menu, a menu without items, a visible menu-bar menu; at design time. |
 | `test_picture.py` | Picture objects: one in memory (the graphics methods on it, transparent and filled, Cls, Image a copy, no unknown properties), LoadPicture (empty, a missing file, not a picture), SavePicture (by extension, BMP without one, a file's picture, an empty one failing); Pictures as a PictureBox's, Image's, button's Picture, the Icon, a MouseIcon, an ImageList's picture, clearing with LoadPicture(); a PictureBox's Image and PaintPicture (at its size, scaled part, a file, an empty one), a form's Image; a form's background Picture (a file relative to its folder, under the drawing, a Picture, cleared; the form file); the clipboard (pictures, files' pictures, text, RTF, files); a dropped picture in a DataObject; the exports. |
+| `test_printer.py` | The Printer, to PDF files (rendered back with QtPdf): the page's size in VP6's pixels and its margins, a box, a filled circle, a Picture and text in points where they belong; pages, NewPage first, Orientation from the next page, A4; KillDoc printing nothing; a document for the printer redirected (conftest) and printed when the program ends; no printer (RuntimeError); no Cls, Point, Image or unknown properties; Printers and choosing DeviceName; ShowPrinter's choices with and without PrinterDefault; the exports. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (none by default, nothing copied; its own files, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |
