@@ -46,6 +46,8 @@ def enum_choices(*labels: str) -> tuple:
 def normalize(kind: str, value):
     if value is None:
         return None
+    if kind == "file" and hasattr(value, "_pixmap") and not isinstance(value, str):
+        return value  # a Picture object (vp6.picture), kept as it is
     if kind in ("str", "text", "file", "font", "shortcut"):
         return str(value)
     if kind in ("int", "enum"):

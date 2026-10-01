@@ -298,8 +298,17 @@ vpLeave = 1
 vpOver = 2
 vpOLEDropNone = 0  # OLEDropMode
 vpOLEDropManual = 1
-vpCFText = 1  # OLEDragDrop's Data formats
-vpCFFiles = 15
+
+# --- Clipboard and OLEDragDrop's Data: formats ---------------------------------------
+vpCFText = 1
+vpCFBitmap = 2  # a picture
+vpCFDIB = 8  # a picture too (VB's device-independent bitmap)
+vpCFFiles = 15  # files (from another program)
+vpCFRTF = -16639  # rich text
+
+# --- Picture.Type -------------------------------------------------------------------
+vpPicTypeNone = 0
+vpPicTypeBitmap = 1
 vpDropEffectNone = 0  # OLEDragOver's Effect
 vpDropEffectCopy = 1
 vpDropEffectMove = 2

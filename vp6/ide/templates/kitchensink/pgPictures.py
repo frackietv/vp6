@@ -1,6 +1,17 @@
-"""Kitchen Sink page: PictureBox (a container) and Image (lightweight)."""
+"""Kitchen Sink page: PictureBox (a container) and Image (lightweight), and
+Picture objects: a picture made in memory (Picture, the graphics methods,
+PaintPicture) used as a Picture and a MouseIcon, SavePicture and LoadPicture,
+a PictureBox's Image, pictures on the clipboard (SetData, GetFormat, GetData)
+and the form's own background Picture."""
+
+import os
+import tempfile
 
 from vp6 import *
+
+SAVED = os.path.join(tempfile.gettempdir(), "vp6-kitchen-sink-picture.png")
+# (a Picture has no form folder: a file for it is a full path)
+LOGO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vp6.png")
 
 
 class pgPictures(Form):
@@ -27,7 +38,74 @@ class pgPictures(Form):
         self.lblPicture = Label(self,
                                 Caption='A PictureBox is a container (the Label is inside it); an Image is a lightweight picture. Right-click the picture.',
                                 Left=270, Top=80, Width=350, Height=80, WordWrap=True, TabIndex=4)
+        self.lblObjects = Label(self, Caption='Picture objects:', Left=16, Top=210, Width=400,
+                                Height=20, TabIndex=5)
+        self.picMade = PictureBox(self, Left=16, Top=234, Width=120, Height=120, TabIndex=6,
+                                  ToolTipText='A Picture made in memory: its MouseIcon too')
+        self.imgSaved = Image(self, Left=150, Top=234, Width=120, Height=120, Stretch=True,
+                              BorderStyle=1,
+                              ToolTipText='LoadPicture of the file SavePicture wrote')
+        self.picPasted = PictureBox(self, Left=284, Top=234, Width=120, Height=120, TabIndex=7,
+                                    ToolTipText='Clipboard.GetData()')
+        self.cmdMake = CommandButton(self, Caption='&Make', Left=16, Top=362, Width=120, Height=30,
+                                     TabIndex=8, ToolTipText='Draw a new Picture in memory')
+        self.cmdSave = CommandButton(self, Caption='Sa&ve, load', Left=150, Top=362, Width=120,
+                                     Height=30, TabIndex=9,
+                                     ToolTipText='SavePicture of its Image, then LoadPicture')
+        self.cmdCopyPicture = CommandButton(self, Caption='C&opy', Left=284, Top=362, Width=58,
+                                            Height=30, TabIndex=10,
+                                            ToolTipText='Clipboard.SetData: the made picture')
+        self.cmdPastePicture = CommandButton(self, Caption='P&aste', Left=346, Top=362, Width=58,
+                                             Height=30, TabIndex=11,
+                                             ToolTipText='Clipboard.GetData: a picture on the clipboard')
+        self.chkBackground = CheckBox(self, Caption="The form's own Picture", Left=420, Top=234,
+                                      Width=200, Height=25, TabIndex=12,
+                                      ToolTipText='Form.Picture: a picture on its background')
+        self.lblInfo = Label(self, Caption='', Left=420, Top=266, Width=204, Height=126,
+                             WordWrap=True, TabIndex=13)
     # endregion
+
+    def Form_Load(self):
+        self.cmdMake_Click()
+
+    # --- Picture objects ---------------------------------------------------------------------
+    def cmdMake_Click(self):
+        # A new picture in memory, drawn on like a PictureBox with AutoRedraw
+        badge = Picture(120, 120, BackColor=0xF0E0C0)
+        badge.PaintPicture(LOGO, 10, 10, 100, 75)  # a picture file, scaled
+        badge.FillStyle, badge.FillColor = vpFSSolid, vpYellow
+        badge.Circle(95, 95, 18, vpRed)
+        badge.CurrentX, badge.CurrentY = 8, 92
+        badge.FontBold = True
+        badge.Print("VP6")
+        self.picMade.Picture = badge  # a Picture as a control's Picture
+        pointer = Picture(16, 16)
+        pointer.FillStyle, pointer.FillColor = vpFSSolid, vpRed
+        pointer.Circle(8, 8, 6, vpRed)
+        self.picMade.MouseIcon = pointer  # ...and as a mouse pointer
+        self.picMade.MousePointer = vpCustom
+        self.lblInfo.Caption = f"Made {badge.Width} x {badge.Height} in memory (Type {badge.Type})"
+
+    def cmdSave_Click(self):
+        SavePicture(self.picMade.Image, SAVED)  # what the PictureBox shows
+        self.imgSaved.Picture = LoadPicture(SAVED)
+        self.lblInfo.Caption = f"Saved and loaded again: {SAVED}"
+
+    def cmdCopyPicture_Click(self):
+        Clipboard.SetData(self.picMade.Image)
+        self.lblInfo.Caption = "Copied: paste it here, or into another program"
+
+    def cmdPastePicture_Click(self):
+        if Clipboard.GetFormat(vpCFBitmap):
+            picture = Clipboard.GetData(vpCFBitmap)
+            self.picPasted.Picture = picture
+            self.lblInfo.Caption = f"Pasted a {picture.Width} x {picture.Height} picture"
+        else:
+            self.lblInfo.Caption = "No picture on the clipboard (copy one first)"
+
+    def chkBackground_Click(self):
+        # The form's own Picture: on its background, under its controls
+        self.Picture = "vp6.png" if self.chkBackground.Value == vpChecked else LoadPicture()
 
     def picLogo_Click(self):
         self.lblPicture.Caption = f"PictureBox clicked (Tag: {self.picLogo.Tag or 'none'})"

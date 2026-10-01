@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Language and runtime]** Picture objects: `LoadPicture`, drawing into an image in memory, using it as a `Picture` or icon, and saving it (`SavePicture`); a form `Picture` (a background picture on the form); clipboard pictures and formats, `Clipboard.GetData` / `SetData` / `GetFormat` (today `Picture` is only a file path and the clipboard text only) (self-hosting: the IDE's drawn icons and the Kitchen Sink image)
 - **[Language and runtime]** `Printer` object and `Printers` collection: printing text and graphics (with the drawing methods above)
 - **[IDE]** Find and Replace in all files of the project (today: the current code window only)
 - **[IDE]** Designer and Properties window: the Properties window's Categorized view (VB's Alphabetic / Categorized tabs); locking controls in the designer (Format > Lock Controls)
@@ -15,7 +14,7 @@
 - **[Appearance]** Per-window title bar color: a forced Light or Dark form still gets a title bar in the OS appearance, since Qt can't set it per window on macOS
 - **[IDE - Debugging]** A debugger: breakpoints, stepping, watches, and evaluating expressions in the Immediate window while the program is paused
 - **[IDE - Debugging]** Editing code while the program is paused
-- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: picture objects, MDI forms
+- **[Self-hosting]** Write the VP6 IDE in VP6 itself; blocked by the self-hosting items above and by existing backlog items: MDI forms
 - **[IDE - Help]** IDE needs a help system that works like the old .chm help.  The help should contain all documentation for VB6, including api and development guides, and should support table of contents, index, and search. 
 - **[IDE - Terminal]** Add a terminal emulator panel (default position same as immediate panel) to allow a shell to be opened in the IDE.
 - **[IDE - AI]** Add Claude integration to allow use of Claude straight from the IDE.  By default Claude panel should go same place as the output or immediate.

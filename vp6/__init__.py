@@ -20,13 +20,15 @@ from .controls import (Button, CheckBox, CodeBox, ColumnHeader, ComboBox, Comman
                        UpDown, VScrollBar, WebBrowser, WebView)
 from .dialogs import InputBox, MsgBox
 from .form import Form, Forms, Load, Unload, run
+from .picture import LoadPicture, Picture, SavePicture
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.27"
+__version__ = "0.4.28"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Command", "Debug", "DeleteSetting", "DoEvents", "End",
     "GetAllSettings", "GetSetting", "SaveSetting", "Screen", "SendKeys",
+    "LoadPicture", "Picture", "SavePicture",
     "RGB", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",
     "Button", "CheckBox", "CodeBox", "ColumnHeader", "CommonDialog", "DialogCancelled", "ComboBox",

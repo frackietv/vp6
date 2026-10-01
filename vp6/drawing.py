@@ -147,13 +147,16 @@ class Drawing:
         the persistent image, then (AutoRedraw False) the Paint event."""
         state = self._draw_state()
         image = state["image"]
+        background = self._background_picture()
         paint = not self._design_mode and not self._values.get("AutoRedraw") and \
             state["painter"] is None
-        if image is None and not (paint and self._handles_paint()):
+        if image is None and background is None and not (paint and self._handles_paint()):
             return
         painter = QPainter(widget)
         painter.translate(self._drawing_origin())
         painter.setClipRect(QRect(QPoint(0, 0), self._draw_area_size()))
+        if background is not None:  # (a form's Picture: a PictureBox's label shows its own)
+            painter.drawPixmap(0, 0, background)
         if image is not None:
             painter.drawImage(0, 0, image)
         if paint:
@@ -167,6 +170,51 @@ class Drawing:
     def _handles_paint(self) -> bool:
         """Whether there is a Paint handler (else no painter is needed)."""
         return True
+
+    def _background_picture(self):
+        """A picture drawn under the drawing (a form's Picture), or None."""
+        return None
+
+    @property
+    def Image(self):
+        """A Picture of what it shows: its background, Picture and drawing
+        (not its controls), e.g. to save with SavePicture or to use as another
+        control's Picture."""
+        from .picture import Picture
+
+        size = self._draw_area_size()
+        image = QImage(max(size.width(), 0), max(size.height(), 0),
+                       QImage.Format_ARGB32_Premultiplied)
+        image.fill(Qt.transparent)
+        if not image.isNull():
+            painter = QPainter(image)
+            surface = self._drawing_surface()
+            surface.render(painter, QPoint(0, 0), QRect(self._drawing_origin(), size),
+                           surface.RenderFlag.DrawWindowBackground)
+            painter.end()
+        return Picture(_image=image)
+
+    def PaintPicture(self, Picture, X1, Y1, Width1=None, Height1=None, X2=0, Y2=0,
+                     Width2=None, Height2=None) -> None:
+        """Draw a picture (a Picture, a file, or another control's Image) at X1,
+        Y1, Width1 x Height1 (its own size when left out: scaled otherwise);
+        X2, Y2, Width2, Height2 take just that part of it."""
+        from .picture import picture_pixmap, to_picture
+
+        if isinstance(Picture, str):  # a file, relative to the form's folder
+            source = picture_pixmap(self, Picture).toImage()
+        else:
+            source = to_picture(Picture)._image
+        if source.isNull():
+            return
+        width2 = source.width() - X2 if Width2 is None else Width2
+        height2 = source.height() - Y2 if Height2 is None else Height2
+        width1 = width2 if Width1 is None else Width1
+        height1 = height2 if Height1 is None else Height1
+        with self._draw_painter(antialias=True) as painter:
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            painter.drawImage(QRectF(X1, Y1, width1, height1), source,
+                              QRectF(X2, Y2, width2, height2))
 
     # -- colors and pens -----------------------------------------------------------------
     def _draw_text_color(self):

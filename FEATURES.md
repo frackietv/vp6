@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.4.28
+**Date:** 2026-10-01
+
+## Language and runtime
+
+- Picture objects: `LoadPicture` and `SavePicture`; `Picture(Width, Height, BackColor)`, a picture in memory drawn on with the graphics methods (Line, Circle, PSet, Print, PaintPicture...); every picture property (Picture, Icon, MouseIcon, DragIcon, the buttons' pictures, ListImages) takes a Picture as it takes a file
+- A form's or PictureBox's `Image` (what it shows, as a Picture) and `PaintPicture` (a picture, or a part of it, scaled)
+- A form's `Picture`: a picture on its background
+- The clipboard: pictures (`Clipboard.GetData`, `SetData`, `GetFormat` with `vpCFBitmap` / `vpCFDIB`), rich text (`GetText` / `SetText` with `vpCFRTF`) and files; a picture dropped from another program in OLEDragDrop's Data
+
+## Kitchen Sink
+
+- The Pictures page makes a Picture in memory (also its MouseIcon), saves and loads it, copies and pastes it, and sets the form's own Picture
+
+---
+
 **Version:** 0.4.27
 **Date:** 2026-10-01
 

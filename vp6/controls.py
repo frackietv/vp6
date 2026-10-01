@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 from . import colors
 from ._props import P, PropertyHost, _make_property, enum_choices
 from .drawing import DRAWING_PROPERTIES, Drawing
+from .picture import is_picture, picture_pixmap
 from .app import call_handler
 
 # Parameters passed to each event handler; used by the IDE to generate stubs.
@@ -633,7 +634,7 @@ class Control(PropertyHost):
         if self._widget is None or self._design_mode:
             return
         cursor = pointer_cursor(self._values.get("MousePointer", 0),
-                                resolve_path(self._form, self._values.get("MouseIcon", "")))
+                                picture_pixmap(self._form, self._values.get("MouseIcon", "")))
         saved = self.__dict__.setdefault("_saved_cursors", {})
         for widget in self._event_targets() or [self._widget]:
             if cursor is None:
@@ -674,7 +675,7 @@ class Control(PropertyHost):
         mime = QMimeData()
         mime.setData(_VP6_DRAG_MIME, QByteArray(str(id(self)).encode()))
         drag.setMimeData(mime)
-        icon = QPixmap(resolve_path(self._form, self._values.get("DragIcon", "")))
+        icon = picture_pixmap(self._form, self._values.get("DragIcon", ""))
         if not icon.isNull():
             drag.setPixmap(icon)
             drag.setHotSpot(QPoint(icon.width() // 2, icon.height() // 2))
@@ -2429,8 +2430,7 @@ class _Graphical:
             name = "DisabledPicture"
         elif (button.isDown() or button.isChecked()) and values.get("DownPicture"):
             name = "DownPicture"
-        path = resolve_path(self, values.get(name, ""))
-        pixmap = QPixmap(path) if path else QPixmap()
+        pixmap = picture_pixmap(self, values.get(name, ""))
         if pixmap.isNull():
             button.setIcon(QIcon())
             button.setToolButtonStyle(Qt.ToolButtonTextOnly)
@@ -4296,8 +4296,7 @@ class PictureBox(_Docked, Drawing, Control):
             self._scroll_area.verticalScrollBar().setValue(int(value))
 
     def _apply_Picture(self, v):
-        path = resolve_path(self, v)
-        pixmap = QPixmap(path) if path else QPixmap()
+        pixmap = picture_pixmap(self, v)  # (a file, or a Picture)
         self._widget.setPixmap(pixmap)
         if self._values.get("AutoSize") and not pixmap.isNull():
             self._widget.resize(pixmap.size())
@@ -4382,8 +4381,7 @@ class Image(Control):
         self._widget.resize(pixmap.width() + border, pixmap.height() + border)
 
     def _apply_Picture(self, v):
-        path = resolve_path(self, v)
-        self._widget.setPixmap(QPixmap(path) if path else QPixmap())
+        self._widget.setPixmap(picture_pixmap(self, v))  # (a file, or a Picture)
         self._fit_to_picture()
 
     def _apply_Stretch(self, v):
@@ -5177,32 +5175,31 @@ def _image_ref(text: str):
 class ListImage(_KeyedItem):
     """One picture of an ImageList (``ImageList1.ListImages(1)`` or by Key)."""
 
-    def __init__(self, images: "ImageList", key: str, picture: str):
+    def __init__(self, images: "ImageList", key: str, picture):
         self._images = images
         self._key = key
-        self._picture = str(picture)
+        self._picture = picture if is_picture(picture) else str(picture)
         self.Tag = ""
 
     def __repr__(self):
         return f"<ListImage {self.Index} {self._key or self._picture!r}>"
 
     @property
-    def Picture(self) -> str:
-        """Its picture file (relative to the form's folder): also usable as an
-        Image's or PictureBox's Picture."""
+    def Picture(self):
+        """Its picture: a file (relative to the form's folder) or a Picture
+        object; also usable as an Image's or PictureBox's Picture."""
         return self._picture
 
     @Picture.setter
     def Picture(self, value):
-        self._picture = str(value)
+        self._picture = value if is_picture(value) else str(value)
         self._changed()
 
     def _pixmap(self) -> QPixmap:
         """The picture, at the ImageList's size (ImageWidth, ImageHeight) in
         logical pixels: on a high-DPI screen it keeps that many more pixels,
         so a 32-pixel picture shown at 16 stays sharp."""
-        path = resolve_path(self._images, self._picture)
-        pixmap = QPixmap(path) if path else QPixmap()
+        pixmap = picture_pixmap(self._images, self._picture)
         width, height = self._images._size()
         if pixmap.isNull() or (width, height) == (pixmap.width(), pixmap.height()):
             return pixmap
@@ -5231,10 +5228,10 @@ class _ListImages(_KeyedCollection):
 
     _noun = "picture"
 
-    def Add(self, Index=None, Key: str = "", Picture: str = "") -> ListImage:
-        """A new picture (a file, relative to the form's folder), at the end or
-        at Index (from 1)."""
-        image = self._insert(ListImage(self._owner, str(Key or ""), str(Picture)), Index)
+    def Add(self, Index=None, Key: str = "", Picture="") -> ListImage:
+        """A new picture (a file, relative to the form's folder, or a Picture
+        object), at the end or at Index (from 1)."""
+        image = self._insert(ListImage(self._owner, str(Key or ""), Picture), Index)
         self._changed()
         return image
 
@@ -5302,8 +5299,7 @@ class ImageList(Control):
         width, height = self._values.get("ImageWidth", 0), self._values.get("ImageHeight", 0)
         if (not width or not height) and self._images is not None and len(self._images):
             first = self._images._list[0]
-            path = resolve_path(self, first._picture)
-            pixmap = QPixmap(path) if path else QPixmap()
+            pixmap = picture_pixmap(self, first._picture)
             width, height = width or pixmap.width(), height or pixmap.height()
         return max(width, 0), max(height, 0)
 
@@ -5384,8 +5380,8 @@ def _picture_icon(control, ref, strict: bool = False, prop: str = "ImageList") -
             raise ValueError(f"{control.TypeName} '{control.Name}': Image {ref} needs an "
                              "ImageList")
         return QIcon()
-    path = resolve_path(control, str(ref))
-    return QIcon(QPixmap(path)) if path else QIcon()
+    pixmap = picture_pixmap(control, ref)  # (a file, or a Picture)
+    return QIcon(pixmap) if not pixmap.isNull() else QIcon()
 
 
 # --- StatusBar ---------------------------------------------------------------------------------
@@ -9275,14 +9271,15 @@ POINTER_CHOICES = tuple((value, f"{value} - {label}") for value, label in (
     (14, "Arrow and Question"), (15, "Size All"), (99, "Custom")))
 
 
-def pointer_cursor(value: int, icon: str = "") -> QCursor | None:
+def pointer_cursor(value: int, icon="") -> QCursor | None:
     """A MousePointer value as a cursor: None for vpDefault (the control's
-    own), the MouseIcon picture for vpCustom (None if it can't be read)."""
+    own), the MouseIcon picture for vpCustom (a QPixmap, a Picture or a file;
+    None if it can't be read)."""
     value = int(value or 0)
     if value == 0:
         return None
     if value == 99:
-        pixmap = QPixmap(icon) if icon else QPixmap()
+        pixmap = icon if isinstance(icon, QPixmap) else picture_pixmap(None, icon)
         return QCursor(pixmap) if not pixmap.isNull() else None
     return QCursor(_CURSORS.get(value, Qt.ArrowCursor))
 
@@ -9328,23 +9325,33 @@ VP_ENTER, VP_LEAVE, VP_OVER = 0, 1, 2  # DragOver's State
 
 
 class DataObject:
-    """What was dropped from another program (OLEDragDrop's Data): its text and
-    files. ``GetFormat(vpCFText)``, ``GetData(vpCFText)``, ``Files``."""
+    """What was dropped from another program (OLEDragDrop's Data): its text,
+    picture and files. ``GetFormat(vpCFText)``, ``GetData(vpCFText)``,
+    ``Files``."""
 
     def __init__(self, mime):
         self._text = mime.text() if mime.hasText() else None
         self.Files = [url.toLocalFile() for url in mime.urls() if url.isLocalFile()]
+        image = mime.imageData() if mime.hasImage() else None
+        self._image = image if image is not None and not image.isNull() else None
 
     def GetFormat(self, Format: int) -> bool:
-        """Whether it has that format: vpCFText (1) or vpCFFiles (15)."""
-        return {1: self._text is not None, 15: bool(self.Files)}.get(int(Format), False)
+        """Whether it has that format: vpCFText (1), vpCFBitmap (2) or vpCFDIB
+        (8) for a picture, vpCFFiles (15)."""
+        return {1: self._text is not None, 2: self._image is not None,
+                8: self._image is not None, 15: bool(self.Files)}.get(int(Format), False)
 
     def GetData(self, Format: int = 1):
-        """Its text (vpCFText) or its files' paths (vpCFFiles); None if it has none."""
+        """Its text (vpCFText), its picture as a Picture (vpCFBitmap, vpCFDIB)
+        or its files' paths (vpCFFiles); None if it has none."""
         if int(Format) == 15:
             return list(self.Files) or None
         if int(Format) == 1:
             return self._text
+        if int(Format) in (2, 8) and self._image is not None:
+            from .picture import Picture
+
+            return Picture(_image=self._image)
         return None
 
     def __repr__(self):

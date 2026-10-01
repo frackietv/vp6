@@ -332,6 +332,7 @@ What the arguments mean:
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over the form (Custom: its MouseIcon) |
 | `NegotiateMenus` | bool | `True` | The menus of forms shown in this one (ShowIn) join its menu bar while they are visible, placed by their NegotiatePosition |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop |
+| `Picture` | file path | `''` | A picture on the form's background, at its top left (a file relative to the form's folder) |
 | `StartUpPosition` | enum | 2 - CenterScreen | 0 - Manual, 1 - CenterOwner, 2 - CenterScreen, 3 - Windows Default. Where the window first appears |
 | `Tag` | str | `''` | Free for your own use |
 | `Top` | int | `0` | Screen position; used with StartUpPosition Manual |
@@ -366,7 +367,7 @@ Run-time only properties:
 | `Move(Left, Top=None, Width=None, Height=None)` | Moves or resizes the window. |
 | `PopupMenu(Menu, Flags=0, X=None, Y=None, DefaultMenu=None)` | Shows one of the form's menus as a context menu; see [Popup menus](#popup-menus). Returns the chosen item, or `None`. |
 | `Refresh()` | Repaints (with AutoRedraw False, `Form_Paint` fires). |
-| `Line`, `Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight` | The [graphics methods](#drawing-on-forms-and-pictureboxes). |
+| `Line`, `Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`, `PaintPicture` | The [graphics methods](#drawing-on-forms-and-pictureboxes); `Image` is a [Picture](#picture-objects) of what the form shows. |
 | `SetFocus()` | Activates the window. |
 | `ShowIn(Container, Fill=True)` | Shows the form inside a container of another form (a PictureBox or Frame) or inside another form; see [Forms inside forms](#forms-inside-forms). `ShowIn(None)` makes it a window again. |
 | `Container` | Read-only: where `ShowIn` put the form, or `None` for a form in its own window. |
@@ -459,6 +460,12 @@ def Form_Load(self):
 | `Cls()` | clears what the graphics methods drew (not the `Picture`) and moves the current point to 0, 0 |
 | `Point(X, Y)` | the color at X, Y (under any controls), or -1 outside |
 | `TextWidth(Text)`, `TextHeight(Text)` | the size Print would give Text in the Font (the longest line; all its lines) |
+| `PaintPicture(Picture, X1, Y1, Width1=None, Height1=None, X2=0, Y2=0, Width2=None, Height2=None)` | draws a [picture](#picture-objects) (a Picture, a file relative to the form's folder, another control's `Image`) at X1, Y1, scaled to Width1 x Height1 when given; X2, Y2, Width2, Height2 take just that part of it |
+
+`Image` (read-only) is a [Picture](#picture-objects) of what the form or
+PictureBox shows: its background, `Picture` and drawing, without its
+controls, e.g. to save with `SavePicture`. A form's `Picture` is a picture on
+its background, at the top left, under the drawing and the controls.
 
 Each moves the current point, `CurrentX` and `CurrentY`: to the end of the
 line, the point, the circle's center or the end of the text.
@@ -757,7 +764,8 @@ Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button
 <!-- END GENERATED -->
 
 Methods: the [graphics methods](#drawing-on-forms-and-pictureboxes) (`Line`,
-`Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`) with
+`Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`,
+`PaintPicture`), `Image` (a [Picture](#picture-objects) of what it shows) with
 `CurrentX` / `CurrentY`, and `ScaleWidth` / `ScaleHeight`, the size inside its
 border. `Cls()` clears the drawing, not the `Picture` (set `Picture = ""` for
 that). The `Paint` event: see [AutoRedraw and Paint](#drawing-on-forms-and-pictureboxes).
@@ -2648,13 +2656,54 @@ registry, under `HKEY_CURRENT_USER\Software\VP6 Program Settings\AppName\Section
 `~/Library/Preferences/com.vp6-program-settings.AppName.plist`; on Linux
 `~/.config/VP6 Program Settings/AppName.conf`.
 
+### Picture objects
+
+A `Picture` is a picture in memory, VB's Picture object. Every picture
+property takes one, as it takes a file name: a PictureBox's or Image's
+`Picture`, a button's pictures, a form's `Icon` and `Picture`, `MouseIcon`,
+`DragIcon`, `ListImages.Add`.
+
+```python
+logo = LoadPicture("logo.png")              # from a file
+self.picLogo.Picture = logo
+self.Icon = logo
+
+badge = Picture(64, 64, BackColor=vpWhite)  # a new one, drawn on in memory
+badge.FillStyle, badge.FillColor = vpFSSolid, vpYellow
+badge.Circle(32, 32, 28, vpRed)
+badge.PaintPicture(logo, 8, 8, 48, 48)
+self.imgBadge.Picture = badge
+
+SavePicture(self.picChart.Image, "chart.png")   # what a PictureBox shows
+Clipboard.SetData(badge)                         # and to other programs
+```
+
+| Name | Description |
+|---|---|
+| `LoadPicture(FileName="")` | a Picture from an image file (PNG, JPEG, BMP, GIF, ICO, SVG...; a relative name is from the current folder, which is the project's when it runs); `LoadPicture()` is an empty one, which clears a picture property. A missing file raises `FileNotFoundError`, one that isn't a picture `ValueError`. |
+| `SavePicture(Picture, FileName)` | saves a Picture (or a picture file's picture) in the format the extension says (`.png`, `.jpg`, `.bmp`...); without one, BMP as in VB. Raises `OSError` when it can't. |
+| `Picture(Width=0, Height=0, BackColor=None)` | a new picture, transparent without a BackColor |
+
+A Picture has `Width` and `Height` (pixels), `Type` (`vpPicTypeBitmap`, or
+`vpPicTypeNone` for an empty one), `Image` (a copy), and the
+[graphics methods](#drawing-on-forms-and-pictureboxes) with their properties
+(`Line`, `Circle`, `PSet`, `Print`, `PaintPicture`, `Point` (-1 where it is
+transparent), `Cls` (fills it with its BackColor), `DrawWidth`, `DrawStyle`,
+`FillStyle`, `FillColor`, `ForeColor`, `CurrentX`, `CurrentY`, `FontName`,
+`FontSize`, `FontBold`, `FontItalic`). A property set to a Picture shows it as
+it is then: draw on it again, and set the property again to show that.
+Reading the property gives what was set (a Picture, or a file name).
+
+A picture dropped from another program is in `OLEDragDrop`'s Data too:
+`Data.GetFormat(vpCFBitmap)`, `Data.GetData(vpCFBitmap)`.
+
 ### Global objects
 
 | Object | Members |
 |---|---|
 | `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started) |
 | `Screen` | `Width`, `Height` (primary screen, pixels), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
-| `Clipboard` | `GetText()`, `SetText(text)`, `Clear()` |
+| `Clipboard` | `GetText(Format=vpCFText)`, `SetText(text, Format=vpCFText)` (`vpCFRTF`: rich text, as RTF source), `GetFormat(Format)` (`vpCFText`, `vpCFBitmap` / `vpCFDIB`, `vpCFRTF`, `vpCFFiles`), `GetData(Format=vpCFBitmap)` (a [Picture](#picture-objects), or with `vpCFFiles` the files' paths; `None` when there is none), `SetData(Picture)` (a Picture or a picture file), `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
 
 ### Control classes
@@ -2775,7 +2824,9 @@ All constants are plain ints or strings.
 | PopupMenu flags (added together) | `vpPopupMenuLeftAlign`, `vpPopupMenuCenterAlign`, `vpPopupMenuRightAlign`, `vpPopupMenuLeftButton`, `vpPopupMenuRightButton` | 0, 4, 8, 0, 2 |
 | Form_QueryUnload: UnloadMode | `vpFormControlMenu`, `vpFormCode`, `vpAppWindows`, `vpAppTaskManager`, `vpFormMDIForm`, `vpFormOwner` | 0, 1, 2, 3, 4, 5 |
 | MousePointer (controls, forms, Screen) | `vpDefault`, `vpArrow`, `vpCrosshair`, `vpIbeam`, `vpIconPointer`, `vpSizePointer`, `vpSizeNESW`, `vpSizeNS`, `vpSizeNWSE`, `vpSizeWE`, `vpUpArrow`, `vpHourglass`, `vpNoDrop`, `vpArrowHourglass`, `vpArrowQuestion`, `vpSizeAll`, `vpCustom` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 99 |
-| Drag and drop | `vpManual`, `vpAutomatic`, `vpCancelDrag`, `vpBeginDrag`, `vpEndDrag`, `vpEnter`, `vpLeave`, `vpOver`, `vpOLEDropNone`, `vpOLEDropManual`, `vpCFText`, `vpCFFiles`, `vpDropEffectNone`, `vpDropEffectCopy`, `vpDropEffectMove` | 0, 1, 0, 1, 2, 0, 1, 2, 0, 1, 1, 15, 0, 1, 2 |
+| Drag and drop | `vpManual`, `vpAutomatic`, `vpCancelDrag`, `vpBeginDrag`, `vpEndDrag`, `vpEnter`, `vpLeave`, `vpOver`, `vpOLEDropNone`, `vpOLEDropManual` | 0, 1, 0, 1, 2, 0, 1, 2, 0, 1 |
+| Clipboard and OLEDragDrop's Data: formats | `vpCFText`, `vpCFBitmap`, `vpCFDIB`, `vpCFFiles`, `vpCFRTF` | 1, 2, 8, 15, -16639 |
+| Picture.Type | `vpPicTypeNone`, `vpPicTypeBitmap`, `vpDropEffectNone`, `vpDropEffectCopy`, `vpDropEffectMove` | 0, 1, 0, 1, 2 |
 | CommonDialog Flags (added together) | `vpOFNReadOnly`, `vpOFNOverwritePrompt`, `vpOFNHideReadOnly`, `vpOFNNoChangeDir`, `vpOFNAllowMultiselect`, `vpOFNPathMustExist`, `vpOFNFileMustExist`, `vpOFNCreatePrompt`, `vpOFNExplorer`, `vpCCRGBInit`, `vpCCFullOpen`, `vpCFScreenFonts`, `vpCFEffects`, `vpPDAllPages`, `vpPDSelection`, `vpPDPageNums`, `vpCdlCancel` | 1, 2, 4, 8, 512, 2048, 4096, 8192, 524288, 1, 2, 1, 256, 0, 1, 2, 32755 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
@@ -2919,7 +2970,11 @@ It goes in the project's `dist` folder:
   print instead of `;` and `,`. With AutoRedraw False, what is drawn outside
   a Paint handler stays (as with AutoRedraw) instead of going when the form is
   covered. There is no `DrawMode`, `FontTransparent` (text is drawn without
-  a background), `PaintPicture` or `ScaleMode` (pixels only).
+  a background) or `ScaleMode` (pixels only).
+* **Picture objects** measure `Width` and `Height` in pixels (VB: HiMetric
+  units), are drawn on directly (in VB through a PictureBox), and have no
+  `Handle`, `hPal` or `Render`. `Set` isn't needed: `self.Picture1.Picture =
+  LoadPicture("a.png")`.
 * **Settings** (`SaveSetting` and the others) are kept under "VP6 Program
   Settings", not VB's "VB and VBA Program Settings", and on macOS and Linux
   where those systems keep them; `GetAllSettings` returns `(key, setting)`

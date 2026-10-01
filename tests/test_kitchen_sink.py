@@ -510,6 +510,25 @@ def test_pictures_page(sink):
     assert page.lblOnPicture.BackStyle == vp6.vpOpaque
     assert page.lblTransparent.BackStyle == vp6.vpTransparent
     assert not page.lblTransparent._widget.autoFillBackground()
+    # Picture objects: made in memory, saved and loaded, on the clipboard
+    made = page.picMade
+    assert isinstance(made.Picture, vp6.Picture) and made.Picture.Width == 120
+    assert made.Point(95, 95) == vp6.vpYellow  # its Circle
+    assert made.Point(20, 20) not in (-1, 0xF0E0C0)  # the logo PaintPicture put there
+    assert made.MousePointer == vp6.vpCustom and isinstance(made.MouseIcon, vp6.Picture)
+    page.cmdSave._widget.click()
+    assert page.imgSaved.Picture.Width == made.ScaleWidth and "Saved" in page.lblInfo.Caption
+    page.cmdCopyPicture._widget.click()
+    page.cmdPastePicture._widget.click()
+    assert page.picPasted.Picture.Width == made.ScaleWidth
+    assert page.picPasted.Point(95, 95) == vp6.vpYellow
+    vp6.Clipboard.SetText("no picture")
+    page.cmdPastePicture._widget.click()
+    assert "No picture" in page.lblInfo.Caption
+    page.chkBackground.Value = vp6.vpChecked  # the form's own Picture
+    assert page.Picture == "vp6.png" and page._background_picture() is not None
+    page.chkBackground.Value = vp6.vpUnchecked
+    assert page._background_picture() is None
 
 
 def test_drawing_page(sink):

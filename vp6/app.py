@@ -510,16 +510,77 @@ def DeleteSetting(AppName, Section=None, Key=None) -> None:
     settings.sync()
 
 
-class _Clipboard:
-    """The VB ``Clipboard`` object."""
+# Clipboard formats (constants.vpCFText...)
+_CF_TEXT, _CF_BITMAP, _CF_DIB, _CF_FILES, _CF_RTF = 1, 2, 8, 15, -16639
+_RTF_MIME = "text/rtf"
 
-    def GetText(self) -> str:
+
+class _Clipboard:
+    """The VB ``Clipboard`` object: text, rich text, pictures and (from other
+    programs) files."""
+
+    def GetText(self, Format: int = _CF_TEXT) -> str:
+        """Its text (vpCFText), or its rich text (vpCFRTF: RTF source); "" if
+        it has none."""
         ensure_app()
+        if int(Format) == _CF_RTF:
+            mime = QGuiApplication.clipboard().mimeData()
+            data = mime.data(_RTF_MIME) if mime is not None and mime.hasFormat(_RTF_MIME) \
+                else b""
+            return bytes(data).decode("utf-8", "replace")
         return QGuiApplication.clipboard().text()
 
-    def SetText(self, text: str) -> None:
+    def SetText(self, text: str, Format: int = _CF_TEXT) -> None:
+        """Put text on it (vpCFRTF: RTF source, for programs that paste rich
+        text)."""
         ensure_app()
+        if int(Format) == _CF_RTF:
+            from PySide6.QtCore import QMimeData
+
+            mime = QMimeData()
+            mime.setData(_RTF_MIME, str(text).encode("utf-8"))
+            QGuiApplication.clipboard().setMimeData(mime)
+            return
         QGuiApplication.clipboard().setText(str(text))
+
+    def GetFormat(self, Format: int) -> bool:
+        """Whether it holds that format: vpCFText, vpCFBitmap or vpCFDIB (a
+        picture), vpCFFiles, vpCFRTF."""
+        ensure_app()
+        mime = QGuiApplication.clipboard().mimeData()
+        if mime is None:
+            return False
+        return {_CF_TEXT: mime.hasText(), _CF_BITMAP: mime.hasImage(),
+                _CF_DIB: mime.hasImage(), _CF_RTF: mime.hasFormat(_RTF_MIME),
+                _CF_FILES: any(url.isLocalFile() for url in mime.urls())}.get(int(Format),
+                                                                              False)
+
+    def GetData(self, Format: int = _CF_BITMAP):
+        """Its picture as a Picture (vpCFBitmap, vpCFDIB), or its files' paths
+        (vpCFFiles); None when it has none."""
+        ensure_app()
+        clipboard = QGuiApplication.clipboard()
+        if int(Format) == _CF_FILES:
+            mime = clipboard.mimeData()
+            files = [url.toLocalFile() for url in mime.urls() if url.isLocalFile()] \
+                if mime is not None else []
+            return files or None
+        if int(Format) not in (_CF_BITMAP, _CF_DIB):
+            return None
+        image = clipboard.image()
+        if image.isNull():
+            return None
+        from .picture import Picture
+
+        return Picture(_image=image)
+
+    def SetData(self, Data, Format: int = _CF_BITMAP) -> None:
+        """Put a picture on it: a Picture (e.g. LoadPicture's, a control's
+        Image) or a picture file."""
+        ensure_app()
+        from .picture import to_picture
+
+        QGuiApplication.clipboard().setImage(to_picture(Data)._image)
 
     def Clear(self) -> None:
         ensure_app()

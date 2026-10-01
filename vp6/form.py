@@ -29,9 +29,10 @@ from . import appearance, colors
 from ._props import P, PropertyHost, enum_choices
 from .app import call_handler, ensure_app, run_event_loop
 from .drawing import DRAWING_PROPERTIES, Drawing
+from .picture import picture_pixmap
 from .controls import (_FONT, POINTER_CHOICES, CommandButton, Control, ControlArray, TextBox,
-                       Timer, handle_drag_event, pointer_cursor, resolve_path, vp_buttons,
-                       vp_key_code, vp_shift)
+                       Timer, handle_drag_event, pointer_cursor, vp_buttons, vp_key_code,
+                       vp_shift)
 from .controls import Menu as MenuControl
 
 _loaded_forms: list["Form"] = []
@@ -281,6 +282,9 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         P("ForeColor", "color", None, description="Text color; unset = the default"),
         *_FONT,
         *DRAWING_PROPERTIES,
+        P("Picture", "file", "",
+          description="A picture on the form's background, at its top left (a file relative "
+                      "to the form's folder)"),
         P("Enabled", "bool", True, description="Whether the form responds to the user"),
         P("MousePointer", "enum", 0, POINTER_CHOICES,
           description="The mouse pointer's shape over the form (Custom: its MouseIcon)"),
@@ -749,7 +753,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
 
     def _apply_MousePointer(self, v):
         cursor = pointer_cursor(self._values.get("MousePointer", 0),
-                                resolve_path(self, self._values.get("MouseIcon", "")))
+                                picture_pixmap(self, self._values.get("MouseIcon", "")))
         if cursor is None:
             self._widget.unsetCursor()
         else:
@@ -758,9 +762,19 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
     _apply_MouseIcon = _apply_MousePointer
 
     def _apply_Icon(self, v):
-        path = v if not v or os.path.isabs(v) else os.path.join(self._base_dir(), v)
         # (none, or a file that can't be read: the program's icon)
-        self._widget.setWindowIcon(QIcon(path) if path and os.path.isfile(path) else QIcon())
+        pixmap = picture_pixmap(self, v)  # (a file, or a Picture)
+        self._widget.setWindowIcon(QIcon(pixmap) if not pixmap.isNull() else QIcon())
+
+    def _apply_Picture(self, v):
+        """A picture on the form's background, at the top left (under the
+        drawing and the controls)."""
+        pixmap = picture_pixmap(self, v)
+        self.__dict__["_background"] = None if pixmap.isNull() else pixmap
+        self._drawing_surface().update()
+
+    def _background_picture(self):
+        return self.__dict__.get("_background")
 
     def _read_Width(self):
         return self._widget.width()

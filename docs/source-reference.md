@@ -38,7 +38,7 @@ The declarative property system shared by forms and controls.
 | `PropSpec(name, kind, default, choices, always, description)` | Frozen dataclass describing one designable property. |
 | `P(...)` | Short constructor for `PropSpec`. |
 | `enum_choices(*labels)` | `((0, "0 - None"), (1, "1 - Fixed Single"), ...)` for `enum` properties. |
-| `normalize(kind, value)` | Coerces a value to its kind (`str`, `int`, `bool`, `color` via `colors.normalize`, `list` from a list or newline-separated string). |
+| `normalize(kind, value)` | Coerces a value to its kind (`str`, `int`, `bool`, `color` via `colors.normalize`, `list` from a list or newline-separated string). A `file` value that is a Picture object (it has `_pixmap`) is kept as it is. |
 | `PropertyHost` | Base class. `__init_subclass__` builds `cls._specs` (name → spec) and generates a Python `property` per spec (unless the class defines one). `_init_values(props)` applies defaults and values in spec order and rejects unknown names. `_set_prop` normalizes, stores in `self._values` and calls `_apply_<Name>`. |
 
 Hooks a subclass may define per property: `_apply_<Name>(value)` pushes the
@@ -95,7 +95,11 @@ Application-level services.
     `ActiveControl`
     (`control_of_widget` of the focus widget, `outer_control` for user
     controls);
-  * `Clipboard`: `GetText`, `SetText`, `Clear`;
+  * `Clipboard`: `GetText` / `SetText` (with vpCFRTF: the `text/rtf` MIME
+    data), `GetFormat` (text, an image, RTF, local files), `GetData` (the
+    clipboard's image as a `picture.Picture`, or local files' paths),
+    `SetData` (`picture.to_picture(...)`'s image), `Clear`; `_CF_*` are the
+    format numbers;
   * `Debug`: `Debug.Print` prints to stdout, which the IDE shows in the
     Immediate window.
 * `Command()` joins `sys.argv[1:]` (`shlex.join`; `list2cmdline` on
@@ -183,6 +187,11 @@ Properties.
   ended and how far its pattern had got (`setDashOffset`, in pen widths),
   reset by `Cls`; `_draw_inset` (Inside Solid), `_draw_fill`
   (FillStyle with FillColor, else ForeColor; hatches with `controls._hatch`).
+* **Pictures:** `_background_picture()` (None; a form's Picture) is drawn
+  first by `_paint_drawing`. `Image` renders the drawing area of the surface
+  without its children into a new `picture.Picture`; `PaintPicture` draws a
+  picture's image (a file through `picture_pixmap`, relative to the form's
+  folder) scaled into a rectangle, or a part of it.
 * **The methods:** `PSet` (a pixel, or a round dot), `Line` (a line, a box
   covering both corners, "BF" filled), `Circle` (a `QPainterPath`: an
   ellipse, or an arc from `arcMoveTo`/`arcTo` with radius lines for negative
@@ -190,6 +199,28 @@ Properties.
   (`QFontMetricsF` of the surface's font; lines at ascent below the current
   point), `Cls`, `Point` (renders that one pixel of the surface without its
   children: `DrawWindowBackground`), `TextWidth`, `TextHeight`.
+
+### `vp6/picture.py` (≈210 lines)
+
+VB's Picture objects.
+
+* `Picture(Drawing, PropertyHost)`: a `QImage` (ARGB32 premultiplied, device
+  pixel ratio 1) in `_image`. `Picture(Width, Height, BackColor)` makes one
+  (filled, or transparent); `_image=` wraps an existing image (converted).
+  Its properties are the drawing ones without AutoRedraw, ForeColor,
+  BackColor and the font's; `__setattr__` refuses others. The graphics
+  methods draw straight on its image: `_drawing_surface()` is a
+  `_PictureSurface` (the size, a font from its values, the application's
+  palette, a no-op `update`), `_draw_image()` its image (it never grows),
+  and it has its own `Cls` (its BackColor), `Point` (-1 where transparent)
+  and `Image` (a copy). `Width`, `Height`, `Type`; `_pixmap()` for controls.
+* `LoadPicture(FileName)` (empty without one; FileNotFoundError /
+  ValueError), `SavePicture(Picture, FileName)` (`QImage.save`, BMP without
+  an extension; OSError).
+* `to_picture(value)`: a Picture from a Picture, a QPixmap / QImage or a
+  file. `picture_pixmap(owner, value)`: a picture property's value as a
+  QPixmap (a Picture's, or a file relative to `owner._base_dir()`).
+* `is_picture(value)`.
 
 ### `vp6/colors.py` (≈60 lines)
 
@@ -237,7 +268,8 @@ The intrinsic controls.
   * **The mouse:** `_add_mouse_members` gives the visible control types
     (`_NO_MOUSE_MEMBERS` aside) MousePointer, MouseIcon, DragMode, DragIcon,
     OLEDropMode and the drag events. `pointer_cursor(value, icon)` makes the
-    QCursor (`_CURSORS`; None for vpDefault); `_update_cursor` sets it on the
+    QCursor (`_CURSORS`; None for vpDefault; the icon a QPixmap, a Picture or
+    a file); `_update_cursor` sets it on the
     control's widgets, remembering their own cursors (`_saved_cursors`) to
     give back for vpDefault. `Drag` runs a `QDrag` with `_VP6_DRAG_MIME`
     (its DragIcon or a faded grab of the widget), recording it in
@@ -245,7 +277,8 @@ The intrinsic controls.
     cancels it with `QDrag.cancel`. Control widgets accept drops; their drag
     events go through `_on_qt_event` to `handle_drag_event(owner, event,
     pos)`, which fires DragOver (enter/over/leave) and DragDrop for a VP6
-    drag, OLEDragOver and OLEDragDrop (a `DataObject`) for others when
+    drag, OLEDragOver and OLEDragDrop (a `DataObject`: text, files, an image
+    as a Picture) for others when
     OLEDropMode is Manual, and `_accept_drag` (refused: accepted with
     IgnoreAction, so the container doesn't take it). DragMode Automatic
     starts a drag on the left button's press.
@@ -267,8 +300,11 @@ The intrinsic controls.
   * `vp_buttons(buttons)` gives 1 = left, 2 = right, 4 = middle.
 * **Other helpers:**
   * `strip_mnemonic("&File") == "File"` (Labels hide `&` access keys);
-  * `resolve_path(owner, path)` resolves paths relative to the form's folder
-    (`PictureBox.Picture`).
+  * `resolve_path(owner, path)` resolves paths relative to the form's folder;
+    picture properties go through `picture.picture_pixmap(owner, value)`
+    instead (a Picture object, or a file resolved the same way): PictureBox,
+    Image, the buttons' pictures, ListImages (`ListImage` keeps a Picture
+    as it is), `_picture_icon`, MouseIcon, DragIcon.
 * **Property groups** reused by the controls: `_geometry(w, h)` (Left, Top,
   Width, Height, always written), `_FONT`, `_COLORS`, `_COMMON` (Enabled,
   Visible, TabIndex, ToolTipText, Tag, ZIndex).
@@ -455,8 +491,12 @@ visibility asks the form to place its docked controls again
     window), 3 from `app.close_all_windows` (Ctrl+C), `VP_FORM_OWNER` for the
     forms shown in a closing form.
   * **Drag and drop, the pointer:** `_FormWidget` and `_FormClient` accept drops; their drag events go to `handle_drag_event` with the form (`_form_drag_event`; a user control's surface: the user control); `_apply_MousePointer` sets the window's cursor.
-  * **Icon:** `_apply_Icon` sets the window icon from a file relative to
-    `_base_dir()` (none or unreadable: an empty QIcon, so the program's).
+  * **Icon:** `_apply_Icon` sets the window icon from a Picture or a file
+    relative to `_base_dir()` (`picture_pixmap`; none or unreadable: an empty
+    QIcon, so the program's).
+  * **Picture:** `_apply_Picture` keeps the background picture's pixmap
+    (`_background`), which `_background_picture()` gives the drawing's
+    `_paint_drawing` to draw first, at the top left.
   * **Construction:**
     * `__init__` (see architecture §4.4);
     * `__setattr__` names controls and `ControlArray`s assigned to
@@ -1534,7 +1574,12 @@ explorer-style.
     the Slider), UpDown with a TextBox buddy (UpClick, DownClick, Change) and a
     horizontal, wrapping one with a Label buddy;
   * `pgPictures.py`: a PictureBox with a Label on it (Click, MouseDown, a
-    Tag from InputBox) and an Image thumbnail;
+    Tag from InputBox) and an Image thumbnail; Picture objects: one made in
+    memory (Picture with a BackColor, PaintPicture of the logo file, Circle,
+    Print) as a PictureBox's Picture and a small one as its MouseIcon,
+    SavePicture of its Image and LoadPicture into an Image, Copy and Paste
+    with Clipboard.SetData / GetFormat / GetData, and the form's own
+    background Picture from a CheckBox;
   * `pgDrawing.py`: a sketch pad (a PictureBox with AutoRedraw: PSet on
     MouseDown, `Line(X, Y)` on MouseMove, DrawWidth from an HScrollBar,
     DrawStyle from a ComboBox, Cls), shapes (Line boxes, hatched and solid
@@ -1825,4 +1870,5 @@ All tests run headless. `conftest.py`:
 | `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the Docking panels page (Float and Dock, Close cancelled, a closed panel shown again, the layout saved and restored, the grid following its panel), the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Web pages page (a stand-in WebView: navigating, an error, Back and Forward, RunScript, Refresh; the WebBrowser chosen instead, its BeforeNavigate, NewWindow and StatusTextChange), the Dialogs page's CommonDialog (Open, Save As writing the sample, Color and its cancelling, Font, Print), the Mouse page's pointers, fruit dragged into the basket and out, and drops from other programs, the Buttons page's cmdHop moving into the Basket frame and out (Container), the Keyboard page's Validate (the focus kept, Help regardless), ActiveControl and SendKeys (typed, upper-cased, Enter on the Default button), the Dialogs page's default instance (Result, closed by code or by its close button, the same instance loaded again, its icon), the Your own controls page (ctlRating's stars, a click's Change, Hover, Value from code, Locked, Max and Value kept in range), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order, lines and shapes, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, the popup menu (right-click, the bold default, under a button), globals); closing unloads the pages. |
 | `test_mouse.py` | MousePointer (a control's own pointer given back, a custom MouseIcon, a form's), Screen.MousePointer; which controls have the mouse members and events; VB drag and drop: DragOver's enter, over and leave, DragDrop, refusing in DragOver, dropping on a user control, Drag starting (its data and picture, its DragIcon), ending where it is and cancelling, DragMode Automatic (no MouseDown or Click); drops from other programs (OLEDragOver, OLEDragDrop, refusing, a TextBox's own drop with OLEDropMode None, a form's), the DataObject. |
 | `test_popupmenu.py` | Form.PopupMenu: the chosen item returned after its Click (and the menu's own Click first), the bold DefaultMenu only for that time, None when closed without a choice, nothing recorded outside PopupMenu; left, right and center alignment at X, Y, the mouse's place for what is left out; not a Menu, a menu without items, a visible menu-bar menu; at design time. |
+| `test_picture.py` | Picture objects: one in memory (the graphics methods on it, transparent and filled, Cls, Image a copy, no unknown properties), LoadPicture (empty, a missing file, not a picture), SavePicture (by extension, BMP without one, a file's picture, an empty one failing); Pictures as a PictureBox's, Image's, button's Picture, the Icon, a MouseIcon, an ImageList's picture, clearing with LoadPicture(); a PictureBox's Image and PaintPicture (at its size, scaled part, a file, an empty one), a form's Image; a form's background Picture (a file relative to its folder, under the drawing, a Picture, cleared; the form file); the clipboard (pictures, files' pictures, text, RTF, files); a dropped picture in a DataObject; the exports. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (none by default, nothing copied; its own files, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |
