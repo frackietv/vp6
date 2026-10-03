@@ -640,7 +640,10 @@ The Terminal control.
   slave with `start_new_session` and `TIOCSCTTY` so it is the controlling
   terminal, `TIOCSWINSZ` for its size, a `QSocketNotifier` on the master
   reading output; EOF / EIO: `_finish` waits for the exit code) and
-  `_PipeProgram` (Windows: a `QProcess`, merged channels); both get the
+  `_PipeProgram` (Windows: a `QProcess`, merged channels); `end()` kills
+  the program and waits for it, its exit reported before it returns (the
+  pseudo-terminal's master is closed first: on macOS a killed program ends
+  only once its output has been read). Both get the
   TERM to set (and `COLORTERM` for the xterm types; the outer terminal's is
   dropped) and the size in pixels (`pixels`, and `resize(rows, cols,
   width, height)`: `TIOCSWINSZ`'s pixel fields). `default_shell()`.
@@ -1252,6 +1255,20 @@ prepended to `PYTHONPATH` for programs started with F5.
   * `_on_dock_moved` / `_tab_bottom_docks`: panels in the bottom dock area
     are always one tab group. This runs on every dock's location, floating
     and visibility changes (coalesced), and after `restoreState`;
+  * **Terminal window** (`terminal`, a `terminalpanel.TerminalPanel`; dock
+    `terminal_dock`): hidden by default at the bottom edge, but not in the
+    Immediate window's tab group (a hidden panel there can leave an empty tab
+    group in the tabs' place when they are regrouped); View > Terminal Window
+    (`show_terminal`, Ctrl+` (the Control key on macOS too: `_TERMINAL_KEY`))
+    shows it, tabs it with the others at once (`_tab_bottom_docks`) and
+    gives it the focus. Its shell starts in the project's folder; `closeEvent` ends it.
+  * **Toolbox** (`toolbox`, dock `toolbox_dock`): resizable, two columns by
+    default. `_snap_toolbox` (a 50 ms `_toolbox_snap` timer started by the
+    Toolbox's `resized` and the dock's moves) fits its width to
+    `Toolbox.fitted_width` once the mouse lets go (`_dragging_edge`: a
+    button down on the window, where the panels' edges are dragged, or on
+    the floating panel; `eventFilter`), at the left or right edge (`resizeDocks`) or floating
+    (`resize`); not at the top or bottom edge.
   * `_default_layout` / `reset_layout`, `_set_tabbed`, `_show_dock`;
   * `_fill_theme_menu`, `_fill_recent_menu`, `show_options`.
   * **Find, Replace and Go to Line** (Edit menu): `show_find`, `show_replace`,
@@ -1841,7 +1858,18 @@ Captures the IDE process's stdout and stderr for the Output window.
 * **`Toolbox`:**
   * checkable tool buttons (the pointer plus the `CONTROL_TYPES` whose
     `InToolbox` is true: not `Menu`) with signals
-    `toolSelected(type | None)` and `toolActivated(type)` (double-click);
+    `toolSelected(type | None)` and `toolActivated(type)` (double-click),
+    in a `QScrollArea` (vertical only) when they don't all fit its height;
+  * as many columns as its width holds: `columns_for(width, height)`, and
+    `_arrange` placing the buttons a row at a time on every resize (`columns`;
+    `BUTTON`, `SPACING`, `MARGIN`); `fitted_width(width, height)` is the
+    width nearest to `width` that holds a whole number of columns, with
+    the scroll bar's width when they need one (`_bar_width`: none for a
+    style whose bars float over the contents, as macOS's); `resized` tells
+    the main window, which snaps the panel to it; its minimum width is one
+    column's;
+  * `set_user_controls(names)` adds the project's user controls after the
+    others (`_add_button`);
   * `reset()` goes back to the pointer; `refresh_icons()` is used after
     light/dark changes.
 * **`ProjectExplorer`:**
@@ -1963,6 +1991,31 @@ Captures the IDE process's stdout and stderr for the Output window.
   `outputcapture.py`). Its context menu is Select All, Copy and Clear.
 * `pump_process_output(process, window)` connects a `QProcess`'s stdout and
   stderr to the window.
+
+### `vp6/ide/terminalpanel.py` (≈170 lines)
+
+The Terminal window: a shell in the IDE, run by the Terminal control.
+
+* **`_PanelHost`** is what the Terminal needs of a form (`_owner_form`,
+  `_container_widget`: the panel, `_base_dir`, `_register_control`, and the
+  rest doing nothing). Its `Shell_Exited` and `Shell_TitleChange` are the
+  Terminal's event handlers, as a form's would be.
+* **`TerminalPanel(QWidget)`** (`folder`: a callable giving the project's
+  folder, or None):
+  * `terminal` (the `Terminal` named Shell, `AutoStart` off) and `view` (its
+    `_TerminalView`) filling the panel;
+  * `folder()`: where a shell starts (the project's folder, else home);
+  * `showEvent` starts the shell the first time; `new_shell()` ends the one
+    running (with `end()`: at once, and without the message) and starts
+    another, cleared; `end_shell()`; `running`;
+  * when the shell ends, `_exited` writes a dimmed line saying so, and Enter
+    (`eventFilter`) starts a new one;
+  * `apply_theme()` (on `theme_manager().changed`): the editor theme's
+    background and foreground, its font a point smaller (as the Immediate
+    window's);
+  * the context menu (`_context_menu`): Copy, Paste, Clear, New Shell, End
+    Shell; not while the program has the mouse;
+  * `titleChanged(str)`: the title the shell gave the terminal.
 
 ### `vp6/ide/documents.py` (≈140 lines)
 
@@ -2423,9 +2476,10 @@ All tests run headless. `conftest.py`:
 | `test_light_dark.py` | Form.DarkMode and Form_ColorSchemeChanged (not while loading, on ColorScheme changes, on the OS switching for System forms only), Screen.DarkMode; the watcher polling only while the scheme is forced; the IDE's scheme file (over the environment variable); designers refreshed by the watcher; the IDE writing its scheme file and rewriting it when its theme changes (removed when it closes); a real program's IDE form following the file live; a form shown in another looking like it. |
 | `test_mdi.py` | MDI forms: children shown in the workspace (the MDI form loaded and shown first, around a docked pane), Activate and Deactivate, ActiveForm, Left/Top/Width/WindowState of a child, not modally; Load showing a child while AutoShowChildren; Arrange (tiles, cascade); the active child's menus replacing the MDI form's (its own bar hidden, never the system's), WindowList (the children, checked, activating, filled once); unloading a child (shown again later) and the MDI form (children first, vpFormMDIForm, cancelled by one); no MDIForm; the properties; ShowPopup (flags, not activating, at the owner's point, hidden in the background, a window again with Show); the form file (MDIForm, MDIForm_Load), the designer's DesignMDIForm and its properties, Project > Add MDI Form (one a project), MDIChild on forms, WindowList in the Menu Editor. |
 | `test_scalemode.py` | ScaleMode: pixels by default; twips, points, inches, centimeters, millimeters, characters (boxes where they belong, CurrentX following); a User scale (Scale upwards, ScaleWidth and ScaleLeft... making one, back to pixels, errors, User from pixels); Circle's radius, TextWidth and PaintPicture in other units; ScaleX / ScaleY and Screen.TwipsPerPixel; the form's mouse X, Y in its scale; a PictureBox (inside its border, its mouse events); a Picture's and the Printer's scales (an inch square in a PDF). |
-| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
+| `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu); the Toolbox: its columns following its width (a row at a time, in order), `fitted_width` choosing the nearest whole number of columns, the scroll bar counted when the buttons scroll, the panel snapping to whole columns (two by default, again after Reset Window Layout), not while its edge is being dragged, floating too, not at the top edge (many columns there), user controls placed in its columns. |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
+| `test_ide_terminal.py` | The IDE's Terminal window: hidden by default and tabbed with the Immediate window (Reset Window Layout hiding it again), View > Terminal Window and its key; the shell started in the project's folder (home without a project or for a missing folder), typing into it; its end announced and Enter starting a new one; New Shell replacing the one running without a word, End Shell at once; the menu (Copy, Paste, Clear, New Shell, End Shell, enabled as they apply); the editor theme's colors and font, light and dark; closing the IDE ending the shell; drawn. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
 | `test_webbrowser.py` | A real WebBrowser (Chromium, headless): a file and its title, a link (BeforeNavigate, DocumentComplete), Busy and Progress, Back and Forward; BeforeNavigate keeping it on its page; new windows opened here or ignored (NewWindow); a name that doesn't resolve (NavigateError); LoadHTML, TitleChange, RunScript's result, StatusTextChange; GotFocus through the page's focus widget; the designer's placeholder, Toolbox, icon and events. |
 | `test_webview.py` | The WebView with a stand-in view (`FakeView`): navigating to a file, a file relative to the form, a domain (https), an error, back and forward, Refresh, Stop, URL set at run time, the events; LoadHTML and RunScript with and without a callback; the designer's placeholder; a clear error without Qt WebView; Toolbox, icon and events. A real web view in a process of its own with VP6_TEST_WEBVIEW=1. |

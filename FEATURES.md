@@ -1,5 +1,20 @@
 # VP6 features
 
+**Version:** 0.4.47
+**Date:** 2026-10-02
+
+## IDE
+
+- The Terminal window (View > Terminal Window, Ctrl+`): a shell in the IDE, tabbed with the Immediate window; it starts in the project's folder the first time the window is shown, in the editor theme's colors and font (following the theme)
+- When the shell ends, Enter starts a new one; its menu copies, pastes, clears, starts a new shell and ends the one running; closing the IDE ends it
+- The Toolbox can be resized: its buttons fill as many columns as fit, and once the edge is let go its width snaps to a whole number of columns (two by default; at the top or bottom edge, a row as wide as the window); it scrolls when the buttons don't all fit its height
+
+## Controls
+
+- The Terminal: a program ended at once no longer hangs on macOS while its output is unread
+
+---
+
 **Version:** 0.4.46
 **Date:** 2026-10-02
 

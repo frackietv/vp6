@@ -10,8 +10,9 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QPalette, QTextCharFormat, QTextCursor, QTextFormat
 from PySide6.QtWidgets import (
-    QAbstractItemView, QButtonGroup, QFileIconProvider, QGridLayout, QHBoxLayout, QLineEdit, QMenu,
-    QPlainTextEdit, QToolButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView, QButtonGroup, QFileIconProvider, QFrame, QGridLayout, QHBoxLayout,
+    QLineEdit, QMenu, QPlainTextEdit, QScrollArea, QStyle, QToolButton, QTreeWidget,
+    QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ..controls import CONTROL_TYPES
@@ -21,42 +22,110 @@ from .theme import theme_manager
 
 
 class Toolbox(QWidget):
-    """The General tab of the VB toolbox."""
+    """The General tab of the VB toolbox: as many columns of buttons as its
+    width holds (``fitted_width`` gives the width of a whole number of them,
+    which the main window snaps the panel to), scrolling when they don't all
+    fit its height."""
 
     toolSelected = Signal(object)  # control type name or None for the pointer
     toolActivated = Signal(str)  # double-click: add the control to the form
+    resized = Signal()
+
+    BUTTON = 34  # a button's side
+    SPACING = 2  # between buttons
+    MARGIN = 4  # around them
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
-        grid = QGridLayout()
-        grid.setSpacing(2)
-        grid.setContentsMargins(4, 4, 4, 4)
         self.buttons: dict[str | None, QToolButton] = {}
-        tools = [None, *(name for name, cls in CONTROL_TYPES.items() if cls.InToolbox)]
-        for index, type_name in enumerate(tools):
-            button = QToolButton()
-            button.setIcon(icons.icon(type_name or "Pointer"))
-            button.setIconSize(QSize(24, 24))
-            button.setCheckable(True)
-            button.setAutoRaise(True)
-            button.setToolTip(type_name or "Pointer")
-            button.setFixedSize(34, 34)
-            button.clicked.connect(lambda _=False, t=type_name: self.toolSelected.emit(t))
-            if type_name:
-                button.mouseDoubleClickEvent = \
-                    lambda event, t=type_name: self.toolActivated.emit(t)
-            self.group.addButton(button)
-            self.buttons[type_name] = button
-            grid.addWidget(button, index // 2, index % 2)
-        self.buttons[None].setChecked(True)
-        self.grid = grid
         self.user_buttons: list[str] = []  # the project's user controls, after the others
+        self.columns = 0
+        self.grid = QGridLayout()
+        self.grid.setSpacing(self.SPACING)
+        self.grid.setContentsMargins(*(self.MARGIN,) * 4)
+        inside = QWidget()
+        column = QVBoxLayout(inside)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.addLayout(self.grid)
+        column.addStretch(1)
+        self.scroll = QScrollArea()
+        self.scroll.setWidget(inside)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(grid)
-        layout.addStretch(1)
+        layout.addWidget(self.scroll)
+        for type_name in (None, *(name for name, cls in CONTROL_TYPES.items()
+                                  if cls.InToolbox)):
+            self._add_button(type_name, type_name or "Pointer", type_name or "Pointer")
+        self.buttons[None].setChecked(True)
+        self.setMinimumWidth(self.fitted_width(0))  # (one column)
+        self._arrange()
+
+    def _add_button(self, type_name, icon_name: str, tip: str) -> None:
+        button = QToolButton()
+        button.setIcon(icons.icon(icon_name))
+        button.setIconSize(QSize(24, 24))
+        button.setCheckable(True)
+        button.setAutoRaise(True)
+        button.setToolTip(tip)
+        button.setFixedSize(self.BUTTON, self.BUTTON)
+        button.clicked.connect(lambda _=False, t=type_name: self.toolSelected.emit(t))
+        if type_name:
+            button.mouseDoubleClickEvent = lambda event, t=type_name: self.toolActivated.emit(t)
+        self.group.addButton(button)
+        self.buttons[type_name] = button
+
+    # -- columns -------------------------------------------------------------------------------
+    def _rows(self, columns: int) -> int:
+        return -(-len(self.buttons) // columns)
+
+    def _bar_width(self, columns: int, height: int) -> int:
+        """The scroll bar's width when the buttons in ``columns`` columns are
+        taller than ``height`` (0: they fit, or the bar floats over them)."""
+        rows = self._rows(columns)
+        if rows * (self.BUTTON + self.SPACING) - self.SPACING + 2 * self.MARGIN <= height:
+            return 0
+        if self.style().styleHint(QStyle.SH_ScrollBar_Transient, None, self.scroll):
+            return 0
+        return self.style().pixelMetric(QStyle.PM_ScrollBarExtent, None, self.scroll)
+
+    def columns_for(self, width: int, height: int | None = None) -> int:
+        """How many columns of buttons ``width`` holds (one at least)."""
+        height = self.height() if height is None else height
+        pitch = self.BUTTON + self.SPACING
+        fit = lambda w: max(1, (w - 2 * self.MARGIN + self.SPACING) // pitch)  # noqa: E731
+        columns = fit(width)
+        bar = self._bar_width(columns, height)
+        return fit(width - bar) if bar else columns
+
+    def fitted_width(self, width: int, height: int | None = None) -> int:
+        """The width nearest ``width`` that holds a whole number of columns
+        (and the scroll bar, when they need one)."""
+        height = self.height() if height is None else height
+        pitch = self.BUTTON + self.SPACING
+        columns = max(1, min(len(self.buttons),
+                             round((width - 2 * self.MARGIN + self.SPACING) / pitch)))
+        return columns * pitch - self.SPACING + 2 * self.MARGIN + \
+            self._bar_width(columns, height)
+
+    def _arrange(self) -> None:
+        columns = self.columns_for(self.width())
+        if columns == self.columns:
+            return
+        self.columns = columns
+        for button in self.buttons.values():
+            self.grid.removeWidget(button)
+        for index, button in enumerate(self.buttons.values()):
+            self.grid.addWidget(button, index // columns, index % columns)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._arrange()
+        self.resized.emit()
 
     def set_user_controls(self, names: list[str]) -> None:
         """Show the project's user controls (their class names) after the built-in tools."""
@@ -68,22 +137,12 @@ class Toolbox(QWidget):
             self.grid.removeWidget(button)
             button.deleteLater()
         self.user_buttons = []
-        start = len(self.buttons)
-        for offset, name in enumerate(names):
-            button = QToolButton()
-            button.setIcon(icons.icon("UserControl"))
-            button.setIconSize(QSize(24, 24))
-            button.setCheckable(True)
-            button.setAutoRaise(True)
-            button.setToolTip(f"{name} (a user control of the project)")
-            button.setFixedSize(34, 34)
-            button.clicked.connect(lambda _=False, t=name: self.toolSelected.emit(t))
-            button.mouseDoubleClickEvent = lambda event, t=name: self.toolActivated.emit(t)
-            self.group.addButton(button)
-            self.buttons[name] = button
+        for name in names:
+            self._add_button(name, "UserControl", f"{name} (a user control of the project)")
             self.user_buttons.append(name)
-            index = start + offset
-            self.grid.addWidget(button, index // 2, index % 2)
+        self.columns = 0  # (placed again)
+        self._arrange()
+        self.resized.emit()  # (a scroll bar may come or go)
 
     def refresh_icons(self) -> None:
         """Redraw the icons after switching between light and dark."""

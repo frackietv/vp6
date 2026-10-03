@@ -41,6 +41,7 @@ from .panels import (ImmediateWindow, OutputWindow, ProjectExplorer, Toolbox,
                      pump_process_output)
 from .projectprops import FileTarget, GroupTarget, ProjectTarget
 from .properties import PropertiesWindow
+from .terminalpanel import TerminalPanel
 from .theme import SYSTEM, ide_settings, theme_manager
 
 VP6_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(vp6.__file__)))
@@ -95,6 +96,8 @@ class MainWindow(QMainWindow):
         self.properties = PropertiesWindow()
         self.immediate = ImmediateWindow()
         self.output = OutputWindow()  # the IDE's own stdout/stderr (hidden by default)
+        # A shell in the project's folder (hidden by default: it starts when first shown)
+        self.terminal = TerminalPanel(lambda: self.project.directory if self.project else None)
         self.outline = OutlineWindow()  # structure of the current file (hidden by default)
         self.toolbox_dock = self._dock("Toolbox", self.toolbox, Qt.LeftDockWidgetArea, "toolbox")
         self.explorer_dock = self._dock("Project", self.explorer, Qt.RightDockWidgetArea,
@@ -104,10 +107,23 @@ class MainWindow(QMainWindow):
         self.immediate_dock = self._dock("Immediate", self.immediate, Qt.BottomDockWidgetArea,
                                          "immediate")
         self.output_dock = self._dock("Output", self.output, Qt.BottomDockWidgetArea, "output")
+        self.terminal_dock = self._dock("Terminal", self.terminal, Qt.BottomDockWidgetArea,
+                                        "terminal")
         self.outline_dock = self._dock("Outline", self.outline, Qt.RightDockWidgetArea,
                                        "outline")
         self.outline.lineChosen.connect(self._goto_outline_line)
-        self.toolbox_dock.setFixedWidth(84)
+        # Its width can change, and snaps to a whole number of columns of buttons once
+        # the mouse lets go of the panel's edge (_snap_toolbox)
+        self._toolbox_snap = QTimer(self)
+        self._toolbox_snap.setSingleShot(True)
+        self._toolbox_snap.setInterval(50)
+        self._toolbox_snap.timeout.connect(self._snap_toolbox)
+        self.toolbox.resized.connect(self._toolbox_snap.start)
+        self.toolbox_dock.dockLocationChanged.connect(self._toolbox_snap.start)
+        self.toolbox_dock.topLevelChanged.connect(self._toolbox_snap.start)
+        self._dragging_edge = False  # a mouse button down on the window (or the floating
+        self.installEventFilter(self)  # Toolbox): its panels' edges may be being dragged
+        self.toolbox_dock.installEventFilter(self)
         # Opening/closing the Project panel changes what Properties follows
         self.explorer_dock.visibilityChanged.connect(self._on_explorer_changed)
 
@@ -287,6 +303,8 @@ class MainWindow(QMainWindow):
             self.immediate_dock), "Ctrl+G")
         self.act_view_output = a("O&utput Window", lambda: self._show_dock(self.output_dock),
                                  tip="The IDE's own output, including library messages")
+        self.act_view_terminal = a("&Terminal Window", self.show_terminal, _TERMINAL_KEY,
+                                   tip="A shell in the project's folder")
         self.act_view_outline = a("Outli&ne Window", self._show_outline,
                                   tip="The structure of the current file")
 
@@ -320,7 +338,7 @@ class MainWindow(QMainWindow):
         view = bar.addMenu("&View")
         for act in (self.act_view_code, self.act_view_object, self.act_view_browser, None,
                     self.act_view_immediate,
-                    self.act_view_output, self.act_view_project, self.act_view_props,
+                    self.act_view_output, self.act_view_terminal, self.act_view_project, self.act_view_props,
                     self.act_view_outline, self.act_view_toolbox):
             view.addSeparator() if act is None else view.addAction(act)
         view.addSeparator()
@@ -438,11 +456,18 @@ class MainWindow(QMainWindow):
         self.output_dock.setFloating(False)
         self.tabifyDockWidget(self.immediate_dock, self.output_dock)
         self.output_dock.hide()
+        # and so does the Terminal window (View > Terminal Window), joining the tabs
+        # when shown (_tab_bottom_docks): a hidden panel among them can keep an empty
+        # tab group in their place when they are regrouped
+        self.terminal_dock.setFloating(False)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.terminal_dock)
+        self.terminal_dock.hide()
         self.immediate_dock.raise_()
         self._place_outline()  # in the Properties panel's place, shown for code windows
         self.outline_dock.hide()
         self.properties_dock.raise_()
         self.resizeDocks([self.immediate_dock], [150], Qt.Vertical)
+        self.resizeDocks([self.toolbox_dock], [84], Qt.Horizontal)  # (two columns)
         self.resizeDocks([self.explorer_dock, self.properties_dock], [180, 420], Qt.Vertical)
         self.resizeDocks([self.properties_dock], [290], Qt.Horizontal)
 
@@ -474,9 +499,35 @@ class MainWindow(QMainWindow):
             self.mdi.setTabsMovable(True)
         self.settings.setValue("tabbed", tabbed)
 
+    def _snap_toolbox(self):
+        """Fit the Toolbox panel's width to a whole number of columns of buttons
+        (at the left or right edge, or floating), once the mouse lets go: not
+        while its edge is being dragged (a press on the window, where its
+        panels' edges are, or on the floating panel)."""
+        if self._dragging_edge:
+            return  # (still dragging: when the mouse lets go)
+        dock, toolbox = self.toolbox_dock, self.toolbox
+        if dock.isHidden() or (not dock.isFloating() and self.dockWidgetArea(dock) not in (
+                Qt.LeftDockWidgetArea, Qt.RightDockWidgetArea)):
+            return  # (at the top or bottom edge: as wide as the window)
+        change = toolbox.fitted_width(toolbox.width()) - toolbox.width()
+        if not change:
+            return
+        if dock.isFloating():
+            dock.resize(dock.width() + change, dock.height())
+        else:
+            self.resizeDocks([dock], [dock.width() + change], Qt.Horizontal)
+
     def _show_dock(self, dock: QDockWidget):
         dock.show()
         dock.raise_()
+
+    def show_terminal(self):
+        """View > Terminal Window: the shell (started the first time), with the focus."""
+        self.terminal_dock.show()
+        self._tab_bottom_docks()  # (now: with the Immediate window)
+        self.terminal_dock.raise_()
+        self.terminal.view.setFocus()
 
     def _show_properties(self):
         self._show_side_panel(False, force=True)  # in the Outline window's place
@@ -1594,6 +1645,12 @@ class MainWindow(QMainWindow):
         # doesn't report the last one going: check after it has
         if event.type() == QEvent.Hide and isinstance(watched, QMdiSubWindow):
             QTimer.singleShot(0, self, self._after_last_window)
+        elif watched is self or watched is self.toolbox_dock:
+            if event.type() == QEvent.MouseButtonPress:
+                self._dragging_edge = True
+            elif event.type() == QEvent.MouseButtonRelease:
+                self._dragging_edge = False
+                self._toolbox_snap.start()
         return super().eventFilter(watched, event)
 
     def _after_last_window(self):
@@ -1909,6 +1966,7 @@ class MainWindow(QMainWindow):
         if not self.close_project():
             event.ignore()
             return
+        self.terminal.end_shell()
         path = self.__dict__.get("_ide_scheme_file")
         if path is not None:
             try:
@@ -1922,6 +1980,11 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("state", self.saveState())
         event.accept()
+
+
+# View > Terminal Window: Ctrl+` as in VS Code (the Control key on macOS too, where Qt
+# calls it Meta: Cmd+` goes through the windows)
+_TERMINAL_KEY = "Meta+`" if sys.platform == "darwin" else "Ctrl+`"
 
 
 def _lock_key(path: str) -> str:

@@ -889,17 +889,20 @@ class _PtyProgram:
             return
         self._finish()
 
-    def _finish(self):
+    def _finish(self, killed=False):
         if self._done:
             return
         self._done = True
         self._notifier.setEnabled(False)
+        if killed:  # (closed first: on macOS a program ends only once its output is read)
+            os.close(self.master)
         try:
             code = self.process.wait(timeout=5)
         except Exception:  # noqa: BLE001 - (it won't end: killed)
             self.process.kill()
             code = self.process.wait()
-        os.close(self.master)
+        if not killed:
+            os.close(self.master)
         self._on_exit(code if code >= 0 else -1)
 
     @property
@@ -925,6 +928,11 @@ class _PtyProgram:
                 os.killpg(self.process.pid, signal.SIGKILL)
             except OSError:
                 self.process.kill()
+
+    def end(self) -> None:
+        """Kill it and wait for it: its exit is reported before this returns."""
+        self.kill()
+        self._finish(killed=True)
 
 
 class _PipeProgram:
@@ -969,6 +977,11 @@ class _PipeProgram:
 
     def kill(self) -> None:
         self.process.kill()
+
+    def end(self) -> None:
+        """Kill it and wait for it: its exit is reported before this returns."""
+        self.kill()
+        self.process.waitForFinished(5000)
 
 
 # --- the view -----------------------------------------------------------------------------

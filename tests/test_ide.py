@@ -1152,3 +1152,122 @@ def test_icons_of_vp6_and_new_projects(window, tmp_path):
     assert Project.load(window.project.path).icon == ["art/logo.png"]  # saved
     assert target.set_property("Icon", "") is None  # none: the VP6 icon
     assert window.project.icon == []
+
+
+# --- the Toolbox: resizable, snapping to whole columns ----------------------------------------
+
+def _settle(window):
+    from PySide6.QtTest import QTest
+
+    QTest.qWait(120)  # (the snap waits for the resizing to end)
+
+
+def _columns_in_grid(toolbox):
+    grid = toolbox.grid
+    return {grid.getItemPosition(grid.indexOf(b))[1] for b in toolbox.buttons.values()}
+
+
+def test_toolbox_columns_follow_its_width(qapp):
+    from vp6.ide.panels import Toolbox
+
+    toolbox = Toolbox()
+    pitch = Toolbox.BUTTON + Toolbox.SPACING
+    tall = 5000  # (no scroll bar)
+    for columns in (1, 2, 3, 6):
+        width = columns * pitch - Toolbox.SPACING + 2 * Toolbox.MARGIN
+        assert toolbox.columns_for(width, tall) == columns
+        assert toolbox.columns_for(width + pitch - 1, tall) == columns  # (not quite another)
+        assert toolbox.fitted_width(width, tall) == width
+        assert toolbox.fitted_width(width + pitch // 2 - 1, tall) == width  # (nearest)
+        assert toolbox.fitted_width(width + pitch // 2 + 1, tall) == width + pitch
+    toolbox.resize(3 * pitch - Toolbox.SPACING + 2 * Toolbox.MARGIN, tall)
+    toolbox._arrange()  # (a hidden widget gets its resizeEvent when shown)
+    assert toolbox.columns == 3 and _columns_in_grid(toolbox) == {0, 1, 2}
+    first_row = [toolbox.grid.itemAtPosition(0, c).widget() for c in range(3)]
+    assert first_row == list(toolbox.buttons.values())[:3]  # (in order, a row at a time)
+    toolbox.deleteLater()
+
+
+def test_toolbox_scroll_bar_counts_when_it_takes_room(qapp, monkeypatch):
+    from PySide6.QtWidgets import QStyle
+
+    from vp6.ide.panels import Toolbox
+
+    toolbox = Toolbox()
+    if toolbox.style().styleHint(QStyle.SH_ScrollBar_Transient, None, toolbox.scroll):
+        pytest.skip("the style's scroll bars float over the buttons")
+    bar = toolbox.style().pixelMetric(QStyle.PM_ScrollBarExtent, None, toolbox.scroll)
+    pitch = Toolbox.BUTTON + Toolbox.SPACING
+    two = 2 * pitch - Toolbox.SPACING + 2 * Toolbox.MARGIN
+    assert toolbox.fitted_width(two, 100) == two + bar  # (short: they scroll)
+    assert toolbox.columns_for(two, 100) == 1  # (the bar leaves room for one)
+    assert toolbox.columns_for(two + bar, 100) == 2
+    toolbox.deleteLater()
+
+
+def test_toolbox_panel_snaps_to_whole_columns(window):
+    from vp6.ide.panels import Toolbox
+
+    _settle(window)
+    dock, toolbox = window.toolbox_dock, window.toolbox
+    assert toolbox.columns == 2  # by default
+    assert toolbox.width() == toolbox.fitted_width(toolbox.width())
+    pitch = Toolbox.BUTTON + Toolbox.SPACING
+    for wanted in (dock.width() + pitch + 10, dock.width() + 3 * pitch - 12):
+        window.resizeDocks([dock], [wanted], Qt.Horizontal)
+        _settle(window)
+        assert toolbox.width() == toolbox.fitted_width(toolbox.width())
+        assert _columns_in_grid(toolbox) == set(range(toolbox.columns))
+    assert toolbox.columns >= 4
+    window.reset_layout()  # back to two columns
+    _settle(window)
+    assert toolbox.columns == 2
+
+
+def test_toolbox_waits_for_the_mouse_and_keeps_out_of_the_top(window):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+
+    from vp6.ide.panels import Toolbox
+
+    _settle(window)
+    dock, toolbox = window.toolbox_dock, window.toolbox
+    # Its edge being dragged: the button is down on the window, between the panels
+    edge = QPoint(dock.geometry().right() + 2, dock.geometry().center().y())
+    before = toolbox.width()
+    QTest.mousePress(window, Qt.LeftButton, Qt.NoModifier, edge)
+    edge += QPoint(Toolbox.BUTTON, 0)
+    QTest.mouseMove(window, edge)
+    _settle(window)
+    assert toolbox.width() == before + Toolbox.BUTTON  # dragged, not snapped yet
+    assert toolbox.width() != toolbox.fitted_width(toolbox.width())
+    QTest.mouseRelease(window, Qt.LeftButton, Qt.NoModifier, edge)  # let go
+    _settle(window)
+    assert toolbox.width() == toolbox.fitted_width(toolbox.width())
+    # Floating, it snaps too
+    dock.setFloating(True)
+    dock.resize(dock.width() + Toolbox.BUTTON + 7, dock.height())
+    _settle(window)
+    assert toolbox.width() == toolbox.fitted_width(toolbox.width())
+    # At the top edge it is as wide as the window: no snapping, many columns
+    window.addDockWidget(Qt.TopDockWidgetArea, dock)
+    dock.setFloating(False)
+    _settle(window)
+    assert toolbox.columns > 4
+    window.reset_layout()
+
+
+def test_toolbox_places_user_controls_in_its_columns(qapp):
+    from vp6.ide.panels import Toolbox
+
+    toolbox = Toolbox()
+    toolbox.resize(2 * (Toolbox.BUTTON + Toolbox.SPACING) + 2 * Toolbox.MARGIN, 5000)
+    count = len(toolbox.buttons)
+    toolbox.set_user_controls(["Rating", "Gauge", "Dial"])
+    assert len(toolbox.buttons) == count + 3 and _columns_in_grid(toolbox) == {0, 1}
+    last = toolbox.buttons["Dial"]
+    assert toolbox.grid.getItemPosition(toolbox.grid.indexOf(last))[:2] == \
+        ((count + 2) // 2, (count + 2) % 2)
+    toolbox.set_user_controls([])
+    assert len(toolbox.buttons) == count
+    toolbox.deleteLater()
