@@ -1088,6 +1088,9 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         for control in self._controls:
             if isinstance(control, Timer) and control._timer is not None:
                 control._timer.stop()
+            unloaded = getattr(control, "_form_unloaded", None)  # (e.g. a Process: ended)
+            if unloaded is not None:
+                unloaded()
         for form in list(self._embedded):  # they go with their host, and can't cancel
             form._query_unload(force=True, mode=VP_FORM_OWNER)
             form._widget.hide()

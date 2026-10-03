@@ -1000,6 +1000,37 @@ def test_mdi_page(sink):
     assert not suggest.Visible
 
 
+def test_process_page(sink, monkeypatch):
+    from conftest import wait_for
+
+    page = _page(sink, "process")
+    page.cmdStart._widget.click()  # a program that answers
+    assert page.prcEcho.Running and not page.cmdStart.Enabled and page.cmdSend.Enabled
+    assert not page.cmdMissing.Enabled  # (one program at a time: not while it runs)
+    wait_for(lambda: "Ready" in page.txtOutput.Text)
+    page.txtSend.Text = "hello"
+    page.cmdSend._widget.click()  # (its standard input)
+    wait_for(lambda: "HELLO" in page.txtOutput.Text)
+    page.txtSend.Text = "error"
+    page.cmdSend._widget.click()
+    wait_for(lambda: "[standard error] That was an error" in page.txtOutput.Text)
+    page.txtSend.Text = "quit"
+    page.cmdSend._widget.click()
+    wait_for(lambda: not page.prcEcho.Running)
+    wait_for(lambda: page.lblStatus.Caption == "Exited with code 3")
+    assert page.cmdStart.Enabled and not page.cmdKill.Enabled
+    page.cmdStart._widget.click()
+    page.cmdKill._widget.click()  # killed: -1
+    wait_for(lambda: "(killed)" in page.lblStatus.Caption)
+    page.cmdMissing._widget.click()  # can't be started: its Error event
+    wait_for(lambda: "couldn't be started" in page.lblStatus.Caption)
+    started = []
+    monkeypatch.setattr("vp6.process.QProcess.startDetached",
+                        lambda program, args: started.append((program, args)) or (True, 42))
+    page.cmdShell._widget.click()  # (the file manager: not really, here)
+    assert started[0][1] == [vp6.App.Path] and page.lblStatus.Caption.endswith("(process 42)")
+
+
 def test_keyboard_page(sink):
     page = _page(sink, "keyboard")
     QTest.keyClicks(page.txtDigits._widget, "a1b2")

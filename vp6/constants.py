@@ -299,6 +299,14 @@ vpOver = 2
 vpOLEDropNone = 0  # OLEDropMode
 vpOLEDropManual = 1
 
+# --- Shell: WindowStyle (accepted, as in VB; programs open their windows themselves) ----
+vpHide = 0
+vpNormalFocus = 1
+vpMinimizedFocus = 2
+vpMaximizedFocus = 3
+vpNormalNoFocus = 4
+vpMinimizedNoFocus = 6
+
 # --- MDIForm.Arrange -------------------------------------------------------------------
 vpCascade = 0
 vpTileHorizontal = 1

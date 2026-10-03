@@ -28,6 +28,7 @@ from pgMenus import pgMenus
 from pgMouse import pgMouse
 from pgRichText import pgRichText
 from pgPictures import pgPictures
+from pgProcess import pgProcess
 from pgSchemes import SCHEMES, pgSchemes
 from pgScrollBars import pgScrollBars
 from pgScrolling import pgScrolling
@@ -49,7 +50,7 @@ PAGES = {
     "timer": pgTimer, "layout": pgLayout, "docking": pgDocking, "scrolling": pgScrolling,
     "embedded": pgEmbedded, "dialogs": pgDialogs, "schemes": pgSchemes, "keyboard": pgKeyboard,
     "mouse": pgMouse, "mdi": pgMDI, "arrays": pgArrays, "menus": pgMenus,
-    "usercontrol": pgUserControl, "globals": pgGlobals,
+    "usercontrol": pgUserControl, "process": pgProcess, "globals": pgGlobals,
 }
 
 HELP = """Kitchen Sink keys:
@@ -75,7 +76,7 @@ class Form1(Form):
         self.picNav = PictureBox(self, Left=0, Top=0, Width=220, Height=572, BorderStyle=0,
                                  Align=3, TabIndex=3)
         self.tvwIndex = TreeView(self.picNav, Left=0, Top=0, Width=220, Height=572,
-                                 Items=['Introduction|intro', 'Controls|controls', '    Text and labels|text', '    RichTextBox|richtext', '    Editing text|editing', '    CodeBox|code', '    Buttons and options|buttons', '    Lists|lists', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    Pictures|pictures', '    Drawing|drawing', '    Lines, shapes and z-order|zorder', '    TreeView|tree', '    ListView|listview', '    FlexGrid|grid', '    Web pages|web', '    TabStrip|tabs', '    Drives, folders and files|files', '    Timer|timer', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Docking panels|docking', '    Scrolling|scrolling', '    Forms inside forms|embedded', 'Forms and dialogs|forms_section', '    Dialogs|dialogs', '    Color schemes|schemes', '    Keyboard|keyboard', '    Mouse|mouse', '    MDI and popup forms|mdi', 'Programming|programming', '    Control arrays|arrays', '    Menus|menus', '    Your own controls|usercontrol', '    App, Screen, settings...|globals'],
+                                 Items=['Introduction|intro', 'Controls|controls', '    Text and labels|text', '    RichTextBox|richtext', '    Editing text|editing', '    CodeBox|code', '    Buttons and options|buttons', '    Lists|lists', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    Pictures|pictures', '    Drawing|drawing', '    Lines, shapes and z-order|zorder', '    TreeView|tree', '    ListView|listview', '    FlexGrid|grid', '    Web pages|web', '    TabStrip|tabs', '    Drives, folders and files|files', '    Timer|timer', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Docking panels|docking', '    Scrolling|scrolling', '    Forms inside forms|embedded', 'Forms and dialogs|forms_section', '    Dialogs|dialogs', '    Color schemes|schemes', '    Keyboard|keyboard', '    Mouse|mouse', '    MDI and popup forms|mdi', 'Programming|programming', '    Control arrays|arrays', '    Menus|menus', '    Your own controls|usercontrol', '    Running programs|process', '    App, Screen, settings...|globals'],
                                  TabIndex=4,
                                  ToolTipText='The topics: its nodes were typed in the designer (Items)')
         self.splNav = Splitter(self, Left=220, Top=0, Width=6, Height=572, MinSize=150,

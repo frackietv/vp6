@@ -263,6 +263,15 @@ def _timer(p):
     p.drawLine(QPointF(12, 13), QPointF(16, 13))
 
 
+def _process(p):  # a console window
+    p.setBrush(QColor("#2b2b2b"))
+    p.drawRect(QRectF(3, 5, 18, 14))
+    p.setPen(QPen(QColor("#5fd35f"), 1.6))
+    p.drawLine(QPointF(6, 9), QPointF(9, 12))
+    p.drawLine(QPointF(9, 12), QPointF(6, 15))
+    p.drawLine(QPointF(11, 15), QPointF(16, 15))
+
+
 def _image(p):
     p.setPen(QPen(C.ink, 1, Qt.DashLine))  # no frame of its own, like VB's Image icon
     p.setBrush(Qt.NoBrush)
@@ -521,7 +530,7 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Shape": _shape,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Process": _process, "Shape": _shape,
     "Line": _line, "Image": _image,
     "DriveListBox": _drivelistbox, "DirListBox": _dirlistbox, "FileListBox": _filelistbox,
     "TreeView": _treeview, "Splitter": _splitter,

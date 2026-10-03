@@ -283,6 +283,10 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `BeforeNavigate` | URL |
 | `NewWindow` | URL |
 | `StatusTextChange` | Text |
+| `Output` | Text |
+| `ErrorOutput` | Text |
+| `Exited` | ExitCode |
+| `Error` | Description |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -2115,6 +2119,56 @@ Default size 32 × 32. Property groups: Font.
 No events.
 <!-- END GENERATED -->
 
+### Process
+
+Runs another program and talks with it while the form keeps working (VB's
+`Shell` only starts one). Invisible at run time, like a Timer.
+
+```python
+def cmdBuild_Click(self):
+    self.prcBuild.Start('python3 -u build.py --all')   # or a list: [program, args...]
+
+def prcBuild_Output(self, Text):                        # what it prints, as it prints it
+    self.txtLog.SelText = Text
+
+def prcBuild_ErrorOutput(self, Text):                   # its standard error
+    self.txtLog.SelText = Text
+
+def prcBuild_Exited(self, ExitCode):
+    self.lblStatus.Caption = f"Done ({ExitCode})"
+
+def cmdAnswer_Click(self):
+    self.prcBuild.WriteLine("yes")                       # its standard input
+```
+
+* `Start(CommandLine=None)`: the program and its arguments, as a command
+  line (double quotes group words), or a list of them; left out, the
+  `CommandLine` property (Start keeps the one it is given there).
+  `WorkingDirectory`: where it runs (relative to the form's folder).
+* Events: `Output(Text)` and `ErrorOutput(Text)` (its standard output and
+  error as they come, decoded as UTF-8), `Exited(ExitCode)` (-1 when it was
+  killed or crashed), `Error(Description)` (it couldn't be started).
+* `Write(Text)`, `WriteLine(Text)` (its standard input), `CloseInput()`,
+  `Terminate()` (asks it to end), `Kill()`, `WaitForExit(Timeout=-1)` (ms;
+  True once it has ended; its events still fire); `Running`, `ExitCode`
+  (-1 before it ends), `ProcessID` (0 when not running).
+* Starting it again while it runs is a RuntimeError; a Process still running
+  when its form unloads is killed.
+
+<!-- BEGIN GENERATED: control Process -->
+Default size 32 × 32.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `CommandLine` | str | `''` | The program and its arguments, as a command line (double quotes group words): what Start runs |
+| `Left` | int | `0` | Position in the designer only |
+| `Tag` | str | `''` | Free for your own use |
+| `Top` | int | `0` | Position in the designer only |
+| `WorkingDirectory` | str | `''` | Where the program runs (relative to the form's folder); empty: here |
+
+Events: `Output(Text)`, `ErrorOutput(Text)`, `Exited(ExitCode)`, `Error(Description)`. Default event (double-click in the designer): `Output`.
+<!-- END GENERATED -->
+
 ### Toolbar
 
 A row of buttons along the top of a form (VB's Toolbar, from the Windows
@@ -2713,6 +2767,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 | `End()` | ends the program immediately; `Form_Unload` handlers do **not** run |
 | Ctrl+C | Not a function, but part of how programs end. Pressed in the terminal that started a program, it closes the program's forms like their close buttons would: an open `MsgBox` or modal form closes first, each `Form_Unload` runs and may cancel, and the program ends when the last form is gone. A console program waiting at `input()` ends with exit code 130. |
 | `Beep()` | system beep |
+| `Shell(PathName, WindowStyle=vpNormalFocus)` | starts a program on its own (a command line, double quotes grouping words, or a list) and returns its process ID; `FileNotFoundError` when it can't be started. WindowStyle is accepted for VB's sake (programs open their windows themselves). To follow a program, its output and its end, use a [Process](#process). |
 | `SendKeys(Keys, Wait=False)` | types keys into the control with the focus, as if pressed (VB's syntax): text as it is; `+` Shift, `^` Ctrl, `%` Alt for the next key or a `(group)`; `~` Enter; `{ENTER}`, `{TAB}`, `{ESC}`, `{BS}`, `{DEL}`, `{HOME}`, `{END}`, `{LEFT}`, `{RIGHT}`, `{UP}`, `{DOWN}`, `{PGUP}`, `{PGDN}`, `{INS}`, `{F1}`..`{F16}` and VB's others; `{LEFT 3}` repeats; `{+}`, `{^}`, `{%}`, `{~}`, `{(}`, `{)}`, `{{}`, `{}}` are those characters. Each key goes to what has the focus when it arrives (`{TAB}` moves on, Enter clicks the Default button), menu shortcuts and Label access keys included. They arrive once the calling code is done; `Wait=True` sends them before returning. |
 
 ### The command line and settings
@@ -2850,7 +2905,7 @@ A picture dropped from another program is in `OLEDragDrop`'s Data too:
 [`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`CommonDialog`](#commondialog) (and `DialogCancelled`), [`Toolbar`](#toolbar) (and its `Button`),
-[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`WebView`](#webview), [`WebBrowser`](#webbrowser),
+[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`WebView`](#webview), [`WebBrowser`](#webbrowser), [`Process`](#process),
 [`StatusBar`](#statusbar) (and its
 `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
 [`Menu`](#menu), and
@@ -2975,6 +3030,7 @@ All constants are plain ints or strings.
 | Form_QueryUnload: UnloadMode | `vpFormControlMenu`, `vpFormCode`, `vpAppWindows`, `vpAppTaskManager`, `vpFormMDIForm`, `vpFormOwner` | 0, 1, 2, 3, 4, 5 |
 | MousePointer (controls, forms, Screen) | `vpDefault`, `vpArrow`, `vpCrosshair`, `vpIbeam`, `vpIconPointer`, `vpSizePointer`, `vpSizeNESW`, `vpSizeNS`, `vpSizeNWSE`, `vpSizeWE`, `vpUpArrow`, `vpHourglass`, `vpNoDrop`, `vpArrowHourglass`, `vpArrowQuestion`, `vpSizeAll`, `vpCustom` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 99 |
 | Drag and drop | `vpManual`, `vpAutomatic`, `vpCancelDrag`, `vpBeginDrag`, `vpEndDrag`, `vpEnter`, `vpLeave`, `vpOver`, `vpOLEDropNone`, `vpOLEDropManual` | 0, 1, 0, 1, 2, 0, 1, 2, 0, 1 |
+| Shell: WindowStyle (accepted, as in VB; programs open their windows themselves) | `vpHide`, `vpNormalFocus`, `vpMinimizedFocus`, `vpMaximizedFocus`, `vpNormalNoFocus`, `vpMinimizedNoFocus` | 0, 1, 2, 3, 4, 6 |
 | MDIForm.Arrange | `vpCascade`, `vpTileHorizontal`, `vpTileVertical`, `vpArrangeIcons` | 0, 1, 2, 3 |
 | Printer.Orientation | `vpPRORPortrait`, `vpPRORLandscape` | 1, 2 |
 | Printer.PaperSize | `vpPRPSLetter`, `vpPRPSTabloid`, `vpPRPSLedger`, `vpPRPSLegal`, `vpPRPSExecutive`, `vpPRPSA3`, `vpPRPSA4`, `vpPRPSA5`, `vpPRPSB5`, `vpPRPSEnv10`, `vpPRPSEnvDL` | 1, 3, 4, 5, 7, 8, 9, 11, 13, 20, 27 |
@@ -3159,6 +3215,8 @@ It goes in the project's `dist` folder:
   project's MDI form is found by its class (the project's one MDIForm), and
   several children of one form class are made as instances of it
   (`frmDocument()`, VB's `New frmDocument`). `ShowPopup` is VP6's own.
+* **Process** is VP6's own (VB had `Shell`, and the Winsock and MSComm
+  controls for talking with other programs); `Shell` ignores WindowStyle.
 * **Printer** measures in VP6's pixels (1/96 inch), not twips, and
   `Set Printer = Printers(1)` is `Printer.DeviceName = Printers(1).DeviceName`.
   It has no `Zoom`, `PrintQuality`, `TrackDefault`, `hDC` or `DrawMode`;

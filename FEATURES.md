@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.4.37
+**Date:** 2026-10-02
+
+## Language and runtime
+
+- The `Process` control: running another program while the form keeps working (`Start` with a command line or a list, `WorkingDirectory`); its standard output and error as they come (`Output`, `ErrorOutput` events), its end (`Exited(ExitCode)`), a program that can't be started (`Error`); `Write` / `WriteLine` to its input, `CloseInput`, `Terminate`, `Kill`, `WaitForExit`; `Running`, `ExitCode`, `ProcessID`; ended with its form
+- VB's `Shell(PathName, WindowStyle)`: a program started on its own, its process ID returned (with VB's WindowStyle constants)
+
+## Kitchen Sink
+
+- A Running programs page: a program that answers what you send it, its output and errors, its exit code, Kill, a missing program, and Shell opening the project's folder
+
+---
+
 **Version:** 0.4.36
 **Date:** 2026-10-01
 
