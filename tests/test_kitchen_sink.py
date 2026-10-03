@@ -1044,10 +1044,17 @@ def test_terminal_page(sink):
     wait_for(lambda: "bold underlined inverse" in term.Text)
     colored = [attr for line in term._screen.lines for char, attr in line if char == "3"]
     assert any(attr.fg == 1 for attr in colored)  # (color 31: red)
+    assert "┌──┐ TERM=xterm-256color" in term.Text.replace("\n", "")  # (DEC line drawing)
     first = term.ProcessID
     page.cmdRestart._widget.click()  # killed, then started again in Exited
-    wait_for(lambda: page.lblStatus.Caption == "Shell restarted")
+    wait_for(lambda: page.lblStatus.Caption == "Shell restarted (xterm-256color)")
     wait_for(lambda: term.Running and term.ProcessID != first)
+    page.cboType.ListIndex = 4  # a vt220: the shell starts again as one
+    wait_for(lambda: page.lblStatus.Caption == "Shell restarted (vt220)")
+    assert term.TerminalType == vp6.vpTermVT220
+    wait_for(lambda: term.Running and "$" in term.Text)
+    page.cmdDemo._widget.click()
+    wait_for(lambda: "┌──┐ TERM=vt220" in term.Text.replace("\n", ""))
     page.cmdClear._widget.click()
     wait_for(lambda: "$" in term.Text and "bold" not in term.Text)
     term.Write("exit\r")

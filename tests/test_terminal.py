@@ -1,20 +1,26 @@
 """The Terminal control: the ANSI screen (text, controls, escape sequences,
-colors, scrolling, history, the alternate screen, resizing), keys as a
-terminal sends them, a real shell in a pseudo-terminal (macOS, Linux: its
-output, Ctrl+C, its size, its exit), copy and paste, and the IDE."""
+colors, scrolling, history, the alternate screen, resizing), the terminal
+types (xterm-256color, xterm, vt100, vt102, vt220, ansi: their character sets,
+modes, answers and keys), keys as a terminal sends them, the mouse, focus and
+pastes reported to the program, a real shell in a pseudo-terminal (macOS,
+Linux: its output, Ctrl+C, its size, its exit, its TERM, a program asking the
+terminal), copy and paste, and the IDE."""
 
+import codecs
 import os
 import sys
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtGui import QFocusEvent, QGuiApplication
+from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
 
 from conftest import wait_for
-from vp6 import Form, Terminal, formfile
+from vp6 import (Form, Terminal, formfile, vpTermAnsi, vpTermVT100, vpTermVT102, vpTermVT220,
+                 vpTermXterm, vpTermXterm256Color)
 from vp6.controls import CONTROL_TYPES, EVENT_ARGS
-from vp6.terminal import PLAIN, TERM, AnsiScreen, Attr, key_text
+from vp6.terminal import PLAIN, TERM, TERMINAL_TYPES, AnsiScreen, Attr, key_text
 
 posix = pytest.mark.skipif(sys.platform == "win32", reason="a pseudo-terminal")
 
@@ -99,6 +105,216 @@ def test_resize():
     assert screen.text() == "1\n2\n3\n4"
 
 
+def test_terminal_types_answer_as_themselves():
+    assert TERM == "xterm-256color" and TERMINAL_TYPES == (
+        "xterm-256color", "xterm", "vt100", "vt102", "vt220", "ansi")
+    assert (vpTermXterm256Color, vpTermXterm, vpTermVT100, vpTermVT102, vpTermVT220,
+            vpTermAnsi) == (0, 1, 2, 3, 4, 5)
+    attributes = {}
+    for term in TERMINAL_TYPES:
+        screen = AnsiScreen(3, 10, term=term)
+        screen.feed("\x1b[c\x1b[>c")  # Device Attributes: primary and secondary
+        attributes[term] = screen.replies
+    assert attributes["vt100"] == ["\x1b[?1;2c"] and attributes["vt102"] == ["\x1b[?6c"]
+    assert attributes["vt220"] == ["\x1b[?62;1;2;6;7;8;9c", "\x1b[>1;10;0c"]
+    assert attributes["xterm-256color"][0] == "\x1b[?62;1;2;6;7;8;9;22c"
+    assert attributes["xterm"] == attributes["xterm-256color"]
+    screen = AnsiScreen(5, 20)
+    screen.feed("ab\x1b[5n\x1b[6n\x1b[18t\x1b[0x")  # status, the cursor, the size, vt100's
+    assert screen.replies == ["\x1b[0n", "\x1b[1;3R", "\x1b[8;5;20t",
+                              "\x1b[2;1;1;112;112;1;0x"]
+    screen.replies.clear()
+    screen.colors = lambda: ((255, 255, 255), (0, 0, 16))
+    screen.feed("\x1b]11;?\x07\x1b]4;1;?\x1b\\")  # colors: the background, a palette's
+    assert screen.replies == ["\x1b]11;rgb:0000/0000/1010\x1b\\",
+                              "\x1b]4;1;rgb:cdcd/3131/3131\x1b\\"]
+    screen.replies.clear()
+    screen.feed("\x1b[?2004h\x1b[?2004$p\x1b[4$p\x1b[?77$p")  # modes: set, reset, unknown
+    assert screen.replies == ["\x1b[?2004;1$y", "\x1b[4;2$y", "\x1b[?77;0$y"]
+    screen.replies.clear()
+    screen.feed("\x1b[1;31m\x1bP$qm\x1b\\\x1bP+q544e;436f;7878\x1b\\")  # settings, terminfo
+    assert screen.replies == ["\x1bP1$r0;1;31m\x1b\\",
+                              "\x1bP1+r544e=787465726d2d323536636f6c6f72\x1b\\",
+                              "\x1bP1+r436f=323536\x1b\\", "\x1bP0+r7878\x1b\\"]
+    screen.replies.clear()
+    screen.feed("\x1b[>q")
+    assert screen.replies[0].startswith("\x1bP>|VP6 ")
+    vt100 = AnsiScreen(3, 10, term="vt100")
+    vt100.feed("\x1b[18t\x1bP$qm\x1b\\\x1b[?1$p")  # (xterm's questions: not a vt100's)
+    assert vt100.replies == [] and vt100.text() == ""
+
+
+def test_character_sets_and_controls():
+    screen = AnsiScreen(4, 20)
+    screen.feed("\x1b(0lqqk\x1b(B x")  # the DEC line drawing set, then ASCII again
+    assert AnsiScreen.line_text(screen.lines[0]) == "┌──┐ x"
+    screen.feed("\r\n\x1b)0\x0ex\x0fx\x1b*0\x1bNjj")  # G1 by SO, G2 for one character
+    assert AnsiScreen.line_text(screen.lines[1]) == "│x┘j"
+    screen.feed("\r\n\x9b1m8\x9b0m\x9d2;C1\x9c")  # 8-bit controls: CSI, OSC, ST
+    assert screen.lines[2][0] == ("8", Attr(bold=True)) and screen.title == "C1"
+    vt100 = AnsiScreen(2, 10, term="vt100")
+    vt100.feed("\x9b1mA")  # (a vt100 has no 8-bit controls)
+    assert vt100.lines[0][0] == ("1", PLAIN)
+    screen = AnsiScreen(2, 20)
+    screen.feed("a\x1bP+q544e\x1b\\b\x1b_Gq=1;AAAA\x1b\\c\x1b^pm\x1b\\d\x1bXsos\x9ce")
+    assert screen.text() == "abcde"  # (DCS, APC, PM, SOS: none of them shown)
+    screen.feed("\x1b[3b\x1b#8")  # REP: the last character again; then all E's
+    assert screen.text() == "E" * 20 + "\n" + "E" * 20
+
+
+def test_modes():
+    screen = AnsiScreen(4, 6)
+    screen.feed("\x1b[?7labcdefgh")  # autowrap off: the last column is overwritten
+    assert screen.text() == "abcdeh"
+    screen.feed("\x1b[?7h\x1b[2;1Habcdef\x1b[0mg")  # (an SGR keeps the pending wrap)
+    assert AnsiScreen.line_text(screen.lines[2]) == "g"
+    screen = AnsiScreen(4, 10)
+    screen.feed("abc\x1b[1;2H\x1b[4hX\x1b[4lY")  # insert mode, then replacing again
+    assert screen.text() == "aXYc"
+    screen.feed("\x1b[20h\n!")  # new line mode: LF goes back to the start too
+    assert AnsiScreen.line_text(screen.lines[1]) == "!"
+    screen = AnsiScreen(5, 10)
+    screen.feed("\x1b[2;4r\x1b[?6h\x1b[1;1HO\x1b[9;1HB\x1b[6n")  # origin: in the region
+    assert screen.lines[1][0][0] == "O" and screen.lines[3][0][0] == "B"
+    assert screen.replies == ["\x1b[3;2R"]  # (the position from the region's top)
+    screen.feed("\x1b[!p")  # soft reset: origin mode and the region gone
+    assert 6 not in screen.modes and (screen.top, screen.bottom) == (0, 4)
+    screen = AnsiScreen(2, 30)
+    screen.feed("\x1b[3g\x1b[1;5H\x1bH\x1b[1;15H\x1bH\r\ta\tb\x1b[2Zc")  # tab stops
+    assert AnsiScreen.line_text(screen.lines[0]) == "    c         b"
+    screen.feed("\x1b[?25l\x1b[5 q\x1b[?5h\x1b[?1000h\x1b[?1006h\x1b[?1h\x1b=")
+    assert not screen.cursor_visible and screen.cursor_shape == "bar"
+    assert screen.mouse_mode == 1000 and {1, 5, 1006} <= screen.modes and screen.keypad_app
+    screen.feed("\x1b[?1003h")  # (one mouse mode at a time)
+    assert screen.mouse_mode == 1003 and 1000 not in screen.modes
+    screen.feed("\x1bc")
+    assert screen.cursor_visible and screen.mouse_mode == 0 and not screen.keypad_app
+
+
+def test_title_stack_and_the_alternate_screen_keeping_the_cursor():
+    screen = AnsiScreen(3, 10)
+    screen.feed("\x1b]2;shell\x07\x1b[22t\x1b]2;vim\x07")
+    assert screen.title == "vim"
+    screen.feed("\x1b[23t")  # (the title kept before)
+    assert screen.title == "shell"
+    screen.feed("ab\x1b[1;31m\x1b[?1049h\x1b[0mXYZ\x1b[?1049lc")
+    assert screen.text() == "abc" and screen.lines[0][2][1].fg == 1
+    screen.feed("\x1b[?1049h")
+    screen.resize(4, 12)  # (the main screen behind it: the new size too)
+    screen.feed("\x1b[?1049l")
+    assert len(screen.lines) == 4 and len(screen.lines[0]) == 12
+
+
+def test_more_attributes():
+    screen = AnsiScreen(2, 20)
+    screen.feed("\x1b[2;3;5;8;9mA\x1b[22;23;25;28;29mB\x1b[4:3mC\x1b[4:0mD"
+                "\x1b[38:2::10:20:30;48:5:17mE\x1b[>4;1mF")
+    cells = [attr for _, attr in screen.lines[0][:6]]
+    assert cells[0] == Attr(dim=True, italic=True, blink=True, invisible=True, strike=True)
+    assert cells[1] == PLAIN and cells[2] == Attr(underline=True) and cells[3] == PLAIN
+    assert cells[4] == Attr(fg=(10, 20, 30), bg=17)
+    assert cells[5] == cells[4]  # (xterm's key options, not an underline)
+
+
+def test_keys_by_terminal_type_and_mode():
+    screen = AnsiScreen()
+    assert key_text(Qt.Key_Up, Qt.NoModifier, "", screen) == "\x1b[A"
+    assert key_text(Qt.Key_Up, Qt.ShiftModifier, "", screen) == "\x1b[1;2A"  # (xterm's)
+    assert key_text(Qt.Key_Home, Qt.NoModifier, "", screen) == "\x1b[H"
+    assert key_text(Qt.Key_Delete, Qt.AltModifier, "", screen) == "\x1b[3;3~"
+    assert key_text(Qt.Key_F1, Qt.ShiftModifier, "", screen) == "\x1b[1;2P"
+    assert key_text(Qt.Key_F5, Qt.NoModifier, "", screen) == "\x1b[15~"
+    assert key_text(Qt.Key_F13, Qt.NoModifier, "", screen) == "\x1b[1;2P"
+    screen.feed("\x1b[?1h\x1b=\x1b[20h")  # cursor and keypad keys: application; new line
+    assert key_text(Qt.Key_Up, Qt.NoModifier, "", screen) == "\x1bOA"
+    assert key_text(Qt.Key_End, Qt.NoModifier, "", screen) == "\x1bOF"
+    assert key_text(Qt.Key_5, Qt.KeypadModifier, "5", screen) == "\x1bOu"
+    assert key_text(Qt.Key_Enter, Qt.KeypadModifier, "\r", screen) == "\x1bOM"
+    assert key_text(Qt.Key_5, Qt.NoModifier, "5", screen) == "5"
+    assert key_text(Qt.Key_Return, Qt.NoModifier, "\r", screen) == "\r\n"
+    vt220 = AnsiScreen(term="vt220")
+    assert key_text(Qt.Key_Home, Qt.NoModifier, "", vt220) == "\x1b[1~"  # Find, Select
+    assert key_text(Qt.Key_End, Qt.NoModifier, "", vt220) == "\x1b[4~"
+    assert key_text(Qt.Key_Up, Qt.ShiftModifier, "", vt220) == "\x1b[A"  # (no modifiers)
+    assert key_text(Qt.Key_F13, Qt.NoModifier, "", vt220) == "\x1b[25~"
+    vt100 = AnsiScreen(term="vt100")
+    assert key_text(Qt.Key_F1, Qt.NoModifier, "", vt100) == "\x1bOP"  # PF1
+    assert key_text(Qt.Key_F5, Qt.NoModifier, "", vt100) == "\x1bOt"  # (its keypad's)
+    assert key_text(Qt.Key_F11, Qt.NoModifier, "", vt100) == "\x1b[23~"
+
+
+class _Program:
+    """A stand-in for the program: what the Terminal sends it."""
+
+    def __init__(self):
+        self.sent = b""
+
+    def running(self):
+        return True
+
+    def write(self, data):
+        self.sent += data
+
+    def kill(self):
+        pass
+
+
+def test_mouse_focus_and_pastes_reported(qapp):
+    class Quiet(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 400, 200
+            self.term = Terminal(self, Left=0, Top=0, Width=400, Height=200, AutoStart=False)
+
+    form = Quiet()
+    form.Show()
+    term = form.term
+    program = term.__dict__["_program"] = _Program()
+    term.__dict__["_decoder"] = codecs.getincrementaldecoder("utf-8")()
+    view = term._widget
+    width, height = view.cell_size()
+    cell = QPoint(round(2 + 3.5 * width), round(2 + 1.5 * height))  # column 4, row 2
+    term._screen.feed("\x1b[?1000h\x1b[?1006h")
+    QTest.mouseClick(view, Qt.LeftButton, Qt.NoModifier, cell)
+    assert program.sent == b"\x1b[<0;4;2M\x1b[<0;4;2m"  # SGR: pressed, released
+    program.sent = b""
+    QTest.mouseClick(view, Qt.LeftButton, Qt.ShiftModifier, cell)  # (Shift: selecting)
+    assert program.sent == b""
+    term._screen.feed("\x1b[?1006l")
+    QTest.mouseClick(view, Qt.RightButton, Qt.NoModifier, cell)  # X10's bytes
+    assert program.sent == b"\x1b[M" + bytes((34, 36, 34)) + b"\x1b[M" + bytes((35, 36, 34))
+    program.sent = b""
+    term._screen.feed("\x1b[?1000l\x1b[?1004h\x1b[?2004h")
+    QTest.mouseClick(view, Qt.LeftButton, Qt.NoModifier, cell)  # (not asked for: selecting)
+    assert program.sent == b""
+    QApplication.sendEvent(view, QFocusEvent(QEvent.FocusIn))
+    QApplication.sendEvent(view, QFocusEvent(QEvent.FocusOut))
+    assert program.sent == b"\x1b[I\x1b[O"
+    program.sent = b""
+    QGuiApplication.clipboard().setText("ls\nrm -rf /\x1b[201~")
+    term.Paste()  # bracketed: the program knows it was pasted (and the end can't be faked)
+    assert program.sent == b"\x1b[200~ls\rrm -rf /\x1b[201~"
+    program.sent = b""
+    term._on_data(b"\x1b[6n")  # its answers go to the program
+    assert program.sent == b"\x1b[1;1R"
+    term.__dict__["_program"] = None
+    form.Unload()
+
+
+def test_terminal_type_property(qapp):
+    class Typed(Form):
+        def InitializeComponent(self):
+            self.term = Terminal(self, AutoStart=False, TerminalType=vpTermVT220)
+
+    form = Typed()
+    assert form.term.TerminalType == vpTermVT220 and form.term.TermName == "vt220"
+    form.term.TerminalType = vpTermXterm
+    assert form.term.TermName == "xterm" and form.term._screen.term == "xterm"
+    with pytest.raises(ValueError, match="TerminalType"):
+        form.term.TerminalType = 9
+    assert Terminal._specs["TerminalType"].default == vpTermXterm256Color
+    form.Unload()
+
+
 def test_keys():
     control = Qt.MetaModifier if sys.platform == "darwin" else Qt.ControlModifier
     assert key_text(Qt.Key_C, control, "") == "\x03"  # Ctrl+C
@@ -159,6 +375,35 @@ def test_a_shell_in_a_terminal(shell):
     term.Start('/bin/sh -c "echo again"')  # another program (double quotes group words)
     wait_for(lambda: ("exit", 0) in shell.log)
     assert "again" in term.Text
+
+
+@posix
+@pytest.mark.parametrize("kind, name", [(vpTermVT100, "vt100"), (vpTermXterm, "xterm")])
+def test_the_program_sees_its_terminal_type(qapp, kind, name):
+    """Its TERM, and its question (Device Attributes) answered as that terminal."""
+    script = ("import os, sys, termios, tty\n"
+              "mode = termios.tcgetattr(0)\n"
+              "tty.setraw(0)\n"
+              "os.write(1, b'\\x1b[c')\n"
+              "reply = b''\n"
+              "while not reply.endswith(b'c'): reply += os.read(0, 1)\n"
+              "termios.tcsetattr(0, termios.TCSANOW, mode)\n"
+              "print(os.environ['TERM'], reply[1:].decode())\n")
+
+    class Asking(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 640, 200
+            self.term = Terminal(self, Left=0, Top=0, Width=640, Height=200, AutoStart=False,
+                                 TerminalType=kind)
+
+    form = Asking()
+    form.Show()
+    form.term.Start([sys.executable, "-c", script])
+    wait_for(lambda: not form.term.Running)
+    answer = AnsiScreen(term=name)
+    answer.feed("\x1b[c")
+    assert form.term.Text.strip() == f"{name} {answer.replies[0][1:]}"
+    form.Unload()
 
 
 @posix

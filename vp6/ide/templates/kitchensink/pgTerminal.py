@@ -1,6 +1,8 @@
-"""Kitchen Sink page: a Terminal running your shell (ANSI): type in it; the
-demo button types a command that writes bold, underlined, inverse and colored
-text and sets the terminal's title (TitleChange); Clear, Restart, and the
+"""Kitchen Sink page: a Terminal running your shell (an xterm): type in it;
+the demo button types a command that writes bold, underlined, inverse and
+colored text, a box in the DEC line drawing characters and its TERM, and sets
+the terminal's title (TitleChange); the terminal type (TerminalType: xterm,
+vt100, vt220...: the shell starts again as one); Clear, Restart, and the
 shell's end (Exited)."""
 
 import sys
@@ -12,7 +14,8 @@ if sys.platform == "win32":  # (cmd.exe, without a pseudo-terminal there)
 else:
     DEMO = ("printf '\\033]0;VP6 Terminal\\007\\033[1mbold\\033[0m \\033[4munderlined\\033[0m "
             "\\033[7minverse\\033[0m'; for c in 31 32 33 34 35 36; do "
-            "printf ' \\033[%sm color %s \\033[0m' $c $c; done; echo\r")
+            "printf ' \\033[%sm color %s \\033[0m' $c $c; done; "
+            "printf ' \\033(0lqqk\\033(B TERM='; echo $TERM\r")
 
 
 class pgTerminal(Form):
@@ -30,15 +33,26 @@ class pgTerminal(Form):
         self.cmdRestart = CommandButton(self, Caption='&Restart', Left=222, Top=366, Width=90,
                                         Height=30, TabIndex=4,
                                         ToolTipText='Kill the shell and start a new one')
-        self.lblStatus = Label(self, Caption='', Left=320, Top=372, Width=304, Height=25,
-                               TabIndex=5)
+        self.cboType = ComboBox(self, Style=2, Left=320, Top=369, Width=140, Height=25, TabIndex=5,
+                                ToolTipText='TerminalType: the shell starts again as this one')
+        self.lblStatus = Label(self, Caption='', Left=468, Top=372, Width=156, Height=25,
+                               TabIndex=6)
         self.lblHelp = Label(self,
                              Caption="It's a terminal: the shell gets your keys (Ctrl+C interrupts, Tab completes). Copy: Cmd+C on macOS, Ctrl+Shift+C elsewhere.",
-                             Left=16, Top=402, Width=608, Height=30, WordWrap=True, TabIndex=6)
+                             Left=16, Top=402, Width=608, Height=30, WordWrap=True, TabIndex=7)
     # endregion
 
     def Form_Load(self):
+        for name in ("xterm-256color", "xterm", "vt100", "vt102", "vt220", "ansi"):
+            self.cboType.AddItem(name)  # (in TerminalType's order: vpTermXterm256Color...)
+        self.cboType.ListIndex = self.termShell.TerminalType
         self.lblStatus.Caption = "Shell running" if self.termShell.Running else ""
+
+    def cboType_Click(self):
+        if self.cboType.ListIndex == self.termShell.TerminalType:
+            return
+        self.termShell.TerminalType = self.cboType.ListIndex  # (its keys and answers at once,
+        self.cmdRestart_Click()                               # its TERM in a new shell)
 
     def cmdDemo_Click(self):
         if not self.termShell.Running:
@@ -63,7 +77,7 @@ class pgTerminal(Form):
         if getattr(self, "restart", False):
             self.restart = False
             self.termShell.Start()
-            self.lblStatus.Caption = "Shell restarted"
+            self.lblStatus.Caption = f"Shell restarted ({self.termShell.TermName})"
         else:
             self.lblStatus.Caption = f"The shell ended ({ExitCode}): Restart starts it again"
 

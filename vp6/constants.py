@@ -318,6 +318,14 @@ vpMillimeters = 6
 vpCentimeters = 7
 vpHimetric = 8
 
+# --- Terminal.TerminalType ----------------------------------------------------------------
+vpTermXterm256Color = 0
+vpTermXterm = 1
+vpTermVT100 = 2
+vpTermVT102 = 3
+vpTermVT220 = 4
+vpTermAnsi = 5
+
 # --- MDIForm.Arrange -------------------------------------------------------------------
 vpCascade = 0
 vpTileHorizontal = 1

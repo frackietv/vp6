@@ -2205,13 +2205,15 @@ Events: `Output(Text)`, `ErrorOutput(Text)`, `Exited(ExitCode)`, `Error(Descript
 
 ### Terminal
 
-A terminal on the form, running your shell or another program, speaking
-ANSI (`TERM=ansi`): the program's colors, bold, underline and inverse text,
-cursor movement and screens drawn in place; your keys go to it as a
-terminal sends them (Enter, Tab, arrows, Ctrl+C...), copy and paste are the
-system's (Cmd+C / Cmd+V on macOS, Ctrl+Shift+C / Ctrl+Shift+V elsewhere), the
-mouse selects (a double-click: a word) and the scroll bar and the wheel go
-back through what scrolled off (ScrollbackLines).
+A terminal on the form, running your shell or another program, as an xterm
+(`TERM=xterm-256color`) or another terminal type (`TerminalType`): the
+program's colors, bold, dim, italic, underlined, inverse and struck-through
+text, line drawing, cursor movement and screens drawn in place; your keys go
+to it as that terminal sends them (Enter, Tab, arrows, function keys,
+Ctrl+C...), copy and paste are the system's (Cmd+C / Cmd+V on macOS,
+Ctrl+Shift+C / Ctrl+Shift+V elsewhere), the mouse selects (a double-click: a
+word) and the scroll bar and the wheel go back through what scrolled off
+(ScrollbackLines).
 
 ```python
 self.termBuild = Terminal(self, Left=8, Top=8, Width=600, Height=300,
@@ -2242,8 +2244,28 @@ def cmdAgain_Click(self):
 * `BackColor` and `ForeColor` (unset: the color scheme's), `FontName` and
   `FontSize` (unset: the system's fixed-width font). A program still running
   when the form unloads is killed.
-* Only ANSI for now (xterm, vt100 and more are on the backlog): full-screen
-  programs that need more than ANSI may not draw right.
+* `TerminalType`: `vpTermXterm256Color` (0, the default), `vpTermXterm`,
+  `vpTermVT100`, `vpTermVT102`, `vpTermVT220`, `vpTermAnsi`; `TermName` is
+  its name as `TERM` has it (`"xterm-256color"`, `"vt100"`...). The program
+  gets it as `TERM` when it starts (change it, then `Start` again); the keys
+  and the answers follow it at once. Each one answers the program's
+  questions as itself (Device Attributes, the cursor's position, xterm's
+  size, modes, settings, colors and terminfo questions) and sends its own
+  keys: an xterm's Shift / Alt / Ctrl with arrows, Home, End, Delete and
+  F-keys (`ESC [ 1 ; 2 A`), a vt220's Find and Select for Home and End,
+  a vt100's PF1–PF4 and keypad keys for F1–F10; cursor and keypad keys in
+  application mode when the program asks (`ESC [ ? 1 h`, `ESC =`).
+  Backspace sends DEL (`^?`) for all of them.
+* What it understands: the DEC line drawing set (`ESC ( 0`, SO / SI; full
+  cell lines for boxes), the vt220's 8-bit controls, insert, origin,
+  autowrap and new line modes, tab stops, repeating a character, the
+  cursor's shape (block, underline, bar), reverse video, the alternate
+  screen (keeping the cursor), the title (and xterm's title stack), mouse
+  reporting (X10, normal, button and any motion; SGR coordinates;
+  Shift+mouse still selects), focus reporting, bracketed paste (a paste
+  arrives marked as one), soft and full resets. Blinking text shows steady;
+  xterm's DCS, APC (Kitty graphics), PM and SOS strings it doesn't use are
+  left out of the screen.
 
 <!-- BEGIN GENERATED: control Terminal -->
 Default size 480 × 300. Property groups: Position, Colors, Common.
@@ -2255,6 +2277,7 @@ Default size 480 × 300. Property groups: Position, Colors, Common.
 | `FontName` | font name | (default) | Its font; unset: the system's fixed one |
 | `FontSize` | int | (default) | Font size in points; unset: the system's |
 | `ScrollbackLines` | int | `1000` | How many lines scrolled off it keeps |
+| `TerminalType` | enum | 0 - xterm-256color | 0 - xterm-256color, 1 - xterm, 2 - vt100, 3 - vt102, 4 - vt220, 5 - ansi. The terminal it is (its TERM, keys and answers); a program started before keeps the TERM it had |
 | `WorkingDirectory` | str | `''` | Where the program runs (relative to the form's folder); empty: here |
 
 Events: `Exited(ExitCode)`, `TitleChange(Title)`, `GotFocus`, `LostFocus`. Default event (double-click in the designer): `Exited`.
@@ -3126,6 +3149,7 @@ All constants are plain ints or strings.
 | Drag and drop | `vpManual`, `vpAutomatic`, `vpCancelDrag`, `vpBeginDrag`, `vpEndDrag`, `vpEnter`, `vpLeave`, `vpOver`, `vpOLEDropNone`, `vpOLEDropManual` | 0, 1, 0, 1, 2, 0, 1, 2, 0, 1 |
 | Shell: WindowStyle (accepted, as in VB; programs open their windows themselves) | `vpHide`, `vpNormalFocus`, `vpMinimizedFocus`, `vpMaximizedFocus`, `vpNormalNoFocus`, `vpMinimizedNoFocus` | 0, 1, 2, 3, 4, 6 |
 | ScaleMode (Form, PictureBox, Printer, Picture; ScaleX / ScaleY) | `vpUser`, `vpTwips`, `vpPoints`, `vpPixels`, `vpCharacters`, `vpInches`, `vpMillimeters`, `vpCentimeters`, `vpHimetric` | 0, 1, 2, 3, 4, 5, 6, 7, 8 |
+| Terminal.TerminalType | `vpTermXterm256Color`, `vpTermXterm`, `vpTermVT100`, `vpTermVT102`, `vpTermVT220`, `vpTermAnsi` | 0, 1, 2, 3, 4, 5 |
 | MDIForm.Arrange | `vpCascade`, `vpTileHorizontal`, `vpTileVertical`, `vpArrangeIcons` | 0, 1, 2, 3 |
 | Printer.Orientation | `vpPRORPortrait`, `vpPRORLandscape` | 1, 2 |
 | Printer.PaperSize | `vpPRPSLetter`, `vpPRPSTabloid`, `vpPRPSLedger`, `vpPRPSLegal`, `vpPRPSExecutive`, `vpPRPSA3`, `vpPRPSA4`, `vpPRPSA5`, `vpPRPSB5`, `vpPRPSEnv10`, `vpPRPSEnvDL` | 1, 3, 4, 5, 7, 8, 9, 11, 13, 20, 27 |

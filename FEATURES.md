@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.4.40
+**Date:** 2026-10-02
+
+## Controls
+
+- Terminal types: the Terminal is an xterm-256color by default, or an xterm, vt100, vt102, vt220 or ansi terminal (TerminalType, the vpTerm constants, TermName): the program gets it as TERM, the keys are that terminal's (xterm's Shift/Alt/Ctrl with arrows, Home, End and F-keys; a vt220's Find and Select; a vt100's PF and keypad keys; application cursor and keypad keys) and it answers as itself (Device Attributes, the cursor's position, xterm's size, modes, settings, colors and terminfo questions)
+- More of the terminals: the DEC line drawing characters (boxes drawn as solid lines), 8-bit controls, insert, origin, autowrap and new line modes, tab stops, repeated characters, dim, italic, strikethrough and hidden text, the cursor's shape (block, underline, bar), reverse video, xterm's title stack, mouse reporting (Shift+mouse still selects), focus reporting, bracketed paste, soft reset; DCS, APC, PM and SOS strings no longer show on the screen
+
+## Kitchen Sink
+
+- The Terminal page: a terminal type to choose (the shell starts again as one), and a line drawing box and the TERM in the demo
+
+---
+
 **Version:** 0.4.39
 **Date:** 2026-10-02
 
