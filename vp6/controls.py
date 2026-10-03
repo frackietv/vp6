@@ -456,14 +456,15 @@ class Control(PropertyHost):
             pos = watched.mapTo(self._widget, event.position().toPoint()) \
                 if watched is not self._widget else event.position().toPoint()
             shift = vp_shift(event.modifiers())
+            x, y = self._mouse_xy(pos.x(), pos.y())  # (a PictureBox: in its ScaleMode)
             if etype == QEvent.MouseButtonPress:
-                self._fire("MouseDown", vp_buttons(event.button()), shift, pos.x(), pos.y())
+                self._fire("MouseDown", vp_buttons(event.button()), shift, x, y)
             elif etype == QEvent.MouseButtonRelease:
-                self._fire("MouseUp", vp_buttons(event.button()), shift, pos.x(), pos.y())
+                self._fire("MouseUp", vp_buttons(event.button()), shift, x, y)
                 if self._synthesize_click and self._widget.rect().contains(pos):
                     self._fire("Click")
             else:
-                self._fire("MouseMove", vp_buttons(event.buttons()), shift, pos.x(), pos.y())
+                self._fire("MouseMove", vp_buttons(event.buttons()), shift, x, y)
         elif etype == QEvent.MouseButtonDblClick:
             self._fire("DblClick")
         elif etype == QEvent.KeyPress:
@@ -710,6 +711,10 @@ class Control(PropertyHost):
     def Refresh(self) -> None:
         if self._widget:
             self._widget.update()
+
+    def _mouse_xy(self, x, y):
+        """A mouse event's X, Y (a PictureBox's: in its ScaleMode, see Drawing)."""
+        return x, y
 
     def ZOrder(self, Position: int = 0) -> None:
         """0 brings the control to the front, 1 sends it to the back, by setting
@@ -4331,14 +4336,6 @@ class PictureBox(_Docked, Drawing, Control):
     def _handles_paint(self) -> bool:
         return self._handler("Paint") is not None
 
-    @property
-    def ScaleWidth(self) -> int:
-        """The width inside the border: the drawing area."""
-        return self._widget.contentsRect().width()
-
-    @property
-    def ScaleHeight(self) -> int:
-        return self._widget.contentsRect().height()
 
 
 class Image(Control):

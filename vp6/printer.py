@@ -29,7 +29,7 @@ import os
 import time
 from contextlib import contextmanager
 
-from PySide6.QtCore import QMarginsF, QSize, QSizeF, Qt
+from PySide6.QtCore import QMarginsF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QPageLayout, QPageSize, QPainter
 from PySide6.QtWidgets import QApplication
 
@@ -110,10 +110,10 @@ class _PrinterSurface:
         self._printer = printer
 
     def width(self) -> int:
-        return self._printer.ScaleWidth
+        return self._printer._draw_area_size().width()
 
     def height(self) -> int:
-        return self._printer.ScaleHeight
+        return self._printer._draw_area_size().height()
 
     def devicePixelRatioF(self) -> float:
         return 1.0
@@ -265,14 +265,6 @@ class _Printer(Drawing, PropertyHost):
     def Height(self) -> int:
         return self._units(self._layout().fullRect(QPageLayout.Point).height())
 
-    @property
-    def ScaleWidth(self) -> int:
-        """The printable area's width: where the graphics methods print."""
-        return self._units(self._layout().paintRect(QPageLayout.Point).width())
-
-    @property
-    def ScaleHeight(self) -> int:
-        return self._units(self._layout().paintRect(QPageLayout.Point).height())
 
     @property
     def Page(self) -> int:
@@ -343,7 +335,9 @@ class _Printer(Drawing, PropertyHost):
             painter.restore()
 
     def _draw_area_size(self) -> QSize:
-        return QSize(self.ScaleWidth, self.ScaleHeight)
+        """The printable area (ScaleWidth, ScaleHeight: it in ScaleMode's units)."""
+        rect = self._layout().paintRect(QPageLayout.Point)
+        return QSize(self._units(rect.width()), self._units(rect.height()))
 
     def _draw_text_color(self):
         color = self._values.get("ForeColor")

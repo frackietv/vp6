@@ -560,7 +560,8 @@ def test_drawing_page(sink):
     QTest.qWait(20)
     assert painted
     del page.picClock_Paint
-    assert clock.Point(clock.ScaleWidth / 2, 12) != vp6.vpWhite  # its face's edge, or a mark
+    assert clock.ScaleMode == vp6.vpUser and clock.ScaleLeft == -1.1  # (Scale: a User scale)
+    assert clock.Point(0, 1) != vp6.vpWhite and clock.Point(0, 1) != -1  # its face's top edge
 
 
 def test_z_order_page(sink):
@@ -1094,7 +1095,8 @@ def ole_drop(widget, data):
 def test_mouse_page(sink, monkeypatch):
     page = _page(sink, "mouse")
     QTest.mousePress(page.picPad._widget, Qt.RightButton, Qt.NoModifier, QPoint(50, 60))
-    assert page.lblMouse.Caption == "right button down at 50, 60"
+    border = page.picPad._widget.contentsRect().topLeft()  # (X, Y: inside its border, as in VB)
+    assert page.lblMouse.Caption == f"right button down at {50 - border.x()}, {60 - border.y()}"
     QTest.mouseRelease(page.picPad._widget, Qt.RightButton, Qt.NoModifier, QPoint(50, 60))
     assert page.lblMouse.Caption.endswith("released")
     page.cboPointer.ListIndex = vp6.vpCrosshair  # the pad's MousePointer

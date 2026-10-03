@@ -164,7 +164,7 @@ Light/dark color schemes for forms (see architecture §4.5).
   * `match_dialog(dialog, parent)` gives a message box the scheme of the form
     under it.
 
-### `vp6/drawing.py` (≈330 lines)
+### `vp6/drawing.py` (≈470 lines)
 
 VB's graphics methods, for `Form` (and so a user control's surface) and
 `PictureBox`: the `Drawing` mixin and `DRAWING_PROPERTIES` (AutoRedraw,
@@ -203,6 +203,18 @@ Properties.
   without its children into a new `picture.Picture`; `PaintPicture` draws a
   picture's image (a file through `picture_pixmap`, relative to the form's
   folder) scaled into a rectangle, or a part of it.
+* **ScaleMode:** the drawing state stays in pixels; the public side converts.
+  `_scale_factors()` is (ScaleLeft, ScaleTop, pixels per unit across, down):
+  a User scale (`_user_scale`: left, top, width, height, from `Scale`, or
+  `_set_scale_part` when ScaleLeft... is set) against `_draw_area_size()`,
+  else `_UNITS` (VP6's pixel 1/96 inch; characters 8 x 16). `_to_px`,
+  `_to_px_size`, `_from_px`, `_point` (Step: a size from the current
+  point) are used by every method, CurrentX / CurrentY, Point, TextWidth /
+  TextHeight (divided back) and PaintPicture's destination; Circle's radius
+  is a size across. `_apply_ScaleMode` (User: the pixels it has, to begin);
+  `ScaleX` / `ScaleY` (`_units_per_pixel`); `_mouse_xy` (from the drawing
+  area's top left, in its units) for the form's mouse events and, through
+  `Control._mouse_xy`, a PictureBox's.
 * **The methods:** `PSet` (a pixel, or a round dot), `Line` (a line, a box
   covering both corners, "BF" filled), `Circle` (a `QPainterPath`: an
   ellipse, or an arc from `arcMoveTo`/`arcTo` with radius lines for negative
@@ -1822,7 +1834,8 @@ explorer-style.
     DrawStyle from a ComboBox, Cls), shapes (Line boxes, hatched and solid
     fills, Circle, an ellipse, a pie and an arc, PSet, Print centered with
     TextWidth and TextHeight, Point), a clock drawn in its Paint (AutoRedraw
-    False) that a Timer refreshes, and the page's own Form_Paint;
+    False) that a Timer refreshes, in a User scale (Scale(-1.1, 1.1, 1.1,
+    -1.1): the center 0, 0), and the page's own Form_Paint;
   * `pgZOrder.py`: ZIndex and ZOrder, Lines (a dashed one above the labels,
     a control array of Lines with BorderStyle 1 to 5, a thick one), Shapes
     (a control array of every kind in QBColor colors, and one whose Shape and
@@ -2121,6 +2134,7 @@ All tests run headless. `conftest.py`:
 | `test_objectbrowser.py` | VP6's classes (properties with types, descriptions and choices, events with their arguments, methods with signatures, run-time properties), objects (App's plain attributes), Globals, constants groups, colors and schemes; the project's forms (controls, methods, not InitializeComponent), modules (constants, variables, functions with their lines, classes, a syntax error) and user controls (their Properties and Events); search; the window (libraries, details, search results choosing a class and member); in the IDE: View > Object Browser (F2), all libraries, the project's, going to a member's code or a control in its designer, refreshed with new code. |
 | `test_light_dark.py` | Form.DarkMode and Form_ColorSchemeChanged (not while loading, on ColorScheme changes, on the OS switching for System forms only), Screen.DarkMode; the watcher polling only while the scheme is forced; the IDE's scheme file (over the environment variable); designers refreshed by the watcher; the IDE writing its scheme file and rewriting it when its theme changes (removed when it closes); a real program's IDE form following the file live; a form shown in another looking like it. |
 | `test_mdi.py` | MDI forms: children shown in the workspace (the MDI form loaded and shown first, around a docked pane), Activate and Deactivate, ActiveForm, Left/Top/Width/WindowState of a child, not modally; Load showing a child while AutoShowChildren; Arrange (tiles, cascade); the active child's menus replacing the MDI form's (its own bar hidden, never the system's), WindowList (the children, checked, activating, filled once); unloading a child (shown again later) and the MDI form (children first, vpFormMDIForm, cancelled by one); no MDIForm; the properties; ShowPopup (flags, not activating, at the owner's point, hidden in the background, a window again with Show); the form file (MDIForm, MDIForm_Load), the designer's DesignMDIForm and its properties, Project > Add MDI Form (one a project), MDIChild on forms, WindowList in the Menu Editor. |
+| `test_scalemode.py` | ScaleMode: pixels by default; twips, points, inches, centimeters, millimeters, characters (boxes where they belong, CurrentX following); a User scale (Scale upwards, ScaleWidth and ScaleLeft... making one, back to pixels, errors, User from pixels); Circle's radius, TextWidth and PaintPicture in other units; ScaleX / ScaleY and Screen.TwipsPerPixel; the form's mouse X, Y in its scale; a PictureBox (inside its border, its mouse events); a Picture's and the Printer's scales (an inch square in a PDF). |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu). |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |

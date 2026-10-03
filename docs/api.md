@@ -341,6 +341,7 @@ What the arguments mean:
 | `NegotiateMenus` | bool | `True` | The menus of forms shown in this one (ShowIn) join its menu bar while they are visible, placed by their NegotiatePosition |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop |
 | `Picture` | file path | `''` | A picture on the form's background, at its top left (a file relative to the form's folder) |
+| `ScaleMode` | enum | 3 - Pixels | 0 - User, 1 - Twips, 2 - Points, 3 - Pixels, 4 - Characters, 5 - Inches, 6 - Millimeters, 7 - Centimeters. The units of the graphics methods, CurrentX / CurrentY, ScaleWidth / ScaleHeight and its mouse events' X, Y (User: set by ScaleLeft, ScaleTop, ScaleWidth, ScaleHeight or Scale) |
 | `StartUpPosition` | enum | 2 - CenterScreen | 0 - Manual, 1 - CenterOwner, 2 - CenterScreen, 3 - Windows Default. Where the window first appears |
 | `Tag` | str | `''` | Free for your own use |
 | `Top` | int | `0` | Screen position; used with StartUpPosition Manual |
@@ -358,7 +359,7 @@ Run-time only properties:
 | `Me` | the form itself (`self`) |
 | `Name` | the form's class name |
 | `Controls` | list of all controls on the form, including nested ones |
-| `ScaleWidth`, `ScaleHeight` | client area size |
+| `ScaleWidth`, `ScaleHeight`, `ScaleLeft`, `ScaleTop` | the client area in its [ScaleMode](#scalemode)'s units (pixels: its size); setting them makes a User scale |
 | `DarkMode` | whether the form looks dark now (see [color schemes](#7-color-schemes-lightdark)) |
 | `CurrentX`, `CurrentY` | where the [graphics methods](#drawing-on-forms-and-pictureboxes) draw next |
 | `Visible` | whether the form is shown; setting it calls `Show()` / `Hide()` |
@@ -562,6 +563,37 @@ line, the point, the circle's center or the end of the text.
 | `DrawStyle` | 0 - Solid | `vpSolid`, `vpDash`, `vpDot`, `vpDashDot`, `vpDashDotDot`, `vpInvisible` (no line), `vpInsideSolid` (boxes and circles drawn inside their bounds). Dashes grow with DrawWidth, so wide lines are dashed too (VB's were always solid). A `Line` that starts where the last one ended goes on with its pattern, so a line drawn bit by bit (following the mouse) is dashed too. |
 | `FillStyle` | 1 - Transparent | `vpFSSolid`, `vpFSTransparent`, `vpHorizontalLine`, `vpVerticalLine`, `vpUpwardDiagonal`, `vpDownwardDiagonal`, `vpCross`, `vpDiagonalCross` |
 | `FillColor` | (ForeColor) | the fill's color |
+
+#### ScaleMode
+
+`ScaleMode` sets the units of the graphics methods, `CurrentX` /
+`CurrentY`, `ScaleWidth` / `ScaleHeight` and the form's (or PictureBox's)
+own mouse events' X, Y: `vpPixels` (3, VP6's default), `vpTwips` (1, VB's
+default; 1440 an inch), `vpPoints` (2), `vpCharacters` (4: 120 x 240
+twips), `vpInches` (5), `vpMillimeters` (6), `vpCentimeters` (7), or
+`vpUser` (0), a scale of your own:
+
+```python
+def picChart_Paint(self):
+    pic = self.picChart
+    pic.Scale(0, 100, 12, 0)                 # 12 months across, 0 to 100 upwards
+    for month, value in enumerate(self.sales):
+        pic.Line(month + 0.1, 0, month + 0.9, value, vpBlue, "BF")
+```
+
+* `Scale(X1, Y1, X2, Y2)`: the top left corner is X1, Y1 and the bottom
+  right X2, Y2 (Y2 below Y1: up is up); `Scale()` goes back to pixels.
+  Setting `ScaleLeft`, `ScaleTop`, `ScaleWidth` or `ScaleHeight` makes a
+  User scale too, the others as they were.
+* `ScaleX(Width, FromScale=vpHimetric, ToScale=None)` and `ScaleY` convert a
+  size between units (`ToScale` left out: its own ScaleMode; `vpUser`: its
+  User scale). `Screen.TwipsPerPixelX` / `TwipsPerPixelY` are 15.
+* A pixel is 1/96 inch, as on a standard screen (and for the
+  [Printer](#printer)). `DrawWidth` stays in pixels; `Circle`'s radius is
+  in units across; `PaintPicture`'s X2, Y2, Width2, Height2 are the
+  picture's pixels.
+* Controls' `Left`, `Top`, `Width` and `Height` stay in pixels whatever the
+  ScaleMode (VB used its container's).
 
 **AutoRedraw and Paint.** With `AutoRedraw = True` what is drawn is kept
 (also when the form grows, or is covered and shown again) until `Cls`, and
@@ -842,6 +874,7 @@ Default size 121 × 97. A container: other controls can be placed on it. Propert
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Picture` | file path | `''` | Image file (relative to the form's folder) |
+| `ScaleMode` | enum | 3 - Pixels | 0 - User, 1 - Twips, 2 - Points, 3 - Pixels, 4 - Characters, 5 - Inches, 6 - Millimeters, 7 - Centimeters. The units of the graphics methods, CurrentX / CurrentY, ScaleWidth / ScaleHeight and its mouse events' X, Y (User: set by ScaleLeft, ScaleTop, ScaleWidth, ScaleHeight or Scale) |
 | `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Scroll bars that appear when the controls in it reach beyond its edges (at run time); the picture stays in place |
 | `Stretch` | bool | `False` | Scale the picture to fit the control |
 
@@ -852,7 +885,8 @@ Methods: the [graphics methods](#drawing-on-forms-and-pictureboxes) (`Line`,
 `Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`,
 `PaintPicture`), `Image` (a [Picture](#picture-objects) of what it shows) with
 `CurrentX` / `CurrentY`, and `ScaleWidth` / `ScaleHeight`, the size inside its
-border. `Cls()` clears the drawing, not the `Picture` (set `Picture = ""` for
+border ([ScaleMode](#scalemode) and its other scale members too; its mouse
+events' X, Y are from inside the border, in its ScaleMode). `Cls()` clears the drawing, not the `Picture` (set `Picture = ""` for
 that). The `Paint` event: see [AutoRedraw and Paint](#drawing-on-forms-and-pictureboxes).
 
 ### Label
@@ -2816,8 +2850,10 @@ def cmdPrint_Click(self):
 ```
 
 * **Units:** VP6's pixels, 1/96 inch (96 is an inch), from the top left of
-  the page's printable area. `ScaleWidth`, `ScaleHeight` are that area,
-  `Width`, `Height` the paper (as it is turned). Font sizes are points, as on
+  the page's printable area; or another [ScaleMode](#scalemode) (e.g.
+  `vpTwips` as in VB, `vpMillimeters`, a User scale). `ScaleWidth`,
+  `ScaleHeight` are that area in those units, `Width`, `Height` the paper
+  (as it is turned, in pixels). Font sizes are points, as on
   screen.
 * **Methods:** `Print`, `Line`, `Circle`, `PSet`, `PaintPicture`,
   `TextWidth`, `TextHeight` (as on a form), `NewPage()` (the next page; the
@@ -2880,7 +2916,8 @@ A Picture has `Width` and `Height` (pixels), `Type` (`vpPicTypeBitmap`, or
 (`Line`, `Circle`, `PSet`, `Print`, `PaintPicture`, `Point` (-1 where it is
 transparent), `Cls` (fills it with its BackColor), `DrawWidth`, `DrawStyle`,
 `FillStyle`, `FillColor`, `ForeColor`, `CurrentX`, `CurrentY`, `FontName`,
-`FontSize`, `FontBold`, `FontItalic`). A property set to a Picture shows it as
+`FontSize`, `FontBold`, `FontItalic`, and [ScaleMode](#scalemode) with its scale
+members). A property set to a Picture shows it as
 it is then: draw on it again, and set the property again to show that.
 Reading the property gives what was set (a Picture, or a file name).
 
@@ -2892,7 +2929,7 @@ A picture dropped from another program is in `OLEDragDrop`'s Data too:
 | Object | Members |
 |---|---|
 | `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started) |
-| `Screen` | `Width`, `Height` (primary screen, pixels), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
+| `Screen` | `Width`, `Height` (primary screen, pixels), `TwipsPerPixelX`, `TwipsPerPixelY` (15), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
 | `Clipboard` | `GetText(Format=vpCFText)`, `SetText(text, Format=vpCFText)` (`vpCFRTF`: rich text, as RTF source), `GetFormat(Format)` (`vpCFText`, `vpCFBitmap` / `vpCFDIB`, `vpCFRTF`, `vpCFFiles`), `GetData(Format=vpCFBitmap)` (a [Picture](#picture-objects), or with `vpCFFiles` the files' paths; `None` when there is none), `SetData(Picture)` (a Picture or a picture file), `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
 
@@ -3031,6 +3068,7 @@ All constants are plain ints or strings.
 | MousePointer (controls, forms, Screen) | `vpDefault`, `vpArrow`, `vpCrosshair`, `vpIbeam`, `vpIconPointer`, `vpSizePointer`, `vpSizeNESW`, `vpSizeNS`, `vpSizeNWSE`, `vpSizeWE`, `vpUpArrow`, `vpHourglass`, `vpNoDrop`, `vpArrowHourglass`, `vpArrowQuestion`, `vpSizeAll`, `vpCustom` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 99 |
 | Drag and drop | `vpManual`, `vpAutomatic`, `vpCancelDrag`, `vpBeginDrag`, `vpEndDrag`, `vpEnter`, `vpLeave`, `vpOver`, `vpOLEDropNone`, `vpOLEDropManual` | 0, 1, 0, 1, 2, 0, 1, 2, 0, 1 |
 | Shell: WindowStyle (accepted, as in VB; programs open their windows themselves) | `vpHide`, `vpNormalFocus`, `vpMinimizedFocus`, `vpMaximizedFocus`, `vpNormalNoFocus`, `vpMinimizedNoFocus` | 0, 1, 2, 3, 4, 6 |
+| ScaleMode (Form, PictureBox, Printer, Picture; ScaleX / ScaleY) | `vpUser`, `vpTwips`, `vpPoints`, `vpPixels`, `vpCharacters`, `vpInches`, `vpMillimeters`, `vpCentimeters`, `vpHimetric` | 0, 1, 2, 3, 4, 5, 6, 7, 8 |
 | MDIForm.Arrange | `vpCascade`, `vpTileHorizontal`, `vpTileVertical`, `vpArrangeIcons` | 0, 1, 2, 3 |
 | Printer.Orientation | `vpPRORPortrait`, `vpPRORLandscape` | 1, 2 |
 | Printer.PaperSize | `vpPRPSLetter`, `vpPRPSTabloid`, `vpPRPSLedger`, `vpPRPSLegal`, `vpPRPSExecutive`, `vpPRPSA3`, `vpPRPSA4`, `vpPRPSA5`, `vpPRPSB5`, `vpPRPSEnv10`, `vpPRPSEnvDL` | 1, 3, 4, 5, 7, 8, 9, 11, 13, 20, 27 |
@@ -3195,7 +3233,9 @@ It goes in the project's `dist` folder:
 * **The language is Python.** `Me` is `self`, handlers are methods, and there
   are no `Dim` statements.
 * **Units are pixels**, not twips. A form's `Width` and `Height` are its
-  client area.
+  client area. `ScaleMode` (pixels by default) sets the units of the
+  graphics methods, the scale members and mouse events' X, Y, but not the
+  controls' Left, Top, Width and Height, which stay in pixels.
 * **`ByRef` event arguments are return values** (see [§2](#2-events)).
 * **Constants use the `vp` prefix** instead of `vb`.
 * **Forms are classes,** with VB's [default instances](#default-form-instances):

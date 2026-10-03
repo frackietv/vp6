@@ -116,8 +116,8 @@ class _FormWidget(QWidget):
 
     def _mouse(self, name, event, buttons):
         pos = event.position().toPoint()
-        self._vp_form._fire(name, vp_buttons(buttons), vp_shift(event.modifiers()),
-                            pos.x(), pos.y())
+        x, y = self._vp_form._mouse_xy(pos.x(), pos.y())  # (in its ScaleMode)
+        self._vp_form._fire(name, vp_buttons(buttons), vp_shift(event.modifiers()), x, y)
 
     def mousePressEvent(self, event):
         self._mouse("MouseDown", event, event.button())
@@ -938,14 +938,6 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
     @property
     def Controls(self) -> list[Control]:
         return list(self._controls)
-
-    @property
-    def ScaleWidth(self) -> int:
-        return self._widget.width()
-
-    @property
-    def ScaleHeight(self) -> int:
-        return self._widget.height() - self._menu_height
 
     @property
     def Visible(self) -> bool:

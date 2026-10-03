@@ -307,6 +307,17 @@ vpMaximizedFocus = 3
 vpNormalNoFocus = 4
 vpMinimizedNoFocus = 6
 
+# --- ScaleMode (Form, PictureBox, Printer, Picture; ScaleX / ScaleY) -----------------------
+vpUser = 0
+vpTwips = 1
+vpPoints = 2
+vpPixels = 3
+vpCharacters = 4
+vpInches = 5
+vpMillimeters = 6
+vpCentimeters = 7
+vpHimetric = 8
+
 # --- MDIForm.Arrange -------------------------------------------------------------------
 vpCascade = 0
 vpTileHorizontal = 1

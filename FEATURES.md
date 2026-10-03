@@ -1,5 +1,20 @@
 # VP6 features
 
+**Version:** 0.4.38
+**Date:** 2026-10-02
+
+## Language and runtime
+
+- `ScaleMode` on forms, PictureBoxes, Picture objects and the Printer: the graphics methods, CurrentX / CurrentY, ScaleWidth / ScaleHeight and the mouse events' X, Y in pixels (the default), twips, points, characters, inches, millimeters or centimeters, or a User scale (`Scale(X1, Y1, X2, Y2)`, or setting `ScaleLeft`, `ScaleTop`, `ScaleWidth`, `ScaleHeight`)
+- `ScaleX` / `ScaleY` convert between units; `Screen.TwipsPerPixelX` / `TwipsPerPixelY`
+- A PictureBox's mouse events' X, Y are from inside its border, where its drawing is (they were off by the border's width)
+
+## Kitchen Sink
+
+- The Drawing page's clock is drawn in a User scale (its center 0, 0, up is up)
+
+---
+
 **Version:** 0.4.37
 **Date:** 2026-10-02
 

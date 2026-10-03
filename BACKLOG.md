@@ -1,7 +1,12 @@
 # VP6 backlog
 
-- **[Language and runtime]** Twips and VB's `ScaleMode`; VP6 uses pixels only
-- **[Controls]** Terminal control, for now support ansi, xterm, xterm-256color (default), vt100, vt102, and vt220
+- **[Controls]** Terminal control, for now support only ansi, but plan to support more
+- **[Controls]** Terminal support for xterm, xterm-256color (default), vt100, vt102, and vt220
+- **[Controls]** Terminal support for Kitty graphics protocol
+- **[Controls]** Terminal support for iterm2 inline images
+- **[Controls]** Terminal support for sixel
+- **[Controls]** Terminal support for true color
+- **[Controls]** Terminal support for ligatures
 - **[Controls]** Data-bound controls
 - **[IDE]** Designer window frames with rounded bottom corners on macOS
 - **[Appearance]** Per-window title bar color: a forced Light or Dark form still gets a title bar in the OS appearance, since Qt can't set it per window on macOS

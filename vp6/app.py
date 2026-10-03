@@ -393,6 +393,8 @@ class _Screen:
         ensure_app()
         return len(_font_families())
 
+    TwipsPerPixelX = TwipsPerPixelY = 15  # (VP6's pixel: 1/96 inch, 1440 twips an inch)
+
     @property
     def DarkMode(self) -> bool:
         """Whether the operating system's appearance is dark now (a form's

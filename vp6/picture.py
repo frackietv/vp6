@@ -155,6 +155,7 @@ class Picture(Drawing, PropertyHost):
 
     def Point(self, X, Y) -> int:
         """The color at X, Y (-1 outside, or where it is transparent)."""
+        X, Y = self._to_px(X, Y)  # (ScaleMode's units)
         if not (0 <= X < self.Width and 0 <= Y < self.Height):
             return -1
         color = self._image.pixelColor(QPoint(int(X), int(Y)))

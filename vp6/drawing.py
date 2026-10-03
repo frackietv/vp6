@@ -33,6 +33,14 @@ _DRAW_PENS = {0: Qt.SolidLine, 1: Qt.DashLine, 2: Qt.DotLine, 3: Qt.DashDotLine,
               4: Qt.DashDotDotLine, 6: Qt.SolidLine}
 _TRANSPARENT, _INSIDE_SOLID = 5, 6
 
+# ScaleMode: pixels per unit (x, y). VP6's pixel is 1/96 inch: a twip 1/15 of one;
+# a character 120 x 240 twips, as in VB. 0 is User (ScaleLeft... set), 8 HiMetric
+# (ScaleX / ScaleY only)
+VP_USER, VP_PIXELS, VP_HIMETRIC = 0, 3, 8
+_UNITS = {1: (1 / 15, 1 / 15), 2: (96 / 72, 96 / 72), 3: (1.0, 1.0), 4: (8.0, 16.0),
+          5: (96.0, 96.0), 6: (96 / 25.4, 96 / 25.4), 7: (96 / 2.54, 96 / 2.54),
+          8: (96 / 2540, 96 / 2540)}
+
 DRAWING_PROPERTIES = (
     P("AutoRedraw", "bool", False,
       description="True: what the graphics methods draw is kept (no Paint event); False: "
@@ -47,6 +55,12 @@ DRAWING_PROPERTIES = (
       description="How Circle and Line with a box (B) fill what they draw"),
     P("FillColor", "color", None,
       description="The fill of Circle and Line boxes (FillStyle); unset = ForeColor"),
+    P("ScaleMode", "enum", VP_PIXELS, enum_choices(
+        "User", "Twips", "Points", "Pixels", "Characters", "Inches", "Millimeters",
+        "Centimeters"),
+      description="The units of the graphics methods, CurrentX / CurrentY, ScaleWidth / "
+                  "ScaleHeight and its mouse events' X, Y (User: set by ScaleLeft, ScaleTop, "
+                  "ScaleWidth, ScaleHeight or Scale)"),
 )
 
 
@@ -73,20 +87,155 @@ class Drawing:
 
     @property
     def CurrentX(self) -> float:
-        """Where the next Print, or a Line from the current point, starts."""
-        return self._draw_state()["x"]
+        """Where the next Print, or a Line from the current point, starts (in
+        ScaleMode's units)."""
+        left, _top, fx, _fy = self._scale_factors()
+        return left + self._draw_state()["x"] / fx
 
     @CurrentX.setter
     def CurrentX(self, value):
-        self._draw_state()["x"] = float(value)
+        left, _top, fx, _fy = self._scale_factors()
+        self._draw_state()["x"] = (float(value) - left) * fx
 
     @property
     def CurrentY(self) -> float:
-        return self._draw_state()["y"]
+        _left, top, _fx, fy = self._scale_factors()
+        return top + self._draw_state()["y"] / fy
 
     @CurrentY.setter
     def CurrentY(self, value):
-        self._draw_state()["y"] = float(value)
+        _left, top, _fx, fy = self._scale_factors()
+        self._draw_state()["y"] = (float(value) - top) * fy
+
+    # -- ScaleMode: the units ------------------------------------------------------------------
+    def _scale_factors(self) -> tuple[float, float, float, float]:
+        """(ScaleLeft, ScaleTop, pixels per unit across, down)."""
+        mode = int(self._values.get("ScaleMode", VP_PIXELS))
+        user = self.__dict__.get("_user_scale")
+        if mode == VP_USER and user is not None:
+            left, top, width, height = user
+            size = self._draw_area_size()
+            return (left, top, size.width() / width if width else 1.0,
+                    size.height() / height if height else 1.0)
+        fx, fy = _UNITS.get(mode, (1.0, 1.0))
+        return 0.0, 0.0, fx, fy
+
+    def _to_px(self, x, y) -> tuple[float, float]:
+        """A point in ScaleMode's units, in pixels of the drawing area."""
+        left, top, fx, fy = self._scale_factors()
+        return (float(x) - left) * fx, (float(y) - top) * fy
+
+    def _to_px_size(self, width, height) -> tuple[float, float]:
+        _left, _top, fx, fy = self._scale_factors()
+        return float(width) * fx, float(height) * fy
+
+    def _from_px(self, x, y) -> tuple[float, float]:
+        left, top, fx, fy = self._scale_factors()
+        return left + x / fx, top + y / fy
+
+    def _scaled(self) -> bool:
+        """Whether its units aren't pixels from the top left."""
+        return int(self._values.get("ScaleMode", VP_PIXELS)) != VP_PIXELS
+
+    def _mouse_xy(self, x, y):
+        """A mouse event's X, Y (pixels of the widget) in ScaleMode's units, from
+        the drawing area's top left (inside a PictureBox's border)."""
+        origin = self._drawing_origin()
+        x, y = x - origin.x(), y - origin.y()
+        return self._from_px(x, y) if self._scaled() else (x, y)
+
+    def _scale_rect(self) -> tuple[float, float, float, float]:
+        left, top, fx, fy = self._scale_factors()
+        size = self._draw_area_size()
+        return left, top, size.width() / fx, size.height() / fy
+
+    def _set_scale_part(self, index: int, value) -> None:
+        """Setting ScaleLeft, ScaleTop, ScaleWidth or ScaleHeight: a User scale,
+        the others as they are now."""
+        scale = list(self._scale_rect())
+        scale[index] = float(value)
+        if index >= 2 and not scale[index]:
+            raise ValueError("ScaleWidth and ScaleHeight can't be 0")
+        self.__dict__["_user_scale"] = tuple(scale)
+        self._values["ScaleMode"] = VP_USER
+
+    @property
+    def ScaleLeft(self) -> float:
+        """The left edge's coordinate (User scales; else 0)."""
+        return self._scale_rect()[0]
+
+    @ScaleLeft.setter
+    def ScaleLeft(self, value):
+        self._set_scale_part(0, value)
+
+    @property
+    def ScaleTop(self) -> float:
+        return self._scale_rect()[1]
+
+    @ScaleTop.setter
+    def ScaleTop(self, value):
+        self._set_scale_part(1, value)
+
+    @property
+    def ScaleWidth(self) -> float:
+        """The drawing area's width in ScaleMode's units (setting it: a User
+        scale, e.g. 100 for percent; negative: right to left)."""
+        return self._scale_rect()[2]
+
+    @ScaleWidth.setter
+    def ScaleWidth(self, value):
+        self._set_scale_part(2, value)
+
+    @property
+    def ScaleHeight(self) -> float:
+        return self._scale_rect()[3]
+
+    @ScaleHeight.setter
+    def ScaleHeight(self, value):
+        self._set_scale_part(3, value)
+
+    def Scale(self, X1=None, Y1=None, X2=None, Y2=None) -> None:
+        """A User scale: X1, Y1 the top left corner, X2, Y2 the bottom right
+        (``Scale(0, 100, 100, 0)``: 0 to 100, upwards). Without them: back to
+        pixels."""
+        if X1 is None:
+            self.__dict__["_user_scale"] = None
+            self._values["ScaleMode"] = VP_PIXELS
+            return
+        if X2 == X1 or Y2 == Y1:
+            raise ValueError("Scale: the corners must differ")
+        self.__dict__["_user_scale"] = (float(X1), float(Y1), float(X2) - float(X1),
+                                        float(Y2) - float(Y1))
+        self._values["ScaleMode"] = VP_USER
+
+    def _apply_ScaleMode(self, v):
+        if int(v) != VP_USER:
+            self.__dict__["_user_scale"] = None
+        elif self.__dict__.get("_user_scale") is None:  # User: the pixels it has, to begin
+            size = self._draw_area_size()
+            self.__dict__["_user_scale"] = (0.0, 0.0, float(size.width() or 1),
+                                            float(size.height() or 1))
+
+    def _units_per_pixel(self, mode: int, across: bool) -> float:
+        if int(mode) == VP_USER:
+            _left, _top, fx, fy = self._scale_factors() if \
+                int(self._values.get("ScaleMode", VP_PIXELS)) == VP_USER else (0, 0, 1, 1)
+            return fx if across else fy
+        if int(mode) not in _UNITS:
+            raise ValueError(f"Not a ScaleMode: {mode}")
+        return _UNITS[int(mode)][0 if across else 1]
+
+    def ScaleX(self, Width, FromScale=VP_HIMETRIC, ToScale=None) -> float:
+        """A width in other units: from FromScale (default HiMetric, as in VB) to
+        ToScale (default this one's ScaleMode); User means this one's scale."""
+        to_scale = self._values.get("ScaleMode", VP_PIXELS) if ToScale is None else ToScale
+        return float(Width) * self._units_per_pixel(FromScale, True) / \
+            self._units_per_pixel(to_scale, True)
+
+    def ScaleY(self, Height, FromScale=VP_HIMETRIC, ToScale=None) -> float:
+        to_scale = self._values.get("ScaleMode", VP_PIXELS) if ToScale is None else ToScale
+        return float(Height) * self._units_per_pixel(FromScale, False) / \
+            self._units_per_pixel(to_scale, False)
 
     def _draw_area_size(self) -> QSize:
         surface = self._drawing_surface()
@@ -209,11 +358,12 @@ class Drawing:
             return
         width2 = source.width() - X2 if Width2 is None else Width2
         height2 = source.height() - Y2 if Height2 is None else Height2
-        width1 = width2 if Width1 is None else Width1
-        height1 = height2 if Height1 is None else Height1
+        x1, y1 = self._to_px(X1, Y1)  # (where: in ScaleMode's units; the source: its pixels)
+        width1 = width2 if Width1 is None else self._to_px_size(Width1, 0)[0]
+        height1 = height2 if Height1 is None else self._to_px_size(0, Height1)[1]
         with self._draw_painter(antialias=True) as painter:
             painter.setRenderHint(QPainter.SmoothPixmapTransform)
-            painter.drawImage(QRectF(X1, Y1, width1, height1), source,
+            painter.drawImage(QRectF(x1, y1, width1, height1), source,
                               QRectF(X2, Y2, width2, height2))
 
     # -- colors and pens -----------------------------------------------------------------
@@ -257,13 +407,22 @@ class Drawing:
         elif style in _HATCHES:  # (1: Transparent)
             _hatch(painter, path, style, color)
 
+    def _point(self, X, Y, Step: bool) -> tuple[float, float]:
+        """A method's point in pixels: X, Y in ScaleMode's units (Step: from the
+        current point)."""
+        if Step:
+            state = self._draw_state()
+            dx, dy = self._to_px_size(X, Y)
+            return state["x"] + dx, state["y"] + dy
+        return self._to_px(X, Y)
+
     # -- the graphics methods -----------------------------------------------------------------
     def PSet(self, X, Y, Color=None, Step: bool = False) -> None:
         """Draw a point (DrawWidth across) at X, Y (Step: relative to the
         current point; DrawStyle Transparent: none); the current point moves
         there."""
         state = self._draw_state()
-        x, y = (state["x"] + X, state["y"] + Y) if Step else (X, Y)
+        x, y = self._point(X, Y, Step)
         color = self._draw_color(Color)
         width = max(1, int(self._values.get("DrawWidth", 1)))
         with self._draw_painter(antialias=width > 1) as painter:
@@ -285,12 +444,16 @@ class Drawing:
         with those corners, filled as FillStyle says; "BF" a box filled with
         the line's color. The current point moves to the second point."""
         state = self._draw_state()
-        if X2 is None or Y2 is None:
-            x1, y1, x2, y2 = state["x"], state["y"], X1, Y1
+        if X2 is None or Y2 is None:  # (from the current point)
+            x1, y1 = state["x"], state["y"]
+            x2, y2 = self._point(X1, Y1, Step)
         else:
-            x1, y1, x2, y2 = X1, Y1, X2, Y2
-        if Step:
-            x2, y2 = x1 + x2, y1 + y2
+            x1, y1 = self._to_px(X1, Y1)
+            if Step:
+                dx, dy = self._to_px_size(X2, Y2)
+                x2, y2 = x1 + dx, y1 + dy
+            else:
+                x2, y2 = self._to_px(X2, Y2)
         color = self._draw_color(Color)
         box = str(Box or "").upper()
         if box not in ("", "B", "BF"):
@@ -341,7 +504,8 @@ class Drawing:
         negative: a pie slice, filled as FillStyle says, like a whole circle).
         The current point moves to the center."""
         state = self._draw_state()
-        x, y = (state["x"] + X, state["y"] + Y) if Step else (X, Y)
+        x, y = self._point(X, Y, Step)
+        Radius = abs(self._to_px_size(Radius, 0)[0])  # (in units across, as in VB)
         aspect = float(Aspect) if Aspect else 1.0
         rx, ry = (Radius, Radius * aspect) if aspect <= 1 else (Radius / aspect, Radius)
         inset = self._draw_inset()
@@ -415,6 +579,7 @@ class Drawing:
         """The color at X, Y (what is drawn there, under any controls), or -1
         outside the drawing area."""
         size = self._draw_area_size()
+        X, Y = self._to_px(X, Y)
         if not (0 <= X < size.width() and 0 <= Y < size.height()):
             return -1
         surface = self._drawing_surface()
@@ -433,9 +598,11 @@ class Drawing:
     def TextWidth(self, Text) -> float:
         """How wide Print would write Text, in the Font (its longest line)."""
         metrics = QFontMetricsF(self._drawing_surface().font())
-        return max(metrics.horizontalAdvance(line) for line in str(Text).split("\n"))
+        width = max(metrics.horizontalAdvance(line) for line in str(Text).split("\n"))
+        return width / abs(self._scale_factors()[2])
 
     def TextHeight(self, Text) -> float:
         """How tall Print would write Text: its lines' height, in the Font."""
         metrics = QFontMetricsF(self._drawing_surface().font())
-        return metrics.lineSpacing() * (str(Text).count("\n") + 1)
+        return metrics.lineSpacing() * (str(Text).count("\n") + 1) / \
+            abs(self._scale_factors()[3])

@@ -1,9 +1,9 @@
 """Kitchen Sink page: drawing with the graphics methods. A sketch pad (a
 PictureBox with AutoRedraw: Line from the mouse, Cls), shapes (Line boxes,
 Circle, arcs and pie slices, PSet, Print centered with TextWidth and
-TextHeight), DrawWidth, DrawStyle, FillStyle and FillColor, and a clock drawn
-in a Paint event (AutoRedraw False) that a Timer refreshes, and the page's
-own Form_Paint."""
+TextHeight), DrawWidth, DrawStyle, FillStyle and FillColor, a clock drawn in
+a Paint event (AutoRedraw False) that a Timer refreshes, in a User scale
+(Scale: its center 0, 0, up is up), and the page's own Form_Paint."""
 
 import math
 import time
@@ -113,26 +113,26 @@ class pgDrawing(Form):
 
     def picClock_Paint(self):
         pic = self.picClock
-        cx, cy = pic.ScaleWidth / 2, pic.ScaleHeight / 2
-        radius = min(cx, cy) - 8
+        # A User scale (ScaleMode 0), as in VB: the center is 0, 0, the face's edge 1
+        # away, and up is up (the top is 1.1, the bottom -1.1)
+        pic.Scale(-1.1, 1.1, 1.1, -1.1)
         pic.DrawWidth, pic.FillStyle, pic.FillColor = 2, vpFSSolid, 0xF0F0F0
-        pic.Circle(cx, cy, radius, 0x404040)
+        pic.Circle(0, 0, 1, 0x404040)
         for hour in range(12):
             angle = hour * math.pi / 6
-            pic.Line(cx + (radius - 10) * math.cos(angle), cy - (radius - 10) * math.sin(angle),
-                     cx + radius * math.cos(angle), cy - radius * math.sin(angle), 0x404040)
+            pic.Line(0.9 * math.cos(angle), 0.9 * math.sin(angle),
+                     math.cos(angle), math.sin(angle), 0x404040)
         now = time.localtime()
         hands = ((now.tm_hour % 12 + now.tm_min / 60) / 12, 0.5, 5, 0x202020), \
             ((now.tm_min + now.tm_sec / 60) / 60, 0.75, 3, 0x202020), \
             (now.tm_sec / 60, 0.85, 1, vpRed)
         for turn, length, width, color in hands:
-            angle = math.pi / 2 - turn * 2 * math.pi
+            angle = math.pi / 2 - turn * 2 * math.pi  # (DrawWidth: pixels, whatever the scale)
             pic.DrawWidth = width
-            pic.Line(cx, cy, cx + radius * length * math.cos(angle),
-                     cy - radius * length * math.sin(angle), color)
+            pic.Line(0, 0, length * math.cos(angle), length * math.sin(angle), color)
         pic.DrawWidth = 1
         stamp = time.strftime("%H:%M:%S", now)
-        pic.CurrentX, pic.CurrentY = cx - pic.TextWidth(stamp) / 2, cy + radius / 2
+        pic.CurrentX, pic.CurrentY = -pic.TextWidth(stamp) / 2, -0.4  # (TextWidth: its units)
         pic.Print(stamp)
 
 
