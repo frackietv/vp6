@@ -20,6 +20,12 @@ Native styles (notably macOS) ignore widget palettes, so forced schemes use
 Qt's Fusion style with a fixed light or dark palette on the form, its
 controls and the message boxes shown over it.
 
+Qt sets the title bars' appearance for the whole application only, so
+``set_title_bar`` sets one window's (``title_bars_follow_scheme()``: where
+it can): on macOS the window's ``NSAppearance`` (through the Objective-C
+runtime, with ctypes), on Windows DWM's immersive dark mode. A form with a
+forced scheme gets a title bar to match.
+
 The project scheme is set by the runner from the ``.vp6p`` file. When a
 form runs on its own (``python Form1.py``) it is read from a ``.vp6p`` next
 to the form's file, if there is one.
@@ -244,6 +250,105 @@ def _make_watcher():
                 self.changed.emit()
 
     return AppearanceWatcher()
+
+
+# --- title bars ---------------------------------------------------------------------------
+
+def title_bars_follow_scheme() -> bool:
+    """Whether a window's title bar can be made light or dark on its own here
+    (macOS and Windows; elsewhere the OS's appearance)."""
+    app = QGuiApplication.instance()
+    return app is not None and app.platformName() in ("cocoa", "windows")
+
+
+def set_title_bar(widget: QWidget, dark: bool | None) -> bool:
+    """Make a window's title bar light or dark (None: the application's, which
+    follows the OS live), where the platform can; True if it did. Creates the
+    native window if there isn't one yet (it needn't be shown)."""
+    if not widget.isWindow() or not title_bars_follow_scheme():
+        return False
+    try:
+        if sys.platform == "darwin":
+            return _macos_title_bar(int(widget.winId()), dark)
+        if sys.platform == "win32":
+            return _windows_title_bar(int(widget.winId()),
+                                      system_is_dark() if dark is None else dark)
+    except (OSError, AttributeError, TypeError):  # (no such library or function)
+        return False
+    return False
+
+
+_objc = None
+
+
+def _objc_runtime():
+    global _objc
+    if _objc is None:
+        import ctypes
+        import ctypes.util
+
+        runtime = ctypes.cdll.LoadLibrary(ctypes.util.find_library("objc"))
+        ctypes.cdll.LoadLibrary(ctypes.util.find_library("AppKit"))  # (NSAppearance)
+        runtime.objc_getClass.restype = ctypes.c_void_p
+        runtime.objc_getClass.argtypes = [ctypes.c_char_p]
+        runtime.sel_registerName.restype = ctypes.c_void_p
+        runtime.sel_registerName.argtypes = [ctypes.c_char_p]
+        _objc = runtime
+    return _objc
+
+
+def _send(target, selector: bytes, *args, returns=None):
+    """An Objective-C message: [target selector args...] (pointers only)."""
+    import ctypes
+
+    runtime = _objc_runtime()
+    send = ctypes.CFUNCTYPE(returns or ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                            *(ctypes.c_void_p,) * len(args))(("objc_msgSend", runtime))
+    return send(target, runtime.sel_registerName(selector), *args)
+
+
+def _macos_title_bar(view: int, dark: bool | None) -> bool:
+    """The NSWindow of a Qt window's NSView gets the Aqua or DarkAqua
+    appearance (None: the application's)."""
+    import ctypes
+
+    window = _send(view, b"window")
+    if not window:
+        return False
+    appearance = None
+    if dark is not None:
+        name = _send(_objc_runtime().objc_getClass(b"NSString"), b"stringWithUTF8String:",
+                     ctypes.cast(ctypes.c_char_p(b"NSAppearanceNameDarkAqua" if dark else
+                                                 b"NSAppearanceNameAqua"), ctypes.c_void_p))
+        appearance = _send(_objc_runtime().objc_getClass(b"NSAppearance"),
+                           b"appearanceNamed:", name)
+    _send(window, b"setAppearance:", appearance)
+    return True
+
+
+def macos_title_bar_appearance(widget: QWidget) -> str | None:
+    """The name of a window's own NSAppearance on macOS ("NSAppearanceNameDarkAqua"...),
+    None when it has none (the application's)."""
+    import ctypes
+
+    window = _send(int(widget.winId()), b"window")
+    appearance = _send(window, b"appearance") if window else None
+    if not appearance:
+        return None
+    name = _send(appearance, b"name")
+    return _send(name, b"UTF8String", returns=ctypes.c_char_p).decode()
+
+
+def _windows_title_bar(hwnd: int, dark: bool) -> bool:
+    import ctypes
+
+    value = ctypes.c_int(1 if dark else 0)
+    dwm = ctypes.windll.dwmapi
+    for attribute in (20, 19):  # DWMWA_USE_IMMERSIVE_DARK_MODE (19 before Windows 10 20H1)
+        if dwm.DwmSetWindowAttribute(ctypes.c_void_p(hwnd), attribute, ctypes.byref(value),
+                                     ctypes.sizeof(value)) == 0:
+            return True
+    return False
 
 
 def fusion_style():

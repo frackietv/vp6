@@ -5,9 +5,15 @@ the target platform's: macOS, Windows 11, GNOME or the classic VB6 look.
 "Automatic" picks the one matching the OS the IDE runs on.
 
 The frame reflects the form's BorderStyle, ControlBox, MinButton and
-MaxButton the way the real window will. Title bars are drawn in the OS
-light/dark appearance because that's what the OS uses at run time; only the
-classic frame follows the form's own color scheme.
+MaxButton the way the real window will. Title bars are drawn light or dark
+as the real one will be (``FrameInfo.title_dark``: the form's scheme where
+the OS lets a window have its own, else the OS appearance); the classic
+frame follows the form's own color scheme.
+
+macOS and Windows 11 windows have rounded corners at the bottom too. The
+form's widget is square and lies over the frame, so ``paint_corners`` paints
+those corners again over it (from the designer's overlay): the workspace,
+the shadow and the outline, outside the rounded window.
 """
 
 from __future__ import annotations
@@ -150,6 +156,77 @@ def _shadow(p: QPainter, rect: QRectF, radius: float, strength: int = 26) -> Non
         p.drawRoundedRect(rect.adjusted(-i, -i + 3, i, i + 3), radius + i, radius + i)
 
 
+def _rounded(rect: QRectF, radius: float, bottom: float = 0) -> QPainterPath:
+    """A window's outline: rounded at the top by ``radius``, at the bottom by
+    ``bottom`` (0: square)."""
+    path = QPainterPath()
+    path.moveTo(rect.left(), rect.bottom() - bottom)
+    path.lineTo(rect.left(), rect.top() + radius)
+    path.quadTo(rect.left(), rect.top(), rect.left() + radius, rect.top())
+    path.lineTo(rect.right() - radius, rect.top())
+    path.quadTo(rect.right(), rect.top(), rect.right(), rect.top() + radius)
+    path.lineTo(rect.right(), rect.bottom() - bottom)
+    if bottom:
+        path.quadTo(rect.right(), rect.bottom(), rect.right() - bottom, rect.bottom())
+        path.lineTo(rect.left() + bottom, rect.bottom())
+        path.quadTo(rect.left(), rect.bottom(), rect.left(), rect.bottom() - bottom)
+    path.closeSubpath()
+    return path
+
+
+# Rounded bottom corners (macOS, Windows 11), and how their outlines and shadows look
+_BOTTOM_RADIUS = {MACOS: 10, WINDOWS: 8}
+_SHADOW = {MACOS: 40, WINDOWS: 34, GNOME: 40}
+
+
+def _outline_color(style: str, dark: bool) -> QColor:
+    if style == WINDOWS:
+        return QColor(255, 255, 255, 40) if dark else QColor(0, 0, 0, 60)
+    return QColor(0, 0, 0, 160 if dark else 70)
+
+
+def bottom_radius(style: str, info: FrameInfo) -> int:
+    """The radius of the window's bottom corners (0: square)."""
+    return 0 if info.border_style == 0 else _BOTTOM_RADIUS.get(style, 0)
+
+
+def corner_path(client: QRect, style: str, info: FrameInfo) -> QPainterPath:
+    """The window's two bottom corners outside its rounded outline (empty
+    when they are square)."""
+    radius = bottom_radius(style, info)
+    if not radius:
+        return QPainterPath()
+    frame = QRectF(frame_rect(client, style, info))
+    strip = QPainterPath()
+    strip.addRect(QRectF(frame.left(), frame.bottom() - radius, frame.width(), radius + 2))
+    return strip.subtracted(_rounded(frame, 0, radius))
+
+
+def paint_corners(p: QPainter, style: str, client: QRect, info: FrameInfo,
+                  workspace: QColor) -> None:
+    """Paint the window's rounded bottom corners over the (square) form: the
+    workspace outside them, the window's shadow there, and its outline."""
+    radius = bottom_radius(style, info)
+    if not radius:
+        return
+    frame = QRectF(frame_rect(client, style, info))
+    corners = corner_path(client, style, info)
+    p.save()
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setClipPath(corners)
+    p.fillRect(frame.adjusted(-1, -1, 1, 1), workspace)
+    _shadow(p, frame, radius, _SHADOW[style])
+    # The outline again where it was painted over: in the corners, and over the form
+    # (the canvas's outline beside them stays: drawn twice, it would look darker)
+    covered = QPainterPath()
+    covered.addRect(QRectF(client))
+    p.setClipPath(corners.united(covered))
+    p.setBrush(Qt.NoBrush)
+    p.setPen(QPen(_outline_color(style, info.title_dark), 1))
+    p.drawPath(_rounded(frame.adjusted(0.5, 0.5, 0.5, 0.5), radius, radius))
+    p.restore()
+
+
 def _top_rounded(rect: QRectF, radius: float) -> QPainterPath:
     path = QPainterPath()
     path.moveTo(rect.left(), rect.bottom())
@@ -186,7 +263,7 @@ def _macos(p: QPainter, frame: QRect, client: QRect, info: FrameInfo) -> None:
     dark = info.title_dark
     radius = 10
     title = QRectF(frame.left(), frame.top(), frame.width(), client.top() - frame.top())
-    _shadow(p, QRectF(frame), radius, 40)
+    _shadow(p, QRectF(frame), radius, _SHADOW[MACOS])
     p.setPen(Qt.NoPen)
     p.setBrush(QColor("#323234" if dark else "#ebebeb"))
     p.drawPath(_top_rounded(title, radius))
@@ -196,12 +273,10 @@ def _macos(p: QPainter, frame: QRect, client: QRect, info: FrameInfo) -> None:
     p.drawLine(QPointF(frame.left(), client.top() - 0.5),
                QPointF(frame.right() + 1, client.top() - 0.5))
     # Outline (plus a faint inner highlight in dark mode, like macOS)
-    outline = _top_rounded(QRectF(frame).adjusted(0.5, 0.5, 0.5, 0.5), radius)
+    outline = _rounded(QRectF(frame).adjusted(0.5, 0.5, 0.5, 0.5), radius, radius)
     p.setBrush(Qt.NoBrush)
-    p.setPen(QPen(QColor(0, 0, 0, 160 if dark else 70), 1))
+    p.setPen(QPen(_outline_color(MACOS, dark), 1))
     p.drawPath(outline)
-    p.drawLine(QPointF(frame.left() + 0.5, frame.bottom() + 1),
-               QPointF(frame.right() + 1, frame.bottom() + 1))
     if dark:
         p.setPen(QPen(QColor(255, 255, 255, 30), 1))
         p.drawPath(_top_rounded(QRectF(frame).adjusted(1.5, 1.5, -0.5, 0), radius - 1))
@@ -237,15 +312,15 @@ def _windows(p: QPainter, frame: QRect, client: QRect, info: FrameInfo) -> None:
     title = QRectF(frame.left(), frame.top(), frame.width(), client.top() - frame.top())
     background = QColor("#202020" if dark else "#ffffff")
     ink = QColor("#ffffff" if dark else "#000000")
-    _shadow(p, QRectF(frame), radius, 34)
+    _shadow(p, QRectF(frame), radius, _SHADOW[WINDOWS])
     p.setPen(Qt.NoPen)
     p.setBrush(background)
     p.drawPath(_top_rounded(title, radius))
     p.fillRect(QRectF(frame.left(), client.top(), frame.width(), frame.bottom() - client.top() + 1),
                background)
     p.setBrush(Qt.NoBrush)
-    p.setPen(QPen(QColor(255, 255, 255, 40) if dark else QColor(0, 0, 0, 60), 1))
-    p.drawPath(_top_rounded(QRectF(frame).adjusted(0.5, 0.5, 0.5, 1), radius))
+    p.setPen(QPen(_outline_color(WINDOWS, dark), 1))
+    p.drawPath(_rounded(QRectF(frame).adjusted(0.5, 0.5, 0.5, 0.5), radius, radius))
 
     # Caption buttons, right to left: close, maximize, minimize
     width = 36 if info.tool else 46
@@ -290,7 +365,7 @@ def _gnome(p: QPainter, frame: QRect, client: QRect, info: FrameInfo) -> None:
     dark = info.title_dark
     radius = 12
     title = QRectF(frame.left(), frame.top(), frame.width(), client.top() - frame.top())
-    _shadow(p, QRectF(frame), radius, 40)
+    _shadow(p, QRectF(frame), radius, _SHADOW[GNOME])
     p.setPen(Qt.NoPen)
     p.setBrush(QColor("#303030" if dark else "#ebebeb"))
     p.drawPath(_top_rounded(title, radius))

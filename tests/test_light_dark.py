@@ -168,3 +168,83 @@ def test_a_form_shown_in_another_looks_like_it(qapp, os_dark):
     assert not page.DarkMode and page.events == [True]
     page.Unload()
     host.Unload()
+
+
+# --- title bars ----------------------------------------------------------------------------
+
+def test_title_bars_follow_the_form_where_the_os_allows(qapp, os_dark, monkeypatch):
+    calls = []
+    monkeypatch.setattr(appearance, "set_title_bar",
+                        lambda widget, dark: calls.append((widget, dark)) or True)
+    form = Themed()
+    form.ColorScheme = vpSchemeDark
+    form.Show()
+    assert calls[-1] == (form._widget, True)  # (shown: its window's)
+    form.ColorScheme = vpSchemeLight
+    assert calls[-1] == (form._widget, False)
+    form.ColorScheme = vpSchemeSystem
+    assert calls[-1] == (form._widget, None)  # the application's: the OS's, live
+    try:
+        appearance.set_app_override(True)  # (the IDE forcing its scheme on the app)
+        os_dark["dark"] = True
+        form._appearance_changed()
+        assert calls[-1] == (form._widget, True)  # the OS's, told explicitly
+    finally:
+        appearance.set_app_override(False)
+    form.Unload()
+
+
+def test_no_title_bar_for_forms_that_are_no_windows(qapp, monkeypatch):
+    calls = []
+    monkeypatch.setattr(appearance, "set_title_bar",
+                        lambda widget, dark: calls.append(widget) or True)
+    host, inner = Themed(), Themed()
+    inner.ColorScheme = vpSchemeDark
+    host.Show()
+    inner.ShowIn(host)
+    inner._apply_title_bar()
+    assert inner._widget not in calls  # (inside another form)
+    created = Themed()  # (no native window yet: nothing to do before it is shown)
+    created.ColorScheme = vpSchemeDark
+    assert created._widget not in calls
+    inner.Unload()
+    host.Unload()
+    created.Unload()
+
+
+def test_set_title_bar_only_where_it_can(qapp):
+    from PySide6.QtWidgets import QWidget
+
+    assert not appearance.title_bars_follow_scheme()  # (the tests' offscreen platform)
+    widget = QWidget()
+    assert not appearance.set_title_bar(widget, True)
+    widget.deleteLater()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS's NSAppearance")
+def test_macos_title_bars_on_cocoa(tmp_path):
+    """On the real platform (no window shown): a forced form's NSWindow gets its
+    own appearance; a System one has none (the application's)."""
+    script = tmp_path / "titlebar.py"
+    script.write_text(textwrap.dedent("""
+        import os
+        os.environ["QT_QPA_PLATFORM"] = "cocoa"
+        from vp6 import Form, appearance, vpSchemeDark, vpSchemeLight, vpSchemeSystem
+        from vp6.app import ensure_app
+        ensure_app()
+        form = Form()
+        form.ColorScheme = vpSchemeDark
+        form._widget.winId()  # (its native window, not shown)
+        form._apply_title_bar()
+        print(appearance.macos_title_bar_appearance(form._widget))
+        form.ColorScheme = vpSchemeLight
+        print(appearance.macos_title_bar_appearance(form._widget))
+        form.ColorScheme = vpSchemeSystem
+        print(appearance.macos_title_bar_appearance(form._widget))
+    """))
+    env = dict(os.environ, PYTHONPATH=ROOT)
+    env.pop("QT_QPA_PLATFORM", None)
+    result = subprocess.run([sys.executable, str(script)], capture_output=True, text=True,
+                            env=env, timeout=60)
+    assert result.stdout.split() == ["NSAppearanceNameDarkAqua", "NSAppearanceNameAqua",
+                                     "None"], result.stderr

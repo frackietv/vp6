@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.4.48
+**Date:** 2026-10-02
+
+## Appearance
+
+- Title bars in the form's scheme: on macOS and Windows a Light or Dark form's window gets a light or dark title bar to match, whatever the OS appearance (a System form's follows the OS, also while the IDE forces its own scheme); on Linux the window manager's appearance as before
+
+## IDE
+
+- The designer's macOS and Windows 11 window frames have rounded bottom corners, as the real windows do
+- The designer draws a form's title bar light or dark as the real window will have it (the form's scheme on macOS and Windows)
+
+---
+
 **Version:** 0.4.47
 **Date:** 2026-10-02
 

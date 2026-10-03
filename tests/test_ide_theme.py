@@ -1,7 +1,7 @@
 """The IDE window (not just the editor) follows the light/dark theme."""
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, QRect, Qt
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 
@@ -154,3 +154,61 @@ def test_grid_can_be_hidden(form_designer):
     assert not d.form._widget.palette().window().texture().isNull()
     _set_designer_options(show_grid=False)
     assert d.form._widget.palette().window().texture().isNull()
+
+
+def test_rounded_bottom_corners():
+    sizable = chrome.FrameInfo("F", border_style=2)
+    assert chrome.bottom_radius(chrome.MACOS, sizable) == 10
+    assert chrome.bottom_radius(chrome.WINDOWS, sizable) == 8
+    for style in (chrome.GNOME, chrome.CLASSIC):  # (square at the bottom)
+        assert chrome.bottom_radius(style, sizable) == 0
+        assert chrome.corner_path(QRect(10, 50, 200, 100), style, sizable).isEmpty()
+    assert chrome.bottom_radius(chrome.MACOS, chrome.FrameInfo("F", border_style=0)) == 0
+    client = QRect(10, 50, 200, 100)
+    corners = chrome.corner_path(client, chrome.MACOS, sizable)
+    frame = chrome.frame_rect(client, chrome.MACOS, sizable)
+    assert corners.contains(QPointF(frame.right() + 0.5, frame.bottom() + 0.5))  # the corners
+    assert corners.contains(QPointF(frame.left() + 0.5, frame.bottom() + 0.5))
+    assert not corners.contains(QPointF(frame.center()))  # not the rest
+    assert not corners.contains(QPointF(frame.right() - 10, frame.bottom() - 10))
+
+
+def _near(color: QColor, other: QColor, tolerance: int) -> bool:
+    return all(abs(a - b) <= tolerance for a, b in zip(color.getRgb()[:3], other.getRgb()[:3]))
+
+
+@pytest.mark.parametrize("style, rounded", [
+    (chrome.MACOS, True), (chrome.WINDOWS, True), (chrome.GNOME, False),
+    (chrome.CLASSIC, False)])
+def test_the_designer_rounds_the_bottom_corners(form_designer, style, rounded):
+    from vp6.ide.designer import WORKSPACE, ide_is_dark
+
+    d = form_designer
+    _set_designer_options(frame_style=style)
+    d.resize(800, 600)
+    image = d.canvas.grab().toImage()  # (the form and the overlay over it too)
+    frame = d.canvas.form_frame_rect()
+    corner = image.pixelColor(frame.left(), frame.bottom())  # (the right one: a handle)
+    inside = image.pixelColor(frame.left() + 12, frame.bottom() - 12)  # (the form)
+    workspace = QColor(WORKSPACE[ide_is_dark()])
+    beside = image.pixelColor(frame.left() - 2, frame.bottom())  # (the workspace, shadowed)
+    assert _near(corner, beside, 30) == rounded
+    assert not _near(inside, workspace, 20)
+    d.select([])
+    d.set_property("BorderStyle", 0)  # no window frame: square
+    image = d.canvas.grab().toImage()
+    rect = d.form_canvas_rect()
+    assert not _near(image.pixelColor(rect.left(), rect.bottom()), workspace, 20)
+
+
+def test_the_designer_title_bar_follows_the_form_where_the_os_allows(form_designer,
+                                                                     monkeypatch):
+    d = form_designer
+    monkeypatch.setattr(appearance, "system_is_dark", lambda: False)
+    d.select([])
+    d.set_property("ColorScheme", appearance.vpSchemeDark)
+    monkeypatch.setattr(appearance, "title_bars_follow_scheme", lambda: False)
+    assert not d.frame_info().title_dark  # (the OS's: light)
+    monkeypatch.setattr(appearance, "title_bars_follow_scheme", lambda: True)
+    info = d.frame_info()
+    assert info.title_dark and info.form_dark  # (the form's)

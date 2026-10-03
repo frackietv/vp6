@@ -3327,7 +3327,10 @@ file's `color_scheme` sets the default for forms left on Project Default.
 
 * **The look of forced schemes.** Light and Dark use Qt's Fusion style with a
   fixed palette, because native styles (macOS) can't be forced per window.
-  The OS still draws the window title bar in its own appearance.
+* **Title bars.** On macOS and Windows a Light or Dark form's window gets a
+  light or dark title bar to match (a System form's follows the OS); on
+  Linux the window manager draws it in its own appearance. The designer
+  shows the title bar the form will have.
 * `BackColor` and `ForeColor` override the scheme's colors.
 * When a form runs on its own (`python Form1.py`), Project Default is read
   from a `.vp6p` file in the same folder, if there is one.

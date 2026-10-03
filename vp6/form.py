@@ -86,6 +86,7 @@ class _FormWidget(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self._vp_form._apply_title_bar()  # (its native window may be a new one)
         self._vp_form._embedded_visibility(True)
 
     def hideEvent(self, event):
@@ -675,8 +676,22 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             self._dark_changed()
         self._widget.update()
 
+    def _apply_title_bar(self) -> None:
+        """A window's title bar in the form's scheme where the platform allows
+        (appearance.set_title_bar): a forced Light or Dark form's is light or
+        dark; a System form's follows the OS (explicitly, while the IDE forces
+        the application's scheme)."""
+        widget = self._widget
+        if self._design_mode or not widget.isWindow() or \
+                not widget.testAttribute(Qt.WA_WState_Created):
+            return
+        follows_os = self._effective_scheme() == appearance.vpSchemeSystem and \
+            not appearance.app_override_active()
+        appearance.set_title_bar(widget, None if follows_os else self._is_dark())
+
     def _dark_changed(self) -> None:
         """Fire ColorSchemeChanged(Dark) when the form turned light or dark."""
+        self._apply_title_bar()
         dark = self._is_dark()
         before = self.__dict__.get("_was_dark")
         self.__dict__["_was_dark"] = dark

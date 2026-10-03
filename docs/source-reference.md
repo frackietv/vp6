@@ -163,6 +163,25 @@ Light/dark color schemes for forms (see architecture §4.5).
     widget and all descendants;
   * `match_dialog(dialog, parent)` gives a message box the scheme of the form
     under it.
+* **Title bars** (Qt sets their appearance for the whole application only):
+  * `title_bars_follow_scheme()`: whether a window can have its own here
+    (the `cocoa` and `windows` platforms);
+  * `set_title_bar(widget, dark)` makes a window's title bar dark, light or
+    (None) the application's, which follows the OS; it creates the native
+    window if needed (it needn't be shown) and answers whether it could. On
+    macOS `_macos_title_bar` sets the NSWindow's `appearance` (`Aqua` or
+    `DarkAqua`, or nil) through the Objective-C runtime (`_objc_runtime`:
+    `libobjc` with ctypes, AppKit loaded; `_send(target, selector, *args)`
+    calls `objc_msgSend` with the prototype the message needs);
+    `macos_title_bar_appearance(widget)` reads its name back. On Windows
+    `_windows_title_bar` sets DWM's immersive dark mode (attribute 20, or 19
+    on older builds; None: the OS's appearance).
+  * `Form._apply_title_bar()` uses it for a form that is a window (not
+    designed, not shown in another, its native window made): its scheme's
+    light or dark when forced, None for a System form (the OS's, live), or
+    the OS's appearance explicitly while the IDE forces the application's
+    scheme. It runs on every show (Qt may make a new native window) and in
+    `_dark_changed`.
 
 ### `vp6/drawing.py` (≈470 lines)
 
@@ -840,6 +859,7 @@ MDI forms.
   * the appearance watcher's `changed` → `Form._appearance_changed` (a slot
     of the widget: disconnected when it goes): the scheme applied again when
     forced (an IDE scheme may now mean another), then `_dark_changed`, which
+    sets the window's title bar (`_apply_title_bar`, below) and
     fires `ColorSchemeChanged(Dark)` when `_is_dark()` differs from
     `_was_dark` (not while loading) and tells the forms shown in it.
     `DarkMode` is `_is_dark()`: a System form shown in another (`ShowIn`)
@@ -1459,7 +1479,8 @@ The form designer (architecture §5.3).
 * **`_Canvas`** paints the workspace and the window frame (`chrome.paint`).
   `form_frame_rect()`.
 * **`_Overlay`** handles all input:
-  * **Painting:** handles and outlines (two-tone, visible on any background),
+  * **Painting:** the window frame's rounded bottom corners over the form
+    (`chrome.paint_corners`), handles and outlines (two-tone, visible on any background),
     a Line's two end handles (`_line_handles`), the rubber band, and the
     rectangle of a control being drawn.
   * **Mouse:** drag kinds `draw` (a Line goes from the press to the release),
@@ -1561,9 +1582,21 @@ Window frames painted around the designed form.
   for clicks.
 * Painters `_macos` (traffic lights), `_windows` (Windows 11 caption
   buttons), `_gnome` (Adwaita header bar) and `_classic` (VB6), plus helpers
-  `_shadow`, `_top_rounded`, `_draw_title`.
-* Title bars are drawn in the **OS** appearance, since the OS draws real
-  title bars at run time; only the classic frame follows the form's scheme.
+  `_shadow`, `_rounded(rect, radius, bottom)` (a window's outline, its
+  bottom corners rounded by `bottom`), `_top_rounded`, `_draw_title`,
+  `_outline_color`; `_SHADOW` (each style's shadow strength).
+* **Rounded bottom corners** (macOS and Windows 11: `_BOTTOM_RADIUS`,
+  `bottom_radius(style, info)`, 0 without a frame): the frame is drawn
+  rounded, but the form's widget is square and lies over it, so
+  `paint_corners(p, style, client, info, workspace)` (called by the
+  designer's overlay) paints the corners outside the rounded outline
+  (`corner_path`) again: the workspace color, the window's shadow, and the
+  outline where it was painted over (in the corners and over the form; not
+  beside them, where it would be drawn twice).
+* `info.title_dark` is the title bar as the real window will have it: the
+  form's scheme where the OS lets a window have its own
+  (`appearance.title_bars_follow_scheme()`), else the OS appearance (the
+  designer's `frame_info`); the classic frame follows the form's scheme.
 
 ### `vp6/ide/codeeditor.py` (≈780 lines)
 
@@ -2473,12 +2506,12 @@ All tests run headless. `conftest.py`:
 | `test_command_line.py` | `--help`: the IDE's (its options and environment variables, exit 0; Qt's options left alone), the runner's (and no project: exit 2); a program's help text (name, version, description, usage, the project's ArgumentsHelp, the VP6 version), a message box without stdout; a real program showing its help from its project file and from `vp6.runner` without starting, and starting with other arguments; ArgumentsHelp saved and in the Project Properties dialog. |
 | `test_categories_and_lock.py` | Property categories (VB's by name, a spec's own, a user control Property's, Misc otherwise); the Properties window's Categorized view (the tabs, headings in order, (Name) first in Misc, the same properties as Alphabetic, editing there, collapsing and expanding, kept across selections, opened by select_property, the heading's description, the view remembered); Lock Controls in the designer (no dragging, resizing or arrow keys; the Properties window and form resizing still work; unlocked again) and in the IDE (the Format menu's checkable item, enabled only for forms, remembered for the form when the project is opened again). |
 | `test_objectbrowser.py` | VP6's classes (properties with types, descriptions and choices, events with their arguments, methods with signatures, run-time properties), objects (App's plain attributes), Globals, constants groups, colors and schemes; the project's forms (controls, methods, not InitializeComponent), modules (constants, variables, functions with their lines, classes, a syntax error) and user controls (their Properties and Events); search; the window (libraries, details, search results choosing a class and member); in the IDE: View > Object Browser (F2), all libraries, the project's, going to a member's code or a control in its designer, refreshed with new code. |
-| `test_light_dark.py` | Form.DarkMode and Form_ColorSchemeChanged (not while loading, on ColorScheme changes, on the OS switching for System forms only), Screen.DarkMode; the watcher polling only while the scheme is forced; the IDE's scheme file (over the environment variable); designers refreshed by the watcher; the IDE writing its scheme file and rewriting it when its theme changes (removed when it closes); a real program's IDE form following the file live; a form shown in another looking like it. |
+| `test_light_dark.py` | Form.DarkMode and Form_ColorSchemeChanged (not while loading, on ColorScheme changes, on the OS switching for System forms only), Screen.DarkMode; the watcher polling only while the scheme is forced; the IDE's scheme file (over the environment variable); designers refreshed by the watcher; the IDE writing its scheme file and rewriting it when its theme changes (removed when it closes); a real program's IDE form following the file live; a form shown in another looking like it; title bars: a shown form's following its Dark, Light or System scheme (the OS's told explicitly while the IDE forces the application's), none for a form inside another or without a native window, `set_title_bar` doing nothing where it can't (offscreen), and on macOS a real Cocoa form's NSWindow getting DarkAqua, Aqua, then none (not shown). |
 | `test_mdi.py` | MDI forms: children shown in the workspace (the MDI form loaded and shown first, around a docked pane), Activate and Deactivate, ActiveForm, Left/Top/Width/WindowState of a child, not modally; Load showing a child while AutoShowChildren; Arrange (tiles, cascade); the active child's menus replacing the MDI form's (its own bar hidden, never the system's), WindowList (the children, checked, activating, filled once); unloading a child (shown again later) and the MDI form (children first, vpFormMDIForm, cancelled by one); no MDIForm; the properties; ShowPopup (flags, not activating, at the owner's point, hidden in the background, a window again with Show); the form file (MDIForm, MDIForm_Load), the designer's DesignMDIForm and its properties, Project > Add MDI Form (one a project), MDIChild on forms, WindowList in the Menu Editor. |
 | `test_scalemode.py` | ScaleMode: pixels by default; twips, points, inches, centimeters, millimeters, characters (boxes where they belong, CurrentX following); a User scale (Scale upwards, ScaleWidth and ScaleLeft... making one, back to pixels, errors, User from pixels); Circle's radius, TextWidth and PaintPicture in other units; ScaleX / ScaleY and Screen.TwipsPerPixel; the form's mouse X, Y in its scale; a PictureBox (inside its border, its mouse events); a Picture's and the Printer's scales (an inch square in a PDF). |
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu); the Toolbox: its columns following its width (a row at a time, in order), `fitted_width` choosing the nearest whole number of columns, the scroll bar counted when the buttons scroll, the panel snapping to whole columns (two by default, again after Reset Window Layout), not while its edge is being dragged, floating too, not at the top edge (many columns there), user controls placed in its columns. |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
-| `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle. |
+| `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle; rounded bottom corners (the radius per style, none without a frame; `corner_path` holding the corners only), the designer painting them over the form (macOS and Windows 11: the workspace in the corner; GNOME and classic square; BorderStyle 0 square); the designer's title bar following the form where the OS allows, else the OS's. |
 | `test_ide_terminal.py` | The IDE's Terminal window: hidden by default and tabbed with the Immediate window (Reset Window Layout hiding it again), View > Terminal Window and its key; the shell started in the project's folder (home without a project or for a missing folder), typing into it; its end announced and Enter starting a new one; New Shell replacing the one running without a word, End Shell at once; the menu (Copy, Paste, Clear, New Shell, End Shell, enabled as they apply); the editor theme's colors and font, light and dark; closing the IDE ending the shell; drawn. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
 | `test_webbrowser.py` | A real WebBrowser (Chromium, headless): a file and its title, a link (BeforeNavigate, DocumentComplete), Busy and Progress, Back and Forward; BeforeNavigate keeping it on its page; new windows opened here or ignored (NewWindow); a name that doesn't resolve (NavigateError); LoadHTML, TitleChange, RunScript's result, StatusTextChange; GotFocus through the page's focus widget; the designer's placeholder, Toolbox, icon and events. |

@@ -183,6 +183,9 @@ class _Overlay(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         d = self.d
+        if d.form is not None:  # the window's rounded bottom corners, over the square form
+            chrome.paint_corners(p, d.frame_style(), d.form_canvas_rect(), d.frame_info(),
+                                 QColor(WORKSPACE[ide_is_dark()]))
         selection = d.selection
         if not selection:
             for handle_rect in self._form_handles().values():
@@ -621,8 +624,10 @@ class FormDesigner(QWidget):
         return chrome.FrameInfo(
             caption=form.Caption, border_style=form.BorderStyle, control_box=form.ControlBox,
             min_button=form.MinButton, max_button=form.MaxButton,
-            # The OS draws title bars in its own appearance at run time
-            title_dark=appearance.system_is_dark(), form_dark=form._is_dark(),
+            # The OS draws title bars at run time: in the form's scheme where it lets a
+            # window have its own (Form._apply_title_bar), else in its own appearance
+            title_dark=form._is_dark() if appearance.title_bars_follow_scheme()
+            else appearance.system_is_dark(), form_dark=form._is_dark(),
             menus=tuple(self.form_def.control(key).props.get("Caption", "")
                         for key in self.menu_bar_keys()))
 
