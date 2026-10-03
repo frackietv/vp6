@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Terminal support for sixel
 - **[Controls]** Terminal support for true color
 - **[Controls]** Terminal support for ligatures
 - **[Controls]** Data-bound controls

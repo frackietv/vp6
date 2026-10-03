@@ -120,7 +120,7 @@ def test_terminal_types_answer_as_themselves():
         attributes[term] = screen.replies
     assert attributes["vt100"] == ["\x1b[?1;2c"] and attributes["vt102"] == ["\x1b[?6c"]
     assert attributes["vt220"] == ["\x1b[?62;1;2;6;7;8;9c", "\x1b[>1;10;0c"]
-    assert attributes["xterm-256color"][0] == "\x1b[?62;1;2;6;7;8;9;22c"
+    assert attributes["xterm-256color"][0] == "\x1b[?62;1;2;4;6;7;8;9;22c"  # (4: sixel)
     assert attributes["xterm"] == attributes["xterm-256color"]
     screen = AnsiScreen(5, 20)
     screen.feed("ab\x1b[5n\x1b[6n\x1b[18t\x1b[0x")  # status, the cursor, the size, vt100's
@@ -760,3 +760,123 @@ def test_iterm2_inline_images():
     assert len(graphics.images) == len(graphics.placements)
     screen.feed("\x1b[2J" + _kitty("a=t,f=100,i=1", png) + _iterm2("inline=1", png))
     assert len(graphics.images) == 2 and len(graphics.placements) == 1  # (Kitty's kept)
+
+
+# --- pictures: sixel graphics ------------------------------------------------------------------
+
+def _sixel(data: str, params: str = "0;1;0", end: str = "\x1b\\") -> str:
+    return f"\x1bP{params}q{data}{end}"
+
+
+def _argb(image: QImage, x: int, y: int) -> int:
+    return image.pixel(x, y) & 0xffffffff
+
+
+def test_sixel_pictures_decoded():
+    screen = AnsiScreen(10, 40)
+    screen.cell_pixels = (10, 20)
+    graphics = screen.graphics
+    # Colors set (RGB percents) and picked, six-pixel columns, $, -, ! repeats
+    screen.feed("ab" + _sixel('"1;1;6;12#1;2;100;0;0#1~~~$#2;2;0;100;0???~~~-#1!6N') + "X")
+    placement, = graphics.placements
+    image = graphics.images[placement.image].image
+    assert (image.width(), image.height()) == (6, 12)  # (the raster attributes' height)
+    assert (placement.line, placement.col, placement.cols, placement.rows) == (0, 2, 1, 1)
+    assert (screen.row, screen.col) == (1, 3)  # the cursor below it, at its column
+    assert screen.text() == "ab\n  X"
+    assert _argb(image, 0, 0) == 0xffff0000 and _argb(image, 5, 5) == 0xff00ff00
+    assert _argb(image, 5, 9) == 0xffff0000 and _argb(image, 0, 11) == 0  # (P2=1: clear)
+    assert screen.replies == [] and graphics.images[placement.image].anonymous
+    # The pixels' shape: P1 (0: twice as tall), or the raster attributes'
+    for params, raster, height in (("0;1", "", 12), ("9;1", "", 6), ("2;1", "", 30),
+                                   ("0;1", '"1;1', 6), ("9;1", '"3;1', 18)):
+        screen.feed(_sixel(raster + "~", params))
+        image = graphics.images[graphics.placements[-1].image].image
+        assert (image.width(), image.height()) == (1, height)
+    # HLS (the VT340's hue: 120 is red), the VT340's own colors, and before any color:
+    # the terminal's foreground; P2 0: the background where nothing's drawn
+    screen.colors = lambda: ((1, 2, 3), (4, 5, 6))
+    screen.feed(_sixel('"1;1;3;8#5;1;120;50;100~#3~#9;2;0;0;0#7~', "0;0"))
+    image = graphics.images[graphics.placements[-1].image].image
+    assert (image.width(), image.height()) == (3, 8)
+    assert [_argb(image, x, 0) for x in range(3)] == [0xffff0000, 0xff33cc33, 0xff878787]
+    assert _argb(image, 0, 7) == 0xff040506
+    screen.feed(_sixel("@!3_"))
+    image = graphics.images[graphics.placements[-1].image].image
+    assert _argb(image, 0, 0) == 0xff010203 and _argb(image, 3, 10) == 0xff010203
+    # Each picture's registers are its own (mode 1070), or shared once it's reset
+    screen.feed(_sixel("#20;2;0;0;100") + _sixel("#20~"))
+    assert _argb(graphics.images[graphics.placements[-1].image].image, 0, 0) == 0xff000000
+    screen.feed("\x1b[?1070l" + _sixel("#20;2;0;0;100") + _sixel("#20~"))
+    assert _argb(graphics.images[graphics.placements[-1].image].image, 0, 0) == 0xff0000ff
+    # Nothing drawn: no picture; with an 8-bit DCS and ST
+    count = len(graphics.placements)
+    screen.feed(_sixel("#1;2;0;0;0$-") + _sixel("???"))
+    assert len(graphics.placements) == count
+    screen.feed("\x90q~\x9c")
+    assert len(graphics.placements) == count + 1
+
+
+def test_sixel_pictures_placed():
+    screen = AnsiScreen(5, 20)
+    screen.cell_pixels = (10, 20)
+    graphics = screen.graphics
+    tall = '"1;1;25;50' + "-".join(["!25~"] * 9)  # 25 x 50 pixels: 3 columns by 3 rows
+    screen.feed("\x1b[2;4H" + _sixel(tall) + "X")
+    placement = graphics.placements[-1]
+    assert (placement.line, placement.col, placement.cols, placement.rows) == (1, 3, 3, 3)
+    assert (screen.row, screen.col) == (4, 4)  # below it (it wrote X), at its column
+    screen.feed("\x1b[?8452h\x1b[H" + _sixel(tall) + "Y")  # to its right, on its last row
+    assert (graphics.placements[-1].line, screen.row, screen.col) == (0, 2, 4)
+    assert screen.text().split("\n")[2] == "   Y"
+    screen.feed("\x1b[?8452l\x1b[5;1H" + _sixel(tall))  # at the bottom: the screen scrolls
+    assert screen.scrolled == 3 and graphics.placements[-1].line == 4
+    assert (screen.row, screen.col) == (4, 0)
+    assert graphics.screen_row(graphics.placements[0]) == -2  # (into the history)
+    # Sixel display mode (80): at the top left, cut to the screen; the cursor stays
+    screen.feed("\x1b[?80h\x1b[3;5H" + _sixel('"1;1;300;150' + "!300~"))
+    placement = graphics.placements[-1]
+    assert (graphics.screen_row(placement), placement.col) == (0, 0)
+    assert (placement.width, placement.height, placement.cols, placement.rows) == \
+        (200, 100, 20, 5)
+    assert (screen.row, screen.col) == (2, 4) and screen.scrolled == 3
+    screen.feed("\x1b[?80$p\x1b[?1070$p\x1b[?8452$p")
+    assert screen.replies == ["\x1b[?80;1$y", "\x1b[?1070;1$y", "\x1b[?8452;2$y"]
+    # XTSMGRAPHICS: color registers, the largest picture (the screen's), ReGIS (none)
+    screen.replies.clear()
+    screen.feed("\x1b[?1;1S\x1b[?1;4S\x1b[?2;1S\x1b[?2;4S\x1b[?3;1S\x1b[?1;9S")
+    assert screen.replies == ["\x1b[?1;0;1024S", "\x1b[?1;0;1024S", "\x1b[?2;0;200;100S",
+                              "\x1b[?2;0;10000;10000S", "\x1b[?3;1;0S", "\x1b[?1;2;0S"]
+    # Not on a vt220 (nor S taken as scrolling there); erased with the screen; reset
+    vt220 = AnsiScreen(3, 10, term="vt220")
+    vt220.feed("x" + _sixel("~") + "\x1b[?1;1S")
+    assert vt220.graphics.images == {} and vt220.replies == [] and vt220.text() == "x"
+    screen.feed("\x1b[2J")
+    assert graphics.screen_row(graphics.placements[-1]) < 0
+    screen.feed("\x1bc")
+    assert graphics.placements == [] and screen.sixel_colors is None and 1070 in screen.modes
+
+
+def test_sixel_pictures_drawn(qapp):
+    class Sixels(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 400, 200
+            self.term = Terminal(self, Left=0, Top=0, Width=400, Height=200, AutoStart=False,
+                                 BackColor=0x000000)
+
+    form = Sixels()
+    form.Show()
+    term = form.term
+    screen = term._screen
+    view = term._widget
+    cell_width, cell_height = screen.cell_pixels
+    bands = -(-cell_height // 6)
+    red = f'"1;1;{cell_width * 2};{cell_height}#1;2;100;0;0' + \
+        "-".join([f"!{cell_width * 2}~"] * bands)  # two cells by one
+    screen.feed("\x1b[2;1H" + _sixel(red))
+    term._redraw()
+    width, height = view.cell_size()
+    picture = view.grab().toImage()
+    assert picture.pixelColor(round(2 + width), round(2 + 1.5 * height)) == QColor("red")
+    assert picture.pixelColor(round(2 + width), round(2 + 0.5 * height)) != QColor("red")
+    form.Unload()

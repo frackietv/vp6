@@ -2290,6 +2290,21 @@ def cmdAgain_Click(self):
   `doNotMoveCursor=1`. `ReportCellSize` is answered (a cell's height and
   width in points, and the scale). Files sent to download (without
   `inline=1`) are left out.
+* And [sixel graphics](https://vt100.net/docs/vt3xx-gp/chapter14.html)
+  (`img2sixel`, `chafa -f sixel`, `timg -ps`, gnuplot's `sixelgd`...), as
+  xterm has them: the xterms say they have them (Device Attributes `4`) and
+  answer XTSMGRAPHICS (`CSI ? 1 ; 1 S`: 1024 color registers; `CSI ? 2 ; 1
+  S`: the largest picture, the screen's size). A sixel string (`ESC P P1 ;
+  P2 q data ESC \`) sets and picks colors (RGB or HLS, the VT340's 16
+  colors to start with: each picture's own, or shared once mode 1070 is
+  reset), draws six pixels at a time, repeats them, and gives the pixels'
+  shape (`P1`, or the raster attributes `"1;1;width;height`); `P2=1` leaves
+  the pixels it doesn't draw clear, otherwise they're the terminal's
+  background. One pixel is one of the screen's device pixels. The picture
+  shows at the cursor, which goes to the line below it (at the same column),
+  or to its right with mode 8452 (`CSI ? 8452 h`); with sixel display mode
+  (`CSI ? 80 h`) it shows at the screen's top left and the cursor stays.
+  Sixel pictures scroll and erase like the others.
 
 <!-- BEGIN GENERATED: control Terminal -->
 Default size 480 × 300. Property groups: Position, Colors, Common.

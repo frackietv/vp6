@@ -44,7 +44,7 @@ from PySide6.QtWidgets import QLabel, QScrollBar, QWidget
 from . import colors
 from ._props import P, enum_choices
 from .controls import _COMMON, CONTROL_TYPES, EVENT_ARGS, Control, _geometry, resolve_path
-from .termgraphics import UNDER_BACKGROUNDS, TerminalGraphics
+from .termgraphics import MAX_SIDE, SIXEL_REGISTERS, UNDER_BACKGROUNDS, TerminalGraphics
 
 EVENT_ARGS.update({"Exited": "ExitCode", "TitleChange": "Title"})
 
@@ -55,8 +55,8 @@ _XTERMS = ("xterm-256color", "xterm")
 _EIGHT_BIT = ("xterm-256color", "xterm", "vt220")  # (8-bit C1 controls: CSI as one character)
 
 # Device Attributes: what each terminal says it is (CSI c)
-_DEVICE_ATTRIBUTES = {"xterm-256color": "\x1b[?62;1;2;6;7;8;9;22c",
-                      "xterm": "\x1b[?62;1;2;6;7;8;9;22c", "vt100": "\x1b[?1;2c",
+_DEVICE_ATTRIBUTES = {"xterm-256color": "\x1b[?62;1;2;4;6;7;8;9;22c",  # (4: sixel)
+                      "xterm": "\x1b[?62;1;2;4;6;7;8;9;22c", "vt100": "\x1b[?1;2c",
                       "vt102": "\x1b[?6c", "vt220": "\x1b[?62;1;2;6;7;8;9c",
                       "ansi": "\x1b[?1;2c"}
 
@@ -71,10 +71,11 @@ DEC_GRAPHICS = dict(zip("`abcdefghijklmnopqrstuvwxyz{|}~_",
 _CHARSETS = {"0": DEC_GRAPHICS, "A": {"#": "£"}}  # (the others: ASCII)
 
 # The private modes it knows (DECRQM answers for these): cursor keys, 132 columns,
-# reverse video, origin, autowrap, blinking, the cursor shown, the alternate screen,
-# the keypad, the mouse, focus, SGR mouse coordinates, bracketed paste
-_KNOWN_MODES = {1, 3, 5, 6, 7, 9, 12, 25, 47, 66, 1000, 1002, 1003, 1004, 1006, 1047, 1048,
-                1049, 2004}
+# reverse video, origin, autowrap, blinking, the cursor shown, sixel display mode, the
+# alternate screen, the keypad, the mouse, focus, SGR mouse coordinates, private sixel
+# color registers, bracketed paste, the cursor to the right of a sixel picture
+_KNOWN_MODES = {1, 3, 5, 6, 7, 9, 12, 25, 47, 66, 80, 1000, 1002, 1003, 1004, 1006, 1047,
+                1048, 1049, 1070, 2004, 8452}
 _MOUSE_MODES = (9, 1000, 1002, 1003)  # (X10: presses; presses and releases; with a
                                       # button held, moves too; all moves)
 _CURSOR_SHAPES = {0: "block", 1: "block", 2: "block", 3: "underline", 4: "underline",
@@ -83,6 +84,7 @@ _CURSOR_SHAPES = {0: "block", 1: "block", 2: "block", 3: "underline", 4: "underl
 _STRING_STOP = re.compile("[\x07\x18\x1a\x1b\x9c]")
 _STRINGS = {"]": "osc", "P": "dcs", "_": "apc"}  # (and "string": SOS, PM)
 _STRING_STATES = ("osc", "dcs", "apc", "string")
+_SIXEL_START = re.compile(r"([0-9;]*)q")  # (a DCS string's parameters, then q: sixel data)
 
 
 def color_rgb(index: int) -> tuple[int, int, int]:
@@ -145,7 +147,7 @@ class AnsiScreen:
         self.scrolled = 0  # (lines gone into the history, ever: pictures are placed on lines
         self.cell_pixels = (10, 20)  # counted from the first) a cell's size in device pixels
         self.pixel_ratio = 1.0  # (device pixels to points: iTerm2's ReportCellSize)
-        self.graphics = TerminalGraphics(self)  # (pictures: Kitty's and iTerm2's)
+        self.graphics = TerminalGraphics(self)  # (pictures: Kitty's, iTerm2's, sixel)
         self._reset()
 
     def _reset(self) -> None:
@@ -155,7 +157,8 @@ class AnsiScreen:
         self.attr = PLAIN
         self.top, self.bottom = 0, self.rows - 1  # the scroll region
         self.wrap_pending = False
-        self.modes = {7, 25}  # the private modes on (CSI ? n h): autowrap, the cursor shown
+        self.modes = {7, 25, 1070}  # the private modes on (CSI ? n h): autowrap, the
+                                    # cursor shown, private sixel color registers
         self.ansi_modes: set[int] = set()  # 4: insert, 20: new line (CSI n h)
         self.keypad_app = False  # (ESC =: the keypad sends its own keys)
         self.charsets = ["B"] * 4  # G0..G3 ("B": ASCII, "0": DEC line drawing)
@@ -167,6 +170,7 @@ class AnsiScreen:
         self._titles: list[str] = []
         self._alternate = None  # the main screen while the alternate one shows
         self._main_graphics = None  # (and its pictures)
+        self.sixel_colors = None  # (sixel color registers shared while mode 1070 is reset)
         self.graphics.reset()
         self._saved_modes: dict[int, bool] = {}
         self.saved = self._cursor_state()
@@ -423,7 +427,10 @@ class AnsiScreen:
     def _dcs(self, text: str) -> None:
         if self.term not in _XTERMS:
             return
-        if text.startswith("$q"):  # DECRQSS: a setting
+        sixel = _SIXEL_START.match(text)
+        if sixel:  # a sixel picture
+            self.graphics.sixel(sixel.group(1), text[sixel.end():])
+        elif text.startswith("$q"):  # DECRQSS: a setting
             setting = {"m": lambda: self._sgr_text() + "m",
                        "r": lambda: f"{self.top + 1};{self.bottom + 1}r",
                        " q": lambda: f"{self.cursor_style} q"}.get(text[2:])
@@ -505,6 +512,8 @@ class AnsiScreen:
                         self._set_modes([number], self._saved_modes[number])
             elif final == "n" and arg(0, 0) == 6 and self.term != "ansi":
                 self._reply(f"\x1b[?{self._report_row()};{self.col + 1}R")
+            elif final == "S" and self.term in _XTERMS:  # XTSMGRAPHICS
+                self._graphics_attribute(arg(0, 0), arg(1, 0))
             if final not in "JK":  # (selective erasing: as erasing)
                 return
         if final == "A":
@@ -608,6 +617,19 @@ class AnsiScreen:
                 self._titles = (self._titles + [self.title])[-10:]
             elif operation == 23 and self._titles:  # the title kept
                 self.title = self._titles.pop()
+
+    def _graphics_attribute(self, item: int, action: int) -> None:
+        """XTSMGRAPHICS: the sixel color registers (1) and the largest sixel
+        picture (2), read (1), reset (2), set (3: they stay) or their most (4);
+        ReGIS (3) isn't there."""
+        if item == 1 and action in (1, 2, 3, 4):
+            self._reply(f"\x1b[?1;0;{SIXEL_REGISTERS}S")
+        elif item == 2 and action in (1, 2, 3, 4):
+            width, height = (self.cell_pixels[0] * self.cols, self.cell_pixels[1] * self.rows) \
+                if action != 4 else (MAX_SIDE, MAX_SIDE)  # (the screen's size, or the most)
+            self._reply(f"\x1b[?2;0;{min(MAX_SIDE, width)};{min(MAX_SIDE, height)}S")
+        else:
+            self._reply(f"\x1b[?{item};{1 if item not in (1, 2) else 2};0S")
 
     def _report_row(self) -> int:
         return self.row - (self.top if 6 in self.modes else 0) + 1
@@ -1253,7 +1275,7 @@ class _TerminalView(QWidget):
                              round(height) + 1)
                 runs.append((y, rect, attr, text, fg, col, bg if bg != back else None))
                 col = end
-        # Pictures (the Kitty graphics protocol) in three layers: under the cells'
+        # Pictures (Kitty's, iTerm2's, sixel) in three layers: under the cells'
         # backgrounds, under the text, over it
         pictures = self._pictures(first, rows)
         self._draw_pictures(painter, pictures, None, UNDER_BACKGROUNDS)

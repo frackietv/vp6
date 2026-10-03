@@ -1,5 +1,18 @@
 # VP6 features
 
+**Version:** 0.4.43
+**Date:** 2026-10-02
+
+## Controls
+
+- Sixel graphics in the Terminal (the xterm types; `img2sixel`, `chafa -f sixel`, `timg -ps`, gnuplot's sixelgd...): color registers set in RGB or HLS (1024, the VT340's 16 colors to start with, each picture's own or shared with mode 1070 reset), repeats, the pixels' shape by P1 or the raster attributes, a clear or filled background; shown at the cursor, which goes below the picture or (mode 8452) to its right; sixel display mode (80) at the top left; scrolling with the text like the other pictures; Device Attributes say so (4), XTSMGRAPHICS answered (color registers, the largest picture)
+
+## Kitchen Sink
+
+- The Terminal page's demo shows VP6's icon a third time, in sixel graphics (encoded by the page from a Picture's pixels)
+
+---
+
 **Version:** 0.4.42
 **Date:** 2026-10-02
 

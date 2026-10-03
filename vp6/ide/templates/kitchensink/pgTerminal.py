@@ -1,9 +1,10 @@
 """Kitchen Sink page: a Terminal running your shell (an xterm): type in it;
 the demo button types a command that writes bold, underlined, inverse and
 colored text, a box in the DEC line drawing characters and its TERM, sets
-the terminal's title (TitleChange) and shows VP6's icon twice, three rows
-high, on an xterm: by the Kitty graphics protocol (the picture's file) and
-as an iTerm2 inline image (the picture itself, by base64); the terminal
+the terminal's title (TitleChange) and shows VP6's icon three times on an
+xterm: three rows high by the Kitty graphics protocol (the picture's file)
+and as an iTerm2 inline image (the picture itself, by base64), and in sixel
+graphics (the icon's pixels encoded here, in 64 colors); the terminal
 type (TerminalType: xterm, vt100, vt220...: the shell starts again as one);
 Clear, Restart, and the shell's end (Exited)."""
 
@@ -11,6 +12,7 @@ import base64
 import os
 import shlex
 import sys
+import tempfile
 
 import vp6
 from vp6 import *
@@ -18,6 +20,8 @@ from vp6 import *
 # VP6's icon: its file, and its path in base64 (for the Kitty graphics protocol)
 ICON_FILE = os.path.join(os.path.dirname(vp6.__file__), "images", "vp6icon-128x128.png")
 ICON = base64.b64encode(ICON_FILE.encode()).decode()
+SIXEL_FILE = os.path.join(tempfile.gettempdir(), "vp6-kitchensink-icon.six")
+SIXEL_SIZE = 48  # (pixels: the sixel picture's width and height)
 
 if sys.platform == "win32":  # (cmd.exe, without a pseudo-terminal there)
     DEMO = "echo The VP6 Terminal & ver\r"
@@ -28,7 +32,48 @@ else:
             "printf ' \\033(0lqqk\\033(B TERM='; echo $TERM; "
             f"printf '\\033_Ga=T,t=f,f=100,r=3,q=2;{ICON}\\033\\\\\\033[2A '; "
             "printf '\\033]1337;File=inline=1;height=3:'; "
-            f"base64 < {shlex.quote(ICON_FILE)} | tr -d '\\n'; printf '\\a'; echo ' VP6'\r")
+            f"base64 < {shlex.quote(ICON_FILE)} | tr -d '\\n'; "
+            "printf '\\a\\033[2A \\033[?8452h'; "
+            f"cat {shlex.quote(SIXEL_FILE)}; printf '\\033[?8452l'; echo ' VP6'\r")
+
+
+def icon_sixel() -> str:
+    """VP6's icon in sixel graphics, SIXEL_SIZE pixels square: each color cut to
+    4 levels of red, green and blue (64 color registers); the clear pixels left
+    out (P2=1). Six rows of pixels make a band: one run of sixels per color in
+    it (back to the left with $), repeats as !n, the next band after -."""
+    icon = Picture(SIXEL_SIZE, SIXEL_SIZE)
+    icon.PaintPicture(LoadPicture(ICON_FILE), 0, 0, SIXEL_SIZE, SIXEL_SIZE)
+    registers = [[-1] * SIXEL_SIZE for _ in range(SIXEL_SIZE)]  # (a register per pixel)
+    for y in range(SIXEL_SIZE):
+        for x in range(SIXEL_SIZE):
+            color = icon.Point(x, y)  # (&HBBGGRR, -1: clear)
+            if color != -1:
+                red, green, blue = color & 0xFF, color >> 8 & 0xFF, color >> 16 & 0xFF
+                registers[y][x] = red * 4 // 256 * 16 + green * 4 // 256 * 4 + blue * 4 // 256
+    parts = [f'\x1bP0;1q"1;1;{SIXEL_SIZE};{SIXEL_SIZE}']
+    for register in range(64):  # (percents of red, green and blue)
+        parts.append(f"#{register};2;{register // 16 * 100 // 3};"
+                     f"{register // 4 % 4 * 100 // 3};{register % 4 * 100 // 3}")
+    for top in range(0, SIXEL_SIZE, 6):
+        rows = registers[top:top + 6]
+        for register in sorted({r for row in rows for r in row if r != -1}):
+            sixels = "".join(chr(63 + sum(1 << bit for bit, row in enumerate(rows)
+                                          if row[x] == register))
+                             for x in range(SIXEL_SIZE))
+            runs, start = [], 0
+            while start < len(sixels):  # (repeats: !n and the sixel)
+                end = start
+                while end < len(sixels) and sixels[end] == sixels[start]:
+                    end += 1
+                runs.append((end - start, sixels[start]))
+                start = end
+            if runs[-1][1] == "?":  # (nothing at the end: left out)
+                runs.pop()
+            parts.append(f"#{register}" + "".join(
+                f"!{count}{sixel}" if count > 3 else sixel * count for count, sixel in runs) + "$")
+        parts.append("-")
+    return "".join(parts) + "\x1b\\"
 
 
 class pgTerminal(Form):
@@ -68,6 +113,9 @@ class pgTerminal(Form):
         self.cmdRestart_Click()                               # its TERM in a new shell)
 
     def cmdDemo_Click(self):
+        if sys.platform != "win32":  # (the demo's command shows it: cat)
+            with open(SIXEL_FILE, "w") as file:
+                file.write(icon_sixel())
         if not self.termShell.Running:
             self.termShell.Start()
         self.termShell.Write(DEMO)  # as if typed: \r is Enter

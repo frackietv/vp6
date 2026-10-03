@@ -1,5 +1,5 @@
-"""Pictures in the Terminal: the Kitty graphics protocol and iTerm2's inline
-images. ``TerminalGraphics`` keeps a screen's images (by id, and the number
+"""Pictures in the Terminal: the Kitty graphics protocol, iTerm2's inline
+images and sixel graphics. ``TerminalGraphics`` keeps a screen's images (by id, and the number
 a program may give one instead) and their placements on its cells.
 
 The Kitty graphics protocol: a program sends an APC string, ``ESC _ G keys ;
@@ -36,6 +36,25 @@ A large one comes in parts: ``MultipartFile=args``, ``FilePart=base64``...,
 points, and the scale. Its pictures have no ids: one is forgotten once its
 placement has gone.
 
+Sixel graphics (the VT340's, as xterm has them): a DCS string, ``ESC P P1 ;
+P2 ; P3 q data ESC \\``. ``P1`` gives the pixels' shape (0, 1, 5, 6: twice
+as tall as wide; 2: five times; 3, 4: three times; 7, 8, 9: square) unless
+the raster attributes (``"Pan;Pad;Ph;Pv``) do; ``P2=1`` leaves the pixels
+not drawn transparent (else they are the terminal's background); the picture
+is at least the raster attributes' width and height. In the data, ``#c`` picks color
+register ``c`` (1024 of them, starting as the VT340's 16 colors: private to
+each picture while mode 1070 is set, as it starts, else shared), ``#c;2;r;g;b``
+sets it (percents) and ``#c;1;h;l;s`` too (HLS, the VT340's hue: 0 is
+blue); each of ``?`` to ``~`` draws a column of six pixels (its bits, the
+lowest at the top) in that color, ``!n`` repeats the next one ``n`` times,
+``$`` goes back to the band's left and ``-`` down to the next band. Before
+any color is picked it draws in the terminal's foreground. One pixel is a
+device pixel. The picture goes at the cursor, which then goes to the line
+below it at the same column (or, with mode 8452 set, to its right on its last
+row); with mode 80 (DECSDM) set it goes at the screen's top left instead,
+cut to the screen, and the cursor stays. Its pictures are anonymous, like
+iTerm2's.
+
 Placements are on lines counted from the first one the screen ever had
 (``AnsiScreen.scrolled`` lines have gone into its history), so they scroll
 with the text, into the history too. Sizes are in device pixels: the screen's
@@ -48,17 +67,31 @@ import base64
 import binascii
 import math
 import os
+import re
 import tempfile
 import zlib
+from array import array
 from dataclasses import dataclass
 
 from PySide6.QtCore import QRect
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QColor, QImage
 
 QUOTA = 320 * 1024 * 1024  # bytes of pixels a screen keeps (older pictures go first)
 MAX_SIDE = 10000  # pixels
 UNDER_BACKGROUNDS = -1073741824  # (a z-index below this: under the cells' backgrounds)
 _FORMATS = {24: (3, QImage.Format_RGB888), 32: (4, QImage.Format_RGBA8888)}
+
+SIXEL_REGISTERS = 1024  # (the color registers a sixel picture has)
+# The VT340's 16 colors (percents of red, green and blue): the sixel registers as they start
+_VT340_COLORS = ((0, 0, 0), (20, 20, 80), (80, 13, 13), (20, 80, 20), (80, 20, 80),
+                 (20, 80, 80), (80, 80, 20), (53, 53, 53), (26, 26, 26), (33, 33, 60),
+                 (60, 26, 26), (33, 60, 33), (60, 33, 60), (33, 60, 60), (60, 60, 33),
+                 (80, 80, 80))
+# The pixels' shape (how many times as tall as wide) by a sixel string's P1
+_SIXEL_ASPECT = {0: 2, 1: 2, 2: 5, 3: 3, 4: 3, 5: 2, 6: 2, 7: 1, 8: 1, 9: 1}
+# Sixel data: sixels, #color, !repeat, "raster attributes, $ (back to the left), - (down)
+_SIXEL_TOKENS = re.compile(r'([?-~]+)|#([0-9;]*)|!([0-9]*)([?-~])|"([0-9;]*)|([$-])')
+_SIXEL_BITS = [tuple(bit for bit in range(6) if value >> bit & 1) for value in range(64)]
 
 
 class GraphicsError(Exception):
@@ -419,6 +452,141 @@ class TerminalGraphics:
             return natural_width * scale, natural_height * scale
         return width, height
 
+    # -- sixel graphics (DCS ... q) ------------------------------------------------------------
+    def sixel(self, params: str, data: str) -> None:
+        """A sixel DCS string: its parameters (before ``q``) and its data."""
+        image = self._sixel_image(params, data)
+        if image is None:
+            return
+        screen = self.screen
+        stored = self._keep(TerminalImage(self._new_id(), 0, image, 0, anonymous=True))
+        cell_width, cell_height = screen.cell_pixels
+        width, height = image.width(), image.height()
+        if 80 in screen.modes:  # DECSDM: at the top left, cut to the screen; the cursor stays
+            width = min(width, screen.cols * cell_width)
+            height = min(height, screen.rows * cell_height)
+            self.placements.append(Placement(
+                stored.id, 0, screen.scrolled, 0, math.ceil(width / cell_width),
+                math.ceil(height / cell_height), QRect(0, 0, width, height), width, height))
+            return
+        placement = Placement(stored.id, 0, 0, 0, math.ceil(width / cell_width),
+                              math.ceil(height / cell_height), image.rect(), width, height)
+        if 8452 in screen.modes:  # (the cursor to its right, on its last row)
+            self._put(placement, True)
+            return
+        col = screen.col
+        self._put(placement, False)
+        for _ in range(placement.rows):  # (the cursor to the line below it)
+            screen._line_feed()
+        screen.col, screen.wrap_pending = col, False
+
+    def _sixel_image(self, params: str, data: str) -> QImage | None:
+        """The picture a sixel string draws (None: nothing drawn)."""
+        fields = [int(field) if field.isdigit() else 0 for field in params.split(";")]
+        fields += [0] * (2 - len(fields))
+        aspect = _SIXEL_ASPECT.get(fields[0], 2)
+        transparent = fields[1] == 1
+        foreground, background = (0xffe5e5e5, 0xff000000)
+        if self.screen.colors is not None:
+            foreground, background = (0xff000000 | r << 16 | g << 8 | b
+                                      for r, g, b in self.screen.colors())
+        blank = 0 if transparent else background
+        private = 1070 in self.screen.modes
+        if private or self.screen.sixel_colors is None:
+            registers = [_sixel_rgb(*rgb) for rgb in _VT340_COLORS]
+            registers += [0xff000000] * (SIXEL_REGISTERS - len(registers))
+            if not private:
+                self.screen.sixel_colors = registers  # (shared: this picture's changes stay)
+        else:
+            registers = self.screen.sixel_colors
+        color = foreground
+        rows: list[array] = []  # (one per pixel row)
+        capacity = 0  # (the rows' length)
+        x = y = 0  # (y: the band's top row)
+        right = bottom = 0  # (how far it has drawn)
+        raster = (0, 0)
+        started = False
+
+        def make_room(width: int, height: int) -> None:
+            nonlocal capacity
+            if width > capacity:
+                grown = min(MAX_SIDE, max(width, capacity * 2, 64))
+                for row in rows:
+                    row.extend(array("I", [blank]) * (grown - capacity))
+                capacity = grown
+            while len(rows) < height:
+                rows.append(array("I", [blank]) * capacity)
+
+        for match in _SIXEL_TOKENS.finditer(data):
+            sixels, color_spec, repeat, repeated, raster_spec, move = match.groups()
+            if sixels is not None or repeated is not None:
+                count = 1
+                if repeated is not None:
+                    sixels, count = repeated, max(1, int(repeat or 1))
+                started = True
+                if y + 6 > MAX_SIDE // aspect or x >= MAX_SIDE:
+                    continue
+                count = min(count, MAX_SIDE - x)
+                end = x + len(sixels) * count
+                make_room(min(end, MAX_SIDE), y + 6)
+                band = rows[y:y + 6]
+                if count > 1:
+                    bits = _SIXEL_BITS[ord(sixels) - 63]
+                    if bits:
+                        run = array("I", [color]) * count
+                        for bit in bits:
+                            band[bit][x:x + count] = run
+                        bottom = max(bottom, y + bits[-1] + 1)
+                        right = max(right, x + count)
+                    x += count
+                    continue
+                for char in sixels[:MAX_SIDE - x]:
+                    bits = _SIXEL_BITS[ord(char) - 63]
+                    if bits:
+                        for bit in bits:
+                            band[bit][x] = color
+                        bottom = max(bottom, y + bits[-1] + 1)
+                        right = max(right, x + 1)
+                    x += 1
+                x = min(x, MAX_SIDE)
+            elif color_spec is not None:
+                numbers = [int(field) if field.isdigit() else 0
+                           for field in color_spec.split(";")]
+                register = numbers[0]
+                if register >= SIXEL_REGISTERS:
+                    continue
+                if len(numbers) >= 5 and numbers[1] in (1, 2):
+                    if numbers[1] == 2:
+                        registers[register] = _sixel_rgb(*numbers[2:5])
+                    else:  # (HLS, the VT340's hue: blue at 0, red at 120, green at 240)
+                        hue, light, saturation = numbers[2:5]
+                        rgb = QColor.fromHslF((hue + 240) % 360 / 360,
+                                              min(100, saturation) / 100,
+                                              min(100, light) / 100).rgb()
+                        registers[register] = rgb | 0xff000000
+                color = registers[register]
+            elif raster_spec is not None:
+                if not started:  # (only before the pixels)
+                    numbers = [int(field) if field.isdigit() else 0
+                               for field in raster_spec.split(";")]
+                    numbers += [0] * (4 - len(numbers))
+                    if numbers[0] and numbers[1]:
+                        aspect = max(1, min(10, round(numbers[0] / numbers[1])))
+                    raster = (min(MAX_SIDE, numbers[2]), min(MAX_SIDE, numbers[3]))
+            elif move == "$":
+                x = 0
+            else:  # "-": the next band
+                x, y = 0, y + 6
+        width, height = max(right, raster[0]), max(bottom, -(-raster[1] // aspect))
+        if not width or not height:
+            return None
+        make_room(width, height)
+        lines = [rows[row][:width].tobytes() for row in range(height)]
+        pixels = b"".join(line for line in lines for _ in range(aspect))
+        height = min(MAX_SIDE, height * aspect)
+        image = QImage(pixels, width, height, width * 4, QImage.Format_ARGB32).copy()
+        return image.convertToFormat(QImage.Format_ARGB32_Premultiplied)
+
     # -- deleting ----------------------------------------------------------------------------
     def _delete(self, keys: dict) -> None:
         how = keys.get("d", "a") or "a"
@@ -512,3 +680,11 @@ class TerminalGraphics:
         self.images.clear()
         self.placements = []
         self._loading = self._multipart = None
+
+
+def _sixel_rgb(red: int, green: int, blue: int) -> int:
+    """A sixel color (percents of red, green, blue) as an ARGB value."""
+    def byte(percent):
+        return round(min(100, percent) * 255 / 100)
+
+    return 0xff000000 | byte(red) << 16 | byte(green) << 8 | byte(blue)

@@ -1045,13 +1045,18 @@ def test_terminal_page(sink):
     colored = [attr for line in term._screen.lines for char, attr in line if char == "3"]
     assert any(attr.fg == 1 for attr in colored)  # (color 31: red)
     assert "┌──┐ TERM=xterm-256color" in term.Text.replace("\n", "")  # (DEC line drawing)
-    # VP6's icon by the Kitty graphics protocol, and as an iTerm2 inline image beside it
-    wait_for(lambda: len(term._screen.graphics.placements) == 2)
-    kitty, iterm2 = term._screen.graphics.placements
+    # VP6's icon by the Kitty graphics protocol, and as an iTerm2 inline image and in sixel
+    # graphics beside it
+    wait_for(lambda: len(term._screen.graphics.placements) == 3)
+    kitty, iterm2, sixel = term._screen.graphics.placements
     assert [image.image.width() for image in term._screen.graphics.images.values()] == \
-        [128, 128]
-    assert kitty.rows == iterm2.rows == 3 and iterm2.line == kitty.line
+        [128, 128, 48]
+    assert kitty.rows == iterm2.rows == 3 and iterm2.line == kitty.line == sixel.line
     assert iterm2.col == kitty.col + kitty.cols + 1
+    assert sixel.col == iterm2.col + iterm2.cols + 1
+    icon = next(image.image for image in term._screen.graphics.images.values()
+                if image.id == sixel.image)
+    assert icon.pixelColor(0, 0).alpha() == 0 and icon.pixelColor(24, 24).alpha() == 255
     first = term.ProcessID
     page.cmdRestart._widget.click()  # killed, then started again in Exited
     wait_for(lambda: page.lblStatus.Caption == "Shell restarted (xterm-256color)")
