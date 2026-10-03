@@ -1057,6 +1057,23 @@ def test_terminal_page(sink):
     icon = next(image.image for image in term._screen.graphics.images.values()
                 if image.id == sixel.image)
     assert icon.pixelColor(0, 0).alpha() == 0 and icon.pixelColor(24, 24).alpha() == 255
+    # a gradient in true color, as the shell knows it has it (COLORTERM)
+    wait_for(lambda: "COLORTERM=[truecolor]" in term.Text.replace("\n", ""))
+    backs = [attr.bg for line in term._screen.lines for _, attr in line]
+    assert (0, 96, 255) in backs and (248, 220, 7) in backs
+    assert term.Ligatures and page.chkLigatures.Value == vp6.vpChecked
+    page.chkLigatures._widget.click()  # (off)
+    assert not term.Ligatures
+    # the font: the fixed-width ones, after the system's (FontName unset)
+    assert page.cboFont.ListIndex == 0 and term.FontName is None
+    assert page.cboFont.List[1:] == list(vp6.Screen.FixedFonts)
+    columns = term.Columns
+    page.cboFont.ListIndex = page.cboFont.ListCount - 1
+    name = page.cboFont.Text
+    assert term.FontName == name and term._widget.font().family() == name
+    assert (term.Rows, term.Columns) == term._widget.grid_size()  # (the font's cells)
+    page.cboFont.ListIndex = 0
+    assert term.FontName is None and term.Columns == columns
     first = term.ProcessID
     page.cmdRestart._widget.click()  # killed, then started again in Exited
     wait_for(lambda: page.lblStatus.Caption == "Shell restarted (xterm-256color)")
@@ -1067,7 +1084,7 @@ def test_terminal_page(sink):
     wait_for(lambda: term.Running and "$" in term.Text)
     page.cmdDemo._widget.click()
     wait_for(lambda: "┌──┐ TERM=vt220" in term.Text.replace("\n", ""))
-    wait_for(lambda: " VP6" in term.Text)
+    wait_for(lambda: "COLORTERM=[]" in term.Text.replace("\n", ""))  # (no true color)
     assert term._screen.graphics.images == {}  # (a vt220 has no pictures)
     page.cmdClear._widget.click()
     wait_for(lambda: "$" in term.Text and "bold" not in term.Text)

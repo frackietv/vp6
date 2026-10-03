@@ -4,9 +4,12 @@ colored text, a box in the DEC line drawing characters and its TERM, sets
 the terminal's title (TitleChange) and shows VP6's icon three times on an
 xterm: three rows high by the Kitty graphics protocol (the picture's file)
 and as an iTerm2 inline image (the picture itself, by base64), and in sixel
-graphics (the icon's pixels encoded here, in 64 colors); the terminal
-type (TerminalType: xterm, vt100, vt220...: the shell starts again as one);
-Clear, Restart, and the shell's end (Exited)."""
+graphics (the icon's pixels encoded here, in 64 colors), then a gradient
+in true color (24-bit RGB: COLORTERM says the xterms have it) and a few
+ligatures (shown as such with a font that has them); the terminal type
+(TerminalType: xterm, vt100, vt220...: the shell starts again as one);
+its font (FontName: one of Screen.FixedFonts, or the system's); Ligatures
+on or off; Clear, Restart, and the shell's end (Exited)."""
 
 import base64
 import os
@@ -22,6 +25,7 @@ ICON_FILE = os.path.join(os.path.dirname(vp6.__file__), "images", "vp6icon-128x1
 ICON = base64.b64encode(ICON_FILE.encode()).decode()
 SIXEL_FILE = os.path.join(tempfile.gettempdir(), "vp6-kitchensink-icon.six")
 SIXEL_SIZE = 48  # (pixels: the sixel picture's width and height)
+SYSTEM_FONT = "(the system's)"  # (the font box's first choice: no FontName)
 
 if sys.platform == "win32":  # (cmd.exe, without a pseudo-terminal there)
     DEMO = "echo The VP6 Terminal & ver\r"
@@ -34,7 +38,10 @@ else:
             "printf '\\033]1337;File=inline=1;height=3:'; "
             f"base64 < {shlex.quote(ICON_FILE)} | tr -d '\\n'; "
             "printf '\\a\\033[2A \\033[?8452h'; "
-            f"cat {shlex.quote(SIXEL_FILE)}; printf '\\033[?8452l'; echo ' VP6'\r")
+            f"cat {shlex.quote(SIXEL_FILE)}; printf '\\033[?8452l'; echo ' VP6'; "
+            "i=0; while [ $i -lt 32 ]; do printf '\\033[48;2;%d;%d;%dm ' $((i * 8)) "
+            "$((96 + i * 4)) $((255 - i * 8)); i=$((i + 1)); done; "
+            "printf '\\033[0m -> != >= => COLORTERM=[%s]\\n' \"$COLORTERM\"\r")
 
 
 def icon_sixel() -> str:
@@ -82,22 +89,29 @@ class pgTerminal(Form):
         self.Caption = 'Terminal'
         self.Width = 640
         self.Height = 440
-        self.termShell = Terminal(self, Left=16, Top=16, Width=608, Height=340, TabIndex=1)
-        self.cmdDemo = CommandButton(self, Caption='&Demo', Left=16, Top=366, Width=100, Height=30,
+        self.termShell = Terminal(self, Left=16, Top=16, Width=608, Height=310, TabIndex=1)
+        self.cmdDemo = CommandButton(self, Caption='&Demo', Left=16, Top=336, Width=100, Height=30,
                                      TabIndex=2,
                                      ToolTipText='Write: types a command that writes colors')
-        self.cmdClear = CommandButton(self, Caption='C&lear', Left=124, Top=366, Width=90,
+        self.cmdClear = CommandButton(self, Caption='C&lear', Left=124, Top=336, Width=90,
                                       Height=30, TabIndex=3)
-        self.cmdRestart = CommandButton(self, Caption='&Restart', Left=222, Top=366, Width=90,
+        self.cmdRestart = CommandButton(self, Caption='&Restart', Left=222, Top=336, Width=90,
                                         Height=30, TabIndex=4,
                                         ToolTipText='Kill the shell and start a new one')
-        self.cboType = ComboBox(self, Style=2, Left=320, Top=369, Width=140, Height=25, TabIndex=5,
+        self.cboType = ComboBox(self, Style=2, Left=320, Top=339, Width=140, Height=25, TabIndex=5,
                                 ToolTipText='TerminalType: the shell starts again as this one')
-        self.lblStatus = Label(self, Caption='', Left=468, Top=372, Width=156, Height=25,
+        self.lblStatus = Label(self, Caption='', Left=468, Top=342, Width=156, Height=25,
                                TabIndex=6)
+        self.lblFont = Label(self, Caption='&Font:', Left=16, Top=378, Width=40, Height=25,
+                             TabIndex=7)
+        self.cboFont = ComboBox(self, Style=2, Left=60, Top=375, Width=240, Height=25, TabIndex=8,
+                                ToolTipText='FontName: the fixed-width fonts (Screen.FixedFonts)')
+        self.chkLigatures = CheckBox(self, Caption='Li&gatures', Left=320, Top=375, Width=100,
+                                     Height=25, Value=1, TabIndex=9,
+                                     ToolTipText='Ligatures: ->, != as one sign, in a font that has them')
         self.lblHelp = Label(self,
                              Caption="It's a terminal: the shell gets your keys (Ctrl+C interrupts, Tab completes). Copy: Cmd+C on macOS, Ctrl+Shift+C elsewhere.",
-                             Left=16, Top=402, Width=608, Height=30, WordWrap=True, TabIndex=7)
+                             Left=16, Top=406, Width=608, Height=30, WordWrap=True, TabIndex=10)
     # endregion
 
     def Form_Load(self):
@@ -105,6 +119,13 @@ class pgTerminal(Form):
             self.cboType.AddItem(name)  # (in TerminalType's order: vpTermXterm256Color...)
         self.cboType.ListIndex = self.termShell.TerminalType
         self.lblStatus.Caption = "Shell running" if self.termShell.Running else ""
+        self.cboFont.AddItem(SYSTEM_FONT)  # (FontName unset)
+        for name in Screen.FixedFonts:
+            self.cboFont.AddItem(name)
+            if name == self.termShell.FontName:
+                self.cboFont.ListIndex = self.cboFont.NewIndex
+        if self.cboFont.ListIndex == -1:
+            self.cboFont.ListIndex = 0
 
     def cboType_Click(self):
         if self.cboType.ListIndex == self.termShell.TerminalType:
@@ -133,6 +154,13 @@ class pgTerminal(Form):
             self.termShell.Kill()
         else:
             self.termShell_Exited(-1)
+
+    def cboFont_Click(self):
+        # (a new size of cell: the program learns its new rows and columns)
+        self.termShell.FontName = None if self.cboFont.ListIndex == 0 else self.cboFont.Text
+
+    def chkLigatures_Click(self):
+        self.termShell.Ligatures = self.chkLigatures.Value == vpChecked
 
     def termShell_Exited(self, ExitCode):
         if getattr(self, "restart", False):

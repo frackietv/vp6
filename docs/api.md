@@ -2244,6 +2244,16 @@ def cmdAgain_Click(self):
 * `BackColor` and `ForeColor` (unset: the color scheme's), `FontName` and
   `FontSize` (unset: the system's fixed-width font). A program still running
   when the form unloads is killed.
+* Colors: the 16 ANSI colors, the 256 of xterm-256color, and true color
+  (24-bit RGB: `ESC [ 38 ; 2 ; r ; g ; b m` for the text, `48` for the
+  background, with semicolons or colons). The xterm types tell the program
+  they have it: `COLORTERM=truecolor` in its environment, and the terminfo
+  capabilities `RGB`, `Tc`, `setrgbf` and `setrgbb` when it asks (XTGETTCAP).
+* `Ligatures` (on by default): a font with ligatures (Fira Code, JetBrains
+  Mono, Cascadia Code...) shows `->`, `!=`, `>=`... as one sign. Text is
+  then drawn a run at a time where the font keeps it in its cells (a
+  character from another, wider font is still drawn in its own cell); the
+  cursor's cell shows its own character. Off: a character at a time.
 * `TerminalType`: `vpTermXterm256Color` (0, the default), `vpTermXterm`,
   `vpTermVT100`, `vpTermVT102`, `vpTermVT220`, `vpTermAnsi`; `TermName` is
   its name as `TERM` has it (`"xterm-256color"`, `"vt100"`...). The program
@@ -2315,6 +2325,7 @@ Default size 480 × 300. Property groups: Position, Colors, Common.
 | `CommandLine` | str | `''` | The program it runs: a command line (double quotes group words); empty: your shell |
 | `FontName` | font name | (default) | Its font; unset: the system's fixed one |
 | `FontSize` | int | (default) | Font size in points; unset: the system's |
+| `Ligatures` | bool | `True` | Show the font's ligatures (->, !=, >=... in Fira Code, JetBrains Mono...); the cursor's cell shows its own character |
 | `ScrollbackLines` | int | `1000` | How many lines scrolled off it keeps |
 | `TerminalType` | enum | 0 - xterm-256color | 0 - xterm-256color, 1 - xterm, 2 - vt100, 3 - vt102, 4 - vt220, 5 - ansi. The terminal it is (its TERM, keys and answers); a program started before keeps the TERM it had |
 | `WorkingDirectory` | str | `''` | Where the program runs (relative to the form's folder); empty: here |
@@ -3048,7 +3059,7 @@ A picture dropped from another program is in `OLEDragDrop`'s Data too:
 | Object | Members |
 |---|---|
 | `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started) |
-| `Screen` | `Width`, `Height` (primary screen, pixels), `TwipsPerPixelX`, `TwipsPerPixelY` (15), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
+| `Screen` | `Width`, `Height` (primary screen, pixels), `TwipsPerPixelX`, `TwipsPerPixelY` (15), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FixedFonts` (the fixed-width ones among them, for code and terminals), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
 | `Clipboard` | `GetText(Format=vpCFText)`, `SetText(text, Format=vpCFText)` (`vpCFRTF`: rich text, as RTF source), `GetFormat(Format)` (`vpCFText`, `vpCFBitmap` / `vpCFDIB`, `vpCFRTF`, `vpCFFiles`), `GetData(Format=vpCFBitmap)` (a [Picture](#picture-objects), or with `vpCFFiles` the files' paths; `None` when there is none), `SetData(Picture)` (a Picture or a picture file), `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
 

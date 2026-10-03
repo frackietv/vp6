@@ -8,7 +8,8 @@ SI, 8-bit C1 controls for the vt220 and xterms, and the escape sequences:
 cursor movement and positioning, erasing in the display and the line,
 inserting and deleting lines and characters, repeating one, a scroll region,
 origin mode, autowrap, insert mode, new line mode, tab stops, saving the
-cursor, colors and attributes with SGR, the cursor shown, hidden or shaped,
+cursor, colors and attributes with SGR (true color too: the xterm types
+announce it in COLORTERM and terminfo answers), the cursor shown, hidden or shaped,
 reverse video, the alternate screen, character sets (the DEC line drawing
 set), the window title by OSC, keypad and cursor key modes, mouse reporting,
 focus reporting, bracketed paste, a soft and a full reset) to a grid of
@@ -25,7 +26,8 @@ Delete, function keys, the keypad, Ctrl+letter, xterm's Shift/Alt/Ctrl
 modifiers...); copy and paste are the system's (Cmd+C / Cmd+V on macOS,
 Ctrl+Shift+C / Ctrl+Shift+V elsewhere); the mouse selects (or goes to the
 program when it asked for it: Shift+mouse still selects); the scroll bar and
-the wheel go through the history.
+the wheel go through the history. With ``Ligatures``, text is drawn a run at
+a time where the font keeps it in its cells, so a font's ligatures show.
 """
 
 from __future__ import annotations
@@ -85,6 +87,13 @@ _STRING_STOP = re.compile("[\x07\x18\x1a\x1b\x9c]")
 _STRINGS = {"]": "osc", "P": "dcs", "_": "apc"}  # (and "string": SOS, PM)
 _STRING_STATES = ("osc", "dcs", "apc", "string")
 _SIXEL_START = re.compile(r"([0-9;]*)q")  # (a DCS string's parameters, then q: sixel data)
+# True color (24-bit RGB, SGR 38;2;r;g;b and 48;2;r;g;b): the xterm types say they have it,
+# in COLORTERM and in the terminfo capabilities they answer (XTGETTCAP): RGB (ncurses'),
+# Tc (tmux's), setrgbf and setrgbb (how to set them)
+COLORTERM = "truecolor"
+_TRUE_COLOR_CAPABILITIES = {"RGB": "8/8/8", "Tc": None,
+                            "setrgbf": "\x1b[38;2;%p1%d;%p2%d;%p3%dm",
+                            "setrgbb": "\x1b[48;2;%p1%d;%p2%d;%p3%dm"}
 
 
 def color_rgb(index: int) -> tuple[int, int, int]:
@@ -441,13 +450,15 @@ class AnsiScreen:
                     capability = bytes.fromhex(name).decode("ascii")
                 except ValueError:
                     capability = ""
-                value = {"TN": self.term, "name": self.term,
+                known = {"TN": self.term, "name": self.term,
                          "Co": str(self._color_count()),
-                         "colors": str(self._color_count())}.get(capability)
-                if value is None:
+                         "colors": str(self._color_count()), **_TRUE_COLOR_CAPABILITIES}
+                if capability not in known:
                     self._reply(f"\x1bP0+r{name}\x1b\\")
+                elif known[capability] is None:  # (a flag: no value)
+                    self._reply(f"\x1bP1+r{name}\x1b\\")
                 else:
-                    self._reply(f"\x1bP1+r{name}={value.encode().hex()}\x1b\\")
+                    self._reply(f"\x1bP1+r{name}={known[capability].encode().hex()}\x1b\\")
 
     def _color_count(self) -> int:
         return 256 if self.term == "xterm-256color" else 8
@@ -840,6 +851,9 @@ class _PtyProgram:
         master, slave = pty.openpty()
         self._set_size(master, rows, cols, *pixels)
         env = dict(os.environ, TERM=term, COLUMNS=str(cols), LINES=str(rows))
+        env.pop("COLORTERM", None)  # (the outer terminal's, if any: not this one's)
+        if term in _XTERMS:
+            env["COLORTERM"] = COLORTERM
 
         def take_the_terminal():  # (in the child: the terminal is its controlling one)
             fcntl.ioctl(0, termios.TIOCSCTTY, 0)
@@ -922,6 +936,9 @@ class _PipeProgram:
         process = QProcess()
         env = QProcessEnvironment.systemEnvironment()
         env.insert("TERM", term)
+        env.remove("COLORTERM")
+        if term in _XTERMS:
+            env.insert("COLORTERM", COLORTERM)
         process.setProcessEnvironment(env)
         if cwd:
             process.setWorkingDirectory(cwd)
@@ -975,6 +992,9 @@ _KEYPAD_KEYS = dict(zip("0123456789.-+*/,=", "pqrstuvwxynmkjolX"))
 _BOX_LINES = {"─": (0, 0, 1, 1), "│": (1, 1, 0, 0), "┌": (0, 1, 0, 1), "┐": (0, 1, 1, 0),
               "└": (1, 0, 0, 1), "┘": (1, 0, 1, 0), "├": (1, 1, 0, 1), "┤": (1, 1, 1, 0),
               "┬": (0, 1, 1, 1), "┴": (1, 0, 1, 1), "┼": (1, 1, 1, 1)}
+# A part of a run drawn at once: a line drawing character, or text without them (from
+# its first character that isn't a space to its last)
+_BOX_PART = "[{0}]|[^{0}\\s]+(?:\\s+[^{0}\\s]+)*".format("".join(_BOX_LINES))
 # The Control key: Qt calls it Meta on macOS (Ctrl there is Command)
 _CONTROL = Qt.MetaModifier if sys.platform == "darwin" else Qt.ControlModifier
 
@@ -1237,6 +1257,9 @@ class _TerminalView(QWidget):
         first = self._first_line()
         rows = int(self.height() // height) + 1
         selection = self.selection
+        ligatures = terminal._values.get("Ligatures", True)
+        cursor = (len(screen.history) + screen.row, screen.col) \
+            if ligatures and screen.cursor_visible else None  # (a run stops at it)
         fonts = {}
 
         def font_for(attr):
@@ -1256,7 +1279,8 @@ class _TerminalView(QWidget):
                 end = col + 1
                 while end < len(line) and line[end][1] == attr and \
                         self._selected(selection, index, end) == \
-                        self._selected(selection, index, col):
+                        self._selected(selection, index, col) and \
+                        (index, end) != cursor and (index, end - 1) != cursor:
                     end += 1
                 text = "".join(char for char, _ in line[col:end])
                 fg = self._color(attr.fg, fore)
@@ -1285,16 +1309,21 @@ class _TerminalView(QWidget):
         self._draw_pictures(painter, pictures, UNDER_BACKGROUNDS, 0)
         for y, rect, attr, text, fg, col, _bg in runs:
             if text.strip() and not attr.invisible:
-                painter.setFont(font_for(attr))
+                font = font_for(attr)
+                painter.setFont(font)
                 painter.setPen(fg)
-                for offset, char in enumerate(text):  # (cell by cell: a fixed grid)
-                    if char in _BOX_LINES:  # (drawn: lines that meet across cells)
-                        self._draw_box(painter, char, 2 + (col + offset) * width, y,
-                                       width, height)
-                    elif char != " ":
-                        painter.drawText(
-                            QPoint(round(2 + (col + offset) * width),
-                                   round(y + metrics.ascent())), char)
+                baseline = round(y + metrics.ascent())
+                for offset, part in _text_parts(text, ligatures):
+                    x = 2 + (col + offset) * width
+                    if part in _BOX_LINES:  # (drawn: lines that meet across cells)
+                        self._draw_box(painter, part, x, y, width, height)
+                    elif len(part) > 1 and _fits_cells(font, part, width):  # (whole: the
+                        painter.drawText(QPoint(round(x), baseline), part)  # ligatures)
+                    else:  # (cell by cell: a fixed grid)
+                        for index_in, char in enumerate(part):
+                            if char != " ":
+                                painter.drawText(
+                                    QPoint(round(x + index_in * width), baseline), char)
             if attr.underline and not attr.invisible:
                 painter.setPen(fg)
                 painter.drawLine(rect.left(), round(y + metrics.ascent() + 2),
@@ -1372,6 +1401,23 @@ class _TerminalView(QWidget):
         return (line, col) >= (l1, c1) and (line, col) <= (l2, c2)
 
 
+def _text_parts(text: str, ligatures: bool) -> list[tuple[int, str]]:
+    """A run's text in the parts it's drawn in, with each one's column in it:
+    each line drawing character on its own, and the text between them (with
+    ligatures: as one part, words and spaces; without: a character a part)."""
+    parts = []
+    for match in re.finditer(_BOX_PART if ligatures else ".", text, re.DOTALL):
+        if match.group().strip():  # (spaces alone: nothing to draw)
+            parts.append((match.start(), match.group()))
+    return parts
+
+
+def _fits_cells(font: QFont, text: str, width: float) -> bool:
+    """Whether the font draws the text exactly in its cells (ligatures and all):
+    a monospaced font's own characters; not wider ones from another font."""
+    return abs(QFontMetricsF(font).horizontalAdvance(text) - len(text) * width) < 0.5
+
+
 def _terminal_design_widget(parent: QWidget) -> QLabel:
     """In the designer: a dark box with a prompt (it runs nothing there)."""
     label = QLabel("$ _", parent)
@@ -1411,6 +1457,10 @@ class Terminal(Control):
         P("ForeColor", "color", None, description="Text color; unset: the scheme's"),
         P("FontName", "font", None, description="Its font; unset: the system's fixed one"),
         P("FontSize", "int", None, description="Font size in points; unset: the system's"),
+        P("Ligatures", "bool", True,
+          description="Show the font's ligatures (->, !=, >=... in Fira Code, JetBrains "
+                      "Mono...); the cursor's cell shows its own character",
+          category="Font"),
         *_COMMON,
     )
 
@@ -1463,7 +1513,7 @@ class Terminal(Control):
         if self._widget is not None:
             self._widget.update()
 
-    _apply_BackColor = _apply_ForeColor = _apply_colors
+    _apply_BackColor = _apply_ForeColor = _apply_Ligatures = _apply_colors
 
     def _default_rgb(self):
         """The default fore and back colors as (r, g, b) (the program may ask)."""

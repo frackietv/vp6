@@ -1,7 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Terminal support for true color
-- **[Controls]** Terminal support for ligatures
 - **[Controls]** Data-bound controls
 - **[IDE]** Designer window frames with rounded bottom corners on macOS
 - **[Appearance]** Per-window title bar color: a forced Light or Dark form still gets a title bar in the OS appearance, since Qt can't set it per window on macOS

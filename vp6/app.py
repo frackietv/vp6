@@ -389,6 +389,14 @@ class _Screen:
         return _Fonts(sorted(_font_families(), key=str.casefold))
 
     @property
+    def FixedFonts(self) -> "_Fonts":
+        """The fixed-width (monospaced) fonts of Screen.Fonts, sorted the same
+        way: the ones for code and terminals."""
+        ensure_app()
+        return _Fonts(sorted((family for family in _font_families()
+                              if QFontDatabase.isFixedPitch(family)), key=str.casefold))
+
+    @property
     def FontCount(self) -> int:
         ensure_app()
         return len(_font_families())

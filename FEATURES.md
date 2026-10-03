@@ -1,5 +1,23 @@
 # VP6 features
 
+**Version:** 0.4.44
+**Date:** 2026-10-02
+
+## Controls
+
+- True color in the Terminal: the xterm types tell programs they have 24-bit RGB colors (`COLORTERM=truecolor`; the terminfo capabilities RGB, Tc, setrgbf and setrgbb answered by XTGETTCAP), so vim, neovim, bat, delta and the like use them
+- Ligatures in the Terminal (`Ligatures`, on by default): a font that has them (Fira Code, JetBrains Mono, Cascadia Code...) shows `->`, `!=`, `>=`... as one sign; text is drawn a run at a time where the font keeps it in its cells; the cursor's cell shows its own character
+
+## Language and runtime
+
+- `Screen.FixedFonts`: the fixed-width (monospaced) fonts installed, sorted like `Screen.Fonts`
+
+## Kitchen Sink
+
+- The Terminal page's demo writes a gradient in true color and a few ligatures, and shows COLORTERM; a Ligatures check box; a Font box (the system's, or one of Screen.FixedFonts) setting the terminal's FontName
+
+---
+
 **Version:** 0.4.43
 **Date:** 2026-10-02
 

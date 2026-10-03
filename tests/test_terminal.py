@@ -1,10 +1,10 @@
 """The Terminal control: the ANSI screen (text, controls, escape sequences,
-colors, scrolling, history, the alternate screen, resizing), the terminal
+colors, true color, scrolling, history, the alternate screen, resizing), the terminal
 types (xterm-256color, xterm, vt100, vt102, vt220, ansi: their character sets,
 modes, answers and keys), keys as a terminal sends them, the mouse, focus and
 pastes reported to the program, a real shell in a pseudo-terminal (macOS,
 Linux: its output, Ctrl+C, its size, its exit, its TERM, a program asking the
-terminal), copy and paste, and the IDE."""
+terminal), copy and paste, ligatures, and the IDE."""
 
 import base64
 import codecs
@@ -15,7 +15,8 @@ import zlib
 
 import pytest
 from PySide6.QtCore import QBuffer, QEvent, QPoint, Qt
-from PySide6.QtGui import QColor, QFocusEvent, QGuiApplication, QImage
+from PySide6.QtGui import (QColor, QFocusEvent, QFont, QFontInfo, QGuiApplication, QImage,
+                           QPainter)
 from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
 
@@ -23,7 +24,8 @@ from conftest import wait_for
 from vp6 import (Form, Terminal, formfile, vpTermAnsi, vpTermVT100, vpTermVT102, vpTermVT220,
                  vpTermXterm, vpTermXterm256Color)
 from vp6.controls import CONTROL_TYPES, EVENT_ARGS
-from vp6.terminal import PLAIN, TERM, TERMINAL_TYPES, AnsiScreen, Attr, key_text
+from vp6.terminal import (COLORTERM, PLAIN, TERM, TERMINAL_TYPES, AnsiScreen, Attr,
+                          _fits_cells, _text_parts, key_text)
 
 posix = pytest.mark.skipif(sys.platform == "win32", reason="a pseudo-terminal")
 
@@ -68,6 +70,92 @@ def test_colors_and_attributes():
     assert cells[1] == Attr(bg=4, inverse=True)
     assert cells[2] == Attr(fg=10)
     assert cells[3].fg == 200 and cells[4].bg == (1, 2, 3) and cells[5] == PLAIN
+
+
+def test_true_color():
+    """RGB colors (semicolons or colons, fore and back), kept as asked (DECRQSS), and
+    the xterms say they have them (XTGETTCAP: RGB, Tc, setrgbf, setrgbb)."""
+    screen = AnsiScreen(2, 20)
+    screen.feed("\x1b[38;2;10;20;30;48:2::200:100:0mA\x1b[38;2;300;0;0mB\x1bP$qm\x1b\\")
+    assert screen.lines[0][0][1] == Attr(fg=(10, 20, 30), bg=(200, 100, 0))
+    assert screen.lines[0][1][1].fg == (255, 0, 0)  # (at most 255)
+    assert screen.replies == ["\x1bP1$r0;38;2;255;0;0;48;2;200;100;0m\x1b\\"]
+    screen.replies.clear()
+    names = ("RGB", "Tc", "setrgbf", "setrgbb")
+    screen.feed("\x1bP+q" + ";".join(name.encode().hex() for name in names) + "\x1b\\")
+    assert screen.replies == [
+        "\x1bP1+r524742=" + b"8/8/8".hex() + "\x1b\\", "\x1bP1+r5463\x1b\\",
+        "\x1bP1+r" + b"setrgbf".hex() + "=" + b"\x1b[38;2;%p1%d;%p2%d;%p3%dm".hex() + "\x1b\\",
+        "\x1bP1+r" + b"setrgbb".hex() + "=" + b"\x1b[48;2;%p1%d;%p2%d;%p3%dm".hex() + "\x1b\\"]
+    assert COLORTERM == "truecolor"
+
+
+def test_true_color_drawn(qapp):
+    class Colors(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 300, 100
+            self.term = Terminal(self, Left=0, Top=0, Width=300, Height=100, AutoStart=False)
+
+    form = Colors()
+    form.Show()
+    term = form.term
+    term._screen.feed("\x1b[48;2;18;52;86m  \x1b[7;38;2;250;128;0m  \x1b[0m")
+    term._redraw()
+    width, height = term._widget.cell_size()
+    picture = term._widget.grab().toImage()
+    assert picture.pixelColor(round(2 + width), round(2 + height / 2)) == QColor(18, 52, 86)
+    assert picture.pixelColor(round(2 + width * 3), round(2 + height / 2)) == \
+        QColor(250, 128, 0)  # (inverse: the foreground's color behind)
+    form.Unload()
+
+
+def test_ligatures_draw_runs_whole(qapp):
+    """With Ligatures, a run's text is drawn in one piece (the font's ligatures:
+    ->, != ...) when the font keeps it in its cells; line drawing characters on
+    their own; without, a character at a time."""
+    assert _text_parts("  a->b  != x─y │", True) == [(2, "a->b  != x"), (12, "─"), (13, "y"),
+                                                    (15, "│")]
+    assert _text_parts("a-> b", False) == [(0, "a"), (1, "-"), (2, ">"), (4, "b")]
+    # (a monospaced font: the offscreen platform's fixed one may not be)
+    font = next((name for name in ("Menlo", "Courier New", "DejaVu Sans Mono",
+                                   "Liberation Mono", "Consolas")
+                 if QFontInfo(QFont(name)).family() == name), None)
+    if font is None:
+        pytest.skip("no monospaced font")
+
+    class Fonts(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 300, 100
+            self.term = Terminal(self, Left=0, Top=0, Width=300, Height=100, AutoStart=False,
+                                 FontName=font)
+
+    form = Fonts()
+    form.Show()
+    term = form.term
+    assert term.Ligatures is True
+    view = term._widget
+    width = view.cell_size()[0]
+    assert _fits_cells(view.font(), "a -> b != c", width)
+    assert not _fits_cells(view.font(), "a\u6f22\u5b57b", width)  # (wider: another font's)
+    drawn = []
+    real = QPainter.drawText
+
+    def draw_text(painter, *args):
+        drawn.append(args[-1])
+        return real(painter, *args)
+
+    QPainter.drawText = draw_text
+    try:
+        term._screen.feed("a->b != c\x1b[H")  # (the cursor at the start: on its own)
+        view.grab()
+        assert drawn == ["a", "->b != c"]
+        drawn.clear()
+        term.Ligatures = False
+        view.grab()
+        assert drawn == list("a->b!=c")
+    finally:
+        QPainter.drawText = real
+    form.Unload()
 
 
 def test_scrolling_history_and_regions():
@@ -391,7 +479,8 @@ def test_the_program_sees_its_terminal_type(qapp, kind, name):
               "reply = b''\n"
               "while not reply.endswith(b'c'): reply += os.read(0, 1)\n"
               "termios.tcsetattr(0, termios.TCSANOW, mode)\n"
-              "print(os.environ['TERM'], reply[1:].decode())\n")
+              "print(os.environ['TERM'], os.environ.get('COLORTERM', '-'), "
+              "reply[1:].decode())\n")
 
     class Asking(Form):
         def InitializeComponent(self):
@@ -405,7 +494,8 @@ def test_the_program_sees_its_terminal_type(qapp, kind, name):
     wait_for(lambda: not form.term.Running)
     answer = AnsiScreen(term=name)
     answer.feed("\x1b[c")
-    assert form.term.Text.strip() == f"{name} {answer.replies[0][1:]}"
+    colorterm = COLORTERM if name == "xterm" else "-"  # (true color: the xterms')
+    assert form.term.Text.strip() == f"{name} {colorterm} {answer.replies[0][1:]}"
     form.Unload()
 
 

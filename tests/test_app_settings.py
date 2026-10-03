@@ -1,6 +1,6 @@
 """App, Screen and settings: SaveSetting / GetSetting / GetAllSettings /
 DeleteSetting, App's version and descriptions from the project, PrevInstance,
-Command(), Screen.Fonts and Screen.FontCount."""
+Command(), Screen.Fonts, Screen.FixedFonts and Screen.FontCount."""
 
 import os
 import subprocess
@@ -8,6 +8,7 @@ import sys
 import textwrap
 
 import pytest
+from PySide6.QtGui import QFontDatabase
 
 import vp6
 from vp6 import (App, Command, DeleteSetting, GetAllSettings, GetSetting, SaveSetting, Screen,
@@ -90,6 +91,10 @@ def test_screen_fonts(qapp):
     assert len(fonts) == Screen.FontCount > 0
     assert fonts(0) == fonts[0] and fonts == sorted(fonts, key=str.casefold)
     assert not any(name.startswith(".") for name in fonts)  # (not the system's private ones)
+    fixed = Screen.FixedFonts
+    assert fixed and set(fixed) <= set(fonts) and fixed == sorted(fixed, key=str.casefold)
+    assert fixed(0) == fixed[0]
+    assert all(QFontDatabase.isFixedPitch(name) for name in fixed)
 
 
 def test_project_properties_dialog(qapp):
