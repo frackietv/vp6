@@ -272,6 +272,16 @@ def _process(p):  # a console window
     p.drawLine(QPointF(11, 15), QPointF(16, 15))
 
 
+def _terminal(p):  # a terminal window with a prompt
+    p.setBrush(QColor("#1e1e1e"))
+    p.drawRect(QRectF(2.5, 4, 19, 16))
+    p.setPen(QPen(QColor("#e5e5e5"), 1.5))
+    p.drawLine(QPointF(5.5, 8.5), QPointF(8.5, 11.5))
+    p.drawLine(QPointF(8.5, 11.5), QPointF(5.5, 14.5))
+    p.setPen(QPen(QColor("#5fd35f"), 1.5))
+    p.drawLine(QPointF(10.5, 15), QPointF(15.5, 15))
+
+
 def _image(p):
     p.setPen(QPen(C.ink, 1, Qt.DashLine))  # no frame of its own, like VB's Image icon
     p.setBrush(Qt.NoBrush)
@@ -530,7 +540,7 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Process": _process, "Shape": _shape,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Process": _process, "Terminal": _terminal, "Shape": _shape,
     "Line": _line, "Image": _image,
     "DriveListBox": _drivelistbox, "DirListBox": _dirlistbox, "FileListBox": _filelistbox,
     "TreeView": _treeview, "Splitter": _splitter,

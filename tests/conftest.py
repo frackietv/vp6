@@ -54,6 +54,18 @@ def _program_settings_in_a_temporary_folder(tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _a_plain_shell_for_terminals(monkeypatch):
+    """A Terminal without a CommandLine runs /bin/sh, not the user's own shell
+    (with its configuration) (the Kitchen Sink's Terminal page has one)."""
+    import sys
+
+    from vp6 import terminal
+
+    if sys.platform != "win32":
+        monkeypatch.setattr(terminal, "default_shell", lambda: ["/bin/sh"])
+
+
+@pytest.fixture(autouse=True)
 def _printing_to_pdf_files(tmp_path_factory, monkeypatch):
     """The Printer never reaches a real printer: documents go to PDF files in a
     folder of the test's own."""

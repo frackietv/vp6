@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vp6"
-version = "0.4.38"
+version = "0.4.39"
 description = "VB6-style IDE and GUI framework for Python"
 readme = "README.md"
 license = "MIT"

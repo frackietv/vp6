@@ -1,5 +1,18 @@
 # VP6 features
 
+**Version:** 0.4.39
+**Date:** 2026-10-02
+
+## Controls
+
+- The Terminal control: your shell (or another program) in a terminal on the form, speaking ANSI: colors, bold, underline, inverse, cursor movement, erasing, scroll regions, the alternate screen, the title; in a pseudo-terminal on macOS and Linux (an interactive shell, Ctrl+C, its size following the control's), pipes on Windows; your keys go to it, copy and paste, mouse selection, a scrollback; CommandLine, WorkingDirectory, AutoStart, Start, Write, Kill, Clear, Text, Title, Exited and TitleChange
+
+## Kitchen Sink
+
+- A Terminal page: your shell, a demo of colors and a title, Clear and Restart
+
+---
+
 **Version:** 0.4.38
 **Date:** 2026-10-02
 

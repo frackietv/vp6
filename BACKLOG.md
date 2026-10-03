@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Terminal control, for now support only ansi, but plan to support more
 - **[Controls]** Terminal support for xterm, xterm-256color (default), vt100, vt102, and vt220
 - **[Controls]** Terminal support for Kitty graphics protocol
 - **[Controls]** Terminal support for iterm2 inline images

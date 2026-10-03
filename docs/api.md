@@ -278,7 +278,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `OLEDragOver` | Data, Effect, Button, Shift, X, Y, State |
 | `DocumentComplete` | URL |
 | `NavigateError` | URL, Description |
-| `TitleChange` | Text |
+| `TitleChange` | Title |
 | `ProgressChange` | Progress |
 | `BeforeNavigate` | URL |
 | `NewWindow` | URL |
@@ -2203,6 +2203,63 @@ Default size 32 × 32.
 Events: `Output(Text)`, `ErrorOutput(Text)`, `Exited(ExitCode)`, `Error(Description)`. Default event (double-click in the designer): `Output`.
 <!-- END GENERATED -->
 
+### Terminal
+
+A terminal on the form, running your shell or another program, speaking
+ANSI (`TERM=ansi`): the program's colors, bold, underline and inverse text,
+cursor movement and screens drawn in place; your keys go to it as a
+terminal sends them (Enter, Tab, arrows, Ctrl+C...), copy and paste are the
+system's (Cmd+C / Cmd+V on macOS, Ctrl+Shift+C / Ctrl+Shift+V elsewhere), the
+mouse selects (a double-click: a word) and the scroll bar and the wheel go
+back through what scrolled off (ScrollbackLines).
+
+```python
+self.termBuild = Terminal(self, Left=8, Top=8, Width=600, Height=300,
+                          CommandLine="python3 -u build.py", WorkingDirectory="tools")
+
+def termBuild_Exited(self, ExitCode):
+    self.lblStatus.Caption = f"Done ({ExitCode})"
+
+def cmdAgain_Click(self):
+    self.termBuild.Start()          # again, once it has ended
+```
+
+* The program: `CommandLine` (a command line, double quotes grouping words,
+  or a list with `Start`), empty for your shell (`$SHELL`, `%COMSPEC%` on
+  Windows). It starts when the Terminal is first shown (`AutoStart`), or
+  with `Start(CommandLine=None)`. On macOS and Linux it runs in a
+  pseudo-terminal: it sees a real terminal of the Terminal's size (updated
+  as it is resized), a shell is interactive and Ctrl+C interrupts. On
+  Windows it gets pipes (no pseudo-terminal there): programs may not echo or
+  color what they write.
+* `Write(Text)` types text into it (`"\r"` is Enter); `Kill()`, `Clear()`
+  (the screen and history), `Copy()`, `Paste()`; `Running`, `ProcessID`,
+  `ExitCode`, `Text` (the screen's text), `Title` (set by the program),
+  `Rows`, `Columns`.
+* Events: `Exited(ExitCode)` (-1: killed), `TitleChange(Title)`,
+  `GotFocus`, `LostFocus`. Its keys are the program's: Enter and Esc don't
+  click the form's Default and Cancel buttons, Tab doesn't move the focus.
+* `BackColor` and `ForeColor` (unset: the color scheme's), `FontName` and
+  `FontSize` (unset: the system's fixed-width font). A program still running
+  when the form unloads is killed.
+* Only ANSI for now (xterm, vt100 and more are on the backlog): full-screen
+  programs that need more than ANSI may not draw right.
+
+<!-- BEGIN GENERATED: control Terminal -->
+Default size 480 × 300. Property groups: Position, Colors, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `AutoStart` | bool | `True` | Start the program when the Terminal is first shown (else: Start) |
+| `CommandLine` | str | `''` | The program it runs: a command line (double quotes group words); empty: your shell |
+| `FontName` | font name | (default) | Its font; unset: the system's fixed one |
+| `FontSize` | int | (default) | Font size in points; unset: the system's |
+| `ScrollbackLines` | int | `1000` | How many lines scrolled off it keeps |
+| `WorkingDirectory` | str | `''` | Where the program runs (relative to the form's folder); empty: here |
+
+Events: `Exited(ExitCode)`, `TitleChange(Title)`, `GotFocus`, `LostFocus`. Default event (double-click in the designer): `Exited`.
+<!-- END GENERATED -->
+
 ### Toolbar
 
 A row of buttons along the top of a form (VB's Toolbar, from the Windows
@@ -2477,7 +2534,7 @@ Default size 321 × 241. Property groups: Position, Common.
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `URL` | str | `''` | The page shown: a web address (https://...), a file (relative to the form's folder) or about:blank; setting it at run time goes there |
 
-Events: `DocumentComplete(URL)`, `NavigateError(URL, Description)`, `TitleChange(Text)`, `ProgressChange(Progress)`, `GotFocus`, `LostFocus`, `Validate`. Default event (double-click in the designer): `DocumentComplete`.
+Events: `DocumentComplete(URL)`, `NavigateError(URL, Description)`, `TitleChange(Title)`, `ProgressChange(Progress)`, `GotFocus`, `LostFocus`, `Validate`. Default event (double-click in the designer): `DocumentComplete`.
 <!-- END GENERATED -->
 
 ### WebBrowser
@@ -2519,7 +2576,7 @@ Default size 321 × 241. Property groups: Position, Common.
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `URL` | str | `''` | The page shown: a web address (https://...), a file (relative to the form's folder) or about:blank; setting it at run time goes there |
 
-Events: `DocumentComplete(URL)`, `NavigateError(URL, Description)`, `BeforeNavigate(URL)`, `NewWindow(URL)`, `TitleChange(Text)`, `ProgressChange(Progress)`, `StatusTextChange(Text)`, `GotFocus`, `LostFocus`, `Validate`. Default event (double-click in the designer): `DocumentComplete`.
+Events: `DocumentComplete(URL)`, `NavigateError(URL, Description)`, `BeforeNavigate(URL)`, `NewWindow(URL)`, `TitleChange(Title)`, `ProgressChange(Progress)`, `StatusTextChange(Text)`, `GotFocus`, `LostFocus`, `Validate`. Default event (double-click in the designer): `DocumentComplete`.
 <!-- END GENERATED -->
 
 ### StatusBar
@@ -2942,7 +2999,7 @@ A picture dropped from another program is in `OLEDragDrop`'s Data too:
 [`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`CommonDialog`](#commondialog) (and `DialogCancelled`), [`Toolbar`](#toolbar) (and its `Button`),
-[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`WebView`](#webview), [`WebBrowser`](#webbrowser), [`Process`](#process),
+[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`WebView`](#webview), [`WebBrowser`](#webbrowser), [`Process`](#process), [`Terminal`](#terminal),
 [`StatusBar`](#statusbar) (and its
 `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
 [`Menu`](#menu), and

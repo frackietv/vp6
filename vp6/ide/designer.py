@@ -40,7 +40,8 @@ NAME_PREFIX = {
     "VScrollBar": "VScroll", "Timer": "Timer", "Line": "Line", "Image": "Image",
     "TreeView": "TreeView", "Splitter": "Splitter", "DriveListBox": "Drive",
     "DirListBox": "Dir", "FileListBox": "File", "CodeBox": "Code", "FlexGrid": "Grid",
-    "DockPanel": "Dock", "Shape": "Shape", "CommonDialog": "CommonDialog", "Process": "Process", "WebView": "Web",
+    "DockPanel": "Dock", "Shape": "Shape", "CommonDialog": "CommonDialog", "Process": "Process",
+    "Terminal": "Terminal", "WebView": "Web",
     "WebBrowser": "WebBrowser",
 }
 

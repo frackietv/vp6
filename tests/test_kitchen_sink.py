@@ -1032,6 +1032,28 @@ def test_process_page(sink, monkeypatch):
     assert started[0][1] == [vp6.App.Path] and page.lblStatus.Caption.endswith("(process 42)")
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="a pseudo-terminal")
+def test_terminal_page(sink):
+    from conftest import wait_for
+
+    page = _page(sink, "terminal")  # (AutoStart: the shell, /bin/sh here)
+    term = page.termShell
+    wait_for(lambda: term.Running and "$" in term.Text)
+    page.cmdDemo._widget.click()  # a command writing colors, and the title
+    wait_for(lambda: page.lblStatus.Caption == "Title: VP6 Terminal")
+    wait_for(lambda: "bold underlined inverse" in term.Text)
+    colored = [attr for line in term._screen.lines for char, attr in line if char == "3"]
+    assert any(attr.fg == 1 for attr in colored)  # (color 31: red)
+    first = term.ProcessID
+    page.cmdRestart._widget.click()  # killed, then started again in Exited
+    wait_for(lambda: page.lblStatus.Caption == "Shell restarted")
+    wait_for(lambda: term.Running and term.ProcessID != first)
+    page.cmdClear._widget.click()
+    wait_for(lambda: "$" in term.Text and "bold" not in term.Text)
+    term.Write("exit\r")
+    wait_for(lambda: page.lblStatus.Caption.startswith("The shell ended (0)"))
+
+
 def test_keyboard_page(sink):
     page = _page(sink, "keyboard")
     QTest.keyClicks(page.txtDigits._widget, "a1b2")
