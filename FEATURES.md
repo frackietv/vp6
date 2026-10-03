@@ -1,5 +1,25 @@
 # VP6 features
 
+**Version:** 0.4.46
+**Date:** 2026-10-02
+
+## Controls
+
+- The MarkdownBox: Markdown (GitHub's: tables, task lists, strikethrough) in one of three modes (`Mode`): the source in a plain-text editor with its syntax colored (headings, emphasis, code and fenced code, links, pictures, lists, quotes, rules, tables; light and dark colors), a visual editor that writes what is typed and formatted there back as Markdown, or a rendered, read-only preview; Mode can change at run time
+- Editing it: `ApplyFormat` for bold, italic, strikethrough, code, headings 1 to 3, bulleted and numbered lists, quotes and plain paragraphs in either editor (the same again removes it), Ctrl+B and Ctrl+I; Enter continues a list and an empty item ends it; Enter after a heading starts a plain paragraph
+- Links in the preview fire `LinkClick` (without a handler, the browser opens them; Ctrl+click in the visual editor); pictures are found in the form's folder and fitted to the width; `TextHTML`, `LoadFile`, `SaveFile`; it can be bound to a Data control's field
+
+## Language and runtime
+
+- Constants: vpMarkdownSource, vpMarkdownVisual, vpMarkdownPreview (Mode); vpMarkdownBold... (ApplyFormat)
+
+## Kitchen Sink
+
+- A Markdown page: the same text in a source editor, a visual editor and a preview, kept in step by their Change events, with buttons formatting the editor used last
+- The pages are listed in the index's new order (grouped and alphabetical)
+
+---
+
 **Version:** 0.4.45
 **Date:** 2026-10-02
 

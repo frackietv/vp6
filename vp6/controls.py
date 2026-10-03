@@ -963,6 +963,12 @@ class _TextEditing:
         """The multi-line editor (QPlainTextEdit, QTextEdit); None for one line."""
         return None if isinstance(self._widget, QLineEdit) else self._widget
 
+    def _text_length(self) -> int:
+        """How many characters the editor has (a MarkdownBox's Text is longer)."""
+        editor = self._editor()
+        return editor.document().characterCount() - 1 if editor is not None else \
+            len(self._widget.text())
+
     def _connect_selection(self) -> None:
         self.__dict__["_selection"] = self._selection_range()
         self._widget.cursorPositionChanged.connect(self._on_selection)
@@ -1040,7 +1046,7 @@ class _TextEditing:
 
     def GetColumnFromChar(self, CharPos: int) -> int:
         """A character position's column in its line (from 0)."""
-        position = max(0, min(int(CharPos), len(self.Text)))
+        position = max(0, min(int(CharPos), self._text_length()))
         return position - self.GetCharFromLine(self.GetLineFromChar(position))
 
     @property
@@ -1378,7 +1384,7 @@ class _EditorSelection:
     @SelStart.setter
     def SelStart(self, value):
         cursor = self._widget.textCursor()
-        cursor.setPosition(max(0, min(int(value), len(self.Text))))
+        cursor.setPosition(max(0, min(int(value), self._text_length())))
         self._widget.setTextCursor(cursor)
 
     @property
@@ -1391,7 +1397,7 @@ class _EditorSelection:
         start = self.SelStart
         cursor = self._widget.textCursor()
         cursor.setPosition(start)
-        cursor.setPosition(max(0, min(start + int(value), len(self.Text))),
+        cursor.setPosition(max(0, min(start + int(value), self._text_length())),
                            QTextCursor.KeepAnchor)
         self._widget.setTextCursor(cursor)
 

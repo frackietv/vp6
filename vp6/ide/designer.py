@@ -41,7 +41,7 @@ NAME_PREFIX = {
     "TreeView": "TreeView", "Splitter": "Splitter", "DriveListBox": "Drive",
     "DirListBox": "Dir", "FileListBox": "File", "CodeBox": "Code", "FlexGrid": "Grid",
     "DockPanel": "Dock", "Shape": "Shape", "CommonDialog": "CommonDialog", "Process": "Process",
-    "Terminal": "Terminal", "Data": "Data", "WebView": "Web",
+    "Terminal": "Terminal", "Data": "Data", "WebView": "Web", "MarkdownBox": "Markdown",
     "WebBrowser": "WebBrowser",
 }
 

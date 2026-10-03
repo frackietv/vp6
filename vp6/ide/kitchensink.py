@@ -27,13 +27,14 @@ from ..project import SUB_MAIN, Project
 
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "kitchensink"
 FORMS = (  # the window, its pages (in the index's order) and the modal dialog
-    "Form1.py", "pgIntro.py", "pgText.py", "pgRichText.py", "pgEditing.py", "pgCode.py",
-    "pgButtons.py", "pgLists.py", "pgScrollBars.py", "pgValues.py", "pgPictures.py",
-    "pgDrawing.py", "pgZOrder.py", "pgTree.py", "pgListView.py", "pgGrid.py", "pgData.py", "pgWeb.py",
-    "pgTerminal.py", "pgTabs.py", "pgFiles.py", "pgTimer.py", "pgLayout.py", "pgDocking.py",
-    "pgScrolling.py", "pgEmbedded.py", "pgDialogs.py", "pgSchemes.py", "pgKeyboard.py",
-    "pgMouse.py", "pgMDI.py", "pgArrays.py", "pgMenus.py", "pgUserControl.py", "pgProcess.py",
-    "pgGlobals.py", "frmDialog.py", "frmMDI.py", "frmNote.py", "frmSuggest.py",
+    "Form1.py", "pgIntro.py", "pgButtons.py", "pgData.py", "pgFiles.py", "pgGrid.py",
+    "pgLists.py", "pgListView.py", "pgZOrder.py", "pgDrawing.py", "pgPictures.py",
+    "pgScrollBars.py", "pgValues.py", "pgTabs.py", "pgTerminal.py", "pgCode.py", "pgEditing.py",
+    "pgMarkdown.py", "pgRichText.py", "pgText.py", "pgTimer.py", "pgTree.py", "pgWeb.py",
+    "pgSchemes.py", "pgDialogs.py", "pgKeyboard.py", "pgMDI.py", "pgMouse.py", "pgLayout.py",
+    "pgDocking.py", "pgEmbedded.py", "pgScrolling.py", "pgGlobals.py", "pgArrays.py",
+    "pgMenus.py", "pgProcess.py", "pgUserControl.py",
+    "frmDialog.py", "frmMDI.py", "frmNote.py", "frmSuggest.py",
 )
 MODULES = ("Module1.py",)
 USER_CONTROLS = ("ctlRating.py",)  # a control of its own (pgUserControl.py uses it)

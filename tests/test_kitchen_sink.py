@@ -204,7 +204,7 @@ def test_toolbar(sink):
         "back", "forward", "nav", "scheme0", "scheme1", "scheme2"]
     assert all(not b._action.icon().isNull() for b in bar.Buttons if b.Key)  # imlToolbar
     bar.Buttons("forward")._action.trigger()  # ButtonClick: the next page
-    assert sink.lblTitle.Caption == "Text and labels"
+    assert sink.lblTitle.Caption == "Buttons and options"
     bar.Buttons("back")._action.trigger()
     bar.Buttons("back")._action.trigger()  # from the first page: round to the last
     assert sink.current == sink.page_titles()[-1][0]
@@ -230,7 +230,7 @@ def test_intro_and_navigation(sink):
     assert w.tvwIndex.SelectedItem is w.tvwIndex.Nodes("lists")
     assert _status(w) == "Controls\\Lists"
     w.tvwIndex_NodeClick(w.tvwIndex.Nodes("forms_section"))  # a section: its first page
-    assert w.lblTitle.Caption == "Dialogs"
+    assert w.lblTitle.Caption == "Color schemes"
 
 
 def test_every_page_opens_once(sink):
@@ -390,6 +390,29 @@ def test_code_page(sink):
     page.chkPython.Value = vp6.vpUnchecked
     assert not code.LineNumbers and not code.HighlightCurrentLine and code.WordWrap
     assert code.Language == 0
+
+
+def test_markdown_page(sink):
+    page = _page(sink, "markdown")
+    source, visual, preview = page.mdSource, page.mdVisual, page.mdPreview
+    sample = sys.modules["pgMarkdown"].SAMPLE
+    assert (source.Mode, visual.Mode, preview.Mode) == (
+        vp6.vpMarkdownSource, vp6.vpMarkdownVisual, vp6.vpMarkdownPreview)
+    assert source.Text == visual.Text == preview.Text == sample  # (Form_Load: all three)
+    assert "words of Markdown" in page.lblStatus.Caption
+    source.SetFocus()
+    source.SelStart = len(source.Text)
+    QTest.keyClicks(source._widget, "Added **here**")  # the source: the other two follow
+    assert visual.Text == preview.Text == source.Text and source.Text.endswith("**here**")
+    assert visual._widget.document().toPlainText().endswith("Added here")
+    visual.SetFocus()  # the visual editor: the buttons format there, the source follows
+    visual.SelStart, visual.SelLength = 0, len("Markdown")
+    page.cmdFormat_Click(1)  # Italic: the heading's text
+    assert source.Text.startswith("# *Markdown*\n") and preview.Text == source.Text
+    page.cmdFormat_Click(1)
+    assert source.Text.startswith("# Markdown\n")
+    page.mdPreview_LinkClick("https://www.python.org")
+    assert page.lblStatus.Caption == "LinkClick: https://www.python.org"
 
 
 def test_user_control_page(sink):

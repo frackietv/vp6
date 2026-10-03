@@ -168,6 +168,15 @@ def _codebox(p):
         p.fillRect(QRectF(x, y, w, 1.6), color)  # colored code
 
 
+def _markdownbox(p):
+    p.setBrush(C.paper)
+    p.drawRoundedRect(QRectF(2, 5, 20, 14), 2, 2)
+    _text(p, QRectF(3, 5, 11, 14), "M", 10, True)  # the Markdown mark: M and a down arrow
+    p.fillRect(QRectF(16, 8, 2, 5), C.ink)
+    p.setBrush(C.ink)
+    p.drawPolygon([QPointF(14, 12.5), QPointF(20, 12.5), QPointF(17, 16)])
+
+
 def _flexgrid(p):
     p.setBrush(C.paper)
     p.drawRect(QRectF(3, 4, 18, 16))
@@ -559,7 +568,7 @@ _DRAWERS = {
     "ProgressBar": _progressbar, "Slider": _slider, "UpDown": _updown, "StatusBar": _statusbar,
     "TabStrip": _tabstrip, "ImageList": _imagelist, "Toolbar": _toolbar,
     "ListView": _listview, "RichTextBox": _richtextbox,
-    "CodeBox": _codebox, "FlexGrid": _flexgrid,
+    "CodeBox": _codebox, "MarkdownBox": _markdownbox, "FlexGrid": _flexgrid,
     "DockPanel": _dockpanel, "UserControl": _usercontrol,
     "CommonDialog": _commondialog, "WebView": _webview, "WebBrowser": _webbrowser,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,

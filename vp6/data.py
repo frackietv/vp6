@@ -13,7 +13,7 @@ it; its arrow buttons go to the first, previous, next and last record::
   Form_Load (so Form_Load can make the database), or when ``Recordset`` is
   first used; after changing them, ``Refresh()`` opens them again.
 * The bound controls: TextBox, Label, CheckBox, ComboBox, ListBox,
-  RichTextBox and CodeBox show the field's value; Image and PictureBox a
+  RichTextBox, CodeBox and MarkdownBox show the field's value; Image and PictureBox a
   picture kept in it (a BLOB, e.g. a PNG); a FlexGrid bound to a Data
   control (DataSource only) shows all its records, and choosing a row there
   goes to that record. ``DataChanged`` tells whether the user changed the
@@ -56,6 +56,7 @@ from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPointF, QRectF, Qt
 from PySide6.QtGui import QImage, QPainter, QPolygonF
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QToolButton, QWidget
 
+from . import markdown  # noqa: F401  (MarkdownBox: a control type before the bindings)
 from ._props import P, enum_choices
 from .app import report_runtime_error
 from .controls import (_COLORS, _FONT, CONTROL_TYPES, EVENT_ARGS, Control, _geometry,
@@ -705,7 +706,7 @@ def _set_combo(control, value) -> None:
 _TEXT = (lambda c: c.Text, lambda c, v: setattr(c, "Text", _as_text(v)),
          lambda c, shown, original: _text_to_value(shown, original))
 BINDINGS = {
-    "TextBox": _TEXT, "RichTextBox": _TEXT, "CodeBox": _TEXT,
+    "TextBox": _TEXT, "RichTextBox": _TEXT, "CodeBox": _TEXT, "MarkdownBox": _TEXT,
     "Label": (lambda c: c.Caption, lambda c, v: setattr(c, "Caption", _as_text(v)),
               lambda c, shown, original: _text_to_value(shown, original)),
     "CheckBox": (lambda c: c.Value, lambda c, v: setattr(c, "Value", _checked(v)),
@@ -1188,7 +1189,7 @@ class Data(Control):
 
 
 for _name in ("TextBox", "Label", "CheckBox", "ComboBox", "ListBox", "RichTextBox", "CodeBox",
-              "Image", "PictureBox"):
+              "MarkdownBox", "Image", "PictureBox"):
     _add_binding(CONTROL_TYPES[_name], grid=False)
 for _name in BOUND_GRIDS:
     _add_binding(CONTROL_TYPES[_name], grid=True)

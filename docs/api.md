@@ -1202,6 +1202,79 @@ Default size 321 × 201. Property groups: Position, Colors, Font, Common.
 Events: `Change`, `SelChange`, `Highlight(Line, Text, State)`, `GutterClick(Line)`, `ProtectedEdit(Line)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
+### MarkdownBox
+
+Markdown text (VP6's own): its source with the syntax colored, a visual
+editor, or the rendered page, chosen by `Mode`. `Text` is always the
+Markdown (GitHub's: tables, task lists, strikethrough), whichever is shown.
+It has the TextBox's [editing API](#editing-text-textbox-and-richtextbox)
+and `SelStart`, `SelLength`, `SelText` (positions in what the editor shows).
+
+```python
+self.mdNotes = MarkdownBox(self, Text="# Notes\n\n- *one*\n- two\n")   # the source
+self.mdPage = MarkdownBox(self, Mode=vpMarkdownPreview)                # rendered
+
+def mdNotes_Change(self):
+    self.mdPage.Text = self.mdNotes.Text          # a live preview
+
+def mdPage_LinkClick(self, URL):                  # without it, the browser opens links
+    Debug.Print("clicked", URL)
+
+self.mdNotes.ApplyFormat(vpMarkdownBold)         # **the selection**; again: undone
+```
+
+* **`Mode`**: `vpMarkdownSource` (the default) is a plain-text editor with
+  the Markdown colored: headings, emphasis, strikethrough, code spans and
+  fenced code, links and pictures, list markers and task boxes, quotes,
+  rules, table bars, in colors for a light or a dark background. Enter
+  continues a list (`- `, `1. ` counting on, `- [ ] `); Enter on an empty
+  item ends it. `vpMarkdownVisual` edits the text as it reads, like a word
+  processor; what is typed and formatted there is written back to `Text` as
+  Markdown (it keeps the Markdown it was given until it is edited). Enter
+  after a heading starts a plain paragraph, Enter on an empty list item ends
+  the list, typing `- ` or `* ` starts one, Ctrl+click opens a link.
+  `vpMarkdownPreview` shows the rendered text, read-only; clicking a link
+  fires `LinkClick(URL)` (without a handler, the browser opens it). `Mode`
+  can change at run time; the text stays.
+* **`ApplyFormat(Format)`** formats the selection in either editor (nothing
+  selected: the word at the caret in the visual editor, the markers around
+  the caret in the source), and the same format again removes it:
+  `vpMarkdownBold`, `vpMarkdownItalic`, `vpMarkdownStrikeThru`,
+  `vpMarkdownCode` (the text); `vpMarkdownHeading1` to `3`,
+  `vpMarkdownBulletList`, `vpMarkdownNumberedList`, `vpMarkdownQuote` and
+  `vpMarkdownParagraph` (plain again) for the selection's paragraphs.
+  Ctrl+B and Ctrl+I are bold and italic. In the preview it does nothing.
+* Keeping several in step: each one's `Change` sets the others' `Text`
+  (setting `Text` fires `Change` too, so guard it with a flag, as the
+  Kitchen Sink's Markdown page does).
+* Pictures (`![alt](file.png)`) with relative paths are found in the form's
+  folder; one wider than the control is shown smaller.
+* `TextHTML` is the Markdown rendered as HTML (read-only); `LoadFile(FileName)`
+  and `SaveFile(FileName)` read and write the Markdown. `Locked` makes the
+  editors read-only. It can be [bound](#data) to a field (`DataSource`,
+  `DataField`).
+
+<!-- BEGIN GENERATED: control MarkdownBox -->
+Default size 321 × 201. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A border around it |
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `Locked` | bool | `False` | Read-only: the text can't be edited |
+| `Mode` | enum | 0 - Source | 0 - Source, 1 - Visual, 2 - Preview. Source: the Markdown with its syntax colored; Visual: edited as it reads; Preview: rendered, read-only |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
+| `Text` | str (multi-line) | `''` | The contents, as Markdown |
+
+Events: `Change`, `SelChange`, `LinkClick(URL)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
+<!-- END GENERATED -->
+
 ### Frame
 
 A captioned container that groups controls. OptionButtons in a Frame form their own group.
@@ -2618,7 +2691,7 @@ def dtaPets_Reposition(self):                                # after arriving at
   the Data control itself can be assigned) and `DataField` (the field they
   show), in the Properties window's Data category, where both are lists: the
   form's Data controls, and the fields of its RecordSource. TextBox,
-  RichTextBox, CodeBox, Label, ComboBox and ListBox show the field as text
+  RichTextBox, CodeBox, MarkdownBox, Label, ComboBox and ListBox show the field as text
   (empty for NULL; an emptied control saves NULL unless the field held
   text); a CheckBox checks it when it is true (grayed for NULL); an Image or
   PictureBox shows a picture kept in it (a BLOB: PNG, JPEG...; a Picture
@@ -3206,7 +3279,7 @@ A picture dropped from another program is in `OLEDragDrop`'s Data too:
 `CheckBox`, `OptionButton`, `Frame`, `ListBox`, `ComboBox`, `Timer`,
 `HScrollBar`, `VScrollBar`, `PictureBox`, [`Shape`](#shape),
 [`DriveListBox`, `DirListBox` and `FileListBox`](#drivelistbox-dirlistbox-and-filelistbox), [`Line`](#line), [`Image`](#image),
-[`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
+[`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`MarkdownBox`](#markdownbox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`CommonDialog`](#commondialog) (and `DialogCancelled`), [`Toolbar`](#toolbar) (and its `Button`),
 [`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`Data`](#data) (and its `Recordset`, `Field` and `Database`, `OpenDatabase`, `CreateDatabase`), [`WebView`](#webview), [`WebBrowser`](#webbrowser), [`Process`](#process), [`Terminal`](#terminal),
@@ -3337,6 +3410,8 @@ All constants are plain ints or strings.
 | Shell: WindowStyle (accepted, as in VB; programs open their windows themselves) | `vpHide`, `vpNormalFocus`, `vpMinimizedFocus`, `vpMaximizedFocus`, `vpNormalNoFocus`, `vpMinimizedNoFocus` | 0, 1, 2, 3, 4, 6 |
 | ScaleMode (Form, PictureBox, Printer, Picture; ScaleX / ScaleY) | `vpUser`, `vpTwips`, `vpPoints`, `vpPixels`, `vpCharacters`, `vpInches`, `vpMillimeters`, `vpCentimeters`, `vpHimetric` | 0, 1, 2, 3, 4, 5, 6, 7, 8 |
 | Terminal.TerminalType | `vpTermXterm256Color`, `vpTermXterm`, `vpTermVT100`, `vpTermVT102`, `vpTermVT220`, `vpTermAnsi` | 0, 1, 2, 3, 4, 5 |
+| MarkdownBox.Mode | `vpMarkdownSource`, `vpMarkdownVisual`, `vpMarkdownPreview` | 0, 1, 2 |
+| MarkdownBox.ApplyFormat | `vpMarkdownBold`, `vpMarkdownItalic`, `vpMarkdownStrikeThru`, `vpMarkdownCode`, `vpMarkdownParagraph`, `vpMarkdownHeading1`, `vpMarkdownHeading2`, `vpMarkdownHeading3`, `vpMarkdownBulletList`, `vpMarkdownNumberedList`, `vpMarkdownQuote` | 1, 2, 3, 4, 10, 11, 12, 13, 20, 21, 22 |
 | MDIForm.Arrange | `vpCascade`, `vpTileHorizontal`, `vpTileVertical`, `vpArrangeIcons` | 0, 1, 2, 3 |
 | Printer.Orientation | `vpPRORPortrait`, `vpPRORLandscape` | 1, 2 |
 | Printer.PaperSize | `vpPRPSLetter`, `vpPRPSTabloid`, `vpPRPSLedger`, `vpPRPSLegal`, `vpPRPSExecutive`, `vpPRPSA3`, `vpPRPSA4`, `vpPRPSA5`, `vpPRPSB5`, `vpPRPSEnv10`, `vpPRPSEnvDL` | 1, 3, 4, 5, 7, 8, 9, 11, 13, 20, 27 |
@@ -3616,6 +3691,7 @@ It goes in the project's `dist` folder:
   constants.
 * **CodeBox** is VP6's own (VB had no code editor control); its events
   `Highlight`, `GutterClick` and `ProtectedEdit` are VP6's too.
+* **MarkdownBox** is VP6's own too (VB had no Markdown).
 * **TextBox and RichTextBox** have an editing API VB didn't (`CurrentLine`,
   `CaretLeft`, `FirstVisibleLine`, `Undo`, `AcceptsTab`...: in VB these took
   `SendMessage` calls), and a TextBox has `SelChange`. It adds `AppendText`; it has no `SelBullet`, `SelIndent`,

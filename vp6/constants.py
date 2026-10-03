@@ -326,6 +326,24 @@ vpTermVT102 = 3
 vpTermVT220 = 4
 vpTermAnsi = 5
 
+# --- MarkdownBox.Mode ---------------------------------------------------------------------
+vpMarkdownSource = 0
+vpMarkdownVisual = 1
+vpMarkdownPreview = 2
+
+# --- MarkdownBox.ApplyFormat ----------------------------------------------------------------
+vpMarkdownBold = 1
+vpMarkdownItalic = 2
+vpMarkdownStrikeThru = 3
+vpMarkdownCode = 4
+vpMarkdownParagraph = 10
+vpMarkdownHeading1 = 11
+vpMarkdownHeading2 = 12
+vpMarkdownHeading3 = 13
+vpMarkdownBulletList = 20
+vpMarkdownNumberedList = 21
+vpMarkdownQuote = 22
+
 # --- MDIForm.Arrange -------------------------------------------------------------------
 vpCascade = 0
 vpTileHorizontal = 1
