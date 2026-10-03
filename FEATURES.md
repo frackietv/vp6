@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.4.41
+**Date:** 2026-10-02
+
+## Controls
+
+- Pictures in the Terminal: the xterm types speak the Kitty graphics protocol (`kitty +kitten icat`, chafa, timg, yazi...): PNG, RGB and RGBA pictures, zlib compressed or not, sent in chunks or as a file (or a temporary file); shown at the cursor, part of one, scaled to columns and rows, offset in the cell, over or under the text (or under the cells' backgrounds), moved by placement id, deleted every way the protocol has; answered (OK or an error, as quietly as asked); scrolling with the text, into the history too; the alternate screen's own; sharp on Retina displays (sizes in device pixels)
+- The Terminal tells programs its size in pixels (the pseudo-terminal's size, xterm's `CSI 14 t` and `CSI 16 t`); `Clear` clears its pictures too
+
+## Kitchen Sink
+
+- The Terminal page's demo shows VP6's icon in the terminal (the Kitty graphics protocol, from its file)
+
+---
+
 **Version:** 0.4.40
 **Date:** 2026-10-02
 

@@ -1045,6 +1045,9 @@ def test_terminal_page(sink):
     colored = [attr for line in term._screen.lines for char, attr in line if char == "3"]
     assert any(attr.fg == 1 for attr in colored)  # (color 31: red)
     assert "┌──┐ TERM=xterm-256color" in term.Text.replace("\n", "")  # (DEC line drawing)
+    wait_for(lambda: term._screen.graphics.placements)  # VP6's icon (Kitty graphics)
+    icon, = term._screen.graphics.images.values()
+    assert icon.image.width() == 128 and term._screen.graphics.placements[0].rows == 3
     first = term.ProcessID
     page.cmdRestart._widget.click()  # killed, then started again in Exited
     wait_for(lambda: page.lblStatus.Caption == "Shell restarted (xterm-256color)")
@@ -1055,6 +1058,8 @@ def test_terminal_page(sink):
     wait_for(lambda: term.Running and "$" in term.Text)
     page.cmdDemo._widget.click()
     wait_for(lambda: "┌──┐ TERM=vt220" in term.Text.replace("\n", ""))
+    wait_for(lambda: " VP6" in term.Text)
+    assert term._screen.graphics.images == {}  # (a vt220 has no pictures)
     page.cmdClear._widget.click()
     wait_for(lambda: "$" in term.Text and "bold" not in term.Text)
     term.Write("exit\r")

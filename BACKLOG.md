@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Controls]** Terminal support for Kitty graphics protocol
 - **[Controls]** Terminal support for iterm2 inline images
 - **[Controls]** Terminal support for sixel
 - **[Controls]** Terminal support for true color

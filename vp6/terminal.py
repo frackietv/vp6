@@ -36,7 +36,7 @@ import re
 import sys
 from dataclasses import dataclass, replace
 
-from PySide6.QtCore import QEvent, QPoint, QRect, QSocketNotifier, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QRect, QRectF, QSocketNotifier, Qt, QTimer
 from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetricsF, QGuiApplication,
                            QPainter, QPalette)
 from PySide6.QtWidgets import QLabel, QScrollBar, QWidget
@@ -44,6 +44,7 @@ from PySide6.QtWidgets import QLabel, QScrollBar, QWidget
 from . import colors
 from ._props import P, enum_choices
 from .controls import _COMMON, CONTROL_TYPES, EVENT_ARGS, Control, _geometry, resolve_path
+from .termgraphics import UNDER_BACKGROUNDS, KittyGraphics
 
 EVENT_ARGS.update({"Exited": "ExitCode", "TitleChange": "Title"})
 
@@ -78,6 +79,10 @@ _MOUSE_MODES = (9, 1000, 1002, 1003)  # (X10: presses; presses and releases; wit
                                       # button held, moves too; all moves)
 _CURSOR_SHAPES = {0: "block", 1: "block", 2: "block", 3: "underline", 4: "underline",
                   5: "bar", 6: "bar"}
+# What ends a string (OSC, DCS, APC...): ST (ESC \\, or C1's), BEL; CAN and SUB cancel it
+_STRING_STOP = re.compile("[\x07\x18\x1a\x1b\x9c]")
+_STRINGS = {"]": "osc", "P": "dcs", "_": "apc"}  # (and "string": SOS, PM)
+_STRING_STATES = ("osc", "dcs", "apc", "string")
 
 
 def color_rgb(index: int) -> tuple[int, int, int]:
@@ -137,6 +142,9 @@ class AnsiScreen:
         self.history: list[list] = []
         self.replies: list[str] = []  # (what it answers the program: the Terminal sends them)
         self.colors = None  # () -> ((r, g, b), (r, g, b)): the default fore and back colors
+        self.scrolled = 0  # (lines gone into the history, ever: pictures are placed on lines
+        self.cell_pixels = (10, 20)  # counted from the first) a cell's size in device pixels
+        self.graphics = KittyGraphics(self)  # (the Kitty graphics protocol's pictures)
         self._reset()
 
     def _reset(self) -> None:
@@ -157,11 +165,14 @@ class AnsiScreen:
         self.title = ""
         self._titles: list[str] = []
         self._alternate = None  # the main screen while the alternate one shows
+        self._main_graphics = None  # (and its pictures)
+        self.graphics.reset()
         self._saved_modes: dict[int, bool] = {}
         self.saved = self._cursor_state()
         self._last = None  # the last character written (REP repeats it)
         self._state = "text"
         self._sequence = ""
+        self._parts: list[str] = []  # (a string's text so far)
         self.changed = True
 
     def _blank(self) -> list:
@@ -187,8 +198,18 @@ class AnsiScreen:
     # -- what the program writes -----------------------------------------------------------
     def feed(self, text: str) -> None:
         self.changed = True
-        for char in text:
+        index, length = 0, len(text)
+        while index < length:
             state = self._state
+            if state in _STRING_STATES and not self._sequence.endswith("\x1b"):
+                stop = _STRING_STOP.search(text, index)  # (pictures: long strings, in bulk)
+                end = stop.start() if stop else length
+                if end > index:
+                    self._parts.append(text[index:end])
+                    index = end
+                    continue
+            char = text[index]
+            index += 1
             if state == "text":
                 self._text_char(char)
             elif state == "esc":
@@ -208,9 +229,9 @@ class AnsiScreen:
                     self._text_char(char)  # (controls act in the middle of one)
                 else:
                     self._sequence += char
-            else:  # "osc", "dcs", "string" (SOS, PM, APC: ignored): up to ST (OSC: or BEL)
+            else:  # "osc", "dcs", "apc", "string" (SOS, PM: ignored): up to ST (OSC: or BEL)
                 if self._sequence.endswith("\x1b"):
-                    self._sequence = self._sequence[:-1]
+                    self._sequence = ""
                     if char == "\\":
                         self._string_end(state)
                     else:  # (ESC and something else: a new sequence instead)
@@ -220,15 +241,20 @@ class AnsiScreen:
                     self._string_end(state)
                 elif char in "\x18\x1a":
                     self._state = "text"
+                elif char == "\x1b":
+                    self._sequence = char  # (ESC: the end, or a new sequence)
                 else:
-                    self._sequence += char
+                    self._parts.append(char)
 
     def _string_end(self, state: str) -> None:
         self._state = "text"
+        text, self._parts = "".join(self._parts), []
         if state == "osc":
-            self._osc(self._sequence)
+            self._osc(text)
         elif state == "dcs":
-            self._dcs(self._sequence)
+            self._dcs(text)
+        elif state == "apc" and self.term in _XTERMS:
+            self.graphics.command(text)
 
     def _text_char(self, char: str) -> None:
         if char == "\x1b":
@@ -297,16 +323,21 @@ class AnsiScreen:
     def _scroll_up(self, count: int) -> None:
         for _ in range(count):
             gone = self.lines.pop(self.top)
-            if self.top == 0 and self._alternate is None:  # (into the history)
+            into_history = self.top == 0 and self._alternate is None
+            self.graphics.scrolled(self.top, self.bottom, -1, into_history)
+            if into_history:
                 self.history.append(gone)
+                self.scrolled += 1
                 if len(self.history) > self.scrollback:
                     del self.history[:len(self.history) - self.scrollback]
+                    self.graphics.prune()
             self.lines.insert(self.bottom, self._blank())
 
     def _scroll_down(self, count: int) -> None:
         for _ in range(count):
             del self.lines[self.bottom]
             self.lines.insert(self.top, self._blank())
+            self.graphics.scrolled(self.top, self.bottom, 1, False)
 
     def _goto(self, row: int, col: int) -> None:
         """To a row (from the scroll region's top in origin mode) and column."""
@@ -332,12 +363,10 @@ class AnsiScreen:
         self._state = "text"
         if char == "[":
             self._state, self._sequence = "csi", ""
-        elif char == "]":
-            self._state, self._sequence = "osc", ""
-        elif char == "P":
-            self._state, self._sequence = "dcs", ""
-        elif char in "X^_":  # SOS, PM, APC: strings it ignores
-            self._state, self._sequence = "string", ""
+        elif char in "]P_":  # OSC, DCS, APC (the Kitty graphics protocol)
+            self._state, self._sequence, self._parts = _STRINGS[char], "", []
+        elif char in "X^":  # SOS, PM: strings it ignores
+            self._state, self._sequence, self._parts = "string", "", []
         elif char in " #%()*+-./":
             self._state, self._sequence = "esc+", char
         elif char == "7":
@@ -503,11 +532,13 @@ class AnsiScreen:
                 for _ in range(min(arg(), self.bottom - self.row + 1)):
                     del self.lines[self.bottom]
                     self.lines.insert(self.row, self._blank())
+                    self.graphics.scrolled(self.row, self.bottom, 1, False)
         elif final == "M":
             if self.top <= self.row <= self.bottom:
                 for _ in range(min(arg(), self.bottom - self.row + 1)):
                     del self.lines[self.row]
                     self.lines.insert(self.bottom, self._blank())
+                    self.graphics.scrolled(self.row, self.bottom, -1, False)
         elif final == "P":
             line = self.lines[self.row]
             count = min(arg(), self.cols - self.col)
@@ -565,6 +596,11 @@ class AnsiScreen:
             operation = arg(0, 0)
             if operation == 18:  # its size in characters
                 self._reply(f"\x1b[8;{self.rows};{self.cols}t")
+            elif operation in (14, 16):  # in pixels: the text area's, a cell's
+                width, height = self.cell_pixels
+                if operation == 14:
+                    width, height = width * self.cols, height * self.rows
+                self._reply(f"\x1b[{operation - 10};{height};{width}t")
             elif operation == 22:  # keep the title
                 self._titles = (self._titles + [self.title])[-10:]
             elif operation == 23 and self._titles:  # the title kept
@@ -633,6 +669,7 @@ class AnsiScreen:
                 self.lines[row] = [blank] * self.cols
         elif how in (2, 3):
             self.lines = [[blank] * self.cols for _ in range(self.rows)]
+            self.graphics.clear(history=how == 3)
             if how == 3:
                 self.history = []
 
@@ -697,9 +734,11 @@ class AnsiScreen:
             self._alternate = (self.lines, self.row, self.col)
             self.lines = [self._blank() for _ in range(self.rows)]
             self.row = self.col = 0
+            self._main_graphics, self.graphics = self.graphics, KittyGraphics(self)
         elif not on and self._alternate is not None:
             self.lines, self.row, self.col = self._alternate
             self._alternate = None
+            self.graphics, self._main_graphics = self._main_graphics, None
 
     # -- size and text ---------------------------------------------------------------------
     def resize(self, rows: int, cols: int) -> None:
@@ -715,12 +754,14 @@ class AnsiScreen:
         while len(lines) > rows:  # (the cursor stays on screen: lines above go first)
             if self.row > 0:
                 self.history.append(lines.pop(0))
+                self.scrolled += 1
                 self.row -= 1
             else:
                 lines.pop()
         while len(lines) < rows:
             if self.history and self._alternate is None:
                 lines.insert(0, self.history.pop())
+                self.scrolled -= 1
                 self.row += 1
             else:
                 lines.append([(" ", PLAIN)] * cols)
@@ -735,6 +776,9 @@ class AnsiScreen:
         self.top, self.bottom = 0, rows - 1
         self.row, self.col = min(self.row, rows - 1), min(self.col, cols - 1)
         self.wrap_pending = False
+        for graphics in (self.graphics, self._main_graphics):
+            if graphics is not None:
+                graphics.prune()
         self.changed = True
 
     def all_lines(self) -> list[list]:
@@ -762,14 +806,14 @@ def default_shell() -> list[str]:
 class _PtyProgram:
     """A program in a pseudo-terminal (macOS, Linux)."""
 
-    def __init__(self, argv, cwd, rows, cols, term, on_data, on_exit):
+    def __init__(self, argv, cwd, rows, cols, term, on_data, on_exit, pixels=(0, 0)):
         import fcntl
         import pty
         import subprocess
         import termios
 
         master, slave = pty.openpty()
-        self._set_size(master, rows, cols)
+        self._set_size(master, rows, cols, *pixels)
         env = dict(os.environ, TERM=term, COLUMNS=str(cols), LINES=str(rows))
 
         def take_the_terminal():  # (in the child: the terminal is its controlling one)
@@ -788,12 +832,13 @@ class _PtyProgram:
         self._done = False
 
     @staticmethod
-    def _set_size(fd, rows, cols):
+    def _set_size(fd, rows, cols, width=0, height=0):
+        """Its size in characters, and in pixels (pictures: programs size them)."""
         import fcntl
         import struct
         import termios
 
-        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, width, height))
 
     def _read(self, *_):
         try:
@@ -829,9 +874,9 @@ class _PtyProgram:
         if not self._done:
             os.write(self.master, data)
 
-    def resize(self, rows, cols) -> None:
+    def resize(self, rows, cols, width=0, height=0) -> None:
         if not self._done:
-            self._set_size(self.master, rows, cols)
+            self._set_size(self.master, rows, cols, width, height)
 
     def kill(self) -> None:
         if not self._done:
@@ -846,7 +891,7 @@ class _PtyProgram:
 class _PipeProgram:
     """A program with pipes (Windows: no pseudo-terminal)."""
 
-    def __init__(self, argv, cwd, rows, cols, term, on_data, on_exit):
+    def __init__(self, argv, cwd, rows, cols, term, on_data, on_exit, pixels=(0, 0)):
         from PySide6.QtCore import QProcess, QProcessEnvironment
 
         process = QProcess()
@@ -877,7 +922,7 @@ class _PipeProgram:
     def write(self, data: bytes) -> None:
         self.process.write(data)
 
-    def resize(self, rows, cols) -> None:
+    def resize(self, rows, cols, width=0, height=0) -> None:
         pass
 
     def kill(self) -> None:
@@ -1176,6 +1221,7 @@ class _TerminalView(QWidget):
                 font.setBold(attr.bold)
                 font.setItalic(attr.italic)
             return fonts[key]
+        runs = []  # (y, the cells' rect, attr, text, fg, the first column, bg or None)
         for index in range(first, min(len(lines), first + rows)):
             y = 2 + (index - first) * height
             line = lines[index]
@@ -1202,28 +1248,37 @@ class _TerminalView(QWidget):
                     fg = self.palette().color(QPalette.HighlightedText)
                 rect = QRect(round(2 + col * width), round(y), round((end - col) * width) + 1,
                              round(height) + 1)
-                if bg != back:
-                    painter.fillRect(rect, bg)
-                if text.strip() and not attr.invisible:
-                    painter.setFont(font_for(attr))
-                    painter.setPen(fg)
-                    for offset, char in enumerate(text):  # (cell by cell: a fixed grid)
-                        if char in _BOX_LINES:  # (drawn: lines that meet across cells)
-                            self._draw_box(painter, char, 2 + (col + offset) * width, y,
-                                           width, height)
-                        elif char != " ":
-                            painter.drawText(
-                                QPoint(round(2 + (col + offset) * width),
-                                       round(y + metrics.ascent())), char)
-                if attr.underline and not attr.invisible:
-                    painter.setPen(fg)
-                    painter.drawLine(rect.left(), round(y + metrics.ascent() + 2),
-                                     rect.right(), round(y + metrics.ascent() + 2))
-                if attr.strike and not attr.invisible:
-                    painter.setPen(fg)
-                    middle = round(y + metrics.ascent() - metrics.strikeOutPos())
-                    painter.drawLine(rect.left(), middle, rect.right(), middle)
+                runs.append((y, rect, attr, text, fg, col, bg if bg != back else None))
                 col = end
+        # Pictures (the Kitty graphics protocol) in three layers: under the cells'
+        # backgrounds, under the text, over it
+        pictures = self._pictures(first, rows)
+        self._draw_pictures(painter, pictures, None, UNDER_BACKGROUNDS)
+        for _y, rect, *_rest, bg in runs:
+            if bg is not None:
+                painter.fillRect(rect, bg)
+        self._draw_pictures(painter, pictures, UNDER_BACKGROUNDS, 0)
+        for y, rect, attr, text, fg, col, _bg in runs:
+            if text.strip() and not attr.invisible:
+                painter.setFont(font_for(attr))
+                painter.setPen(fg)
+                for offset, char in enumerate(text):  # (cell by cell: a fixed grid)
+                    if char in _BOX_LINES:  # (drawn: lines that meet across cells)
+                        self._draw_box(painter, char, 2 + (col + offset) * width, y,
+                                       width, height)
+                    elif char != " ":
+                        painter.drawText(
+                            QPoint(round(2 + (col + offset) * width),
+                                   round(y + metrics.ascent())), char)
+            if attr.underline and not attr.invisible:
+                painter.setPen(fg)
+                painter.drawLine(rect.left(), round(y + metrics.ascent() + 2),
+                                 rect.right(), round(y + metrics.ascent() + 2))
+            if attr.strike and not attr.invisible:
+                painter.setPen(fg)
+                middle = round(y + metrics.ascent() - metrics.strikeOutPos())
+                painter.drawLine(rect.left(), middle, rect.right(), middle)
+        self._draw_pictures(painter, pictures, 0, None)
         # The cursor: a block, an underline or a bar (a block's outline when the terminal
         # doesn't have the focus)
         cursor_line = len(screen.history) + screen.row
@@ -1242,6 +1297,35 @@ class _TerminalView(QWidget):
             else:
                 painter.setPen(fore)
                 painter.drawRect(rect.adjusted(0, 0, -1, -1))
+
+    def _pictures(self, first: int, rows: int) -> list:
+        """The placements showing in lines first..first + rows (of all_lines), with
+        where they go: [(placement, image, QRectF)], lowest z first."""
+        screen = self._terminal._screen
+        graphics = screen.graphics
+        width, height = self.cell_size()
+        scale_x = width / screen.cell_pixels[0]  # (device pixels to the view's, in the
+        scale_y = height / screen.cell_pixels[1]  # cells' size: the font's)
+        shown = []
+        for placement in graphics.placements:
+            line = len(screen.history) + graphics.screen_row(placement)
+            stored = graphics.images.get(placement.image)
+            if stored is None or line + placement.rows <= first or line >= first + rows:
+                continue
+            x_offset, y_offset = placement.offset
+            target = QRectF(2 + placement.col * width + x_offset * scale_x,
+                            2 + (line - first) * height + y_offset * scale_y,
+                            placement.width * scale_x, placement.height * scale_y)
+            shown.append((placement, stored.image, target))
+        return sorted(shown, key=lambda item: item[0].z)
+
+    @staticmethod
+    def _draw_pictures(painter, pictures, low, high) -> None:
+        """The pictures with a z-index from low (None: all) up to high (not included)."""
+        for placement, image, target in pictures:
+            if (low is None or placement.z >= low) and (high is None or placement.z < high):
+                painter.setRenderHint(QPainter.SmoothPixmapTransform)
+                painter.drawImage(target, image, QRectF(placement.source))
 
     @staticmethod
     def _draw_box(painter, char: str, x: float, y: float, width: float, height: float):
@@ -1434,7 +1518,7 @@ class Terminal(Control):
         self.__dict__.update(_decoder=codecs.getincrementaldecoder("utf-8")(errors="replace"),
                              _started=True, _exit_code=-1)
         self.__dict__["_program"] = backend(argv, cwd, rows, cols, self._screen.term,
-                                            self._on_data, self._on_exit)
+                                            self._on_data, self._on_exit, self._pixels())
 
     def _on_data(self, data: bytes) -> None:
         title = self._screen.title
@@ -1473,11 +1557,21 @@ class Terminal(Control):
         if view is None or self._design_mode:
             return
         rows, cols = view.grid_size()
-        if (rows, cols) != (self._screen.rows, self._screen.cols):
+        width, height = view.cell_size()
+        ratio = view.devicePixelRatioF()
+        cell_pixels = (max(1, round(width * ratio)), max(1, round(height * ratio)))
+        if (rows, cols, cell_pixels) != (self._screen.rows, self._screen.cols,
+                                         self._screen.cell_pixels):
             self._screen.resize(rows, cols)
+            self._screen.cell_pixels = cell_pixels
             if self.Running:
-                self._program.resize(rows, cols)
+                self._program.resize(rows, cols, *self._pixels())
         self._redraw()
+
+    def _pixels(self) -> tuple[int, int]:
+        """The text area's size in device pixels (the program sees it with its size)."""
+        screen = self._screen
+        return screen.cols * screen.cell_pixels[0], screen.rows * screen.cell_pixels[1]
 
     def _send(self, text: str) -> None:
         self._send_bytes(text.encode("utf-8"))
@@ -1498,11 +1592,13 @@ class Terminal(Control):
             self._program.kill()
 
     def Clear(self) -> None:
-        """Clear the screen and its history (the program may draw again)."""
+        """Clear the screen, its history and its pictures (the program may draw
+        again)."""
         screen = self._screen
         screen.history = []
         screen.lines = [screen._blank() for _ in range(screen.rows)]
         screen.row = screen.col = 0
+        screen.graphics.reset()  # (its pictures too)
         self._redraw()
 
     def Copy(self) -> None:

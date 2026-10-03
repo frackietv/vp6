@@ -6,13 +6,16 @@ pastes reported to the program, a real shell in a pseudo-terminal (macOS,
 Linux: its output, Ctrl+C, its size, its exit, its TERM, a program asking the
 terminal), copy and paste, and the IDE."""
 
+import base64
 import codecs
 import os
 import sys
+import tempfile
+import zlib
 
 import pytest
-from PySide6.QtCore import QEvent, QPoint, Qt
-from PySide6.QtGui import QFocusEvent, QGuiApplication
+from PySide6.QtCore import QBuffer, QEvent, QPoint, Qt
+from PySide6.QtGui import QColor, QFocusEvent, QGuiApplication, QImage
 from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
 
@@ -470,3 +473,234 @@ def test_not_started_and_in_the_ide(qapp, tmp_path):
     assert "self.Terminal1 = Terminal(self," in designer.document.text
     designer.close()
     assert os.path.exists(str(path))
+
+
+# --- pictures: the Kitty graphics protocol -----------------------------------------------------
+
+def _kitty(keys: str, data: bytes = b"") -> str:
+    return f"\x1b_G{keys};{base64.b64encode(data).decode()}\x1b\\"
+
+
+RED = bytes((255, 0, 0)) * (20 * 40)  # 20 x 40 pixels: two cells by two (cells of 10 x 20)
+
+
+def _png(width=4, height=4, color="#00ff00") -> bytes:
+    image = QImage(width, height, QImage.Format_ARGB32)
+    image.fill(QColor(color))
+    buffer = QBuffer()
+    buffer.open(QBuffer.WriteOnly)
+    image.save(buffer, "PNG")
+    return bytes(buffer.data())
+
+
+def test_kitty_pictures_sent_and_placed(qapp, tmp_path):
+    screen = AnsiScreen(10, 40)
+    screen.cell_pixels = (10, 20)
+    graphics = screen.graphics
+    screen.feed("ab" + _kitty("a=T,f=24,s=20,v=40,i=7", RED) + "X")
+    assert screen.replies == ["\x1b_Gi=7;OK\x1b\\"]  # (it had an id: answered)
+    placement, = graphics.placements
+    assert (placement.line, placement.col, placement.cols, placement.rows) == (0, 2, 2, 2)
+    assert (placement.width, placement.height) == (20, 40)
+    assert screen.text() == "ab\n    X"  # the cursor: right of it, on its last row
+    assert graphics.images[7].image.pixelColor(0, 0) == QColor("red")
+    screen.replies.clear()
+    screen.feed(_kitty("a=p,i=7,c=4,C=1,z=-1,p=3,X=5,Y=30"))  # 4 columns: its shape kept
+    placed = graphics.placements[-1]
+    assert (placed.cols, placed.rows, placed.width, placed.height) == (4, 5, 35, 70)
+    assert placed.offset == (5, 19) and placed.z == -1  # (into the cell: within it)
+    assert (screen.row, screen.col) == (1, 5) and screen.replies == ["\x1b_Gi=7,p=3;OK\x1b\\"]
+    screen.feed("\x1b[1;1H" + _kitty("a=p,i=7,p=3,r=1,x=10,w=10,q=1"))  # moved, part of it
+    assert len(graphics.placements) == 2 and graphics.placements[-1].source.x() == 10
+    assert (graphics.placements[-1].line, graphics.placements[-1].cols) == (0, 1)
+    assert len(screen.replies) == 1  # (q=1: no OK)
+    # Queries, chunks, zlib, PNG, numbers instead of ids
+    screen.replies.clear()
+    screen.feed(_kitty("i=31,s=1,v=1,a=q,t=d,f=24", b"\0\0\0") + "\x1b[c")
+    assert screen.replies[0] == "\x1b_Gi=31;OK\x1b\\" and 31 not in graphics.images
+    assert screen.replies[1].startswith("\x1b[?62")  # (the answer comes first: supported)
+    packed = base64.b64encode(zlib.compress(bytes((0, 0, 255, 255)) * 100)).decode()
+    screen.feed(f"\x1b_Ga=t,f=32,s=10,v=10,o=z,i=8,m=1;{packed[:8]}\x1b\\"
+                f"\x1b_Gm=1;{packed[8:16]}\x1b\\\x1b_Gm=0;{packed[16:]}\x1b\\")
+    assert graphics.images[8].image.pixelColor(9, 9) == QColor("blue")
+    screen.replies.clear()
+    screen.feed(_kitty("a=t,f=100,I=5", _png()) + _kitty("a=p,I=5,q=1"))
+    numbered, = (image for image in graphics.images.values() if image.number == 5)
+    assert screen.replies == [f"\x1b_Gi={numbered.id},I=5;OK\x1b\\"]
+    assert numbered.image.size().toTuple() == (4, 4) and graphics.placements[-1].cols == 1
+    # From a file, and a temporary one (deleted once read)
+    picture = tmp_path / "picture.png"
+    picture.write_bytes(_png(color="#ffff00"))
+    screen.feed(_kitty("a=t,t=f,f=100,i=9", str(picture).encode()))
+    assert graphics.images[9].image.pixelColor(0, 0) == QColor("yellow") and picture.exists()
+    handle, temporary = tempfile.mkstemp(prefix="tty-graphics-protocol-", suffix=".png")
+    os.write(handle, _png())
+    os.close(handle)
+    screen.feed(_kitty("a=t,t=t,f=100,i=10", temporary.encode()))
+    assert 10 in graphics.images and not os.path.exists(temporary)
+    # Errors: told, unless q=2
+    screen.replies.clear()
+    screen.feed(_kitty("a=p,i=99") + _kitty("a=T,f=24,s=20,v=40,i=11", b"\0" * 10) +
+                _kitty("a=t,f=100,i=12", b"not a picture") + _kitty("a=t,f=7,i=13") +
+                _kitty("a=t,t=s,i=14") + _kitty("a=t,t=f,i=15", b"/no/such/file") +
+                _kitty("a=p,i=99,q=2") + _kitty("a=p,i=1,I=1"))
+    assert [reply.split(";")[1].split(":")[0] for reply in screen.replies] == [
+        "ENOENT", "ENODATA", "EBADPNG", "EINVAL", "EINVAL", "EBADF", "EINVAL"]
+    assert not {11, 12, 13, 14, 15} & set(graphics.images)
+    screen.feed(_kitty("a=t,f=24,s=1,v=1,i=8", b"\0\0\0"))  # (the same id: replaced)
+    assert graphics.images[8].image.size().toTuple() == (1, 1)
+
+
+def test_kitty_pictures_scrolled_cleared_and_deleted():
+    screen = AnsiScreen(5, 20, scrollback=3)
+    screen.cell_pixels = (10, 20)
+    graphics = screen.graphics
+
+    def rows():
+        return [graphics.screen_row(p) for p in graphics.placements]
+
+    screen.feed(_kitty("a=T,f=24,s=20,v=40,i=1", RED))
+    screen.feed("\r\n\r\n\r\n\r\n")  # scrolled up: it goes along, into the history
+    assert screen.scrolled == 1 and rows() == [-1]
+    screen.feed("\r\n" * 3)  # (beyond the history: gone)
+    assert rows() == [] and 1 in graphics.images
+    screen.feed("\x1b[2;4r\x1b[3;1H" + _kitty("a=p,i=1,C=1") + "\x1b[5;1H")
+    screen.feed("\x1b[4;1H\n")  # a scroll region: within it
+    assert rows() == [1] and screen.scrolled == 4
+    screen.feed("\x1b[2;1H\x1bM")  # (reverse index at its top: down)
+    assert rows() == [2]
+    screen.feed("\x1b[2;1H\x1b[L")  # inserted and deleted lines move it
+    assert rows() == [3]
+    screen.feed("\x1b[2;1H\x1b[2M")
+    assert rows() == [1]
+    screen.feed("\x1b[r\x1b[1;1H\x1b[2J")  # erasing the display: gone
+    assert rows() == []
+    # Deleting: all, by id, number, cell, column, row, z-index, a range; capitals free them
+    screen.feed(_kitty("a=t,f=24,s=20,v=40,i=2", RED) + _kitty("a=t,f=24,s=20,v=40,I=6", RED))
+
+    def place(*cells, z=0):
+        for row, col in cells:
+            screen.feed(f"\x1b[{row};{col}H" + _kitty(f"a=p,i=1,C=1,z={z}"))
+
+    place((1, 1), (1, 5))
+    screen.feed("\x1b[1;5H" + _kitty("a=d,d=c"))
+    assert [p.col for p in graphics.placements] == [0]
+    place((3, 10))
+    screen.feed(_kitty("a=d,d=p,x=11,y=4"))  # (cells from 1: its lower right one)
+    assert [p.col for p in graphics.placements] == [0]
+    place((3, 10), (1, 15))
+    screen.feed(_kitty("a=d,d=x,x=16") + _kitty("a=d,d=y,y=4"))
+    assert [p.col for p in graphics.placements] == [0]
+    place((3, 10), z=5)
+    screen.feed(_kitty("a=d,d=q,x=10,y=3,z=4"))  # (q: at the cell, with this z-index)
+    assert len(graphics.placements) == 2
+    screen.feed(_kitty("a=d,d=z,z=5"))
+    assert len(graphics.placements) == 1
+    screen.feed(_kitty("a=d"))  # (all of them, the pictures kept)
+    assert graphics.placements == [] and 1 in graphics.images
+    place((1, 1))
+    screen.feed(_kitty("a=d,d=I,i=1") + _kitty("a=d,d=N,I=6"))
+    assert set(graphics.images) == {2}
+    screen.feed(_kitty("a=t,f=24,s=1,v=1,i=3", b"\0\0\0") + _kitty("a=d,d=R,x=1,y=2"))
+    assert set(graphics.images) == {3}
+    screen.feed("\x1bc")  # a reset: no pictures
+    assert graphics.images == {}
+
+
+def test_kitty_pictures_on_the_alternate_screen_resized_and_not_on_a_vt100():
+    screen = AnsiScreen(5, 20)
+    screen.cell_pixels = (10, 20)
+    screen.feed(_kitty("a=T,f=24,s=20,v=40,i=1,C=1", RED))
+    main = screen.graphics
+    screen.feed("\x1b[?1049h")  # its own pictures
+    assert screen.graphics is not main and screen.graphics.images == {}
+    screen.feed(_kitty("a=T,f=24,s=20,v=40,i=2,C=1", RED) + "\x1b[?1049l")
+    assert screen.graphics is main and list(main.images) == [1]
+    screen.feed("\x1b[5;1H")
+    screen.resize(2, 20)  # (lines into the history: it goes along)
+    assert main.screen_row(main.placements[0]) == -3
+    screen.resize(5, 20)
+    assert main.screen_row(main.placements[0]) == 0
+    screen.feed("\x1b[16t\x1b[14t")  # a cell's size in pixels, the text area's
+    assert screen.replies[-2:] == ["\x1b[6;20;10t", "\x1b[4;100;200t"]
+    vt100 = AnsiScreen(term="vt100")
+    vt100.feed(_kitty("a=T,f=24,s=20,v=40,i=1", RED) + "x")
+    assert vt100.graphics.images == {} and vt100.replies == [] and vt100.text() == "x"
+    big = AnsiScreen()  # (a long string: in bulk, not character by character)
+    big.feed(_kitty("a=t,f=24,s=1000,v=1000,i=1", bytes(3_000_000)))
+    assert big.graphics.images[1].image.width() == 1000
+
+
+def test_kitty_pictures_quota(monkeypatch):
+    from vp6 import termgraphics
+
+    monkeypatch.setattr(termgraphics, "QUOTA", 3 * 20 * 40 * 4)  # three pictures
+    screen = AnsiScreen()
+    screen.feed(_kitty("a=T,f=24,s=20,v=40,i=1,C=1", RED))
+    for image_id in range(2, 6):
+        screen.feed(_kitty(f"a=t,f=24,s=20,v=40,i={image_id}", RED))
+    assert sorted(screen.graphics.images) == [1, 4, 5]  # (the hidden ones went first)
+
+
+def test_kitty_pictures_drawn(qapp):
+    class Pictures(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 400, 200
+            self.term = Terminal(self, Left=0, Top=0, Width=400, Height=200, AutoStart=False,
+                                 BackColor=0x000000)
+
+    form = Pictures()
+    form.Show()
+    term = form.term
+    screen = term._screen
+    view = term._widget
+    width, height = view.cell_size()
+    ratio = view.devicePixelRatioF()
+    assert screen.cell_pixels == (round(width * ratio), round(height * ratio))
+    cell_width, cell_height = screen.cell_pixels
+    red = bytes((255, 0, 0)) * (cell_width * 2 * cell_height)  # two cells by one
+    blue = "\x1b[44m  \x1b[0m"  # (two cells with a background)
+    screen.feed(_kitty(f"a=T,f=24,s={cell_width * 2},v={cell_height},i=1,C=1", red) + blue)
+    screen.feed("\r\n" + _kitty("a=p,i=1,C=1,z=-1") + "XX")  # under the text
+    screen.feed("\r\n" + _kitty("a=p,i=1,C=1,z=-1073741825") + blue)  # and backgrounds
+    term._redraw()
+    picture = view.grab().toImage()
+
+    def color(row):
+        return picture.pixelColor(round(2 + width), round(2 + (row + 0.5) * height))
+
+    assert color(0) == QColor("red")  # (over the background)
+    assert color(1).red() > 200  # (under the text: X's middle may be drawn over it)
+    assert color(2) == QColor("#2472c8")  # (color 4: blue)
+    screen.feed("\x1b[2J")
+    term.Clear()  # (and the pictures)
+    assert screen.graphics.images == {}
+    term._redraw()
+    assert view.grab().toImage().pixelColor(round(2 + width), round(2 + height / 2)) != \
+        QColor("red")
+    form.Unload()
+
+
+@posix
+def test_a_program_sizes_pictures(qapp):
+    """The pixel size in the pseudo-terminal's size, and a picture the program shows."""
+    script = ("import fcntl, struct, sys, termios\n"
+              "rows, cols, width, height = struct.unpack('HHHH', fcntl.ioctl(\n"
+              "    1, termios.TIOCGWINSZ, bytes(8)))\n"
+              "print(width // cols, height // rows)\n"
+              "sys.stdout.write('\\x1b_Ga=T,f=24,s=1,v=1,c=3,r=2;AAAA\\x1b\\\\')\n")
+
+    class Sizing(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 400, 200
+            self.term = Terminal(self, Left=0, Top=0, Width=400, Height=200, AutoStart=False)
+
+    form = Sizing()
+    form.Show()
+    form.term.Start([sys.executable, "-c", script])
+    wait_for(lambda: not form.term.Running)
+    cell_width, cell_height = form.term._screen.cell_pixels
+    assert form.term.Text.split("\n")[0] == f"{cell_width} {cell_height}"
+    placement, = form.term._screen.graphics.placements
+    assert (placement.cols, placement.rows, placement.line) == (3, 2, 1)
+    form.Unload()

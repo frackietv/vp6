@@ -1,0 +1,404 @@
+"""Pictures in the Terminal: the Kitty graphics protocol.
+
+A program sends an APC string, ``ESC _ G keys ; payload ESC \\``: the keys
+(``a=T,f=100,i=1...``) say what to do, the payload is base64. ``KittyGraphics``
+keeps a screen's images (by id, and the number a program may give one
+instead) and their placements on its cells:
+
+* transmitting (``a=t``, ``a=T`` to show it too, ``a=q`` to only check it):
+  PNG (``f=100``), RGBA (32, the default) or RGB (24) pixels of ``s`` x
+  ``v``, zlib-compressed (``o=z``), in the payload (``t=d``, in chunks with
+  ``m=1``) or in a file (``t=f``; ``t=t``: a temporary file, deleted once
+  read; ``S`` bytes from offset ``O``); shared memory (``t=s``) isn't
+  supported;
+* placing (``a=p``): at the cursor, part of the image (``x``, ``y``, ``w``,
+  ``h``), ``X``/``Y`` pixels into the cell, scaled to ``c`` columns and
+  ``r`` rows (one of them: keeping its shape), ``z`` (below zero: under the
+  text; below -1073741824: under the cells' backgrounds too), ``p`` (a
+  placement id: placing it again moves it), ``C=1`` (the cursor stays);
+  else the cursor goes to the right of the image, on its last row;
+* deleting (``a=d``, ``d=``): all of them, by id, by number, at the cursor,
+  at a cell, in a column, a row, a z-index, a range of ids; capital letters
+  free the images too;
+* answering (unless ``q=1``: not OKs; ``q=2``: nothing): ``ESC _ G i=id ;
+  OK ESC \\`` or an error (``ENOENT:...``), when the program gave an id or a
+  number.
+
+Placements are on lines counted from the first one the screen ever had
+(``AnsiScreen.scrolled`` lines have gone into its history), so they scroll
+with the text, into the history too. Sizes are in device pixels: the screen's
+``cell_pixels`` (the Terminal sets it from its font) gives a cell's.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import math
+import os
+import tempfile
+import zlib
+from dataclasses import dataclass
+
+from PySide6.QtCore import QRect
+from PySide6.QtGui import QImage
+
+QUOTA = 320 * 1024 * 1024  # bytes of pixels a screen keeps (older pictures go first)
+MAX_SIDE = 10000  # pixels
+UNDER_BACKGROUNDS = -1073741824  # (a z-index below this: under the cells' backgrounds)
+_FORMATS = {24: (3, QImage.Format_RGB888), 32: (4, QImage.Format_RGBA8888)}
+
+
+class GraphicsError(Exception):
+    """An error the program is told about: "ENOENT:No image with id 3"..."""
+
+
+@dataclass
+class TerminalImage:
+    id: int
+    number: int  # (the I the program gave it: 0 none)
+    image: QImage
+    order: int  # (when it came: the oldest go first when there are too many)
+
+    @property
+    def size(self) -> int:
+        return self.image.sizeInBytes()
+
+
+@dataclass
+class Placement:
+    """An image shown on the screen: its top left cell (``line``: counted from
+    the screen's first line ever), the cells it covers, the part of the image
+    it shows (``source``), drawn ``width`` x ``height`` device pixels from
+    ``offset`` pixels into its first cell."""
+    image: int
+    id: int
+    line: int
+    col: int
+    cols: int
+    rows: int
+    source: QRect
+    width: float
+    height: float
+    offset: tuple[int, int] = (0, 0)
+    z: int = 0
+
+
+class KittyGraphics:
+    """A screen's images and placements (the module's documentation)."""
+
+    def __init__(self, screen):
+        self.screen = screen
+        self.images: dict[int, TerminalImage] = {}
+        self.placements: list[Placement] = []
+        self._loading = None  # (the keys and payload so far, while chunks come: m=1)
+        self._order = 0
+        self._next_id = 1 << 31  # (ids it gives pictures: above the programs' usual ones)
+
+    # -- the commands ----------------------------------------------------------------------
+    def command(self, text: str) -> None:
+        """An APC string's text (after ``ESC _``): ``G`` and a command."""
+        if not text.startswith("G"):
+            return
+        control, _, payload = text[1:].partition(";")
+        keys = {}
+        for item in control.split(","):
+            key, _, value = item.partition("=")
+            if key:
+                keys[key] = value
+        if self._loading is not None:  # (a chunk: the first one's keys hold)
+            first, parts = self._loading
+            parts.append(payload)
+            if sum(map(len, parts)) > QUOTA * 4 // 3:
+                self._loading = None
+                self._answer(first, "EFBIG:Too much data")
+                return
+            if keys.get("m") == "1":
+                return
+            self._loading = None
+            keys, payload = first, "".join(parts)
+        elif keys.get("m") == "1" and keys.get("a", "t") in ("t", "T", "q"):
+            self._loading = (keys, [payload])
+            return
+        try:
+            self._run(keys, payload)
+        except GraphicsError as error:
+            self._answer(keys, str(error))
+
+    def _run(self, keys: dict, payload: str) -> None:
+        action = keys.get("a", "t")
+        if "i" in keys and "I" in keys and action != "d":
+            raise GraphicsError("EINVAL:Both an id and a number")
+        if action == "d":
+            self._delete(keys)
+            return
+        if action in ("t", "T", "q"):
+            image = self._image_from(keys, payload)
+            if action == "q":  # (only checked: nothing kept)
+                self._answer(keys, "OK")
+                return
+            stored = self._store(keys, image)
+            if action == "T":
+                self._place(stored, keys)
+            self._answer(keys, "OK", stored.id)
+        elif action == "p":
+            stored = self._find(keys)
+            self._place(stored, keys)
+            self._answer(keys, "OK", stored.id)
+        else:  # (animation: f, a, c)
+            raise GraphicsError("EINVAL:Animation isn't supported")
+
+    @staticmethod
+    def _number(keys: dict, key: str, default: int = 0) -> int:
+        try:
+            return int(keys.get(key, default))
+        except ValueError:
+            raise GraphicsError(f"EINVAL:{key} isn't a number") from None
+
+    def _answer(self, keys: dict, message: str, image_id: int | None = None) -> None:
+        """Tell the program (only when it gave an id or a number, and as quietly
+        as it asked)."""
+        quiet = keys.get("q", "0")
+        if (message == "OK" and quiet in ("1", "2")) or quiet == "2":
+            return
+        if "i" not in keys and "I" not in keys:
+            return
+        number = keys.get("I")
+        parts = [f"i={image_id if image_id is not None and number else keys.get('i', 0)}"]
+        if number:
+            parts.append(f"I={number}")
+        if keys.get("p", "0") != "0":
+            parts.append(f"p={keys['p']}")
+        self.screen._reply(f"\x1b_G{','.join(parts)};{message}\x1b\\")
+
+    # -- transmitting ------------------------------------------------------------------------
+    def _image_from(self, keys: dict, payload: str) -> QImage:
+        try:
+            data = base64.b64decode(payload + "=" * (-len(payload) % 4), validate=False)
+        except (binascii.Error, ValueError):
+            raise GraphicsError("EINVAL:The payload isn't base64") from None
+        medium = keys.get("t", "d")
+        if medium in ("f", "t"):
+            data = self._read_file(data.decode("utf-8", "replace"), keys, medium == "t")
+        elif medium != "d":
+            raise GraphicsError("EINVAL:Shared memory isn't supported")
+        if keys.get("o") == "z":
+            try:
+                data = zlib.decompress(data)
+            except zlib.error:
+                raise GraphicsError("EINVAL:The data isn't zlib's") from None
+        kind = self._number(keys, "f", 32)
+        if kind == 100:
+            image = QImage.fromData(data)
+            if image.isNull():
+                raise GraphicsError("EBADPNG:Not a PNG picture")
+        elif kind in _FORMATS:
+            width, height = self._number(keys, "s"), self._number(keys, "v")
+            if not (0 < width <= MAX_SIDE and 0 < height <= MAX_SIDE):
+                raise GraphicsError("EINVAL:The width (s) and height (v) are needed")
+            depth, qformat = _FORMATS[kind]
+            if len(data) < width * height * depth:
+                raise GraphicsError("ENODATA:Too little data for the size")
+            image = QImage(data, width, height, width * depth, qformat).copy()
+        else:
+            raise GraphicsError(f"EINVAL:Unknown format {kind}")
+        if image.width() > MAX_SIDE or image.height() > MAX_SIDE:
+            raise GraphicsError("EFBIG:The picture is too big")
+        return image.convertToFormat(QImage.Format_ARGB32_Premultiplied)
+
+    def _read_file(self, path: str, keys: dict, temporary: bool) -> bytes:
+        size, offset = self._number(keys, "S"), self._number(keys, "O")
+        try:
+            with open(path, "rb") as file:
+                file.seek(offset)
+                data = file.read(size if size > 0 else QUOTA)
+        except OSError as error:
+            raise GraphicsError(f"EBADF:{error.strerror or error}") from None
+        finally:  # (a temporary file the program left for it: gone, once read)
+            if temporary and "tty-graphics-protocol" in path and os.path.realpath(
+                    path).startswith(os.path.realpath(tempfile.gettempdir()) + os.sep):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+        return data
+
+    def _store(self, keys: dict, image: QImage) -> TerminalImage:
+        image_id, number = self._number(keys, "i"), self._number(keys, "I")
+        if image_id:
+            self._forget(image_id)  # (the same id again: a new picture, and not shown)
+        else:
+            image_id = self._new_id()
+        self._order += 1
+        stored = self.images[image_id] = TerminalImage(image_id, number, image, self._order)
+        self._within_quota()
+        return stored
+
+    def _new_id(self) -> int:
+        while self._next_id in self.images:
+            self._next_id += 1
+        self._next_id += 1
+        return self._next_id - 1
+
+    def _within_quota(self) -> None:
+        def total():
+            return sum(image.size for image in self.images.values())
+
+        shown = {placement.image for placement in self.placements}
+        for keep_shown in (True, False):  # (the hidden ones first)
+            for image in sorted(self.images.values(), key=lambda image: image.order)[:-1]:
+                if total() <= QUOTA:
+                    return
+                if not (keep_shown and image.id in shown):
+                    self._forget(image.id)
+
+    def _forget(self, image_id: int) -> None:
+        self.images.pop(image_id, None)
+        self.placements = [p for p in self.placements if p.image != image_id]
+
+    def _find(self, keys: dict) -> TerminalImage:
+        if "I" in keys:
+            number = self._number(keys, "I")
+            found = [image for image in self.images.values() if image.number == number]
+            if not found:
+                raise GraphicsError(f"ENOENT:No image with number {number}")
+            return max(found, key=lambda image: image.order)  # (the newest)
+        image_id = self._number(keys, "i")
+        if image_id not in self.images:
+            raise GraphicsError(f"ENOENT:No image with id {image_id}")
+        return self.images[image_id]
+
+    # -- placing -----------------------------------------------------------------------------
+    def _place(self, stored: TerminalImage, keys: dict) -> None:
+        if keys.get("U") == "1":  # (a virtual placement, for Unicode placeholders: not drawn)
+            return
+        screen = self.screen
+        cell_width, cell_height = screen.cell_pixels
+        image = stored.image
+        x = max(0, min(image.width(), self._number(keys, "x")))
+        y = max(0, min(image.height(), self._number(keys, "y")))
+        source = QRect(x, y, self._number(keys, "w") or image.width() - x,
+                       self._number(keys, "h") or image.height() - y)
+        source = source.intersected(image.rect())
+        if source.isEmpty():
+            raise GraphicsError("EINVAL:The part of the picture to show is empty")
+        cols, rows = max(0, self._number(keys, "c")), max(0, self._number(keys, "r"))
+        offset = (max(0, min(cell_width - 1, self._number(keys, "X"))),
+                  max(0, min(cell_height - 1, self._number(keys, "Y"))))
+        if cols and rows:
+            width, height = cols * cell_width - offset[0], rows * cell_height - offset[1]
+        elif cols:
+            width = cols * cell_width - offset[0]
+            height = source.height() * width / source.width()
+        elif rows:
+            height = rows * cell_height - offset[1]
+            width = source.width() * height / source.height()
+        else:
+            width, height = source.width(), source.height()
+        cols = cols or max(1, math.ceil((offset[0] + width) / cell_width))
+        rows = rows or max(1, math.ceil((offset[1] + height) / cell_height))
+        placement_id = self._number(keys, "p")
+        if placement_id:  # (placed again: moved)
+            self.placements = [p for p in self.placements
+                               if not (p.image == stored.id and p.id == placement_id)]
+        self.placements.append(Placement(
+            stored.id, placement_id, screen.scrolled + screen.row, screen.col, cols, rows,
+            source, width, height, offset, self._number(keys, "z")))
+        if keys.get("C") != "1":  # the cursor: right of the picture, on its last row
+            for _ in range(rows - 1):
+                screen._line_feed()
+            screen.col = min(screen.cols - 1, screen.col + cols)
+            screen.wrap_pending = False
+
+    # -- deleting ----------------------------------------------------------------------------
+    def _delete(self, keys: dict) -> None:
+        how = keys.get("d", "a") or "a"
+        which, free = how.lower(), how.isupper()
+        screen = self.screen
+        number = self._number
+        cell_x, cell_y = number(keys, "x"), number(keys, "y")
+        if which == "a":
+            gone = [p for p in self.placements if self.screen_row(p) >= 0]
+        elif which in "in":
+            try:
+                image_id = self._find(keys if which == "n" else {"i": keys.get("i", "0")}).id
+            except GraphicsError:
+                return
+            placement_id = number(keys, "p")
+            gone = [p for p in self.placements
+                    if p.image == image_id and (not placement_id or p.id == placement_id)]
+            if free and not placement_id:
+                self._forget(image_id)
+        elif which == "c":
+            gone = [p for p in self.placements if self._covers(p, screen.row, screen.col)]
+        elif which in "pq":
+            gone = [p for p in self.placements if self._covers(p, cell_y - 1, cell_x - 1) and
+                    (which == "p" or p.z == number(keys, "z"))]
+        elif which == "x":
+            gone = [p for p in self.placements if p.col <= cell_x - 1 < p.col + p.cols]
+        elif which == "y":
+            gone = [p for p in self.placements
+                    if self.screen_row(p) <= cell_y - 1 < self.screen_row(p) + p.rows]
+        elif which == "z":
+            gone = [p for p in self.placements if p.z == number(keys, "z")]
+        elif which == "r":
+            gone = [p for p in self.placements if cell_x <= p.image <= cell_y]
+            if free:
+                for image_id in [i for i in self.images if cell_x <= i <= cell_y]:
+                    self._forget(image_id)
+        else:  # (f: animation frames)
+            return
+        self._remove(gone, free)
+
+    def _remove(self, gone: list[Placement], free: bool = False) -> None:
+        gone_ids = {id(p) for p in gone}
+        self.placements = [p for p in self.placements if id(p) not in gone_ids]
+        if free:  # (and the pictures no longer shown)
+            shown = {p.image for p in self.placements}
+            for image_id in {p.image for p in gone} - shown:
+                self.images.pop(image_id, None)
+
+    def _covers(self, placement: Placement, row: int, col: int) -> bool:
+        top = self.screen_row(placement)
+        return top <= row < top + placement.rows and \
+            placement.col <= col < placement.col + placement.cols
+
+    # -- following the screen ---------------------------------------------------------------
+    def screen_row(self, placement: Placement) -> int:
+        """Its row on the screen (below 0: in the history)."""
+        return placement.line - self.screen.scrolled
+
+    def scrolled(self, top: int, bottom: int, step: int, into_history: bool) -> None:
+        """Lines top..bottom moved one line up (step -1) or down (1); into_history:
+        the top one went into the history (the screen's ``scrolled`` is about to
+        count it)."""
+        if into_history:  # (the region's lines move with the count; the ones below don't)
+            for placement in self.placements:
+                if self.screen_row(placement) > bottom:
+                    placement.line += 1
+            return
+        kept = []
+        for placement in self.placements:
+            row = self.screen_row(placement)
+            if top <= row <= bottom:
+                if not top <= row + step <= bottom:
+                    continue  # (out of the region: gone)
+                placement.line += step
+            kept.append(placement)
+        self.placements = kept
+
+    def clear(self, history: bool = False) -> None:
+        """The screen cleared (ED 2): its placements go; the history's too (ED 3)."""
+        self.placements = [p for p in self.placements
+                           if not history and self.screen_row(p) < 0]
+
+    def prune(self) -> None:
+        """Placements on lines no longer there (the history's limit, a resize) go."""
+        screen = self.screen
+        first = -len(screen.history)
+        self.placements = [p for p in self.placements if first <= self.screen_row(p) < screen.rows]
+
+    def reset(self) -> None:
+        self.images.clear()
+        self.placements = []
+        self._loading = None

@@ -2235,7 +2235,7 @@ def cmdAgain_Click(self):
   Windows it gets pipes (no pseudo-terminal there): programs may not echo or
   color what they write.
 * `Write(Text)` types text into it (`"\r"` is Enter); `Kill()`, `Clear()`
-  (the screen and history), `Copy()`, `Paste()`; `Running`, `ProcessID`,
+  (the screen, history and pictures), `Copy()`, `Paste()`; `Running`, `ProcessID`,
   `ExitCode`, `Text` (the screen's text), `Title` (set by the program),
   `Rows`, `Columns`.
 * Events: `Exited(ExitCode)` (-1: killed), `TitleChange(Title)`,
@@ -2264,8 +2264,22 @@ def cmdAgain_Click(self):
   reporting (X10, normal, button and any motion; SGR coordinates;
   Shift+mouse still selects), focus reporting, bracketed paste (a paste
   arrives marked as one), soft and full resets. Blinking text shows steady;
-  xterm's DCS, APC (Kitty graphics), PM and SOS strings it doesn't use are
-  left out of the screen.
+  xterm's DCS, PM and SOS strings it doesn't use are left out of the screen.
+* Pictures: the xterm types (`vpTermXterm256Color`, `vpTermXterm`) speak the
+  [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/),
+  so `kitty +kitten icat picture.png`, `chafa`, `timg`, `yazi` and the like
+  show pictures in it. A program sends PNG, RGB or RGBA pixels (zlib
+  compressed or not) in its output, in chunks, or the name of a file (or of
+  a temporary file, deleted once read; shared memory isn't supported); shows
+  them at the cursor (part of a picture, scaled to columns and rows, offset
+  into the cell, over the text or under it, under the cells' backgrounds
+  too), moves and deletes them, and is answered (`OK` or an error, as
+  quietly as it asks). The pictures scroll with the text, into the history
+  too; erasing the display, the alternate screen and `Clear()` have their
+  own. Programs learn a cell's size in pixels from the pseudo-terminal's
+  size and xterm's `CSI 14 t` / `CSI 16 t`; sizes are in the screen's device
+  pixels (a Retina display's are twice the points). Not supported: animation
+  and Unicode placeholders.
 
 <!-- BEGIN GENERATED: control Terminal -->
 Default size 480 × 300. Property groups: Position, Colors, Common.

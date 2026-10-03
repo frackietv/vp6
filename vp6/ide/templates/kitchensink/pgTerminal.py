@@ -1,13 +1,21 @@
 """Kitchen Sink page: a Terminal running your shell (an xterm): type in it;
 the demo button types a command that writes bold, underlined, inverse and
-colored text, a box in the DEC line drawing characters and its TERM, and sets
-the terminal's title (TitleChange); the terminal type (TerminalType: xterm,
-vt100, vt220...: the shell starts again as one); Clear, Restart, and the
-shell's end (Exited)."""
+colored text, a box in the DEC line drawing characters and its TERM, sets
+the terminal's title (TitleChange) and shows VP6's icon (the Kitty graphics
+protocol: the picture's file, three rows high, on an xterm); the terminal
+type (TerminalType: xterm, vt100, vt220...: the shell starts again as one);
+Clear, Restart, and the shell's end (Exited)."""
 
+import base64
+import os
 import sys
 
+import vp6
 from vp6 import *
+
+# VP6's icon, for the Kitty graphics protocol: its file's path, in base64
+ICON = base64.b64encode(os.path.join(os.path.dirname(vp6.__file__), "images",
+                                     "vp6icon-128x128.png").encode()).decode()
 
 if sys.platform == "win32":  # (cmd.exe, without a pseudo-terminal there)
     DEMO = "echo The VP6 Terminal & ver\r"
@@ -15,7 +23,8 @@ else:
     DEMO = ("printf '\\033]0;VP6 Terminal\\007\\033[1mbold\\033[0m \\033[4munderlined\\033[0m "
             "\\033[7minverse\\033[0m'; for c in 31 32 33 34 35 36; do "
             "printf ' \\033[%sm color %s \\033[0m' $c $c; done; "
-            "printf ' \\033(0lqqk\\033(B TERM='; echo $TERM\r")
+            "printf ' \\033(0lqqk\\033(B TERM='; echo $TERM; "
+            f"printf '\\033_Ga=T,t=f,f=100,r=3,q=2;{ICON}\\033\\\\'; echo ' VP6'\r")
 
 
 class pgTerminal(Form):

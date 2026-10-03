@@ -535,7 +535,7 @@ Running other programs.
 * `Shell(PathName, WindowStyle)`: `QProcess.startDetached`; its process ID,
   or FileNotFoundError.
 
-### `vp6/terminal.py` (≈1550 lines)
+### `vp6/terminal.py` (≈1640 lines)
 
 The Terminal control.
 
@@ -556,8 +556,9 @@ The Terminal control.
   10 / 11). Properties `cursor_visible`, `cursor_shape`, `mouse_mode`.
   `_reset()` is the power-on state (ESC c; the history stays). `feed(text)`
   is a state machine (text, ESC, ESC with an intermediate, CSI, and strings
-  up to ST: OSC, DCS, SOS/PM/APC ignored; CAN / SUB cancel, ESC starts
-  over): `_text_char` (CR, LF (and CR in new line mode), BS, TAB, SO / SI,
+  up to ST: OSC, DCS, APC (`graphics.command`, xterms only), SOS/PM
+  ignored; CAN / SUB cancel, ESC starts over; a string's text is collected
+  in `_parts`, in bulk up to `_STRING_STOP`, since pictures are long): `_text_char` (CR, LF (and CR in new line mode), BS, TAB, SO / SI,
   C1 controls as ESC sequences for `_EIGHT_BIT` types, printable `_put`:
   the character set, insert mode, autowrap, `_last` for REP), `_escape`
   (7 / 8 with `_cursor_state` / `_restore_cursor`, D, E, M, H, = / >,
@@ -572,7 +573,13 @@ The Terminal control.
   (0 and 2: the title; 10 / 11 / 4 questions), `_dcs` (xterm's DECRQSS
   with `_sgr_text`, XTGETTCAP). `resize` keeps the cursor's line on the
   screen (lines above go to the history, and come back), the main screen
-  behind the alternate one and the tab stops follow. `text()`,
+  behind the alternate one and the tab stops follow. Pictures: `graphics`
+  (a `KittyGraphics`; the alternate screen has its own, the main one's in
+  `_main_graphics`), `scrolled` (lines gone into the history ever: the
+  placements' lines count from the first), `cell_pixels` (a cell in device
+  pixels, set by the Terminal; `CSI 14 t` / `16 t` answer with it);
+  `_scroll_up`, `_scroll_down`, `L` / `M`, `_erase_display` (2, 3), `resize`
+  and `_reset` keep them in step. `text()`,
   `all_lines()`, `line_text`. `Attr` (frozen: fg, bg, bold, dim, italic,
   underline, blink, inverse, invisible, strike), `PLAIN`.
 * **The program:** `_PtyProgram` (`pty.openpty`, `subprocess.Popen` on the
@@ -580,7 +587,8 @@ The Terminal control.
   terminal, `TIOCSWINSZ` for its size, a `QSocketNotifier` on the master
   reading output; EOF / EIO: `_finish` waits for the exit code) and
   `_PipeProgram` (Windows: a `QProcess`, merged channels); both get the
-  TERM to set. `default_shell()`.
+  TERM to set and the size in pixels (`pixels`, and `resize(rows, cols,
+  width, height)`: `TIOCSWINSZ`'s pixel fields). `default_shell()`.
 * **Keys:** `key_text(key, modifiers, text, screen=None)`: as the screen's
   terminal type and modes (`_CURSOR_KEYS` with CSI or SS3, `_EDITING_KEYS`,
   `_PF_KEYS`, `_FUNCTION_KEYS`, `_VT100_KEYS`, `_KEYPAD_KEYS` in keypad
@@ -594,7 +602,11 @@ The Terminal control.
   grid, a font per bold / italic, bold dark colors brightened, dim, inverse,
   invisible, underline, strikethrough, `_draw_box` for box lines, reverse
   video, selection, `_color` for 16 / 256 / RGB colors, the cursor: a block
-  (an outline without the focus), an underline or a bar);
+  (an outline without the focus), an underline or a bar); the runs are
+  collected first so `_pictures` (the placements showing, where, scaled
+  from the screen's `cell_pixels` to the font's cells) are drawn by
+  `_draw_pictures` in three layers: z below `UNDER_BACKGROUNDS`, then the
+  cells' backgrounds, z below 0, the text, the rest;
   `grid_size()` from the font's cell size; resizing resizes the screen and
   the program; keys (`ShortcutOverride` accepted for what the program gets,
   so the menus don't take them; `focusNextPrevChild` keeps Tab), input
@@ -608,12 +620,44 @@ The Terminal control.
   `default_shell()`; a pty, or pipes on Windows, with the screen's TERM),
   `_on_data` (an incremental UTF-8 decoder, `feed`, the screen's replies
   sent back, a 15 ms `_refresh` timer, TitleChange), `_on_exit` (Exited),
-  `_resize_screen`, `_send` / `_send_bytes`, `Write`, `Kill`, `Clear`,
+  `_resize_screen` (also the screen's `cell_pixels` from the font and the
+  device pixel ratio; `_pixels()` for the program), `_send` /
+  `_send_bytes`, `Write`, `Kill`, `Clear` (the pictures too),
   `Copy`, `Paste` (bracketed in mode 2004); `TerminalType`
   (`_apply_TerminalType` sets the screen's `term`), `TermName`,
   `_default_rgb` (the screen's `colors`);
   `_shown` starts it (AutoStart) the first time it shows; `_form_unloaded`
   kills it. In the designer, `_terminal_design_widget` (a dark box, `$ _`).
+
+### `vp6/termgraphics.py` (≈400 lines)
+
+Pictures in the Terminal: the Kitty graphics protocol, for `AnsiScreen`.
+
+* `KittyGraphics(screen)`: `images` (id: `TerminalImage(id, number, image,
+  order)`, the QImage premultiplied) and `placements` (`Placement`: the
+  image, its placement id, `line` (counted from the screen's first,
+  `screen.scrolled` of them in the history), `col`, the `cols` x `rows`
+  cells it covers, `source` (a QRect of the image), `width` x `height` in
+  device pixels, `offset` into the first cell, `z`).
+* `command(text)` (an APC string's text: `G`, keys, `;`, base64): chunks
+  (`m=1`) collect in `_loading` with the first chunk's keys; `_run` by the
+  action: transmit (`t`, `T`, `q` only checks): `_image_from` (base64,
+  `t=d`, `t=f` / `t=t` with `_read_file` (`S`, `O`; a temporary file with
+  `tty-graphics-protocol` in its name in the temp folder is deleted),
+  `o=z`, `f=100` PNG, 24 / 32 with `s` x `v`, `MAX_SIDE`), `_store` (the
+  same id replaces a picture; else `_new_id` from 2³¹; `_within_quota`
+  drops the oldest, hidden ones first, beyond `QUOTA`); place (`p`):
+  `_find` (by `i`, or `I`: the newest with that number), `_place` (`x`,
+  `y`, `w`, `h`, `X`, `Y`, `c`, `r` (one: the shape kept), `z`, `p`
+  replacing the same placement, `U=1` not drawn, the cursor moved unless
+  `C=1`); delete (`d`): `_delete` (`a`, `i`, `n`, `c`, `p`, `q`, `x`, `y`,
+  `z`, `r`; capitals free pictures, `_remove`); animation: an error.
+  `GraphicsError` messages go back by `_answer` (only with `i` or `I`;
+  `q=1` no OK, `q=2` nothing) through the screen's `_reply`.
+* Following the screen: `screen_row(placement)`, `scrolled(top, bottom,
+  step, into_history)` (a region's lines moving; out of it: gone),
+  `clear(history)` (ED 2 / 3), `prune()` (lines gone from the history or
+  below the screen), `reset()`.
 
 ### `vp6/mdi.py` (≈280 lines)
 
@@ -1978,8 +2022,9 @@ explorer-style.
     opening the project's folder in the file manager;
   * `pgTerminal.py`: a Terminal running your shell (AutoStart), Demo
     typing a command (Write) that writes bold, underlined, inverse and
-    colored text, a DEC line drawing box and its TERM, and sets the title
-    (TitleChange), a ComboBox of terminal types (TerminalType: the shell
+    colored text, a DEC line drawing box and its TERM, sets the title
+    (TitleChange) and shows VP6's icon (`ICON`: its file's path for the
+    Kitty graphics protocol, `t=f`), a ComboBox of terminal types (TerminalType: the shell
     restarted as one), Clear, Restart (Kill, then Start in Exited), and the
     shell's end;
   * `pgMDI.py`: a button opening the Notes window (`frmMDI`), and a TextBox
@@ -2197,7 +2242,7 @@ All tests run headless. `conftest.py`:
 | `test_splash.py` | The command line (`parse_arguments`: a project, `--no-splash` before or after it, a missing file); the splash screen (2 seconds by default, frameless and of a fixed size, the logo with the version centered under it, not closed by `close()`, a click or Esc, closing itself when its time is up, its colors the same under a light and a dark palette); `main()` showing the window after the splash screen, and no splash screen with `--no-splash`. |
 | `test_statusbar.py` | The StatusBar: the designer's panel lines (`parse_panel`); docking at the bottom beside other docked controls, following the window (Spring panels growing), Top, hidden taking no space; the Panels collection (Index and Key, Add at an Index, unique keys, errors, Contents and fixed widths, Alignment, ToolTipText, hidden panels, Remove, Clear, changing a Key); time and date panels kept up to date, lock keys dimmed when off; Simple style; PanelClick, Click and PanelDblClick from the mouse; the form file round trip; creating it in the designer (docked, one panel to start, no clock running, the Properties window's Panels); Toolbox, icon and constants. |
 | `test_tabstrip.py` | The TabStrip: the designer's tab lines (`parse_tab`); tabs, captions and tooltips; the selection (the first to begin with, no Click while loading, SelectedItem by Key, Index or Tab, `Selected`, Click from code); the user's clicks, BeforeClick cancelling, no BeforeClick for the selected tab; Add before the others keeping the selection without Click, Caption and ToolTipText, errors, Remove, Key changes, Clear; the client area for every Placement (equal to Qt's layout, and already right in Form_Load), a Frame over it on top; the form file round trip; the designer (one tab to start, the Properties window's Tabs); Toolbox, icon and constants. |
-| `test_terminal.py` | The ANSI screen: text and controls (CR, LF, TAB, BS, wrapping), cursor movement and erasing, inserting and deleting lines and characters, saving the cursor, colors and attributes (16, bright, 256, RGB), scrolling and the history's limit, a scroll region, the title, the alternate screen, reset, resizing; the terminal types (their Device Attributes and other answers: status, the cursor, the size, colors, modes, settings, terminfo, the version; a vt100 not answering xterm's), character sets (DEC line drawing, SO/SI, single shifts), 8-bit controls (not a vt100's), DCS/APC/PM/SOS strings left out, REP, the alignment test, modes (autowrap, the wrap kept by SGR, insert, new line, origin, soft reset, tab stops, the cursor's shape, reverse video, mouse modes one at a time, full reset), the title stack and the alternate screen keeping the cursor and resizing, more attributes (dim, italic, blink, invisible, strike, colon forms, xterm's key options not taken for SGR), keys by terminal type and mode (xterm's modifiers, application cursor and keypad keys, new line Enter, a vt220's Find and Select, a vt100's PF and keypad keys); the mouse (SGR and X10, Shift selecting), focus and bracketed pastes reported to a stand-in program, and the terminal's answers sent to it; the TerminalType property (TermName, out of range, its default); keys as a terminal sends them; a real shell in a pseudo-terminal (its TERM, its tty and size, the title, Ctrl+C interrupting, its exit code, another program with Start), a program seeing its terminal type (vt100, xterm: its TERM and its Device Attributes answered), resizing telling the program, typing, copy and paste, Clear; ended with its form; not started without AutoStart; the Toolbox, icon, events and the designer's placeholder. |
+| `test_terminal.py` | The ANSI screen: text and controls (CR, LF, TAB, BS, wrapping), cursor movement and erasing, inserting and deleting lines and characters, saving the cursor, colors and attributes (16, bright, 256, RGB), scrolling and the history's limit, a scroll region, the title, the alternate screen, reset, resizing; the terminal types (their Device Attributes and other answers: status, the cursor, the size, colors, modes, settings, terminfo, the version; a vt100 not answering xterm's), character sets (DEC line drawing, SO/SI, single shifts), 8-bit controls (not a vt100's), DCS/APC/PM/SOS strings left out, REP, the alignment test, modes (autowrap, the wrap kept by SGR, insert, new line, origin, soft reset, tab stops, the cursor's shape, reverse video, mouse modes one at a time, full reset), the title stack and the alternate screen keeping the cursor and resizing, more attributes (dim, italic, blink, invisible, strike, colon forms, xterm's key options not taken for SGR), keys by terminal type and mode (xterm's modifiers, application cursor and keypad keys, new line Enter, a vt220's Find and Select, a vt100's PF and keypad keys); the mouse (SGR and X10, Shift selecting), focus and bracketed pastes reported to a stand-in program, and the terminal's answers sent to it; the TerminalType property (TermName, out of range, its default); keys as a terminal sends them; a real shell in a pseudo-terminal (its TERM, its tty and size, the title, Ctrl+C interrupting, its exit code, another program with Start), a program seeing its terminal type (vt100, xterm: its TERM and its Device Attributes answered), resizing telling the program, typing, copy and paste, Clear; ended with its form; not started without AutoStart; the Toolbox, icon, events and the designer's placeholder; pictures by the Kitty graphics protocol (RGB, RGBA, PNG, zlib, chunks, files and temporary files, queries, numbers, answers and errors and their quietness, placing part of a picture scaled, offset, at a z-index, moved by its placement id, the cursor after it), scrolling with the text and in a scroll region, inserted and deleted lines, erased, deleted every way (capitals freeing them), reset, the alternate screen's own, resizing, the pixel sizes asked, not on a vt100, a long one in bulk, the quota; drawn over and under the text and under the cells' backgrounds, Clear; a program in the pseudo-terminal learning the pixel size and placing one. |
 | `test_toolbar.py` | The Toolbar: its designer lines (`parse_button`); docking at the top as tall as its buttons, following the window, vertical when Left; the Buttons collection (Index and Key, separators, hidden and disabled buttons, tooltips, Add at an Index, errors, Remove, read-only placement); clicks on default, Check and ButtonGroup buttons (one pressed, a pressed one staying pressed), code setting Values (no ButtonClick, none pressed allowed); ImageList pictures by key and Index at its size, TextAlignment, an unknown Image; the form file round trip; the designer (docked at the top, the Properties window's Buttons); Toolbox, icon and constants. |
 | `test_scrolling.py` | PictureBox ScrollBars: bars appearing for controls beyond the edges (both directions), ScrollLeft/ScrollTop and the Scroll event moving the contents, bars following moved, added and hidden controls, one direction only, turning it off, controls and Click on the empty area still working, a taller form shown inside scrolling, the designer not scrolling. |
 | `test_label_text.py` | Label TextFormat: plain text hiding access keys, rich text and Markdown (really rendered), switching back; links firing LinkClick or opening the browser without a handler, only for formatted captions; the file and the designer (links off while designing, the multi-line Caption editor); the constants; access keys: `parse_mnemonic`, the key sequence per platform, the letter underlined, focusing the next control (skipping hidden, disabled and focusless ones, going round), none for a disabled label, a new Caption replacing the key, UseMnemonic False, && and rich text without keys, none while designing.; BackStyle (Opaque by default, filled with the container's color, a Frame's panel kept, Transparent ignoring BackColor, switching back, BackColor None). |
@@ -2238,7 +2283,7 @@ All tests run headless. `conftest.py`:
 | `test_packaging.py` | The package as published: `pyproject.toml`'s version is `vp6.__version__`, the MIT license and its file, the author without an email, the dependencies and the `make` extra; every data file in `vp6/` (not a module of a package) matched by the package data, so the wheel has it; the `vp6`, `vp6-run` and `vp6-make` commands; the source distribution's docs and tests; the release workflow's version check and trusted publishing. |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the Docking panels page (Float and Dock, Close cancelled, a closed panel shown again, the layout saved and restored, the grid following its panel), the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Terminal page (the shell started, the demo's colors, line drawing and title, Restart, a vt220 chosen restarting the shell as one, Clear, the shell's end); the Running programs page (a program answering, its error output, exit code, Kill, a missing one, Shell stubbed); the MDI and popup forms page (the Notes window and its notes, their menus, tiling, closing; suggestions in a popup taken with the keys); the Web pages page (a stand-in WebView: navigating, an error, Back and Forward, RunScript, Refresh; the WebBrowser chosen instead, its BeforeNavigate, NewWindow and StatusTextChange), the Dialogs page's CommonDialog (Open, Save As writing the sample, Color and its cancelling, Font, Print), the Mouse page's pointers, fruit dragged into the basket and out, and drops from other programs, the Buttons page's cmdHop moving into the Basket frame and out (Container), the Keyboard page's Validate (the focus kept, Help regardless), ActiveControl and SendKeys (typed, upper-cased, Enter on the Default button), the Dialogs page's default instance (Result, closed by code or by its close button, the same instance loaded again, its icon), the Your own controls page (ctlRating's stars, a click's Change, Hover, Value from code, Locked, Max and Value kept in range), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order, lines and shapes, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, the popup menu (right-click, the bold default, under a button), globals); closing unloads the pages. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the Docking panels page (Float and Dock, Close cancelled, a closed panel shown again, the layout saved and restored, the grid following its panel), the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Terminal page (the shell started, the demo's colors, line drawing, title and picture, Restart, a vt220 chosen restarting the shell as one, Clear, the shell's end); the Running programs page (a program answering, its error output, exit code, Kill, a missing one, Shell stubbed); the MDI and popup forms page (the Notes window and its notes, their menus, tiling, closing; suggestions in a popup taken with the keys); the Web pages page (a stand-in WebView: navigating, an error, Back and Forward, RunScript, Refresh; the WebBrowser chosen instead, its BeforeNavigate, NewWindow and StatusTextChange), the Dialogs page's CommonDialog (Open, Save As writing the sample, Color and its cancelling, Font, Print), the Mouse page's pointers, fruit dragged into the basket and out, and drops from other programs, the Buttons page's cmdHop moving into the Basket frame and out (Container), the Keyboard page's Validate (the focus kept, Help regardless), ActiveControl and SendKeys (typed, upper-cased, Enter on the Default button), the Dialogs page's default instance (Result, closed by code or by its close button, the same instance loaded again, its icon), the Your own controls page (ctlRating's stars, a click's Change, Hover, Value from code, Locked, Max and Value kept in range), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order, lines and shapes, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, the popup menu (right-click, the bold default, under a button), globals); closing unloads the pages. |
 | `test_mouse.py` | MousePointer (a control's own pointer given back, a custom MouseIcon, a form's), Screen.MousePointer; which controls have the mouse members and events; VB drag and drop: DragOver's enter, over and leave, DragDrop, refusing in DragOver, dropping on a user control, Drag starting (its data and picture, its DragIcon), ending where it is and cancelling, DragMode Automatic (no MouseDown or Click); drops from other programs (OLEDragOver, OLEDragDrop, refusing, a TextBox's own drop with OLEDropMode None, a form's), the DataObject. |
 | `test_popupmenu.py` | Form.PopupMenu: the chosen item returned after its Click (and the menu's own Click first), the bold DefaultMenu only for that time, None when closed without a choice, nothing recorded outside PopupMenu; left, right and center alignment at X, Y, the mouse's place for what is left out; not a Menu, a menu without items, a visible menu-bar menu; at design time. |
 | `test_picture.py` | Picture objects: one in memory (the graphics methods on it, transparent and filled, Cls, Image a copy, no unknown properties), LoadPicture (empty, a missing file, not a picture), SavePicture (by extension, BMP without one, a file's picture, an empty one failing); Pictures as a PictureBox's, Image's, button's Picture, the Icon, a MouseIcon, an ImageList's picture, clearing with LoadPicture(); a PictureBox's Image and PaintPicture (at its size, scaled part, a file, an empty one), a form's Image; a form's background Picture (a file relative to its folder, under the drawing, a Picture, cleared; the form file); the clipboard (pictures, files' pictures, text, RTF, files); a dropped picture in a DataObject; the exports. |
