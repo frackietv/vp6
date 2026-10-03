@@ -2280,6 +2280,16 @@ def cmdAgain_Click(self):
   size and xterm's `CSI 14 t` / `CSI 16 t`; sizes are in the screen's device
   pixels (a Retina display's are twice the points). Not supported: animation
   and Unicode placeholders.
+* They also show [iTerm2's inline images](https://iterm2.com/documentation-images.html)
+  (`imgcat`, `chafa -f iterm`, `timg -pi`...): a PNG, JPEG, GIF or BMP
+  file sent in the output (`OSC 1337 ; File=inline=1 : base64`, or in parts
+  with `MultipartFile`, `FilePart` and `FileEnd`), sized by `width` and
+  `height` in cells, pixels (`16px`), percent of the screen (`50%`) or
+  `auto` (its own size, no wider than the screen), its shape kept unless
+  `preserveAspectRatio=0`; the cursor goes after it unless
+  `doNotMoveCursor=1`. `ReportCellSize` is answered (a cell's height and
+  width in points, and the scale). Files sent to download (without
+  `inline=1`) are left out.
 
 <!-- BEGIN GENERATED: control Terminal -->
 Default size 480 × 300. Property groups: Position, Colors, Common.

@@ -1,9 +1,10 @@
-"""Pictures in the Terminal: the Kitty graphics protocol.
+"""Pictures in the Terminal: the Kitty graphics protocol and iTerm2's inline
+images. ``TerminalGraphics`` keeps a screen's images (by id, and the number
+a program may give one instead) and their placements on its cells.
 
-A program sends an APC string, ``ESC _ G keys ; payload ESC \\``: the keys
-(``a=T,f=100,i=1...``) say what to do, the payload is base64. ``KittyGraphics``
-keeps a screen's images (by id, and the number a program may give one
-instead) and their placements on its cells:
+The Kitty graphics protocol: a program sends an APC string, ``ESC _ G keys ;
+payload ESC \\``: the keys (``a=T,f=100,i=1...``) say what to do, the payload
+is base64:
 
 * transmitting (``a=t``, ``a=T`` to show it too, ``a=q`` to only check it):
   PNG (``f=100``), RGBA (32, the default) or RGB (24) pixels of ``s`` x
@@ -23,6 +24,17 @@ instead) and their placements on its cells:
 * answering (unless ``q=1``: not OKs; ``q=2``: nothing): ``ESC _ G i=id ;
   OK ESC \\`` or an error (``ENOENT:...``), when the program gave an id or a
   number.
+
+iTerm2's inline images: an OSC string, ``ESC ] 1337 ; File = args : base64
+BEL`` (or ST), the file a picture Qt reads (PNG, JPEG, GIF, BMP...). With
+``inline=1`` it shows at the cursor (else it's a download: left out),
+``width`` and ``height`` in cells (``N``), pixels (``Npx``), percent of the
+screen (``N%``) or ``auto``, ``preserveAspectRatio=0`` to stretch it; the
+cursor goes to the right of it on its last row (unless ``doNotMoveCursor=1``).
+A large one comes in parts: ``MultipartFile=args``, ``FilePart=base64``...,
+``FileEnd``. ``ReportCellSize`` is answered with a cell's height and width in
+points, and the scale. Its pictures have no ids: one is forgotten once its
+placement has gone.
 
 Placements are on lines counted from the first one the screen ever had
 (``AnsiScreen.scrolled`` lines have gone into its history), so they scroll
@@ -59,6 +71,7 @@ class TerminalImage:
     number: int  # (the I the program gave it: 0 none)
     image: QImage
     order: int  # (when it came: the oldest go first when there are too many)
+    anonymous: bool = False  # (iTerm2's: forgotten once no longer placed)
 
     @property
     def size(self) -> int:
@@ -84,7 +97,7 @@ class Placement:
     z: int = 0
 
 
-class KittyGraphics:
+class TerminalGraphics:
     """A screen's images and placements (the module's documentation)."""
 
     def __init__(self, screen):
@@ -92,11 +105,12 @@ class KittyGraphics:
         self.images: dict[int, TerminalImage] = {}
         self.placements: list[Placement] = []
         self._loading = None  # (the keys and payload so far, while chunks come: m=1)
+        self._multipart = None  # (iTerm2's: the args and parts so far)
         self._order = 0
         self._next_id = 1 << 31  # (ids it gives pictures: above the programs' usual ones)
 
-    # -- the commands ----------------------------------------------------------------------
-    def command(self, text: str) -> None:
+    # -- the Kitty graphics protocol's commands ----------------------------------------------
+    def kitty(self, text: str) -> None:
         """An APC string's text (after ``ESC _``): ``G`` and a command."""
         if not text.startswith("G"):
             return
@@ -229,10 +243,22 @@ class KittyGraphics:
             self._forget(image_id)  # (the same id again: a new picture, and not shown)
         else:
             image_id = self._new_id()
+        return self._keep(TerminalImage(image_id, number, image, 0))
+
+    def _keep(self, stored: TerminalImage) -> TerminalImage:
+        self._drop_unplaced()
         self._order += 1
-        stored = self.images[image_id] = TerminalImage(image_id, number, image, self._order)
+        stored.order = self._order
+        self.images[stored.id] = stored
         self._within_quota()
         return stored
+
+    def _drop_unplaced(self) -> None:
+        """iTerm2's pictures no longer placed (no program can show them again)."""
+        shown = {placement.image for placement in self.placements}
+        for image_id in [image.id for image in self.images.values()
+                         if image.anonymous and image.id not in shown]:
+            del self.images[image_id]
 
     def _new_id(self) -> int:
         while self._next_id in self.images:
@@ -301,14 +327,97 @@ class KittyGraphics:
         if placement_id:  # (placed again: moved)
             self.placements = [p for p in self.placements
                                if not (p.image == stored.id and p.id == placement_id)]
-        self.placements.append(Placement(
-            stored.id, placement_id, screen.scrolled + screen.row, screen.col, cols, rows,
-            source, width, height, offset, self._number(keys, "z")))
-        if keys.get("C") != "1":  # the cursor: right of the picture, on its last row
-            for _ in range(rows - 1):
+        self._put(Placement(stored.id, placement_id, 0, 0, cols, rows, source, width, height,
+                            offset, self._number(keys, "z")), keys.get("C") != "1")
+
+    def _put(self, placement: Placement, move_cursor: bool) -> None:
+        """A placement at the cursor; the cursor then to the right of it, on its
+        last row."""
+        screen = self.screen
+        placement.line, placement.col = screen.scrolled + screen.row, screen.col
+        self.placements.append(placement)
+        if move_cursor:
+            for _ in range(placement.rows - 1):
                 screen._line_feed()
-            screen.col = min(screen.cols - 1, screen.col + cols)
+            screen.col = min(screen.cols - 1, screen.col + placement.cols)
             screen.wrap_pending = False
+
+    # -- iTerm2's inline images (OSC 1337) ----------------------------------------------------
+    def iterm2(self, text: str) -> None:
+        """An OSC 1337 string's text after ``1337;``."""
+        command, _, rest = text.partition("=")
+        if text == "ReportCellSize":
+            scale = self.screen.pixel_ratio
+            width, height = (size / scale for size in self.screen.cell_pixels)
+            self.screen._reply(f"\x1b]1337;ReportCellSize={height:g};{width:g};{scale:g}\x1b\\")
+        elif command == "File":
+            args, _, data = rest.partition(":")
+            self._iterm2_file(args, data)
+        elif command == "MultipartFile":
+            self._multipart = (rest, [])
+        elif command == "FilePart" and self._multipart is not None:
+            parts = self._multipart[1]
+            parts.append(rest)
+            if sum(map(len, parts)) > QUOTA:
+                self._multipart = None
+        elif text == "FileEnd" and self._multipart is not None:
+            args, parts = self._multipart
+            self._multipart = None
+            self._iterm2_file(args, "".join(parts))
+
+    def _iterm2_file(self, args: str, data: str) -> None:
+        keys = {}
+        for item in args.split(";"):
+            key, _, value = item.partition("=")
+            keys[key.strip()] = value.strip()
+        if keys.get("inline") != "1":  # (a file to download: not shown)
+            return
+        try:
+            image = QImage.fromData(base64.b64decode(data + "=" * (-len(data) % 4)))
+        except (binascii.Error, ValueError):
+            return
+        if image.isNull() or image.width() > MAX_SIDE or image.height() > MAX_SIDE:
+            return
+        image = image.convertToFormat(QImage.Format_ARGB32_Premultiplied)
+        stored = self._keep(TerminalImage(self._new_id(), 0, image, 0, anonymous=True))
+        width, height = self._iterm2_size(image, keys)
+        cell_width, cell_height = self.screen.cell_pixels
+        self._put(Placement(stored.id, 0, 0, 0, max(1, math.ceil(width / cell_width)),
+                            max(1, math.ceil(height / cell_height)), image.rect(), width,
+                            height), keys.get("doNotMoveCursor") != "1")
+
+    def _iterm2_size(self, image: QImage, keys: dict) -> tuple[float, float]:
+        """The size to draw it, in device pixels: from width and height (cells,
+        px, %, auto), its shape kept unless preserveAspectRatio=0; auto: its
+        own size, but no wider than the screen."""
+        screen = self.screen
+        cell_width, cell_height = screen.cell_pixels
+        whole_width, whole_height = screen.cols * cell_width, screen.rows * cell_height
+
+        def length(spec: str, cell: int, whole: int):
+            try:
+                if spec.endswith("px"):
+                    return max(1.0, float(spec[:-2]))
+                if spec.endswith("%"):
+                    return max(1.0, float(spec[:-1]) * whole / 100)
+                return max(1.0, float(spec) * cell)
+            except ValueError:  # (auto)
+                return None
+
+        natural_width, natural_height = image.width(), image.height()
+        width = length(keys.get("width", "auto"), cell_width, whole_width)
+        height = length(keys.get("height", "auto"), cell_height, whole_height)
+        if width is None and height is None:
+            scale = min(1.0, whole_width / natural_width)
+            return natural_width * scale, natural_height * scale
+        if width is None:
+            return natural_width * height / natural_height, height
+        if height is None:
+            return width, natural_height * width / natural_width
+        if keys.get("preserveAspectRatio", "1") != "0":  # (within the box)
+            scale = min(width / natural_width, height / natural_height)
+            return natural_width * scale, natural_height * scale
+        return width, height
 
     # -- deleting ----------------------------------------------------------------------------
     def _delete(self, keys: dict) -> None:
@@ -397,8 +506,9 @@ class KittyGraphics:
         screen = self.screen
         first = -len(screen.history)
         self.placements = [p for p in self.placements if first <= self.screen_row(p) < screen.rows]
+        self._drop_unplaced()
 
     def reset(self) -> None:
         self.images.clear()
         self.placements = []
-        self._loading = None
+        self._loading = self._multipart = None

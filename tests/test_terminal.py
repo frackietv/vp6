@@ -704,3 +704,59 @@ def test_a_program_sizes_pictures(qapp):
     placement, = form.term._screen.graphics.placements
     assert (placement.cols, placement.rows, placement.line) == (3, 2, 1)
     form.Unload()
+
+
+# --- pictures: iTerm2's inline images ----------------------------------------------------------
+
+def _iterm2(args: str, data: bytes, end: str = "\x07") -> str:
+    return f"\x1b]1337;File={args}:{base64.b64encode(data).decode()}{end}"
+
+
+def test_iterm2_inline_images():
+    screen = AnsiScreen(10, 40)
+    screen.cell_pixels, screen.pixel_ratio = (10, 20), 2.0
+    graphics = screen.graphics
+    png = _png(32, 32, "#ff0000")
+    screen.feed("ab" + _iterm2("name=" + base64.b64encode(b"x.png").decode() +
+                               ";size=99;inline=1", png) + "X")
+    placement, = graphics.placements  # its own size: 4 columns by 2 rows
+    assert (placement.line, placement.col, placement.cols, placement.rows) == (0, 2, 4, 2)
+    assert (placement.width, placement.height) == (32, 32)
+    assert screen.text() == "ab\n      X" and screen.replies == []  # (the cursor: after it)
+    assert graphics.images[placement.image].image.pixelColor(0, 0) == QColor("red")
+
+    def size(args):
+        screen.feed("\x1b[H" + _iterm2(args + ";inline=1;doNotMoveCursor=1", png))
+        assert (screen.row, screen.col) == (0, 0)
+        placed = graphics.placements[-1]
+        return placed.width, placed.height, placed.cols, placed.rows
+
+    assert size("width=3") == (30, 30, 3, 2)  # cells, its shape kept
+    assert size("height=2") == (40, 40, 4, 2)
+    assert size("width=16px") == (16, 16, 2, 1)  # pixels
+    assert size("height=50%") == (100, 100, 10, 5)  # of the screen
+    assert size("width=auto;height=1") == (20, 20, 2, 1)
+    assert size("width=4;height=1") == (20, 20, 2, 1)  # (within the box)
+    assert size("width=4;height=1;preserveAspectRatio=0") == (40, 20, 4, 1)  # stretched
+    wide = _png(800, 100)
+    screen.feed(_iterm2("inline=1", wide))  # (auto: no wider than the screen)
+    assert graphics.placements[-1].width == 400 and graphics.placements[-1].height == 50
+    # In parts, with ST; downloads, broken ones and a vt100's: not shown
+    count = len(graphics.placements)
+    encoded = base64.b64encode(png).decode()
+    screen.feed("\x1b]1337;MultipartFile=inline=1;height=1\x1b\\" +
+                f"\x1b]1337;FilePart={encoded[:50]}\x1b\\\x1b]1337;FilePart={encoded[50:]}\x07"
+                "\x1b]1337;FileEnd\x07")
+    assert len(graphics.placements) == count + 1 and graphics.placements[-1].rows == 1
+    screen.feed(_iterm2("name=eA==", png) + _iterm2("inline=1", b"not a picture") +
+                "\x1b]1337;File=inline=1:%%%\x07\x1b]1337;FileEnd\x07")
+    assert len(graphics.placements) == count + 1
+    vt100 = AnsiScreen(term="vt100")
+    vt100.feed(_iterm2("inline=1", png) + "x")
+    assert vt100.graphics.images == {} and vt100.text() == "x"
+    # Its cell's size, in points; pictures forgotten with their placements
+    screen.feed("\x1b]1337;ReportCellSize\x07")
+    assert screen.replies == ["\x1b]1337;ReportCellSize=10;5;2\x1b\\"]
+    assert len(graphics.images) == len(graphics.placements)
+    screen.feed("\x1b[2J" + _kitty("a=t,f=100,i=1", png) + _iterm2("inline=1", png))
+    assert len(graphics.images) == 2 and len(graphics.placements) == 1  # (Kitty's kept)

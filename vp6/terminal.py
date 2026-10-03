@@ -44,7 +44,7 @@ from PySide6.QtWidgets import QLabel, QScrollBar, QWidget
 from . import colors
 from ._props import P, enum_choices
 from .controls import _COMMON, CONTROL_TYPES, EVENT_ARGS, Control, _geometry, resolve_path
-from .termgraphics import UNDER_BACKGROUNDS, KittyGraphics
+from .termgraphics import UNDER_BACKGROUNDS, TerminalGraphics
 
 EVENT_ARGS.update({"Exited": "ExitCode", "TitleChange": "Title"})
 
@@ -144,7 +144,8 @@ class AnsiScreen:
         self.colors = None  # () -> ((r, g, b), (r, g, b)): the default fore and back colors
         self.scrolled = 0  # (lines gone into the history, ever: pictures are placed on lines
         self.cell_pixels = (10, 20)  # counted from the first) a cell's size in device pixels
-        self.graphics = KittyGraphics(self)  # (the Kitty graphics protocol's pictures)
+        self.pixel_ratio = 1.0  # (device pixels to points: iTerm2's ReportCellSize)
+        self.graphics = TerminalGraphics(self)  # (pictures: Kitty's and iTerm2's)
         self._reset()
 
     def _reset(self) -> None:
@@ -254,7 +255,7 @@ class AnsiScreen:
         elif state == "dcs":
             self._dcs(text)
         elif state == "apc" and self.term in _XTERMS:
-            self.graphics.command(text)
+            self.graphics.kitty(text)
 
     def _text_char(self, char: str) -> None:
         if char == "\x1b":
@@ -408,6 +409,8 @@ class AnsiScreen:
         number, _, value = text.partition(";")
         if number in ("0", "2"):
             self.title = value
+        elif number == "1337" and self.term in _XTERMS:  # iTerm2's: inline images
+            self.graphics.iterm2(value)
         elif number in ("10", "11") and value == "?" and self.colors is not None:
             rgb = self.colors()[int(number) - 10]
             self._reply(f"\x1b]{number};{_xcolor(rgb)}\x1b\\")
@@ -734,7 +737,7 @@ class AnsiScreen:
             self._alternate = (self.lines, self.row, self.col)
             self.lines = [self._blank() for _ in range(self.rows)]
             self.row = self.col = 0
-            self._main_graphics, self.graphics = self.graphics, KittyGraphics(self)
+            self._main_graphics, self.graphics = self.graphics, TerminalGraphics(self)
         elif not on and self._alternate is not None:
             self.lines, self.row, self.col = self._alternate
             self._alternate = None
@@ -1564,6 +1567,7 @@ class Terminal(Control):
                                          self._screen.cell_pixels):
             self._screen.resize(rows, cols)
             self._screen.cell_pixels = cell_pixels
+            self._screen.pixel_ratio = ratio
             if self.Running:
                 self._program.resize(rows, cols, *self._pixels())
         self._redraw()

@@ -1045,9 +1045,13 @@ def test_terminal_page(sink):
     colored = [attr for line in term._screen.lines for char, attr in line if char == "3"]
     assert any(attr.fg == 1 for attr in colored)  # (color 31: red)
     assert "┌──┐ TERM=xterm-256color" in term.Text.replace("\n", "")  # (DEC line drawing)
-    wait_for(lambda: term._screen.graphics.placements)  # VP6's icon (Kitty graphics)
-    icon, = term._screen.graphics.images.values()
-    assert icon.image.width() == 128 and term._screen.graphics.placements[0].rows == 3
+    # VP6's icon by the Kitty graphics protocol, and as an iTerm2 inline image beside it
+    wait_for(lambda: len(term._screen.graphics.placements) == 2)
+    kitty, iterm2 = term._screen.graphics.placements
+    assert [image.image.width() for image in term._screen.graphics.images.values()] == \
+        [128, 128]
+    assert kitty.rows == iterm2.rows == 3 and iterm2.line == kitty.line
+    assert iterm2.col == kitty.col + kitty.cols + 1
     first = term.ProcessID
     page.cmdRestart._widget.click()  # killed, then started again in Exited
     wait_for(lambda: page.lblStatus.Caption == "Shell restarted (xterm-256color)")

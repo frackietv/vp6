@@ -1,5 +1,18 @@
 # VP6 features
 
+**Version:** 0.4.42
+**Date:** 2026-10-02
+
+## Controls
+
+- iTerm2's inline images in the Terminal (the xterm types; `imgcat`, `chafa -f iterm`, `timg -pi`...): PNG, JPEG, GIF and BMP pictures sent in the output, whole or in parts, sized in cells, pixels, percent of the screen or their own size (no wider than the screen), their shape kept or stretched, the cursor after them or kept; scrolling with the text like Kitty's pictures; ReportCellSize answered
+
+## Kitchen Sink
+
+- The Terminal page's demo shows VP6's icon twice: by the Kitty graphics protocol and as an iTerm2 inline image
+
+---
+
 **Version:** 0.4.41
 **Date:** 2026-10-02
 
