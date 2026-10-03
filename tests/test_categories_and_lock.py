@@ -48,7 +48,7 @@ def test_categories():
     assert category_of(specs["Tag"]) == category_of(P("Unknown")) == "Misc"
     assert category_of(P("Stars", category="Appearance")) == "Appearance"  # its own
     assert category_of(Property("Rating", "int", category="Behavior")) == "Behavior"
-    known = {"Appearance", "Behavior", "Font", "List", "Misc", "Position", "Text"}
+    known = {"Appearance", "Behavior", "Data", "Font", "List", "Misc", "Position", "Text"}
     assert {category_of(spec) for spec in specs.values()} <= known
 
 

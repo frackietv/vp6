@@ -10,6 +10,7 @@ from vp6 import *
 from pgArrays import pgArrays
 from pgButtons import pgButtons
 from pgCode import pgCode
+from pgData import pgData
 from pgDialogs import pgDialogs
 from pgDocking import pgDocking
 from pgDrawing import pgDrawing
@@ -47,7 +48,7 @@ PAGES = {
     "intro": pgIntro, "text": pgText, "richtext": pgRichText, "editing": pgEditing, "code": pgCode,
     "buttons": pgButtons, "lists": pgLists, "scrollbars": pgScrollBars, "values": pgValues,
     "pictures": pgPictures, "drawing": pgDrawing, "zorder": pgZOrder, "tree": pgTree,
-    "listview": pgListView, "grid": pgGrid, "web": pgWeb, "terminal": pgTerminal,
+    "listview": pgListView, "grid": pgGrid, "data": pgData, "web": pgWeb, "terminal": pgTerminal,
     "tabs": pgTabs, "files": pgFiles, "timer": pgTimer, "layout": pgLayout,
     "docking": pgDocking, "scrolling": pgScrolling, "embedded": pgEmbedded, "dialogs": pgDialogs,
     "schemes": pgSchemes, "keyboard": pgKeyboard, "mouse": pgMouse, "mdi": pgMDI,
@@ -78,7 +79,49 @@ class Form1(Form):
         self.picNav = PictureBox(self, Left=0, Top=0, Width=220, Height=572, BorderStyle=0,
                                  Align=3, TabIndex=3)
         self.tvwIndex = TreeView(self.picNav, Left=0, Top=0, Width=220, Height=572,
-                                 Items=['Introduction|intro', 'Controls|controls', '    Text and labels|text', '    RichTextBox|richtext', '    Editing text|editing', '    CodeBox|code', '    Buttons and options|buttons', '    Lists|lists', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    Pictures|pictures', '    Drawing|drawing', '    Lines, shapes and z-order|zorder', '    TreeView|tree', '    ListView|listview', '    FlexGrid|grid', '    Web pages|web', '    Terminal|terminal', '    TabStrip|tabs', '    Drives, folders and files|files', '    Timer|timer', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Docking panels|docking', '    Scrolling|scrolling', '    Forms inside forms|embedded', 'Forms and dialogs|forms_section', '    Dialogs|dialogs', '    Color schemes|schemes', '    Keyboard|keyboard', '    Mouse|mouse', '    MDI and popup forms|mdi', 'Programming|programming', '    Control arrays|arrays', '    Menus|menus', '    Your own controls|usercontrol', '    Running programs|process', '    App, Screen, settings...|globals'],
+                                 Items=[
+                                     'Introduction|intro',
+                                     'Controls|controls',
+                                     '    Buttons and options|buttons',
+                                     '    Data control|data',
+                                     '    Drives, folders and files|files',
+                                     '    FlexGrid|grid',
+                                     '    Lists|lists',
+                                     '    ListView|listview',
+                                     '    Graphics Controls|graphics_controls',
+                                     '        Lines, shapes and z-order|zorder',
+                                     '        Drawing|drawing',
+                                     '        Pictures|pictures',
+                                     '    Scroll bars|scrollbars',
+                                     '    Sliders, progress and spinners|values',
+                                     '    TabStrip|tabs',
+                                     '    Terminal|terminal',
+                                     '    Text Input Controls|text_input_controls',
+                                     '        CodeBox|code',
+                                     '        Editing text|editing',
+                                     '        RichTextBox|richtext',
+                                     '        Text and labels|text',
+                                     '    Timer|timer',
+                                     '    TreeView|tree',
+                                     '    Web pages|web',
+                                     'Forms and dialogs|forms_section',
+                                     '    Color schemes|schemes',
+                                     '    Dialogs|dialogs',
+                                     '    Keyboard|keyboard',
+                                     '    MDI and popup forms|mdi',
+                                     '    Mouse|mouse',
+                                     'Layout|layout_section',
+                                     '    Docked panes and Splitter|layout',
+                                     '    Docking panels|docking',
+                                     '    Forms inside forms|embedded',
+                                     '    Scrolling|scrolling',
+                                     'Programming|programming',
+                                     '    App, Screen, settings...|globals',
+                                     '    Control arrays|arrays',
+                                     '    Menus|menus',
+                                     '    Running programs|process',
+                                     '    Your own controls|usercontrol',
+                                     ],
                                  TabIndex=4,
                                  ToolTipText='The topics: its nodes were typed in the designer (Items)')
         self.splNav = Splitter(self, Left=220, Top=0, Width=6, Height=572, MinSize=150,

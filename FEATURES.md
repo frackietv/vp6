@@ -1,5 +1,25 @@
 # VP6 features
 
+**Version:** 0.4.45
+**Date:** 2026-10-02
+
+## Controls
+
+- The Data control (VB's): a SQLite database's records (DatabaseName, RecordSource: a table or a SELECT), one at a time, its arrows going to the first, previous, next and last; what was changed is saved when it moves on (Validate(Action, Save) first, which can cancel; Reposition after); EOFAction (stay, EOF, or a new record) and BOFAction; ReadOnly; Error; Refresh, UpdateRecord, UpdateControls; Recordset and Database
+- Data-bound controls: DataSource and DataField (lists of the form's Data controls and of the record's fields in the Properties window) on TextBox, RichTextBox, CodeBox, Label, ComboBox, ListBox, CheckBox (NULL grayed) and Image and PictureBox (pictures kept in the database); DataChanged; a FlexGrid bound to a Data control shows all its records, and choosing a row goes to that record
+
+## Language and runtime
+
+- DAO's Recordset: MoveFirst, MoveLast, MoveNext, MovePrevious, Move, BOF, EOF, RecordCount, AbsolutePosition, Bookmark, Fields (and `rs("Name")`, `rs["Name"] = x`), AddNew, Edit, Update, CancelUpdate, EditMode, Delete, FindFirst / FindLast / FindNext / FindPrevious with SQL conditions and NoMatch, Requery, Updatable
+- OpenDatabase and CreateDatabase: a Database with Execute (parameters; several statements), OpenRecordset, Close; Pictures saved as PNGs
+- Constants: vpEOFAction..., vpBOFAction..., vpDataAction... (Validate's Action), vpEdit... (EditMode)
+
+## Kitchen Sink
+
+- A Data control page: pets in a SQLite database it makes the first time, in bound text boxes, a combo box, a check box, a picture and a grid; adding, deleting, finding, undoing and saving, read-only, and a summary by a GROUP BY query
+
+---
+
 **Version:** 0.4.44
 **Date:** 2026-10-02
 

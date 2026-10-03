@@ -23,17 +23,19 @@ from .form import Form, Forms, Load, Unload, run
 from .mdi import MDIForm
 from .process import Process, Shell
 from .terminal import Terminal
+from .data import CreateDatabase, Data, Database, Field, OpenDatabase, Recordset
 from .picture import LoadPicture, Picture, SavePicture
 from .printer import Printer, Printers
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.44"
+__version__ = "0.4.45"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Command", "Debug", "DeleteSetting", "DoEvents", "End",
     "GetAllSettings", "GetSetting", "SaveSetting", "Screen", "SendKeys",
     "LoadPicture", "Picture", "SavePicture", "Printer", "Printers", "MDIForm",
     "Process", "Shell", "Terminal",
+    "Data", "Database", "Recordset", "Field", "OpenDatabase", "CreateDatabase",
     "RGB", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",
     "Button", "CheckBox", "CodeBox", "ColumnHeader", "CommonDialog", "DialogCancelled", "ComboBox",

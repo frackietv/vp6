@@ -535,6 +535,55 @@ Running other programs.
 * `Shell(PathName, WindowStyle)`: `QProcess.startDetached`; its process ID,
   or FileNotFoundError.
 
+### `vp6/data.py` (≈1200 lines)
+
+Data-bound controls, on Python's `sqlite3`.
+
+* `Database` (`OpenDatabase`, `CreateDatabase`): a `sqlite3` connection by
+  URI (`mode=rw`, `ro` or `rwc`, so a missing file isn't made by accident),
+  autocommit (`isolation_level=None`). `Execute` falls back to
+  `executescript` for several statements without parameters; `_stored`
+  turns a Picture into PNG bytes (`picture_bytes`). `field_names(database,
+  source)` reads a RecordSource's fields for the Properties window.
+* `Recordset`: `_query` reads every record into `_records` (`_Record`: its
+  rowid as `key` and its `values`; the record object is the Bookmark). A
+  table name or a SELECT from one table (`_TABLE`, `_SELECT`, not
+  `_NOT_ONE_TABLE`) is read with `rowid AS __vp6_rowid` and can be changed
+  (`_table`, `_refetch` reads a record again after it is saved); anything
+  else, or a table without a rowid (a view), is read-only. `_pos` is -1 at
+  BOF, `len(_records)` at EOF; `_deleted` after Delete (DAO: no current
+  record until moving, MoveNext goes to `_pos`). Edits go into `_buffer`
+  (`_dirty`: the fields set), `EditMode`; `_write` INSERTs or UPDATEs by
+  rowid. Every move goes through `_go(target, action)`: the owning Data
+  control's `_leaving` (Validate, saving) first, the target computed after
+  (saving may append a record), then `_arrived`. Find methods evaluate the
+  SQL condition per record in SQLite (`SELECT (criteria) FROM (SELECT ? AS
+  "col", ...)`). `Field`, `_Fields`.
+* The bound controls: `BINDINGS` (TypeName: what the control shows, how a
+  value is shown, what is saved), `_add_binding` adds `DataSource`,
+  `DataField` (category Data), `DataChanged` (the value shown compared with
+  `_data_shown`, the value right after the record was shown; `_FORCED`
+  for True) and `_rebind` (DataSource or DataField changed at run time) to
+  TextBox, Label, CheckBox, ComboBox, ListBox, RichTextBox, CodeBox, Image
+  and PictureBox, and DataSource alone to FlexGrid (`BOUND_GRIDS`).
+* `Data(Control)`: `_DataBar` (a sunken frame: four `_NavButton`s, which
+  paint their arrows in the palette's colors, and the caption QLabel;
+  `_qss_type` QLabel so BackColor and ForeColor color the caption).
+  `Refresh` opens the database and Recordset (errors: `_report`, the Error
+  event or a run-time error); `_form_loaded` (called by `Form.Load` after
+  Form_Load) and the first use of `Recordset` or `Database` open it;
+  `_form_unloaded` saves and closes. `_collect(action)` fires Validate
+  (`_validate`) and puts the changed bound values into the Recordset's
+  buffer; `_leaving` also writes it (an untouched new record is dropped);
+  `_arrived` shows the record in the bound controls (`_arriving` keeps
+  their Change handlers from moving again) and the grids' current row, then
+  Reposition. Bound grids are filled by `_fill_grid` (`_rows_changed` after
+  a save, Delete, Requery) and follow the record (`_sync_grid`); a row
+  chosen there calls `_grid_moved` through the grid's `_data_follow` (from
+  `FlexGrid._on_current_changed`), `_syncing` guarding the loop. `_button`
+  applies BOFAction and EOFAction. Registered in `CONTROL_TYPES` before
+  Menu.
+
 ### `vp6/terminal.py` (≈1720 lines)
 
 The Terminal control.
@@ -1952,6 +2001,15 @@ explorer-style.
     Editable property sheet with an editor per cell (text, check, list,
     color, a `...` button asking with InputBox in CellButtonClick), Width
     checked in ValidateEdit, and a sample Label following it in AfterEdit;
+  * `pgData.py`: a Data control (`dtaPets`) on a SQLite database it makes in
+    Form_Load the first time (`make_database`: CreateDatabase, Execute, a
+    Recordset's AddNew and Update, pictures drawn by `portrait` saved as
+    PNGs), shown in a bound Label, TextBoxes, ComboBox, CheckBox, Image and
+    FlexGrid; EOFAction AddNew; Validate checking the age (and not saving an
+    emptied name), Reposition setting the caption, Error; buttons for AddNew,
+    Delete (then MoveNext), FindFirst, UpdateControls, UpdateRecord, ReadOnly
+    with Refresh, and a summary by OpenDatabase and a GROUP BY Recordset
+    (`field_list`);
   * `pgButtons.py` (with Graphical buttons: `cmdStar`, a picture button with
     a DownPicture; `chkUnderline`, a toggle CheckBox; `optAlign`, toggle
     OptionButtons in the Alignment frame): CommandButtons (Value = True clicks), CheckBoxes (also
@@ -2331,5 +2389,6 @@ All tests run headless. `conftest.py`:
 | `test_picture.py` | Picture objects: one in memory (the graphics methods on it, transparent and filled, Cls, Image a copy, no unknown properties), LoadPicture (empty, a missing file, not a picture), SavePicture (by extension, BMP without one, a file's picture, an empty one failing); Pictures as a PictureBox's, Image's, button's Picture, the Icon, a MouseIcon, an ImageList's picture, clearing with LoadPicture(); a PictureBox's Image and PaintPicture (at its size, scaled part, a file, an empty one), a form's Image; a form's background Picture (a file relative to its folder, under the drawing, a Picture, cleared; the form file); the clipboard (pictures, files' pictures, text, RTF, files); a dropped picture in a DataObject; the exports. |
 | `test_printer.py` | The Printer, to PDF files (rendered back with QtPdf): the page's size in VP6's pixels and its margins, a box, a filled circle, a Picture and text in points where they belong; pages, NewPage first, Orientation from the next page, A4; KillDoc printing nothing; a document for the printer redirected (conftest) and printed when the program ends; no printer (RuntimeError); no Cls, Point, Image or unknown properties; Printers and choosing DeviceName; ShowPrinter's choices with and without PrinterDefault; the exports. |
 | `test_project_files.py` | Save Project As: where the copy goes (an empty or new folder, else one named after the file), what it holds (the project's files, unsaved texts, the project file renamed with its own code, the project's fields with the new name; not dist, caches or hidden files), the original untouched, errors (a bad name, the project's own folder or one in it, a folder that isn't empty), File > Save Project As in the IDE working on the copy; renaming and deleting a module's file from the Project view's menu (out of the project, to the Trash). |
+| `test_data.py` | Data-bound controls: Database (CreateDatabase, OpenDatabase, Execute with parameters and several statements, Pictures as PNGs), the Recordset (moving, BOF and EOF, Fields and their values, AddNew, Edit, Update, CancelUpdate, Delete then MoveNext, Find with NoMatch, Bookmark, AbsolutePosition, Requery, read-only queries and views); the Data control: opened after Form_Load, bound controls of each kind, DataChanged, saving on moving, Validate (cancelling, Save), Reposition, EOFAction and BOFAction, Error, ReadOnly, UpdateRecord and UpdateControls, a bound FlexGrid both ways, DataSource set at run time, saved on unload; the Toolbox, icon, designer and the Properties window's lists. |
 | `test_process.py` | The Process control: running a program and talking with it (WorkingDirectory, UTF-8 both ways, standard output and error, Write and WriteLine, its exit code, not started twice, no writing when not running), CloseInput, Kill (-1), Terminate, WaitForExit, a command line with quotes, a program that can't be started (Error), no CommandLine, `split_command`; ended with its form; Shell (a program run on its own, a missing one, none); the Toolbox (before Menu), its icon, events and designer placement. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (none by default, nothing copied; its own files, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |

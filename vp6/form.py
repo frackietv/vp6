@@ -953,6 +953,10 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             self.__dict__["_loaded"] = True
             _loaded_forms.append(self)
             self._fire("Load")
+            for control in list(self._controls):  # (e.g. a Data control: opened now)
+                loaded = getattr(control, "_form_loaded", None)
+                if loaded is not None and self._loaded:
+                    loaded()
             if self._values.get("MDIChild") and not self._design_mode and self._loaded and \
                     not self.__dict__.get("_showing"):  # (Load of an MDI child: shown too)
                 from .mdi import mdi_form_for

@@ -55,6 +55,7 @@ _CATEGORY_NAMES = {
                 "NegotiatePosition OLEDropMode Resizable ScrollBars SelectionMode ShowHidden "
                 "SmallChange SortKey SortOrder Sorted SyncBuddy TabWidth UseMnemonic UseTabs "
                 "Value Visible WindowState WordWrap Wrap",
+    "Data": "BOFAction DatabaseName DataField DataSource EOFAction ReadOnly RecordSource",
     "Font": "FontBold FontItalic FontName FontSize FontStrikethru FontUnderline",
     "List": "Buttons Cols ColumnHeaders FixedCols FixedRows FormatString Icons ImageHeight "
             "ImageList ImageWidth Items List ListImages ListItems Panels Rows SmallIcons Tabs",

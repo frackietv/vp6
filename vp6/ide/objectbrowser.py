@@ -142,7 +142,7 @@ def _class_members(cls) -> list[Member]:
                 not inspect.ismodule(attribute):  # (e.g. App.Major: a plain attribute)
             members[name] = Member(name, "Property", f"Property {name} = {attribute!r}")
     for event in getattr(cls, "Events", ()):
-        arguments = EVENT_ARGS.get(event, "")
+        arguments = (getattr(cls, "EventArgs", None) or {}).get(event, EVENT_ARGS.get(event, ""))
         handler = f"Name_{event}(self" + (f", {arguments})" if arguments else ")")
         members[event] = Member(event, "Event", f"Event {event}({arguments})",
                                 f"Handled in the form by {handler}, Name being the "

@@ -34,6 +34,7 @@ vp6/                    runtime library - "from vp6 import *"
   colors.py             VB-style BGR colors, RGB(), QBColor()
   constants.py          vp* constants (MsgBox, keys, ...)
   controls.py           Control base class + 12 intrinsic controls
+  data.py               the Data control, Recordset and Database (SQLite); bound controls
   dialogs.py            MsgBox, InputBox
   form.py               Form, Forms, Load, Unload, run
   formfile.py           parse/generate the designer region of form files

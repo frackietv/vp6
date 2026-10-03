@@ -389,6 +389,32 @@ vpPDSelection = 0x1
 vpPDPageNums = 0x2
 vpCdlCancel = 32755  # the error a cancelled dialog raises with CancelError (DialogCancelled)
 
+# --- Data control: EOFAction and BOFAction ----------------------------------------------
+vpEOFActionMoveLast = 0
+vpEOFActionEOF = 1
+vpEOFActionAddNew = 2
+vpBOFActionMoveFirst = 0
+vpBOFActionBOF = 1
+
+# --- Data control: Validate's Action ----------------------------------------------------
+vpDataActionCancel = 0
+vpDataActionMoveFirst = 1
+vpDataActionMovePrevious = 2
+vpDataActionMoveNext = 3
+vpDataActionMoveLast = 4
+vpDataActionAddNew = 5
+vpDataActionUpdate = 6
+vpDataActionDelete = 7
+vpDataActionFind = 8
+vpDataActionBookmark = 9
+vpDataActionClose = 10
+vpDataActionUnload = 11
+
+# --- Recordset.EditMode -----------------------------------------------------------------
+vpEditNone = 0
+vpEditInProgress = 1
+vpEditAdd = 2
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

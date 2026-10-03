@@ -7422,6 +7422,9 @@ class FlexGrid(Control):
         if row >= 0 and col >= 0:
             self._fire("RowColChange")
             self._fire("EnterCell")
+        follow = self.__dict__.get("_data_follow")  # (bound to a Data control: its record)
+        if follow is not None and row >= 0 and row != previous_row:
+            follow(row)
 
     # -- structure ------------------------------------------------------------------------
     def _fill_headers(self) -> None:

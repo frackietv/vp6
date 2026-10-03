@@ -90,7 +90,7 @@ def _events(cls) -> str:
         return "No events."
     items = []
     for event in cls.Events:
-        args = EVENT_ARGS.get(event, "")
+        args = (getattr(cls, "EventArgs", None) or {}).get(event, EVENT_ARGS.get(event, ""))
         items.append(f"`{event}({args})`" if args else f"`{event}`")
     return (f"Events: {', '.join(items)}. Default event (double-click in the designer): "
             f"`{cls.DefaultEvent}`.")
@@ -155,6 +155,10 @@ def event_arguments() -> str:
     rows = ["| Event | Arguments |", "|---|---|"]
     for event, args in EVENT_ARGS.items():
         rows.append(f"| `{event}` | {args or 'none'} |")
+    for name, cls in CONTROL_TYPES.items():  # (a control's own, e.g. Data's Validate)
+        for event, args in (getattr(cls, "EventArgs", None) or {}).items():
+            if args != EVENT_ARGS.get(event):
+                rows.append(f"| `{event}` ({name}) | {args or 'none'} |")
     return "\n".join(rows)
 
 

@@ -179,6 +179,7 @@ class PropertiesWindow(QWidget):
             self.description.clear()
             return
         objects = designer.selected_objects()
+        self._objects = objects
         for name, type_name in designer.all_objects():
             self.object_combo.addItem(f"{name}  {type_name}", name)
         if len(objects) == 1:
@@ -335,6 +336,8 @@ class PropertiesWindow(QWidget):
             button.clicked.connect(
                 lambda _=False, n=spec.name, v=value, k=kind: self._edit_list(n, v, k))
             return button
+        if spec.name in ("DataSource", "DataField") and kind == "str":
+            return self._data_editor(spec, "" if mixed else value)
         if kind == "font":
             combo = QComboBox()
             combo.addItem("(Default)", None)
@@ -388,6 +391,42 @@ class PropertiesWindow(QWidget):
             more.clicked.connect(lambda _=False, n=spec.name: self._browse_file(n))
         container.setFocusProxy(edit)
         return container
+
+    def _data_choices(self, name: str) -> list[str]:
+        """DataSource: the form's Data controls; DataField: the fields of the
+        selected control's Data control's RecordSource (read from its database)."""
+        from ..data import field_names
+
+        controls = list(getattr(self.designer, "controls", {}).values())
+        sources = {c.Name: c for c in controls if c.TypeName == "Data"}
+        if name == "DataSource":
+            return sorted(sources)
+        objects = getattr(self, "_objects", [])
+        data = sources.get(objects[0]._values.get("DataSource", "")) if objects else None
+        if data is None:
+            return []
+        database = data._values.get("DatabaseName", "")
+        if database and not os.path.isabs(database):
+            database = os.path.join(getattr(self.designer, "base_dir", ""), database)
+        return field_names(database, data._values.get("RecordSource", ""))
+
+    def _data_editor(self, spec: PropSpec, value) -> QWidget:
+        """An editable list: VB's DataSource and DataField drop-downs."""
+        combo = QComboBox()
+        combo.setEditable(True)
+        combo.addItems(self._data_choices(spec.name))
+        combo.setCurrentText(str(value or ""))
+        combo.setProperty("vp6_value", str(value or ""))
+
+        def commit(c=combo, n=spec.name):
+            text = c.currentText()
+            if text != c.property("vp6_value"):  # (once: Enter, then losing the focus)
+                c.setProperty("vp6_value", text)
+                self._commit(n, text)
+
+        combo.lineEdit().editingFinished.connect(commit)
+        combo.activated.connect(lambda _i: commit())
+        return combo
 
     def _color_editor(self, spec: PropSpec, value, mixed: bool) -> QWidget:
         button = QPushButton()

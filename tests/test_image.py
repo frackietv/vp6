@@ -86,7 +86,7 @@ def test_properties_and_file(picture):
     assert list(Image._specs) == ["Left", "Top", "Width", "Height", "Stretch", "BorderStyle",
                                   "Picture", "Enabled", "Visible", "ToolTipText", "Tag",
                                   "ZIndex", "MousePointer", "MouseIcon", "DragMode",
-                                  "DragIcon", "OLEDropMode"]
+                                  "DragIcon", "OLEDropMode", "DataSource", "DataField"]
     body = ("def InitializeComponent(self):\n"
             "    self.imgA = Image(self, Left=8, Top=8, Width=64, Height=48, Stretch=True, "
             "Picture='a.png')\n")

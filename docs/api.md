@@ -287,6 +287,8 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `ErrorOutput` | Text |
 | `Exited` | ExitCode |
 | `Error` | Description |
+| `Reposition` | none |
+| `Validate` (Data) | Action, Save |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -864,6 +866,8 @@ Default size 121 × 97. A container: other controls can be placed on it. Propert
 | `AutoRedraw` | bool | `False` | True: what the graphics methods draw is kept (no Paint event); False: Paint fires whenever it needs drawing again |
 | `AutoSize` | bool | `False` | Resize to fit the picture |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A sunken border around the picture |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `DrawStyle` | enum | 0 - Solid | 0 - Solid, 1 - Dash, 2 - Dot, 3 - Dash-Dot, 4 - Dash-Dot-Dot, 5 - Transparent, 6 - Inside Solid. The lines the graphics methods draw |
@@ -956,6 +960,8 @@ Default size 97 × 25. Property groups: Position, Colors, Font, Common.
 | `BackStyle` | enum | 1 - Opaque | 0 - Transparent, 1 - Opaque. Opaque: the label fills its box (with BackColor, or its container's color) and hides what is behind it; Transparent: what is behind it (a picture, other controls) shows through, and BackColor is ignored |
 | `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the label |
 | `Caption` | str (multi-line) | `''` | The text; in plain text an & before a letter underlines it, its access key (&& shows a literal &) |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
@@ -980,6 +986,8 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment (single-line only) |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Locked` | bool | `False` | Read-only: the text can't be edited |
@@ -1089,6 +1097,8 @@ Default size 201 × 121. Property groups: Position, Colors, Font, Common.
 | `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A border around it |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Locked` | bool | `False` | Read-only: the text can't be edited |
@@ -1172,6 +1182,8 @@ Default size 321 × 201. Property groups: Position, Colors, Font, Common.
 | `AutoIndent` | bool | `True` | Enter keeps the line's indentation (Python: one more after a colon) |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `CurrentLineColor` | color | (default) | The current line's shade; unset = a shade of the background |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `HighlightCurrentLine` | bool | `True` | Shade the caret's line |
@@ -1271,6 +1283,8 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 |---|---|---|---|
 | `Caption` | str | `''` | The text; & marks the access key |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DisabledPicture` | file path | `''` | A Graphical button's picture while it is disabled; empty = Picture, grayed |
 | `DownPicture` | file path | `''` | A Graphical button's picture while it is pressed (or set); empty = Picture |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
@@ -1329,6 +1343,8 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the items' ItemImage is then a picture's Key or Index in it |
@@ -1380,6 +1396,8 @@ Default size 121 × 97. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the items' ItemImage is then a picture's Key or Index in it |
@@ -1688,6 +1706,8 @@ Default size 97 × 97. Property groups: Position.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the image |
+| `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
+| `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Enabled` | bool | `True` | Whether the control responds to the user |
@@ -2548,6 +2568,7 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | `AllowUserResizing` | enum | 1 - Columns | 0 - None, 1 - Columns, 2 - Rows, 3 - Both. What the user can resize by dragging the headings' edges |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Cols` | int | `2` | How many columns, the fixed one included |
+| `DataSource` | str | `''` | The Data control (its Name) whose records it shows; choosing a row goes to that record |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Editable` | bool | `False` | The user can edit the cells, each with its column's or its own editor |
@@ -2562,6 +2583,122 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | `SelectionMode` | enum | 0 - Free | 0 - Free, 1 - By Row, 2 - By Column. What a click selects: cells, whole rows or whole columns |
 
 Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
+### Data
+
+VB's Data control: it opens a SQLite database (Python's own `sqlite3`, no
+server) and a set of its records, and shows one record at a time in the
+controls bound to it. Its arrows go to the first, previous, next and last
+record; changes made in the bound controls are saved when it moves on.
+
+```python
+self.dtaPets = Data(self, Caption='Pets', DatabaseName='pets.db',
+                    RecordSource='SELECT * FROM pets ORDER BY Name')
+self.txtName = TextBox(self, DataSource='dtaPets', DataField='Name')
+self.chkVaccinated = CheckBox(self, DataSource='dtaPets', DataField='Vaccinated')
+self.grdPets = FlexGrid(self, DataSource='dtaPets')        # all the records
+
+def dtaPets_Validate(self, Action, Save):                    # before leaving a record
+    if Save and not self.txtAge.Text.isdigit():
+        MsgBox("The age is a number")
+        return vpDataActionCancel                             # stay on it
+
+def dtaPets_Reposition(self):                                # after arriving at one
+    rs = self.dtaPets.Recordset
+    self.dtaPets.Caption = f"Pet {rs.AbsolutePosition + 1} of {rs.RecordCount}"
+```
+
+* `DatabaseName`: the database file (relative to the form's folder); it must
+  exist (make it with `CreateDatabase`, e.g. in Form_Load). `RecordSource`:
+  a table's name or a `SELECT`. They are opened after Form_Load, or when
+  `Recordset` is first used; after changing them, `Refresh()` opens them
+  again. `ReadOnly`: nothing is saved.
+* **Bound controls** have `DataSource` (the Data control's name; at run time
+  the Data control itself can be assigned) and `DataField` (the field they
+  show), in the Properties window's Data category, where both are lists: the
+  form's Data controls, and the fields of its RecordSource. TextBox,
+  RichTextBox, CodeBox, Label, ComboBox and ListBox show the field as text
+  (empty for NULL; an emptied control saves NULL unless the field held
+  text); a CheckBox checks it when it is true (grayed for NULL); an Image or
+  PictureBox shows a picture kept in it (a BLOB: PNG, JPEG...; a Picture
+  assigned is saved as a PNG). A FlexGrid with only a `DataSource` shows all
+  the records under their field names, the current one selected; choosing a
+  row goes to that record.
+* `DataChanged` (a bound control's, at run time): whether its value was
+  changed since the record was shown; set it to False and the change isn't
+  saved.
+* Leaving a record (the arrows, the Recordset's Move and Find methods,
+  AddNew, Update, Delete, closing the form) first fires `Validate(Action,
+  Save)`: Action says why (`vpDataActionMoveNext`, `vpDataActionAddNew`,
+  `vpDataActionUnload`...), Save whether a bound control was changed.
+  Returning `vpDataActionCancel` (or True) stays on the record. Then the
+  changed values are saved, the new record is shown and `Reposition` fires.
+* `EOFAction`: what the next arrow does on the last record:
+  `vpEOFActionMoveLast` stays there, `vpEOFActionEOF` goes past it (EOF:
+  the controls are empty), `vpEOFActionAddNew` starts a new record, saved
+  when something was typed into it. `BOFAction`: `vpBOFActionMoveFirst` or
+  `vpBOFActionBOF`, the same for the previous arrow.
+* `Error(Description)`: a database that can't be opened, a record that can't
+  be saved (e.g. a NOT NULL field left empty) after a click on its arrows or
+  a grid's row. Without a handler it is a run-time error.
+* `UpdateRecord()` saves the bound controls' values now (no Validate);
+  `UpdateControls()` shows the record again, dropping their changes (e.g. a
+  Cancel button). `Database` is the open `Database`.
+
+**The Recordset** (`Data1.Recordset`, or `Database.OpenRecordset(Source,
+ReadOnly=False)` on its own) is DAO's:
+
+| Member | |
+|---|---|
+| `MoveFirst()`, `MoveLast()`, `MoveNext()`, `MovePrevious()`, `Move(Rows, Start=None)` | go to a record (MoveNext from EOF, MovePrevious from BOF: "No current record.") |
+| `BOF`, `EOF` | before the first, after the last record (both when there is none) |
+| `RecordCount`, `AbsolutePosition` | how many records; the current one's number from 0 (-1: none), settable |
+| `Bookmark` | the current record: keep it, set it back to return to that record |
+| `Fields` | `Fields("Name")` or `Fields(0)`: a `Field` (`Name`, `Value`, `OriginalValue`); `Fields.Count`; iterating gives each one |
+| `rs("Name")`, `rs["Name"]`, `rs["Name"] = x` | a field's value in the current record; setting one starts editing it |
+| `AddNew()`, `Edit()`, `Update()`, `CancelUpdate()`, `EditMode` | a new record or changes to this one, saved by Update (a new one goes after the last record and becomes the current one); `vpEditNone`, `vpEditInProgress`, `vpEditAdd` |
+| `Delete()` | deletes the current record; as in VB there is then no current record until you move (`MoveNext` goes to the one after it) |
+| `FindFirst(Criteria)`, `FindLast`, `FindNext`, `FindPrevious`, `NoMatch` | go to a record where a SQL condition holds (`"Age > 3 AND Name LIKE 'B%'"`); NoMatch: there was none (the current record stays) |
+| `Requery()` | read the records again, at the first one |
+| `Updatable`, `Name`, `Close()` | whether it can be changed (a table, or a SELECT from one table; not a join, a GROUP BY, a view...); its source |
+
+**Databases**: `OpenDatabase(Name, ReadOnly=False)` opens a SQLite file
+(FileNotFoundError when there is none), `CreateDatabase(Name)` makes a new
+one (FileExistsError when there is one). A `Database` has `Execute(SQL,
+*Params)` (its `?` filled in order, a Picture as a PNG; several statements
+separated by `;` when there are no Params; returns `RecordsAffected`),
+`OpenRecordset(Source, ReadOnly=False)`, `Name`, `ReadOnly` and `Close()`.
+
+```python
+db = CreateDatabase(os.path.join(folder, "pets.db"))
+db.Execute("CREATE TABLE pets (Id INTEGER PRIMARY KEY, Name TEXT NOT NULL, Age INTEGER)")
+db.Execute("INSERT INTO pets (Name, Age) VALUES (?, ?)", "Bella", 3)
+rs = db.OpenRecordset("pets")
+rs.AddNew()
+rs["Name"], rs["Age"] = "Max", 5
+rs.Update()
+db.Close()
+```
+
+<!-- BEGIN GENERATED: control Data -->
+Default size 241 × 33. Property groups: Position, Colors, Font.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `BOFAction` | enum | 0 - Move First | 0 - Move First, 1 - BOF. What the previous button does on the first record: stay there, or go before it (BOF) |
+| `Caption` | str | `''` | The text between the arrows |
+| `DatabaseName` | file path | `''` | The SQLite database file (relative to the form's folder) |
+| `EOFAction` | enum | 0 - Move Last | 0 - Move Last, 1 - EOF, 2 - Add New. What the next button does on the last record: stay there, go past it (EOF), or start a new record |
+| `Enabled` | bool | `True` | Whether its buttons respond to the user |
+| `ReadOnly` | bool | `False` | Nothing is saved |
+| `RecordSource` | str | `''` | Its records: a table's name, or a SELECT |
+| `Tag` | str | `''` | Free for your own use |
+| `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
+| `Visible` | bool | `True` | Whether it is shown at run time (hidden, it still works: move with its Recordset) |
+| `ZIndex` | int | `0` | Stacking order among controls in the same container: higher values are drawn on top |
+
+Events: `Validate(Action, Save)`, `Reposition`, `Error(Description)`. Default event (double-click in the designer): `Validate`.
 <!-- END GENERATED -->
 
 ### WebView
@@ -3072,7 +3209,7 @@ A picture dropped from another program is in `OLEDragDrop`'s Data too:
 [`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`CommonDialog`](#commondialog) (and `DialogCancelled`), [`Toolbar`](#toolbar) (and its `Button`),
-[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`WebView`](#webview), [`WebBrowser`](#webbrowser), [`Process`](#process), [`Terminal`](#terminal),
+[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`Data`](#data) (and its `Recordset`, `Field` and `Database`, `OpenDatabase`, `CreateDatabase`), [`WebView`](#webview), [`WebBrowser`](#webbrowser), [`Process`](#process), [`Terminal`](#terminal),
 [`StatusBar`](#statusbar) (and its
 `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
 [`Menu`](#menu), and
@@ -3207,6 +3344,9 @@ All constants are plain ints or strings.
 | Clipboard and OLEDragDrop's Data: formats | `vpCFText`, `vpCFBitmap`, `vpCFDIB`, `vpCFFiles`, `vpCFRTF` | 1, 2, 8, 15, -16639 |
 | Picture.Type | `vpPicTypeNone`, `vpPicTypeBitmap`, `vpDropEffectNone`, `vpDropEffectCopy`, `vpDropEffectMove` | 0, 1, 0, 1, 2 |
 | CommonDialog Flags (added together) | `vpOFNReadOnly`, `vpOFNOverwritePrompt`, `vpOFNHideReadOnly`, `vpOFNNoChangeDir`, `vpOFNAllowMultiselect`, `vpOFNPathMustExist`, `vpOFNFileMustExist`, `vpOFNCreatePrompt`, `vpOFNExplorer`, `vpCCRGBInit`, `vpCCFullOpen`, `vpCFScreenFonts`, `vpCFEffects`, `vpPDAllPages`, `vpPDSelection`, `vpPDPageNums`, `vpCdlCancel` | 1, 2, 4, 8, 512, 2048, 4096, 8192, 524288, 1, 2, 1, 256, 0, 1, 2, 32755 |
+| Data control: EOFAction and BOFAction | `vpEOFActionMoveLast`, `vpEOFActionEOF`, `vpEOFActionAddNew`, `vpBOFActionMoveFirst`, `vpBOFActionBOF` | 0, 1, 2, 0, 1 |
+| Data control: Validate's Action | `vpDataActionCancel`, `vpDataActionMoveFirst`, `vpDataActionMovePrevious`, `vpDataActionMoveNext`, `vpDataActionMoveLast`, `vpDataActionAddNew`, `vpDataActionUpdate`, `vpDataActionDelete`, `vpDataActionFind`, `vpDataActionBookmark`, `vpDataActionClose`, `vpDataActionUnload` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 |
+| Recordset.EditMode | `vpEditNone`, `vpEditInProgress`, `vpEditAdd` | 0, 1, 2 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 
@@ -3388,6 +3528,12 @@ It goes in the project's `dist` folder:
   (`frmDocument()`, VB's `New frmDocument`). `ShowPopup` is VP6's own.
 * **Process** is VP6's own (VB had `Shell`, and the Winsock and MSComm
   controls for talking with other programs); `Shell` ignores WindowStyle.
+* **The Data control uses SQLite,** not Jet or ODBC (`Connect`, `Exclusive`,
+  `Options` and `RecordsetType` aren't there); the Find methods take SQL
+  conditions (`LIKE 'B%'`, not `Like 'B*'`); `Validate`'s Action and Save
+  aren't changed in the handler: returning `vpDataActionCancel` cancels, and
+  setting a control's `DataChanged` to False keeps it from being saved.
+  `Recordset.Update` after `AddNew` makes the new record the current one.
 * **Printer** measures in VP6's pixels (1/96 inch), not twips, and
   `Set Printer = Printers(1)` is `Printer.DeviceName = Printers(1).DeviceName`.
   It has no `Zoom`, `PrintQuality`, `TrackDefault`, `hDC` or `DrawMode`;

@@ -180,6 +180,18 @@ def _flexgrid(p):
     p.fillRect(QRectF(8, 12.5, 5.5, 3), C.blue)  # the current cell
 
 
+def _data(p):  # VB's Data control: |< < > >| under a database
+    p.setBrush(C.face)
+    p.drawRect(QRectF(2, 13, 20, 8))
+    p.setBrush(QColor("#f2d17b") if C is _LIGHT else QColor("#8a7230"))
+    p.drawRect(QRectF(6, 4, 12, 6))  # the database: a cylinder
+    p.drawEllipse(QRectF(6, 2, 12, 4))
+    p.setBrush(C.ink)
+    p.setPen(Qt.NoPen)
+    p.drawPolygon([QPointF(8, 14.5), QPointF(8, 19.5), QPointF(4.5, 17)])  # previous
+    p.drawPolygon([QPointF(16, 14.5), QPointF(16, 19.5), QPointF(19.5, 17)])  # next
+
+
 def _dockpanel(p):
     p.setBrush(C.face)
     p.drawRect(QRectF(2, 3, 20, 18))  # the form
@@ -540,7 +552,7 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Process": _process, "Terminal": _terminal, "Shape": _shape,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Process": _process, "Terminal": _terminal, "Data": _data, "Shape": _shape,
     "Line": _line, "Image": _image,
     "DriveListBox": _drivelistbox, "DirListBox": _dirlistbox, "FileListBox": _filelistbox,
     "TreeView": _treeview, "Splitter": _splitter,
