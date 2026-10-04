@@ -1,5 +1,36 @@
 # VP6 features
 
+**Version:** 0.4.50
+**Date:** 2026-10-02
+
+## IDE
+
+- Edit and Continue: change the code while the program is paused, then Continue or step: the changes go into the running program first; its forms, and whatever refers to its procedures, use the new code; its variables keep their values (names in capitals are constants and take the new values)
+- Debug > Apply Code Changes (Alt+F10): apply them without going on (then try them in the Immediate window)
+- A procedure that is running goes on with its old code (the Immediate window says so): the change applies from its next call
+- An error in the changes (a syntax error) keeps the program paused until it is fixed or undone; the Immediate window says what was applied
+- The execution point and the breakpoints move with the lines edited in break mode
+
+---
+
+**Version:** 0.4.49
+**Date:** 2026-10-02
+
+## IDE
+
+- A debugger, as VB6's: every program the IDE starts runs under it; the title shows [break] while it is paused
+- Breakpoints: F9 or a click in the gutter (a red dot, the line tinted), on lines of code; they move with their lines as you edit, and reach a program that is already running; Debug > Clear All Breakpoints (Ctrl+Shift+F9)
+- Stopping: at a breakpoint, with Run > Break (Ctrl+Break, or Cmd+. on macOS; also in an endless loop, or between events), and at an error an event handler didn't handle (at its line, instead of the error box); the code window opens at the line with a yellow arrow, and the status bar says why
+- Stepping: Step Into (F8; before the program runs, it starts paused at its first line), Step Over (Shift+F8), Step Out (Ctrl+Shift+F8); Start becomes Continue (F5); only the program's own code is stepped through (not VP6's, Qt's or Python's)
+- The Immediate window while paused: an expression's value (`? x` too) or a statement run in the paused procedure (changing its variables); between events, VP6's names and the forms by name
+- The Debug window (View > Debug Window), tabbed with the Immediate window: the Watches, the Call Stack and the Breakpoints side by side
+- Watches (Debug > Add Watch…): expressions with their values and types each time the program stops; double-click to edit, Delete to remove
+- The Call Stack: the paused program's procedures, innermost first; choosing one shows its line and makes the Immediate window and the watches evaluate in it
+- The Breakpoints list: every breakpoint of the project with its line of code, following the edits; double-click to go to one, a check box to disable it (a red ring in the margin: kept, but not stopped at), Delete to remove; Enable All, Disable All, Delete All
+- Theme colors for breakpoint lines and the execution point
+
+---
+
 **Version:** 0.4.48
 **Date:** 2026-10-02
 

@@ -1052,7 +1052,9 @@ class ImmediateWindow(_OutputPane):
         super().__init__(parent)
         self.output.mouseDoubleClickEvent = self._on_double_click
         self.input = QLineEdit()
-        self.input.setPlaceholderText("Type input for the running program and press Enter")
+        self.input.setPlaceholderText(self._INPUT_HINT)
+        self.paused = False
+        self._accepts_input = False
         self.input.returnPressed.connect(self._submit)
         self.input.setEnabled(False)
         self._layout.addWidget(self.input)
@@ -1061,9 +1063,25 @@ class ImmediateWindow(_OutputPane):
     def _themed_widgets(self) -> list[QWidget]:
         return [self.output, self.input]
 
+    _INPUT_HINT = "Type input for the running program and press Enter"
+    _PAUSED_HINT = "Paused: type an expression or a statement to run (? x prints x)"
+
     def set_running(self, running: bool) -> None:
-        self.input.setEnabled(running)
-        if running:
+        """Input for a console program while it runs (its stdin)."""
+        self._accepts_input = running
+        if not self.paused:
+            self.input.setEnabled(running)
+            if running:
+                self.input.setFocus()
+
+    def set_paused(self, paused: bool) -> None:
+        """While the program is paused, the input line evaluates expressions
+        and runs statements in it (inputSubmitted: the main window knows
+        which); afterwards it is the program's input again, if it takes any."""
+        self.paused = paused
+        self.input.setPlaceholderText(self._PAUSED_HINT if paused else self._INPUT_HINT)
+        self.input.setEnabled(paused or self._accepts_input)
+        if paused:
             self.input.setFocus()
 
     def _submit(self) -> None:

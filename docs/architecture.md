@@ -40,6 +40,8 @@ vp6/                    runtime library - "from vp6 import *"
   formfile.py           parse/generate the designer region of form files
   project.py            .vp6p project files (executable launcher scripts)
   runner.py             run a project (form or Sub Main)
+  debugagent.py         the debugger in a program the IDE runs (breakpoints, steps)
+  hotpatch.py           Edit and Continue: new source applied to the running program
   make.py               package a project: a wheel, or a standalone executable (PyInstaller)
   ide/                  the IDE - "python -m vp6.ide" or the "vp6" command
     __main__.py         entry point
@@ -47,6 +49,8 @@ vp6/                    runtime library - "from vp6 import *"
     designer.py         FormDesigner: the form design surface
     chrome.py           window frames painted around the designed form
     codeeditor.py       CodeWindow / CodeEditor / PythonHighlighter
+    debugger.py         the debugger's IDE side (DebugSession) and the Watches window
+    debugpanel.py       the Debug window: the Watches, the Call Stack and the Breakpoints
     properties.py       Properties window (property grid)
     projectprops.py     the project as a Properties window target
     panels.py           Toolbox, Project Explorer, Immediate and Output windows
@@ -102,6 +106,8 @@ flowchart LR
   * `PYTHONUNBUFFERED=1` and `PYTHONIOENCODING=utf-8`, so output streams live,
   * `VP6_IDE_SCHEME=system|light|dark`, the IDE's appearance at launch, used
     by forms whose color scheme is "IDE".
+  * `VP6_DEBUG_PORT` and `VP6_DEBUG_ROOT`: the debugger's localhost port and
+    the project's folder (see §5.8).
 * stdout and stderr are piped into the Immediate window (stderr in the error
   color). For console projects, the Immediate window's input line writes to
   the program's stdin.
@@ -337,13 +343,14 @@ flowchart TD
 * a central `QMdiArea` holding designer windows (`FormDesigner`) and code
   windows (`CodeWindow`), one of each per file at most, created on demand and
   hidden rather than deleted when closed;
-* six docks: **Toolbox** (`panels.Toolbox`), **Project**
+* seven docks: **Toolbox** (`panels.Toolbox`), **Project**
   (`panels.ProjectExplorer`), **Properties**
   (`properties.PropertiesWindow`), **Immediate** (`panels.ImmediateWindow`, the
   running program's output) and **Output** (`panels.OutputWindow`, the IDE's
-  own stdout/stderr), and **Terminal** (`terminalpanel.TerminalPanel`, a shell
-  run by the Terminal control). Output and Terminal are hidden by default and
-  tabbed with Immediate;
+  own stdout/stderr), **Terminal** (`terminalpanel.TerminalPanel`, a shell
+  run by the Terminal control) and **Debug** (`debugpanel.DebugPanel`: the
+  Watches, the Call Stack and the Breakpoints, §5.8). Output, Terminal and
+  Debug are hidden by default and tabbed with Immediate;
   `outputcapture.OutputCapture` redirects file descriptors 1 and 2 through
   pipes, so library output such as Qt's warnings is included, and still
   copies everything to the terminal;
@@ -569,6 +576,44 @@ End kills the process. The finish handler flushes the remaining output and
 prints "■ Program exited with code N". Restart chains a new run onto
 `finished`.
 
+### 5.8 The debugger
+
+Every program the IDE starts runs under its debugger, as in VB6: there is no
+separate debug mode.
+
+* **Two sides.** The IDE's `DebugSession` (`ide/debugger.py`) listens on a
+  localhost TCP port; the runner, seeing `VP6_DEBUG_PORT`, connects
+  (`debugagent.start_from_environment`) before any project code runs and
+  waits for the breakpoints. They exchange one JSON object a line.
+* **Tracing the program's own code only.** `sys.settrace` gives line
+  tracing to frames of files in the project's folder; VP6, Qt and the
+  standard library run untraced, at full speed. So Step Into never goes
+  into them, and Break stops in the program's code even in an endless loop.
+* **Stopped means waiting.** At a breakpoint, a step, Break, or an error an
+  event handler didn't handle (instead of the error box), the program's
+  thread blocks in the trace function, doing the IDE's commands: evaluating
+  expressions and statements in a frame (the Immediate window, the
+  Watches), then continuing or stepping. Its windows don't repaint
+  meanwhile (as a VB6 program's in break mode).
+* **Between events.** A program waiting in Qt's event loop runs no Python:
+  Break posts an event to an object of its thread, which stops there
+  without a line; expressions see VP6's names and the forms by name.
+* **Breakpoints** live in the documents as text cursors, so they move with
+  the lines; every change is sent to the running program (the enabled ones:
+  a disabled breakpoint stays in the file). Only the main thread is
+  debugged.
+* **Edit and Continue.** Code edited in break mode (or while it runs) goes
+  to the program when it continues from break mode (or with Apply Code
+  Changes): `hotpatch` runs the new source in the module and updates the
+  functions and classes the program already has, in place, so its forms and
+  callbacks see the change; variables keep their values. A procedure that
+  is running goes on with its old code until its next call (Python can't
+  change a running frame's code); a syntax error keeps it paused. Design
+  changes (InitializeComponent) apply to forms loaded afterwards.
+* **The Debug window** shows the watches, the paused program's call stack
+  (choosing a frame makes the Immediate window and the watches evaluate in
+  it) and every breakpoint of the project, to go to, enable or delete.
+
 ## 6. File formats
 
 ### 6.1 Form files (`*.py`)
@@ -719,6 +764,8 @@ suite redirects to a temporary INI file.
 |---|---|---|
 | `VP6_PYTHON` | project script (line 2) | interpreter used by `./Project.vp6p` |
 | `VP6_IDE_SCHEME` | `appearance.ide_scheme` | IDE appearance passed to programs started with F5 |
+| `VP6_DEBUG_PORT` | `debugagent.start_from_environment` | the IDE's debugger: the port a program it starts connects to (removed once read) |
+| `VP6_DEBUG_ROOT` | `debugagent.start_from_environment` | the project's folder: the program's own code, which the debugger traces |
 | `VP6_NO_ERROR_DIALOG` | `app.report_runtime_error` | print tracebacks without showing the error box |
 | `VP6_NO_OUTPUT_CAPTURE` | `mainwindow.main` | don't capture the IDE's stdout/stderr for the Output window (e.g. to see the last messages of a hard crash directly) |
 | `VP6_SETTINGS_DIR` | `theme.ide_settings` | keep the IDE's settings in `VP6 IDE.ini` in this folder instead of the normal store (separate IDE instances; tests that start the IDE) |

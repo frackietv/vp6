@@ -115,7 +115,9 @@ Application-level services.
   Exceptions go to `report_runtime_error`.
 * `report_runtime_error(exc)` prints the traceback to stderr and shows a
   "Run-time error" box with End / Continue, unless the environment variable
-  `VP6_NO_ERROR_DIALOG` is set.
+  `VP6_NO_ERROR_DIALOG` is set. Run by the IDE's debugger, the program
+  stops at the error's line instead (`debugagent.active().post_mortem`), no
+  box.
 * `run_event_loop()` runs `app.exec()` if any top-level window is visible.
 
 ### `vp6/appearance.py` (≈230 lines)
@@ -1188,6 +1190,81 @@ executables for the system it runs on only.
 * `main(argv)`: the `vp6-make` command: a wheel, or with `--exe` (or
   `--onefile`) an executable (exit code 1 with the reason on stderr).
 
+### `vp6/debugagent.py` (≈330 lines)
+
+The debugger's side in the program (the IDE's is `vp6/ide/debugger.py`).
+
+* `start_from_environment()` (the runner, before the project's code):
+  when `VP6_DEBUG_PORT` is set (and removed: not for the programs it
+  starts), connects to the IDE on localhost, makes the `Agent` (the project
+  folder from `VP6_DEBUG_ROOT`) and `start()`s it; `active()` gives it.
+  Can't connect: a message on stderr, and the program runs without it.
+* **Protocol:** a JSON object a line. From the IDE: `start` (its
+  `breakpoints`: file → lines, and `step`), `breakpoints`, `pause`,
+  `continue`, `step`, `next`, `return`, `eval` (`id`, `expr`, `frame`,
+  `exec`). To it: `paused` (`reason`: `breakpoint`, `step`, `pause` or
+  `error`; `file`, `line`, `function` of the innermost frame, `stack` of the
+  program's own frames, `error`), `running`, `result` (`id`, `value` (a
+  `repr` cut at `REPR_LIMIT`) and `type`, or `error`).
+* **`Agent`:**
+  * `start()` waits for `start`, then traces with `sys.settrace` (the main
+    thread) and reads the IDE's commands in a daemon thread (`_reader`):
+    `breakpoints` and `pause` there and then, the others into `commands` (a
+    queue the stopped program's thread waits on). The IDE gone: no more
+    stops.
+  * **What is traced:** `_trace_call` gives a frame the line tracer
+    `_trace_line` only when `is_user_file`: an absolute path to an existing
+    file in the project's folder (`canonical`: real, case-normalized), not
+    in `site-packages` or VP6's own folder. Other code runs untraced.
+  * **Stopping** (`_stop_reason`, each line): a pause asked for, a
+    breakpoint's line, `mode` `step`, `next` in its target frame, or
+    `start` (Step Into before running: the first line of a function of the
+    program's, not module code). Step Out (`return`) and Step Over at a
+    procedure's end: the target frame's `return` event switches to `step`.
+  * **Between events:** a pause asked for while the program waits in Qt's
+    event loop reaches it as a posted event (`_make_waker`: a `QObject` of
+    the program's thread; `_wake` from the reader thread): it stops with no
+    frame.
+  * `stop(frame, reason)` and `post_mortem(exc)` (the innermost frame of the
+    program's own in the traceback, at the error's line; False when there is
+    none, or it is already stopped) both go to `_interact`: `paused` sent,
+    then the commands done until one goes on (`eval`; Step Over and Out
+    follow the innermost frame when it still runs (`live`), else they go to
+    the next line run), then `running`.
+  * `_apply` (`apply`, while stopped): each file's new text to its module,
+    found among `sys.modules` by file (`hotpatch.apply`, with the stopped
+    frames' code); files whose module isn't loaded (or the launcher) need
+    nothing. The result lists what changed, was added or removed, what is
+    running, the errors, and the files applied.
+  * `_evaluate`: an expression (`eval`), or with `exec` a statement, in a
+    frame's globals and locals (3.13's write-through `f_locals`: assignments
+    change the program's variables); between events in `_namespaces`' own:
+    `__main__`'s, VP6's names and the loaded forms by name.
+
+### `vp6/hotpatch.py` (≈200 lines)
+
+Edit and Continue: `apply(module, source, filename, running_code)` runs a
+module's new source in its own namespace (compiled with `dont_inherit`: not
+this file's `__future__` flags), then puts back what the program had,
+updated, and answers a `Report` (`changed`, `added`, `removed`, `running`,
+`error`):
+
+* functions keep their identity: `_update_function` gives the old one the
+  new code, defaults, kwdefaults, annotations and docstring when their free
+  variables match; otherwise the new one takes its place (`_rebound`: its
+  `__class__` cell is the program's class, for `super()`);
+* classes keep their identity (`_update_class`): their methods, static and
+  class methods, properties' functions and nested classes updated
+  (`_update_member`), new ones added, removed ones deleted; class variables
+  keep their values;
+* module variables keep the program's values; names in capitals are
+  constants and take the new value; new names are added;
+* a syntax error or an error running the code restores the namespace and
+  changes nothing;
+* `running`: the changed functions whose old code is on the paused stack
+  (`_code_by_name`): they go on with it until their next call;
+* `linecache` gets the new lines (tracebacks).
+
 ### `vp6/runner.py` (≈95 lines)
 
 It's deliberately not named `run.py`: importing a `vp6.run` submodule would
@@ -1209,6 +1286,8 @@ Starts a project. `run_project(path)`:
    `appearance.project_scheme`, and for a windowed
    project with an `icon`, the application's icon (`app.set_program_icon`;
    otherwise the VP6 icon `ensure_app` gives it);
+   before that, run by the IDE, it connects to the IDE's debugger
+   (`debugagent.start_from_environment`, see below);
 4. starts the program:
    * **`Sub Main`:** calls `find_main(project)()` (modules are searched
      first, then forms). A console project exits with Main's return value if
@@ -1419,8 +1498,54 @@ prepended to `PYTHONPATH` for programs started with F5.
     `_write_ide_scheme` keeps (`VP6_IDE_SCHEME_FILE`: rewritten whenever the
     theme manager changes, removed when the IDE closes)),
     `stop_project`, `restart_project`;
-  * `_send_input` (stdin), `_on_process_finished` / `_on_process_error`;
-  * `running`, `_update_title`, `_update_actions`.
+  * `_send_input` (stdin; in break mode `evaluate_in_immediate`),
+    `_on_process_finished` / `_on_process_error`;
+  * `running`, `paused`, `_update_title` (`[design]`, `[run]`, `[break]`),
+    `_update_actions` (Start becomes Continue in break mode; Break while it
+    runs; the steps before it runs or while paused).
+* **The debugger** (`debug`: a `debugger.DebugSession` for each run):
+  * `run_project(step)` makes the session, with `_all_breakpoints()`, and
+    passes `VP6_DEBUG_PORT` and `VP6_DEBUG_ROOT` (the project's folder); in
+    break mode it continues;
+  * Run > **Break** (`act_break`, `break_project`: Ctrl+Break, Ctrl+Pause,
+    and ⌘. on macOS); Debug > **Step Into** (F8), **Step Over** (Shift+F8),
+    **Step Out** (Ctrl+Shift+F8): `step(how)` starts the program paused at
+    its first line, steps while paused, pauses while it runs;
+  * **Toggle Breakpoint** (F9: `toggle_breakpoint`, and the gutter's
+    `breakpointClicked`: `_toggle_breakpoint_at`, refusing lines that aren't
+    code), **Clear All Breakpoints** (Ctrl+Shift+F9); any document's
+    `breakpointsChanged` sends them all (`_send_breakpoints`);
+  * `_on_paused(location)`: the code window opened at the line
+    (`_doc_for_file`, `show_line`) with the execution point, an error's
+    message in the Immediate window, `describe(location)` in the status bar,
+    the Immediate window in break mode, the watches evaluated
+    (`_refresh_watches`), the IDE brought to the front; `_on_resumed` undoes
+    it; `_end_debugging` when the program ends (the watches out of context);
+  * **Edit and Continue:** `run_project` keeps the files' text the program
+    runs (`_applied`); `pending_changes()` are the files edited since.
+    `resume(how)` (Continue, the steps, in break mode) and Debug > **Apply
+    Code Changes** (Alt+F10, `act_apply_changes`: without going on) call
+    `apply_code_changes(then)`: the session's `apply_changes`, then in the
+    Immediate window what was applied, which running procedures keep their
+    old code until their next call, and errors; with an error it stays
+    paused (the status bar says to fix it), else `then` goes on. The
+    breakpoints are sent again (their lines may have moved).
+  * **The Debug window** (`debug_panel`, a `debugpanel.DebugPanel`; dock
+    `debug_dock`, hidden at the bottom edge until shown (`_show_bottom`, as
+    the Terminal): View > Debug Window and the Debug menu's, Debug > **Add
+    Watch…** (`add_watch`: the selection or the word at the cursor)).
+    `_connect_debug_panel`: the **Watches** (`watches`) are evaluated each
+    time it stops and when they change; the **Call Stack** is filled by
+    `_on_paused` and emptied by `_on_resumed`, and its choice
+    (`_choose_frame`) sets the session's `frame` (the Immediate window and
+    the watches evaluate there), shows its line and evaluates the watches
+    again; the **Breakpoints** list is refilled (`_refresh_breakpoint_list`,
+    by the 200 ms `_breakpoint_list_timer`) when breakpoints change, files
+    are edited (lines move), removed or closed; it goes to a breakpoint
+    (`_go_to_line`), enables, disables and deletes them in their documents
+    (`_with_doc`), all at once too (`enable_all_breakpoints`,
+    `clear_breakpoints`). Only enabled breakpoints go to the program
+    (`_all_breakpoints`).
 * **`closeEvent`** asks to save, then stores `geometry` and `state`.
 
 **Ctrl+C** in the terminal that started the IDE works like File > Exit (Quit
@@ -1613,8 +1738,18 @@ Window frames painted around the designed form.
 * **`CodeEditor(QPlainTextEdit)`:**
   * **Theme:** `apply_theme(theme, font)` sets palette, font, tab width and
     gutter colors.
-  * **Gutter:** `paint_gutter` draws line numbers and the fold box;
-    `gutter_clicked` toggles the fold.
+  * **Gutter:** `paint_gutter` draws line numbers and the fold box, and in
+    its left column (`MARKERS` wide: `_paint_markers`) the breakpoints (a red
+    dot, `BREAKPOINT_DOT`; a disabled one a red ring, its line not tinted)
+    and the execution point (a yellow arrow,
+    `EXECUTION_ARROW`); `gutter_clicked` toggles the fold (the fold box's
+    line, right of the markers) or emits `breakpointClicked(line)`.
+  * **Breakpoints and the execution point:** the document's
+    (`breakpointsChanged`, `executionChanged`, and lines coming or going:
+    `_on_markers_changed`); `_highlight_current_line` adds their lines'
+    backgrounds (`breakpoint`, `execution_point` theme colors,
+    `_line_selection`) after the current line's; `show_line(line)` puts the
+    cursor at a line's start, centered.
   * **Region:** `apply_fold` (hidden blocks), `_region_span`,
     `_edit_allowed(key)`, `range_editable(start, end)` and `_reject_edit`;
     `insertFromMimeData`, `cut` and `paste` are guarded.
@@ -2016,7 +2151,9 @@ Captures the IDE process's stdout and stderr for the Output window.
   * a context menu built by the subclass's `_context_menu()`.
 * **`ImmediateWindow(_OutputPane)`** shows the running program's output:
   * **Input:** an `input` line, enabled by `set_running(True)` while a console
-    program runs, emits `inputSubmitted`.
+    program runs, emits `inputSubmitted`. `set_paused(True)` enables it in
+    break mode, for expressions and statements (its placeholder says so;
+    `paused`), then back to what `set_running` said.
   * **Traceback links:** double-clicking a `File "...", line N` line emits
     `openLocation`.
   * **Context menu:** the standard text menu plus Clear.
@@ -2050,6 +2187,51 @@ The Terminal window: a shell in the IDE, run by the Terminal control.
     Shell; not while the program has the mouse;
   * `titleChanged(str)`: the title the shell gave the terminal.
 
+### `vp6/ide/debugger.py` (≈280 lines)
+
+The IDE's side of the debugger (the program's: `vp6/debugagent.py`).
+
+* **`DebugSession(QObject)`** (`breakpoints`, `step`): a `QTcpServer` on a
+  free localhost `port`; the first program to connect gets `start` (later
+  ones are refused, the server closes). Lines of JSON (`_on_ready_read`,
+  `_dispatch`) become `paused(location)` (`location`, `is_paused`; `frame`:
+  0, the innermost), `resumed`, and `result` callbacks by id;
+  `set_breakpoints`, `pause`, `resume(how)` (continue, step, next, return),
+  `apply_changes(files, callback)` (Edit and Continue: path → text),
+  `evaluate(expression, callback, statements)` (an error result when not
+  paused); `is_connected`, `close()`. Disconnected while paused: `resumed`.
+* **`WatchWindow`**: a `QTreeWidget` (Expression, Value, Type; the editor
+  theme's colors and font): `add`, `expressions`, `items`, `remove_selected`
+  (Delete, Backspace: `eventFilter`), `clear`; an edited expression asks
+  for its value again (`changed`; emptied: removed); `show_result(item,
+  expression, result)` (left alone if edited or removed since; errors in
+  the error color), `out_of_context`; a menu (Edit Watch, Delete Watch,
+  Clear All).
+* `same_file(a, b)` (by `debugagent.canonical`), `describe(location)` (the
+  status bar's "Breakpoint at Form1.py, line 12", "Paused between
+  events"…).
+
+### `vp6/ide/debugpanel.py` (≈230 lines)
+
+The Debug window: three parts side by side in a `QSplitter` (each a
+`_section`: a bold title over it).
+
+* **`DebugPanel`** (`watches`: a `debugger.WatchWindow`, `call_stack`,
+  `breakpoints`, `sections`, `splitter`): the editor theme's colors and font
+  (`_themed`); `not_paused()` empties the call stack.
+* **`CallStackView(QTreeWidget)`** (Procedure, Where): `show_stack(stack)`
+  lists the paused program's frames, innermost first (not the project file
+  that started it; each item keeps its frame's index, `_FRAME`), the
+  current one in bold; `choose(index)` (a click, Enter) emits
+  `frameChosen(index, file, line)`.
+* **`BreakpointList(QTreeWidget)`** (Breakpoint: `File.py:12` with a check
+  box; Code): `show_breakpoints([(file, line, enabled, code)])` (keeping
+  the selection), `entries()`; it asks rather than changes: `goTo`
+  (double-click, Enter, the menu), `enableRequested` (the check box),
+  `removeRequested` (Delete, Backspace, the menu), `enableAllRequested`,
+  `removeAllRequested` (the menu: Go to Breakpoint, Delete Breakpoint,
+  Enable All, Disable All, Delete All).
+
 ### `vp6/ide/documents.py` (≈140 lines)
 
 * `Document(QObject)`:
@@ -2057,7 +2239,20 @@ The Terminal window: a shell in the IDE, run by the Terminal control.
     `filename`, `name`, `text`, `modified`, `save()`;
   * signal `modifiedChanged`;
   * `replace_text(text)` does a whole-text replacement as one undoable edit
-    (used for renames).
+    (used for renames), keeping the breakpoints' lines;
+  * **breakpoints:** `QTextCursor`s at the start of their lines, so they
+    follow the edits (Enter at a line's start takes it down with its line),
+    each enabled or not (`_Breakpoint`: its cursor and `enabled`; a disabled
+    one stays, but the program doesn't stop there); `breakpoints()` (line,
+    enabled), `breakpoint_lines(enabled_only)`, `has_breakpoint`,
+    `breakpoint_enabled`, `set_breakpoint(line, on, enabled=True)`,
+    `enable_breakpoint(line, enabled)`, `toggle_breakpoint`,
+    `clear_breakpoints`, `can_break_at(line)` (code: not blank, not a
+    comment); signal `breakpointsChanged`;
+  * **the execution point** (where the program is paused): a cursor too, so
+    it follows the edits made in break mode; `execution_line` (a property),
+    `execution_error`, `set_execution_line(line, error)`; signal
+    `executionChanged`.
 * `FormDocument(Document)` (a form's or a user control's file):
   * `form_def`, `kind` (`form_def.kind`: "form" or "usercontrol"), `name`
     (the class name found in the text), `region_range()`;
@@ -2402,7 +2597,8 @@ Icons drawn with `QPainter`, in light and dark variants.
     `_image`, `TreeView`: `_treeview`, `Splitter`: `_splitter`),
     plus `Pointer`;
   * project icons `Form`, `Module`, `Project`, `Console`;
-  * toolbar icons `New`, `Open`, `Save`, `Run`, `Stop`, `Sun`, `Moon`;
+  * toolbar icons `New`, `Open`, `Save`, `Run`, `Pause` (Break), `Stop`, `Sun`,
+    `Moon`;
   * the `KitchenSink` template icon;
   * Outline item badges `OutlineConstant`, `OutlineVariable`, `OutlineClass`,
     `OutlineFunction`, `OutlineMethod`, `OutlineAttribute`, `OutlineCode`
@@ -2501,6 +2697,8 @@ All tests run headless. `conftest.py`:
 | `test_listview.py` | The ListView: its designer lines (`parse_column`, `parse_list_item`); ListItems (Index and Key, SubItems read and set, Add at an Index, Text, Key changes, errors, Remove, Clear); ColumnHeaders (labels, widths, alignments of existing and new cells, a new column, HideColumnHeaders); the four views keeping one selection, MultiSelect; sorting by the Text or a SubItem (as text), new and renamed items sorted in; ItemClick, HitTest and ColumnClick from the mouse, ItemCheck from the user but not code, Checkboxes off; Icons in the Icon view and SmallIcons in the others, unknown ones raising, an ImageList's changes; the form file round trip; the designer (the Properties window's Columns and Items); Toolbox, icon and constants. |
 | `test_make.py` | Wheels: the package of the project's files and its launcher, METADATA (version, summary, author, requirements: VP6, not the standard library), console or GUI scripts, WHEEL and RECORD; requirements from the installed distributions (noting missing ones); a project's own `__main__.py`; the command line (a wheel by default, `--exe`, `--onefile` implying it); a wheel installed with pip run by its command and `python -m`; Project > Build Wheel. Making executables: the files that go in (not `dist`, `build`, caches or hidden files), the modules their code imports (not the project's own, nor relative imports; files with syntax errors skipped), the launcher, where the result goes on each system (apps, folders, one file, `.exe`), the PyInstaller command (console or windowed, one file, the project's or VP6's icon and none without Pillow, `--add-data` into the same folders with `os.pathsep`, hidden imports, VP6's folder and icons), the message without PyInstaller, `make()` with PyInstaller faked, File > Make Executable… with the process faked (success with the path, failure); with `VP6_TEST_MAKE=1` a real one-file executable made and run (its output, its data file, a module in a subfolder, its exit code). |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
+| `test_debugger.py` | The debugger: breakpoints following the edits (a line above, Enter at its start, a rename), only on code lines; F9, the gutter's click, a blank line refused, Clear All; the editor's breakpoint and execution point backgrounds and red dot; the Watches window (results, errors, stale answers left alone, an edited watch asked again, out of context, Delete, the menu); `describe`; the agent's idea of the program's own code (VP6's, the standard library's, site-packages, relative and missing files left out); no agent without the IDE; real programs: a console program at a breakpoint (break mode: the title, Continue, the status bar, the Immediate window evaluating with `?`, running a statement that changes a variable, an error), watches with values, types and errors, Continue to the breakpoint again, Clear All reaching the program, the end; stepping (Step Into before it runs, Over, Into a call with the stack, Out, Over a call, End); Break in an endless loop, a breakpoint set while it runs; a GUI program stopped at an error in Form_Load (its frame's variables), Break between events (the forms by name, assigning, VP6's names), stepping on from there; the session alone; the Debug menu, its keys and VB6's menu order; disabled breakpoints (kept, not sent, through a rename too); the Debug window (its three parts; the call stack without the project file, the current frame in bold, a frame chosen); the breakpoint list (shown, enabling, going to, Delete, the menu); in the IDE: View > Debug Window as a tab, the list following the edits, disabling from the list (only enabled ones sent), going to one, Enable All, deleting; paused: the call stack, a frame chosen for the watches and the Immediate window (its line shown, the execution point kept), emptied at the end and the list when the project closes; Edit and Continue: a procedure changed in break mode applied on Continue (the program's result), a running one going on with its old code, Apply Code Changes staying paused, the execution point and breakpoints following an edit, an error in the changes keeping it paused until fixed (a step going on then), a form's method changed for the form the program has. |
+| `test_hotpatch.py` | Edit and Continue's patching: functions, classes, nested classes, properties, static and class methods keeping their identity with the new code (super() too), only what changed reported; added and removed procedures; variables keeping the program's values, constants and class variables, new names; a closure that changes; a method gaining a `__class__` cell; syntax and run-time errors changing nothing; a running procedure reported; the new lines for tracebacks; not inheriting `__future__` flags. |
 | `test_findreplace.py` | Match case and whole word; wrapping forwards and backwards; regular expressions with escapes across lines, groups in the find and replace text and per-line `^`/`$`; Find Next/Previous, Replace and Replace All (one undo step) in an editor; invalid patterns and replacements; positions after emoji; the designer region skipped when replacing and unfolded when found; the dialog; highlighting the first match as you type (growing matches, options, wrapping, not found, unfinished regexes, clearing); in the IDE: the Edit menu, Find from a designer opening the code window, Go to Line; in the whole project: Find Next and Previous from file to file and round (the designer region found too), the only match, not found; Find All (the list, going to a match, just the module); Replace All in every file (not designer regions, unsaved, one undo step each) and Replace going on to the next match; no project scope without a project. |
 | `test_app_settings.py` | SaveSetting, GetSetting (its Default), GetAllSettings, DeleteSetting of a setting, a section or everything (in INI files of the test's own); App's title, version and descriptions from a project; the new project fields saved and loaded, and older projects' defaults; Command(); Screen.Fonts, FixedFonts and FontCount; the Project Properties dialog's version and text fields; PrevInstance in real programs (a second copy sees the first, a third after it ends doesn't); a project's arguments reaching Command() and `sys.argv` from the project file and from `vp6.runner`. |
 | `test_command_line.py` | `--help`: the IDE's (its options and environment variables, exit 0; Qt's options left alone), the runner's (and no project: exit 2); a program's help text (name, version, description, usage, the project's ArgumentsHelp, the VP6 version), a message box without stdout; a real program showing its help from its project file and from `vp6.runner` without starting, and starting with other arguments; ArgumentsHelp saved and in the Project Properties dialog. |

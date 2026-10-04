@@ -36,6 +36,8 @@ UI_ROLES = [
     ("selection_background", "Selection background"),
     ("selection_foreground", "Selection text"),
     ("current_line", "Current line"),
+    ("breakpoint", "Breakpoint line"),
+    ("execution_point", "Execution point (paused)"),
     ("gutter_background", "Line numbers background"),
     ("gutter_foreground", "Line numbers"),
     ("designer_region", "Designer region background"),
@@ -94,7 +96,8 @@ BUILTIN_THEMES: dict[str, Theme] = {
     LIGHT: Theme(LIGHT, False, {
         "background": "#ffffff", "foreground": "#000000",
         "selection_background": "#add6ff", "selection_foreground": "#000000",
-        "current_line": "#fffbdd", "gutter_background": "#f3f3f3",
+        "current_line": "#fffbdd", "breakpoint": "#f7d4d1", "execution_point": "#fff19c",
+        "gutter_background": "#f3f3f3",
         "gutter_foreground": "#6e7781", "designer_region": "#eef0f4",
         "fold_marker": "#808080", "output_error": "#c0392b", "output_info": "#7f8c8d",
         "output_input": "#1f5fbf",
@@ -108,7 +111,8 @@ BUILTIN_THEMES: dict[str, Theme] = {
     DARK: Theme(DARK, True, {
         "background": "#1e1e1e", "foreground": "#d4d4d4",
         "selection_background": "#264f78", "selection_foreground": "#ffffff",
-        "current_line": "#2a2d2e", "gutter_background": "#1e1e1e",
+        "current_line": "#2a2d2e", "breakpoint": "#4b2424", "execution_point": "#4b4618",
+        "gutter_background": "#1e1e1e",
         "gutter_foreground": "#858585", "designer_region": "#252a33",
         "fold_marker": "#c5c5c5", "output_error": "#f48771", "output_info": "#9d9d9d",
         "output_input": "#4fc1ff",

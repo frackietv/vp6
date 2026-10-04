@@ -18,6 +18,8 @@ from ..formfile import FormDef, FormFileError
 class Document(QObject):
     kind = "module"
     modifiedChanged = Signal(bool)
+    breakpointsChanged = Signal()
+    executionChanged = Signal()  # (where the program is paused: execution_line)
 
     def __init__(self, path: str, text: str | None = None):
         super().__init__()
@@ -30,6 +32,11 @@ class Document(QObject):
         self.text_document.setPlainText(text)
         self.text_document.setModified(False)
         self.text_document.modificationChanged.connect(self.modifiedChanged)
+        # Breakpoints keep a cursor at the start of their lines: they follow the edits
+        self._breakpoints: list[_Breakpoint] = []
+        # Where the program is paused: a cursor too (edited in break mode, it follows)
+        self._execution: QTextCursor | None = None
+        self.execution_error = False  # (paused there by an error)
 
     @property
     def filename(self) -> str:
@@ -51,11 +58,92 @@ class Document(QObject):
         """Replace the whole text as one undoable edit (used for renames)."""
         if text == self.text:
             return
+        breakpoints = self.breakpoints()  # (the lines stay: a rename keeps them)
         cursor = QTextCursor(self.text_document)
         cursor.beginEditBlock()
         cursor.select(QTextCursor.Document)
         cursor.insertText(text)
         cursor.endEditBlock()
+        if breakpoints:
+            self._breakpoints = []
+            for line, enabled in breakpoints:
+                self.set_breakpoint(line, True, notify=False, enabled=enabled)
+            self.breakpointsChanged.emit()
+
+    # -- breakpoints and the execution point ------------------------------------------------
+    def breakpoints(self) -> list[tuple[int, bool]]:
+        """(line (1-based), enabled) of each breakpoint, in line order (one a
+        line: lines joined by an edit keep the first's)."""
+        lines: dict[int, bool] = {}
+        for breakpoint in self._breakpoints:
+            lines.setdefault(breakpoint.line, breakpoint.enabled)
+        return sorted(lines.items())
+
+    def breakpoint_lines(self, enabled_only: bool = False) -> list[int]:
+        """The lines (1-based) with a breakpoint (enabled ones only: those the
+        program stops at)."""
+        return [line for line, enabled in self.breakpoints() if enabled or not enabled_only]
+
+    def has_breakpoint(self, line: int) -> bool:
+        return line in self.breakpoint_lines()
+
+    def breakpoint_enabled(self, line: int) -> bool:
+        return dict(self.breakpoints()).get(line, False)
+
+    def set_breakpoint(self, line: int, on: bool, notify: bool = True,
+                       enabled: bool = True) -> None:
+        block = self.text_document.findBlockByNumber(line - 1)
+        if not block.isValid():
+            return
+        self._breakpoints = [b for b in self._breakpoints if b.line != line]
+        if on:
+            self._breakpoints.append(_Breakpoint(QTextCursor(block), enabled))
+        if notify:
+            self.breakpointsChanged.emit()
+
+    def enable_breakpoint(self, line: int, enabled: bool) -> None:
+        """Enable or disable a line's breakpoint (a disabled one stays, but
+        the program doesn't stop there)."""
+        changed = False
+        for breakpoint in self._breakpoints:
+            if breakpoint.line == line and breakpoint.enabled != enabled:
+                breakpoint.enabled = enabled
+                changed = True
+        if changed:
+            self.breakpointsChanged.emit()
+
+    def toggle_breakpoint(self, line: int) -> bool:
+        """Set or clear the breakpoint on a line; True if it now has one."""
+        on = not self.has_breakpoint(line)
+        self.set_breakpoint(line, on)
+        return on
+
+    def clear_breakpoints(self) -> None:
+        if self._breakpoints:
+            self._breakpoints = []
+            self.breakpointsChanged.emit()
+
+    def can_break_at(self, line: int) -> bool:
+        """Whether a line is code a breakpoint can stop at (not blank, not a
+        comment)."""
+        block = self.text_document.findBlockByNumber(line - 1)
+        text = block.text().strip() if block.isValid() else ""
+        return bool(text) and not text.startswith("#")
+
+    @property
+    def execution_line(self) -> int | None:
+        """The line (1-based) where the program is paused, as it moves with the
+        edits; None when it isn't paused in this file."""
+        return None if self._execution is None else self._execution.blockNumber() + 1
+
+    def set_execution_line(self, line: int | None, error: bool = False) -> None:
+        if (line, error) == (self.execution_line, self.execution_error):
+            return
+        block = self.text_document.findBlockByNumber(line - 1) if line else None
+        self._execution = QTextCursor(block) if block is not None and block.isValid() \
+            else None
+        self.execution_error = error
+        self.executionChanged.emit()
 
     def save(self) -> None:
         text = self.text
@@ -64,6 +152,19 @@ class Document(QObject):
         with open(self.path, "w", encoding="utf-8") as f:
             f.write(text)
         self.text_document.setModified(False)
+
+
+class _Breakpoint:
+    """A breakpoint: a cursor at the start of its line, and whether it is on."""
+
+    __slots__ = ("cursor", "enabled")
+
+    def __init__(self, cursor: QTextCursor, enabled: bool = True):
+        self.cursor, self.enabled = cursor, enabled
+
+    @property
+    def line(self) -> int:
+        return self.cursor.blockNumber() + 1
 
 
 class FormDocument(Document):

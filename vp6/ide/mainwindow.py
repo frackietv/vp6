@@ -22,12 +22,15 @@ from .. import formfile
 from ..app import install_interrupt_handler, vp6_icon
 from ..appearance import (IDE_SCHEME_ENV, IDE_SCHEME_FILE_ENV, SCHEME_NAMES, scheme_from_name,
                           write_ide_scheme_file)
+from ..debugagent import PORT_ENV, ROOT_ENV
 from ..project import EXTENSION, SUB_MAIN, Project, copy_project
 from ..runner import import_folders
 from ..usercontrol import (load_user_control, register_user_control,
                            unregister_user_controls, user_control_types)
 from . import icons, kitchensink
 from .codeeditor import CodeWindow
+from .debugger import DebugSession, WatchWindow, describe, same_file
+from .debugpanel import DebugPanel
 from .designer import FormDesigner, is_identifier
 from .dialogs import AboutDialog, MakeDialog, NewProjectDialog, ProjectPropertiesDialog
 from .splash import SplashScreen
@@ -60,6 +63,8 @@ class MainWindow(QMainWindow):
         self._designers: dict[str, FormDesigner] = {}
         self.code_windows: dict[str, QMdiSubWindow] = {}
         self.process: QProcess | None = None
+        self.debug: DebugSession | None = None  # the running program's debugger
+        self._applied: dict[str, str] = {}  # the text the program runs (Edit and Continue)
         self.make_process: QProcess | None = None  # Make Executable, Build Wheel: while it runs
         self._made_path: str | None = None
         self.current_tool: str | None = None
@@ -98,6 +103,9 @@ class MainWindow(QMainWindow):
         self.output = OutputWindow()  # the IDE's own stdout/stderr (hidden by default)
         # A shell in the project's folder (hidden by default: it starts when first shown)
         self.terminal = TerminalPanel(lambda: self.project.directory if self.project else None)
+        # View > Debug Window: the Watches, the Call Stack and the Breakpoints (hidden at first)
+        self.watches = WatchWindow()
+        self.debug_panel = DebugPanel(self.watches)
         self.outline = OutlineWindow()  # structure of the current file (hidden by default)
         self.toolbox_dock = self._dock("Toolbox", self.toolbox, Qt.LeftDockWidgetArea, "toolbox")
         self.explorer_dock = self._dock("Project", self.explorer, Qt.RightDockWidgetArea,
@@ -109,6 +117,10 @@ class MainWindow(QMainWindow):
         self.output_dock = self._dock("Output", self.output, Qt.BottomDockWidgetArea, "output")
         self.terminal_dock = self._dock("Terminal", self.terminal, Qt.BottomDockWidgetArea,
                                         "terminal")
+        self.debug_dock = self._dock("Debug", self.debug_panel, Qt.BottomDockWidgetArea,
+                                     "debug")
+        self.watches.changed.connect(self._refresh_watches)
+        self._connect_debug_panel()
         self.outline_dock = self._dock("Outline", self.outline, Qt.RightDockWidgetArea,
                                        "outline")
         self.outline.lineChosen.connect(self._goto_outline_line)
@@ -308,7 +320,7 @@ class MainWindow(QMainWindow):
         self.act_view_outline = a("Outli&ne Window", self._show_outline,
                                   tip="The structure of the current file")
 
-        self.act_run = a("&Start", self.run_project, "F5", "Run", "Run the project")
+        self.act_run = a("&Start", lambda: self.run_project(), "F5", "Run", "Run the project")
         # Also Cmd+Enter on macOS / Ctrl+Enter elsewhere (Qt's "Ctrl" is Command on macOS),
         # from the main keyboard or the keypad
         self.act_run.setShortcuts([QKeySequence("F5"), QKeySequence("Ctrl+Return"),
@@ -318,6 +330,30 @@ class MainWindow(QMainWindow):
                                     QKeySequence.NativeText) + ")")
         self.act_end = a("&End", self.stop_project, None, "Stop", "Stop the running program")
         self.act_restart = a("&Restart", self.restart_project, "Shift+F5")
+        self.act_break = a("&Break", self.break_project, "Ctrl+Break", "Pause",
+                           "Pause the running program (break mode)")
+        # Ctrl+Break as in VB6; Ctrl+Pause too, and Cmd+. on macOS (no Break key there)
+        self.act_break.setShortcuts([QKeySequence("Ctrl+Break"), QKeySequence("Ctrl+Pause")] +
+                                    ([QKeySequence("Ctrl+.")] if sys.platform == "darwin"
+                                     else []))
+
+        self.act_step_into = a("Step &Into", lambda: self.step("step"), "F8",
+                               tip="Run the next line, into the procedures it calls")
+        self.act_step_over = a("Step &Over", lambda: self.step("next"), "Shift+F8",
+                               tip="Run the next line, and the procedures it calls")
+        self.act_step_out = a("Step Ou&t", lambda: self.step("return"), "Ctrl+Shift+F8",
+                              tip="Run to the end of this procedure")
+        self.act_apply_changes = a("Apply Code C&hanges", lambda: self.apply_code_changes(),
+                                   "Alt+F10", tip="Apply the code edited in break mode, "
+                                   "without going on")
+        self.act_toggle_breakpoint = a("Toggle &Breakpoint", self.toggle_breakpoint, "F9",
+                                       tip="Stop the program at this line")
+        self.act_clear_breakpoints = a("&Clear All Breakpoints", self.clear_breakpoints,
+                                       "Ctrl+Shift+F9")
+        self.act_add_watch = a("&Add Watch…", lambda: self.add_watch(),
+                               tip="An expression shown in the Watches window when paused")
+        self.act_view_debug = a("&Debug Window", lambda: self._show_bottom(self.debug_dock),
+                                tip="The watches, the call stack and the breakpoints")
 
     def _create_menus(self):
         bar = self.menuBar()
@@ -338,7 +374,8 @@ class MainWindow(QMainWindow):
         view = bar.addMenu("&View")
         for act in (self.act_view_code, self.act_view_object, self.act_view_browser, None,
                     self.act_view_immediate,
-                    self.act_view_output, self.act_view_terminal, self.act_view_project, self.act_view_props,
+                    self.act_view_output, self.act_view_debug, self.act_view_terminal,
+                    self.act_view_project, self.act_view_props,
                     self.act_view_outline, self.act_view_toolbox):
             view.addSeparator() if act is None else view.addAction(act)
         view.addSeparator()
@@ -377,8 +414,14 @@ class MainWindow(QMainWindow):
         fmt.addSeparator()
         fmt.addAction(self.act_lock)
 
+        debug = bar.addMenu("&Debug")
+        for act in (self.act_step_into, self.act_step_over, self.act_step_out, None,
+                    self.act_apply_changes, None, self.act_add_watch, None, self.act_toggle_breakpoint,
+                    self.act_clear_breakpoints, None, self.act_view_debug):
+            debug.addSeparator() if act is None else debug.addAction(act)
+
         run = bar.addMenu("&Run")
-        for act in (self.act_run, self.act_end, self.act_restart):
+        for act in (self.act_run, self.act_break, self.act_end, self.act_restart):
             run.addAction(act)
 
         tools = bar.addMenu("&Tools")
@@ -413,7 +456,7 @@ class MainWindow(QMainWindow):
         toolbar.setObjectName("standard")
         toolbar.setMovable(False)
         for act in (self.act_new, self.act_add_form, self.act_add_module, self.act_open,
-                    self.act_save, None, self.act_run, self.act_end):
+                    self.act_save, None, self.act_run, self.act_break, self.act_end):
             toolbar.addSeparator() if act is None else toolbar.addAction(act)
         # Light/dark switch at the right end
         spacer = QWidget()
@@ -462,6 +505,9 @@ class MainWindow(QMainWindow):
         self.terminal_dock.setFloating(False)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.terminal_dock)
         self.terminal_dock.hide()
+        self.debug_dock.setFloating(False)  # (the same for the Debug window)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.debug_dock)
+        self.debug_dock.hide()
         self.immediate_dock.raise_()
         self._place_outline()  # in the Properties panel's place, shown for code windows
         self.outline_dock.hide()
@@ -524,10 +570,14 @@ class MainWindow(QMainWindow):
 
     def show_terminal(self):
         """View > Terminal Window: the shell (started the first time), with the focus."""
-        self.terminal_dock.show()
-        self._tab_bottom_docks()  # (now: with the Immediate window)
-        self.terminal_dock.raise_()
+        self._show_bottom(self.terminal_dock)
         self.terminal.view.setFocus()
+
+    def _show_bottom(self, dock: QDockWidget):
+        """Show a panel of the bottom edge's tabs (Terminal, Watches) there now."""
+        dock.show()
+        self._tab_bottom_docks()  # (now: with the Immediate window)
+        dock.raise_()
 
     def _show_properties(self):
         self._show_side_panel(False, force=True)  # in the Outline window's place
@@ -539,11 +589,16 @@ class MainWindow(QMainWindow):
     def running(self) -> bool:
         return self.process is not None
 
+    @property
+    def paused(self) -> bool:
+        """Whether the running program is paused (break mode)."""
+        return self.debug is not None and self.debug.is_paused
+
     def _update_title(self):
         if self.project is None:
             self.setWindowTitle("VP6")
             return
-        mode = "run" if self.running else "design"
+        mode = "break" if self.paused else "run" if self.running else "design"
         self.setWindowTitle(f"{self.project.name} - VP6 [{mode}]")
 
     def _update_actions(self):
@@ -553,9 +608,15 @@ class MainWindow(QMainWindow):
                     self.act_add_user_control, self.act_add_file, self.act_add_folder,
                     self.act_project_props):
             act.setEnabled(has_project)
-        self.act_run.setEnabled(has_project and not self.running)
+        paused = self.paused
+        self.act_run.setEnabled(has_project and (not self.running or paused))
+        self.act_run.setText("&Continue" if paused else "&Start")
         self.act_restart.setEnabled(has_project)
         self.act_end.setEnabled(self.running)
+        self.act_break.setEnabled(self.running and not paused and self.debug is not None)
+        for act in (self.act_step_into, self.act_step_over, self.act_step_out):
+            act.setEnabled(has_project and (not self.running or paused))
+        self.act_apply_changes.setEnabled(paused)
         # (it may be called while the window is being built)
         making = getattr(self, "make_process", None) is not None
         self.act_make.setEnabled(has_project and not making)
@@ -727,6 +788,8 @@ class MainWindow(QMainWindow):
     def _add_document(self, doc: Document):
         self.documents[doc.path] = doc
         doc.modifiedChanged.connect(lambda *_: self._update_window_titles())
+        doc.breakpointsChanged.connect(self._on_breakpoints_changed)
+        doc.text_document.contentsChanged.connect(self._breakpoint_list_timer.start)
         if isinstance(doc, FormDocument):
             doc.parseError.connect(
                 lambda msg: self.statusBar().showMessage(f"Designer region: {msg}", 6000))
@@ -765,6 +828,7 @@ class MainWindow(QMainWindow):
         self.designer_windows.clear()
         self.code_windows.clear()
         self.documents.clear()
+        self._refresh_breakpoint_list()
         self._file_targets.clear()
         self.project = None
         self._user_control_timer.stop()
@@ -1167,6 +1231,7 @@ class MainWindow(QMainWindow):
         self.project.remove_file(self._relative(path))
         del self.documents[path]
         self._file_targets.pop(path, None)
+        self._on_breakpoints_changed()  # (its breakpoints go too)
 
     # -- the Files view: folders and files on disk ----------------------------------------------
     def _file_name_error(self, name: str) -> str | None:
@@ -1529,6 +1594,8 @@ class MainWindow(QMainWindow):
         if sub is None:
             window = CodeWindow(doc)
             window.editor.cursorPositionChanged.connect(self._sync_outline_line)
+            window.editor.breakpointClicked.connect(
+                lambda line, d=doc: self._toggle_breakpoint_at(d, line))
             sub = self._add_subwindow(window, "Module")
             self.code_windows[path] = sub
             self._update_window_titles()
@@ -1786,15 +1853,34 @@ class MainWindow(QMainWindow):
             editor.goto_line(line)
 
     # -- running ----------------------------------------------------------------------------------------------
-    def run_project(self):
+    def run_project(self, step: bool = False):
+        """Run > Start (F5): run the project in a process of its own, under the
+        debugger (with ``step``, Debug > Step Into: paused at the first line of
+        its procedures). While paused, Start continues it."""
+        if self.paused:
+            self.resume("continue")
+            return
         if self.project is None or self.running:
             return
         if not self.save_all():
             return
+        # The text the program runs: what is edited from now on is applied when it
+        # continues from break mode (Edit and Continue)
+        self._applied = {path: doc.text for path, doc in self.documents.items()}
         self._show_dock(self.immediate_dock)
         self.immediate.append(f"▶ Running {self.project.name}…\n", "info")
         process = QProcess(self)
         env = QProcessEnvironment.systemEnvironment()
+        try:  # the debugger: the program connects to it (vp6.debugagent)
+            self.debug = DebugSession(self._all_breakpoints(), step, self)
+        except OSError as exc:
+            self.debug = None
+            self.immediate.append(f"Running without the debugger: {exc}\n", "err")
+        if self.debug is not None:
+            self.debug.paused.connect(self._on_paused)
+            self.debug.resumed.connect(self._on_resumed)
+            env.insert(PORT_ENV, str(self.debug.port))
+            env.insert(ROOT_ENV, self.project.directory)
         python_path = env.value("PYTHONPATH", "")
         env.insert("PYTHONPATH", VP6_ROOT + (os.pathsep + python_path if python_path else ""))
         env.insert("PYTHONUNBUFFERED", "1")
@@ -1905,6 +1991,240 @@ class MainWindow(QMainWindow):
         if error == QProcess.FailedToStart and self.make_process is not None:
             self._on_make_finished(-1, QProcess.CrashExit)
 
+    def break_project(self):
+        """Run > Break (Ctrl+Break): pause the program where it is (between
+        events when it's waiting for one)."""
+        if self.debug is not None and self.running:
+            self.debug.pause()
+
+    def step(self, how: str):
+        """Debug > Step Into, Over and Out (``step``, ``next``, ``return``):
+        while paused, run on to the next line; before it runs, start the
+        program paused at its first line; while it runs, pause it."""
+        if not self.running:
+            self.run_project(step=True)
+        elif self.paused:
+            self.resume(how)
+        else:
+            self.break_project()
+
+    # -- Edit and Continue ------------------------------------------------------------------------
+    def resume(self, how: str = "continue"):
+        """Go on from break mode (continue or a step), the code changed in break
+        mode applied first; when it can't be (an error), it stays paused."""
+        if self.paused:
+            self.apply_code_changes(lambda: self.debug.resume(how))
+
+    def pending_changes(self) -> dict[str, str]:
+        """The files edited since the program started (or the last changes were
+        applied): path → their text now."""
+        return {path: doc.text for path, doc in self.documents.items()
+                if path.endswith(".py") and doc.text != self._applied.get(path)}
+
+    def apply_code_changes(self, then=None):
+        """Debug > Apply Code Changes (Alt+F10), and before going on from break
+        mode: the edited files' text goes to the paused program, which runs it
+        in its modules (vp6.hotpatch). ``then`` runs once they are applied."""
+        if not self.paused:
+            return
+        files = self.pending_changes()
+        if not files:
+            if then is not None:
+                then()
+            return
+
+        def applied(result):
+            for path in result.get("files", []):
+                self._applied[path] = files[path]
+            names = result.get("changed", []) + result.get("added", [])
+            if names:
+                self.immediate.append(f"✎ Code changes applied: {', '.join(names)}\n", "info")
+            for name in result.get("running", []):
+                self.immediate.append(f"✎ {name} is running: it goes on with its old code; "
+                                      "the change applies from its next call\n", "info")
+            errors = result.get("errors", [])
+            for error in errors:
+                self.immediate.append(f"✎ Not applied: {error}\n", "err")
+            self._on_breakpoints_changed()  # (their lines may have moved with the edits)
+            if errors:
+                self._show_dock(self.immediate_dock)
+                self.statusBar().showMessage("The code changes have an error: fix it (or undo "
+                                             "it) to go on", 8000)
+            elif then is not None:
+                then()
+        self.debug.apply_changes(files, applied)
+
+    # -- the debugger --------------------------------------------------------------------------
+    def _all_breakpoints(self) -> dict[str, list[int]]:
+        return {path: doc.breakpoint_lines(enabled_only=True)
+                for path, doc in self.documents.items()
+                if doc.breakpoint_lines(enabled_only=True)}
+
+    def _on_breakpoints_changed(self):
+        if self.debug is not None:
+            self.debug.set_breakpoints(self._all_breakpoints())
+        self._breakpoint_list_timer.start()
+
+    # -- the Debug panel -------------------------------------------------------------------------
+    def _connect_debug_panel(self):
+        panel = self.debug_panel
+        # The breakpoint list follows the files (their lines move as they are edited)
+        self._breakpoint_list_timer = QTimer(self)
+        self._breakpoint_list_timer.setSingleShot(True)
+        self._breakpoint_list_timer.setInterval(200)
+        self._breakpoint_list_timer.timeout.connect(self._refresh_breakpoint_list)
+        breakpoints = panel.breakpoints
+        breakpoints.goTo.connect(self._go_to_line)
+        breakpoints.enableRequested.connect(
+            lambda path, line, on: self._with_doc(path, lambda d: d.enable_breakpoint(line, on)))
+        breakpoints.removeRequested.connect(
+            lambda path, line: self._with_doc(path, lambda d: d.set_breakpoint(line, False)))
+        breakpoints.removeAllRequested.connect(self.clear_breakpoints)
+        breakpoints.enableAllRequested.connect(self.enable_all_breakpoints)
+        panel.call_stack.frameChosen.connect(self._choose_frame)
+
+    def _with_doc(self, path: str, action) -> None:
+        doc = self.documents.get(path)
+        if doc is not None:
+            action(doc)
+
+    def _refresh_breakpoint_list(self):
+        entries = []
+        for path, doc in sorted(self.documents.items(), key=lambda item: item[1].filename):
+            for line, enabled in doc.breakpoints():
+                block = doc.text_document.findBlockByNumber(line - 1)
+                entries.append((path, line, enabled, block.text()))
+        self.debug_panel.breakpoints.show_breakpoints(entries)
+
+    def enable_all_breakpoints(self, enabled: bool = True):
+        for doc in self.documents.values():
+            for line, _on in doc.breakpoints():
+                doc.enable_breakpoint(line, enabled)
+
+    def _go_to_line(self, path: str, line: int):
+        window = self.view_code(path) if path in self.documents else None
+        if window is not None:
+            window.editor.show_line(line)
+            window.editor.setFocus()
+
+    def _choose_frame(self, index: int, path: str, line: int):
+        """The Call Stack's choice: the frame the Immediate window and the
+        watches evaluate in; its line shown."""
+        if not self.paused:
+            return
+        self.debug.frame = index
+        doc = self._doc_for_file(path)
+        if doc is not None:
+            self._go_to_line(doc.path, line)
+        self._refresh_watches()
+
+    def toggle_breakpoint(self):
+        """Debug > Toggle Breakpoint (F9): on the current code window's line."""
+        window = self._active_widget()
+        if isinstance(window, CodeWindow):
+            self._toggle_breakpoint_at(window.doc, window.editor.current_line())
+
+    def _toggle_breakpoint_at(self, doc: Document, line: int):
+        if not doc.has_breakpoint(line) and not doc.can_break_at(line):
+            self.statusBar().showMessage("A breakpoint goes on a line of code (not a blank "
+                                         "line or a comment)", 4000)
+            return
+        doc.toggle_breakpoint(line)
+
+    def clear_breakpoints(self):
+        """Debug > Clear All Breakpoints."""
+        for doc in self.documents.values():
+            doc.clear_breakpoints()
+
+    def add_watch(self, expression: str | None = None):
+        """Debug > Add Watch: the selected text (or the word at the cursor) by
+        default; shown in the Watches window, evaluated each time the program
+        stops."""
+        if expression is None:
+            default = ""
+            window = self._active_widget()
+            if isinstance(window, CodeWindow):
+                cursor = window.editor.textCursor()
+                if not cursor.hasSelection():
+                    cursor.select(cursor.SelectionType.WordUnderCursor)
+                default = cursor.selectedText().strip()
+            expression, ok = QInputDialog.getText(self, "Add Watch", "Expression:",
+                                                  QLineEdit.Normal, default)
+            if not ok:
+                return
+        if expression.strip():
+            self.watches.add(expression)
+            self._show_bottom(self.debug_dock)
+
+    def _refresh_watches(self):
+        if not self.paused:
+            return
+        for item in self.watches.items():
+            expression = item.text(0)
+            self.debug.evaluate(expression, lambda result, i=item, e=expression:
+                                self.watches.show_result(i, e, result))
+
+    def evaluate_in_immediate(self, text: str):
+        """What was typed in the Immediate window while paused: an expression's
+        value is shown (``? x`` as in VB too), a statement is run."""
+        text = text.strip()
+        if not text:
+            return
+        expression = text[1:].strip() if text.startswith("?") else text
+
+        def show(result):
+            if "error" in result:
+                self.immediate.append(result["error"] + "\n", "err")
+            elif result.get("value") is not None:
+                self.immediate.append(result["value"] + "\n")
+            self._refresh_watches()  # (a statement may have changed them)
+        self.debug.evaluate(expression, show, statements=True)
+
+    def _doc_for_file(self, path: str | None) -> Document | None:
+        if not path:
+            return None
+        return next((doc for doc in self.documents.values() if same_file(doc.path, path)),
+                    None)
+
+    def _on_paused(self, location: dict):
+        """The program stopped (a breakpoint, a step, Break, an error): show its
+        line, with the execution point, and the watches' values."""
+        for doc in self.documents.values():
+            doc.set_execution_line(None)
+        doc = self._doc_for_file(location.get("file"))
+        if doc is not None:
+            window = self.view_code(doc.path)
+            doc.set_execution_line(location["line"], location.get("reason") == "error")
+            if window is not None:
+                window.editor.show_line(location["line"])
+        if location.get("error"):
+            self.immediate.append(f"■ {describe(location)}: {location['error']}\n", "err")
+        self.statusBar().showMessage(describe(location))
+        self.immediate.set_paused(True)
+        self.debug_panel.call_stack.show_stack(location.get("stack") or [])
+        self._refresh_watches()
+        self.raise_()
+        self.activateWindow()
+        self._update_title()
+        self._update_actions()
+
+    def _on_resumed(self):
+        for doc in self.documents.values():
+            doc.set_execution_line(None)
+        self.debug_panel.not_paused()
+        self.immediate.set_paused(False)
+        self.statusBar().clearMessage()
+        self._update_title()
+        self._update_actions()
+
+    def _end_debugging(self):
+        if self.debug is not None:
+            self.debug.close()
+            self.debug.deleteLater()
+            self.debug = None
+        self._on_resumed()
+        self.watches.out_of_context()
+
     def stop_project(self):
         if self.process is not None:
             self.process.kill()
@@ -1918,6 +2238,9 @@ class MainWindow(QMainWindow):
             self.run_project()
 
     def _send_input(self, text: str):
+        if self.paused:  # break mode: an expression or a statement, in the program
+            self.evaluate_in_immediate(text)
+            return
         if self.process is not None:
             self.process.write((text + "\n").encode("utf-8"))
 
@@ -1933,6 +2256,7 @@ class MainWindow(QMainWindow):
         how = "was stopped" if status == QProcess.CrashExit else f"exited with code {code}"
         self.immediate.append(f"■ Program {how}.\n", "info")
         self.process = None
+        self._end_debugging()
         self.immediate.set_running(False)
         self._update_title()
         self._update_actions()
@@ -1941,6 +2265,7 @@ class MainWindow(QMainWindow):
         if error == QProcess.FailedToStart:
             self.immediate.append(f"Failed to start {sys.executable}\n", "err")
             self.process = None
+            self._end_debugging()
             self._update_title()
             self._update_actions()
 

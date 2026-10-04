@@ -6,9 +6,10 @@ import builtins
 import keyword
 import re
 
-from PySide6.QtCore import QRect, QSize, QStringListModel, Qt, QTimer, Signal
-from PySide6.QtGui import (QColor, QFont, QKeySequence, QPainter, QPalette, QSyntaxHighlighter,
-                           QTextCharFormat, QTextCursor, QTextFormat)
+from PySide6.QtCore import (QPoint, QPointF, QRect, QRectF, QSize, QStringListModel, Qt, QTimer,
+                            Signal)
+from PySide6.QtGui import (QColor, QFont, QKeySequence, QPainter, QPalette, QPen, QPolygonF,
+                           QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextFormat)
 from PySide6.QtWidgets import (QApplication, QComboBox, QCompleter, QHBoxLayout, QPlainTextEdit,
                                QTextEdit, QVBoxLayout, QWidget)
 
@@ -22,6 +23,9 @@ from .documents import Document, FormDocument
 from .theme import Theme, TextStyle, theme_manager
 
 INDENT = "    "
+MARKERS = 14  # the gutter's column of breakpoints and the execution point, at its left
+BREAKPOINT_DOT = "#e51400"
+EXECUTION_ARROW = "#ffcc00"
 GENERAL = "(General)"
 DECLARATIONS = "(Declarations)"
 
@@ -162,7 +166,11 @@ class _LineNumbers(QWidget):
 
 class CodeEditor(QPlainTextEdit):
     """Python editor with auto-indent, completion and a protected, foldable
-    designer region."""
+    designer region. Its gutter shows the document's breakpoints and where
+    the program is paused; a click there asks for a breakpoint
+    (``breakpointClicked``)."""
+
+    breakpointClicked = Signal(int)  # the line (1-based) clicked in the gutter
 
     def __init__(self, document: Document, completion_provider=None, parent=None,
                  follow_theme: bool = True):
@@ -181,6 +189,9 @@ class CodeEditor(QPlainTextEdit):
         self.blockCountChanged.connect(self._update_gutter_width)
         self.updateRequest.connect(self._update_gutter)
         self.cursorPositionChanged.connect(self._highlight_current_line)
+        document.breakpointsChanged.connect(self._on_markers_changed)
+        document.executionChanged.connect(self._on_markers_changed)
+        self.document().contentsChange.connect(self._on_lines_changed)
         self._update_gutter_width()
         self._highlight_current_line()
 
@@ -225,7 +236,7 @@ class CodeEditor(QPlainTextEdit):
     # -- gutter -----------------------------------------------------------------------------
     def gutter_width(self) -> int:
         digits = len(str(max(1, self.blockCount())))
-        return 18 + self.fontMetrics().horizontalAdvance("9") * max(digits, 3)
+        return MARKERS + 18 + self.fontMetrics().horizontalAdvance("9") * max(digits, 3)
 
     def _update_gutter_width(self, *_):
         self.setViewportMargins(self.gutter_width(), 0, 0, 0)
@@ -254,6 +265,7 @@ class CodeEditor(QPlainTextEdit):
             bottom = top + round(self.blockBoundingRect(block).height())
             if block.isVisible() and bottom >= event.rect().top():
                 number = block.blockNumber()
+                self._paint_markers(painter, number + 1, top, height)
                 painter.setPen(QColor(colors["gutter_foreground"]))
                 painter.drawText(0, top, self.gutter.width() - 14, height, Qt.AlignRight,
                                  str(number + 1))
@@ -269,22 +281,80 @@ class CodeEditor(QPlainTextEdit):
             block = block.next()
             top = bottom
 
+    def _paint_markers(self, painter: QPainter, line: int, top: int, height: int) -> None:
+        """A line's breakpoint (a red dot) and the execution point (a yellow
+        arrow), in the gutter's left column."""
+        size = min(height - 2, MARKERS - 4)
+        box = QRectF(2, top + (height - size) / 2, size, size)
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        if self.doc.has_breakpoint(line):
+            if self.doc.breakpoint_enabled(line):
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QColor(BREAKPOINT_DOT))
+            else:  # disabled: a ring
+                painter.setPen(QPen(QColor(BREAKPOINT_DOT), 1.5))
+                painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(box.adjusted(0.75, 0.75, -0.75, -0.75))
+        if self.doc.execution_line == line:
+            arrow = QPolygonF([QPointF(box.left(), box.top() + size * 0.3),
+                               QPointF(box.left() + size * 0.5, box.top() + size * 0.3),
+                               QPointF(box.left() + size * 0.5, box.top()),
+                               QPointF(box.right(), box.center().y()),
+                               QPointF(box.left() + size * 0.5, box.bottom()),
+                               QPointF(box.left() + size * 0.5, box.top() + size * 0.7),
+                               QPointF(box.left(), box.top() + size * 0.7)])
+            painter.setPen(QPen(QColor("#7a6000"), 0.8))
+            painter.setBrush(QColor(EXECUTION_ARROW))
+            painter.drawPolygon(arrow)
+        painter.restore()
+
     def gutter_clicked(self, pos):
+        cursor = self.cursorForPosition(QPoint(0, pos.y()))
         region = self._region_blocks()
-        if not region:
-            return
-        cursor = self.cursorForPosition(pos)
-        if cursor.blockNumber() == region[0]:
+        if region and cursor.blockNumber() == region[0] and pos.x() >= MARKERS:
             self.region_folded = not self.region_folded
             self.apply_fold()
+            return
+        self.breakpointClicked.emit(cursor.blockNumber() + 1)
+
+    def _on_markers_changed(self) -> None:
+        self._highlight_current_line()
+        self.gutter.update()
+
+    def _on_lines_changed(self, _position, removed, added) -> None:
+        if removed or added:  # (lines may have come or gone: the markers follow)
+            self._on_markers_changed()
+
+    def _line_selection(self, line: int, color: str) -> QTextEdit.ExtraSelection:
+        selection = QTextEdit.ExtraSelection()
+        selection.format.setBackground(QColor(color))
+        selection.format.setProperty(QTextFormat.FullWidthSelection, True)
+        selection.cursor = QTextCursor(self.document().findBlockByNumber(line - 1))
+        return selection
 
     def _highlight_current_line(self):
+        colors = self.theme.colors
         selection = QTextEdit.ExtraSelection()
-        selection.format.setBackground(QColor(self.theme.colors["current_line"]))
+        selection.format.setBackground(QColor(colors["current_line"]))
         selection.format.setProperty(QTextFormat.FullWidthSelection, True)
         selection.cursor = self.textCursor()
         selection.cursor.clearSelection()
-        self.setExtraSelections([selection])
+        selections = [selection]
+        selections += [self._line_selection(line, colors["breakpoint"])
+                       for line in self.doc.breakpoint_lines(enabled_only=True)]
+        if self.doc.execution_line is not None:
+            selections.append(self._line_selection(self.doc.execution_line,
+                                                   colors["execution_point"]))
+        self.setExtraSelections(selections)
+
+    def show_line(self, line: int) -> None:
+        """Put the cursor at the start of a line and scroll it into the middle
+        (the execution point: nothing selected)."""
+        block = self.document().findBlockByNumber(max(line - 1, 0))
+        self._unfold_for(block.blockNumber())
+        self.setTextCursor(QTextCursor(block))
+        self.centerCursor()
 
     # -- designer region: folding and protection ----------------------------------------------------
     def _region_blocks(self) -> tuple[int, int] | None:

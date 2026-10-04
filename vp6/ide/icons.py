@@ -496,6 +496,13 @@ def _stop(p):
     p.drawRoundedRect(QRectF(5, 5, 14, 14), 2, 2)
 
 
+def _pause(p):  # (Run > Break: two bars, as a pause button)
+    p.setPen(QPen(QColor("#1f5fbf"), 1))
+    p.setBrush(QColor("#4c8dff"))
+    p.drawRoundedRect(QRectF(6, 5, 4.5, 14), 1, 1)
+    p.drawRoundedRect(QRectF(13.5, 5, 4.5, 14), 1, 1)
+
+
 def _sun(p):
     p.setPen(QPen(QColor("#f5a623"), 1.6, Qt.SolidLine, Qt.RoundCap))
     center = QPointF(12, 12)
@@ -572,7 +579,7 @@ _DRAWERS = {
     "DockPanel": _dockpanel, "UserControl": _usercontrol,
     "CommonDialog": _commondialog, "WebView": _webview, "WebBrowser": _webbrowser,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
-    "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop,
+    "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop, "Pause": _pause,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,
     **{name: (lambda p, c=color, l=letter: _badge(p, c, l, 10 if l == "\u25b6" else 13))
        for name, (color, letter) in _OUTLINE_BADGES.items()},

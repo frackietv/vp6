@@ -670,6 +670,11 @@ def call_handler(handler, *args):
 def report_runtime_error(exc: BaseException) -> None:
     traceback.print_exception(exc, file=sys.stderr)
     sys.stderr.flush()
+    from . import debugagent
+
+    agent = debugagent.active()
+    if agent is not None and agent.post_mortem(exc):  # (run by the IDE's debugger: it
+        return                                          # stopped at the error's line)
     if os.environ.get("VP6_NO_ERROR_DIALOG"):
         return
     box = QMessageBox()

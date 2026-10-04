@@ -103,6 +103,9 @@ def run_project(path: str) -> int:
         return 0
     sys.path[:0] = import_folders(project)
     os.chdir(project.directory)
+    from . import debugagent
+
+    debugagent.start_from_environment()  # (run by the IDE's Start: its debugger)
     from . import appearance
     from .app import App
 
