@@ -3708,4 +3708,3 @@ It goes in the project's `dist` folder:
 * **Making an executable** (File > Make Executable…) bundles Python with the
   program, so it is large (around 100 MB) and made for the system it is made
   on (see [Making an executable](#making-an-executable)).
-* **Not implemented yet:** see [BACKLOG.md](../BACKLOG.md).
