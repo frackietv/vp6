@@ -1,5 +1,50 @@
 # VP6 features
 
+**Version:** 0.4.51
+**Date:** 2026-10-06
+
+## Help system (vp6help, a package of its own)
+
+- Help files that work like the old .chm help: one `.vp6help` file with a table of contents, an index and full-text search
+- `vp6help-make` makes one from Markdown and HTML documents (in the order given, or folders of them), with the pictures and files they link to; links between the documents become links between pages
+- The contents: each document with its headings (`--toc-depth`; `--flat` for documents without them)
+- The index: headings, names in code that start a table row or stand alone in a paragraph, `<!-- keywords: ... -->` comments and HTML pages' keywords
+- Python packages documented from their code, javadoc-style (`--package`): a page per module with its classes (methods, properties, attributes, what they inherit, bases linked), functions and constants (grouped by `# --- Title ---` comments); read without importing; compiled modules inspected; `--follow` documents the packages they import too (`--follow-stdlib`, `--private`, `--exclude`)
+- `vp6help` shows a help file: Contents, Index (narrowed as you type: text or a regular expression, matching case or not; keywords with several topics list them) and Search (text or a regular expression, matching case or not; the most matches first; the matches highlighted on the page) on the left, the page on the right with Back, Forward, Home and Locate; web links open in the browser; colors follow the light or dark palette
+- Any page, keyword, index filter or search from the command line (`vp6help FILE docs/guide.html#heading`, `--keyword`, `--index`, `--search`, `--regex`, `--case`; `--list` prints instead) or from Python (`show_help`)
+
+## Runtime
+
+- `ShowHelp(HelpFile, Keyword, Search, Page, Regex, MatchCase)`: a help file in its window, at a keyword, a search, a page or the contents; `App.HelpFile` is the program's help file (VP6's own help otherwise)
+- CommonDialog: `ShowHelp` shows a `.vp6help` HelpFile as `HelpCommand` asks (`vpHelpContents`, `vpHelpKey`, `vpHelpPartialKey`, `vpHelpSearch`) with `HelpKey`
+
+## IDE
+
+- VP6's help: the README, the IDE guide, the API reference, the development guide, the architecture, the source reference, vp6help's guide, the release notes and the Python reference of every `vp6` module, with an index of every control, property, event, function, class and constant
+- Help > Contents, Index, Search…
+- F1 (Help > Context Help): help on the word at the cursor in the code (a control's name: its type), the property chosen (for the selected control's type), the control selected in the designer, the tool chosen in the Toolbox, or the Object Browser's member; a word the index doesn't have is searched for
+- The help is in the wheel (made when it's built) and in executables; run from the source, VP6 makes it again after a change
+
+- New Project: the templates in categories (a tree of folders on the left; double-click a folder to open it): Standard EXE and Console Application at the top level, the samples in Sample Projects
+- Sample Projects > Graphics > Projection: a single form with a model turning in a parallel projection, solid and shaded or as a wireframe (Wireframe), Rotate, the axes drawn behind it
+  - Model: a cube, a pyramid, a torus, a house (a gable roof, a door and windows), a few boxes of different sizes apart in one scene, or a simple downtown (a ground slab, streets, office blocks, a tower with a spire, a park with trees)
+  - The parts drawn back to front: of two whose pictures overlap, the one behind the plane of a face between them first (worked out once for each model), the farthest first otherwise; a part's own faces farthest first (the torus)
+  - Projection: elevation, plan, isometric, dimetric or trimetric orthographic; military, cavalier or top-down oblique; what the projection has become is named as the axes are moved (isometric, dimetric, trimetric… or a general parallel projection)
+  - Drag an axis's end to move just that axis (the angles between the axes no longer right ones); drag the empty space to turn all of them (azimuth and elevation); drag the model to turn it; double-click or Reset view to go back to the projection chosen
+  - Sliders with their values for the model's roll (X), pitch (Y) and tumble (Z), and for Rotate's roll, pitch and tumble rates (0 to 100%)
+  - The angles between X and Y, Y and Z, Z and X on the screen, and the axes' lengths
+
+## Runtime
+
+- `Polygon(Points, Color)`: a graphics method for forms, PictureBoxes, Pictures and the Printer: a closed polygon, filled as FillStyle says, outlined with the pen
+
+## Kitchen Sink
+
+- The Dialogs page's Help button: `ShowHelp(Keyword="MsgBox")`
+- The Drawing page's shapes include a Polygon star
+
+---
+
 **Version:** 0.4.50
 **Date:** 2026-10-02
 

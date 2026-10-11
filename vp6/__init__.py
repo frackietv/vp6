@@ -6,7 +6,7 @@
 from .appearance import (vpSchemeDark, vpSchemeIDE, vpSchemeLight, vpSchemeProjectDefault,
                          vpSchemeSystem)
 from .app import (App, Beep, Clipboard, Command, Debug, DeleteSetting, DoEvents, End,
-                  GetAllSettings, GetSetting, SaveSetting, Screen, SendKeys)
+                  GetAllSettings, GetSetting, SaveSetting, Screen, SendKeys, ShowHelp)
 from .colors import (RGB, QBColor, vpBlack, vpBlue, vpCyan, vpGreen, vpMagenta, vpRed,
                      vpWhite, vpYellow)
 from .constants import *  # noqa: F403
@@ -29,11 +29,11 @@ from .picture import LoadPicture, Picture, SavePicture
 from .printer import Printer, Printers
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.50"
+__version__ = "0.4.51"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Command", "Debug", "DeleteSetting", "DoEvents", "End",
-    "GetAllSettings", "GetSetting", "SaveSetting", "Screen", "SendKeys",
+    "GetAllSettings", "GetSetting", "SaveSetting", "Screen", "SendKeys", "ShowHelp",
     "LoadPicture", "Picture", "SavePicture", "Printer", "Printers", "MDIForm",
     "Process", "Shell", "Terminal", "MarkdownBox",
     "Data", "Database", "Recordset", "Field", "OpenDatabase", "CreateDatabase",

@@ -287,6 +287,16 @@ class PropertiesWindow(QWidget):
             }.get(spec.kind, "")
             self.description.setText(f"<b>{spec.name}</b><br>{doc}")
 
+    def current_property(self) -> tuple[str, str]:
+        """The property chosen (its name) and the type of the object it is
+        of (when one object is selected); empty strings if none."""
+        row = self.table.currentRow()
+        if not 0 <= row < len(self._specs) or isinstance(self._specs[row], str):
+            return "", ""
+        objects = getattr(self, "_objects", [])
+        type_name = getattr(objects[0], "TypeName", "") if len(objects) == 1 else ""
+        return self._specs[row].name, type_name
+
     def select_property(self, name: str) -> None:
         for row, spec in enumerate(self._specs):
             if not isinstance(spec, str) and spec.name == name:

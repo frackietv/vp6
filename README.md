@@ -44,6 +44,7 @@ From the source:
 
 ```bash
 python3 -m venv .venv
+.venv/bin/pip install -e packages/vp6help   # the help system (vp6help), first
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/vp6                       # start the IDE (or: python -m vp6.ide)
 .venv/bin/vp6 path/to/Project.vp6p      # open a project
@@ -58,16 +59,26 @@ Project.vp6p`), install PyInstaller too: `.venv/bin/pip install -e ".[dev,make]"
 Executables are made for the system they are made on (macOS, Windows,
 Linux); see [Making an executable](docs/api.md#making-an-executable).
 
-The IDE opens with a VB-style **New Project** dialog. Every new project has
-`Form1` and `Module1` and starts in `Sub Main`, the `Main()` function in
-`Module1`:
+The IDE opens with a VB-style **New Project** dialog. A Standard EXE or a
+Console Application has `Form1` and `Module1` and starts in `Sub Main`, the
+`Main()` function in `Module1`:
 
 * *Standard EXE:* `Main()` shows `Form1` with `run(Form1)`.
 * *Console Application:* `Main()` talks through `print()` / `input()`.
+
+The samples are in the **Sample Projects** folder:
+
 * *Kitchen Sink:* a demo project showing every VP6 control and feature,
   explorer-style: choose a topic in the tree on the left and its page, a form
   of its own, is shown beside it. Open the pages to see how things work, and
   copy code out of them.
+* *Graphics > Projection:* a model turning in a parallel projection on a
+  single form (elevation, plan, isometric, dimetric or trimetric orthographic;
+  military, cavalier or top-down oblique): a cube, a pyramid, a torus, a
+  house, a few boxes or a downtown, solid or as a wireframe, with the axes
+  behind it; drag an axis to move just that one, the space around to turn
+  them all, the model to turn it; sliders for its roll, pitch and tumble and
+  their rates, and the angles between the axes.
 
 ## Further documentation
 

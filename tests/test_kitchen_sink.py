@@ -574,6 +574,7 @@ def test_drawing_page(sink):
     assert pic.DrawStyle == 2
     page.cmdShapes._widget.click()
     assert pic.Point(170, 40) == vp6.QBColor(10) and pic.DrawStyle == 2  # (kept)
+    assert pic.Point(358, 178) == vp6.QBColor(14)  # the Polygon star, filled
     # The clock: drawn in its Paint (AutoRedraw False), refreshed by the Timer
     clock = page.picClock
     assert not clock.AutoRedraw
@@ -898,6 +899,17 @@ def test_dialogs_page(sink):
     page.cmdModal._widget.click()
     assert page.lblResult.Caption == "The dialog's Result: None (closed by its close button)"
     assert dialog._vp_default is first and dialog.txtItem.Text == ""  # the same, loaded again
+
+
+def test_dialogs_page_help(sink):
+    from vp6help import viewer
+
+    page = _page(sink, "dialogs")
+    page.cmdHelp._widget.click()  # ShowHelp(Keyword="MsgBox"): VP6's help
+    window = next(iter(viewer._viewers.values()))
+    assert window.current_page() == "docs/api.html#dialogs"
+    assert window.index_list.currentItem().text(0) == "MsgBox"
+    assert page.lblResult.Caption.startswith("ShowHelp: VP6's help, at MsgBox")
 
 
 def test_common_dialogs(sink, monkeypatch, tmp_path):

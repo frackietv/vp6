@@ -537,6 +537,18 @@ def _kitchensink(p):
         p.restore()
 
 
+def _isometric(p):
+    # A cube in isometric projection: three shaded faces, 120 degrees apart
+    top, left, right = QColor("#9fb8ec"), QColor("#4f74c8"), QColor("#2f4f9a")
+    w = 10.4  # (a face's width: its edges at 30 degrees)
+    p.setPen(QPen(QColor("#1d2b4f"), 0.8))
+    for color, corners in ((top, ((12, 3), (12 + w, 6), (12, 9), (12 - w, 6))),
+                           (left, ((12 - w, 6), (12, 9), (12, 21), (12 - w, 18))),
+                           (right, ((12, 9), (12 + w, 6), (12 + w, 18), (12, 21)))):
+        p.setBrush(color)
+        p.drawPolygon([QPointF(x, y) for x, y in corners])
+
+
 def _badge(p, color: str, letter: str, size: int = 13):
     """Outline item icon: a colored rounded square with a white letter."""
     p.setPen(Qt.NoPen)
@@ -580,7 +592,7 @@ _DRAWERS = {
     "CommonDialog": _commondialog, "WebView": _webview, "WebBrowser": _webbrowser,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop, "Pause": _pause,
-    "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink,
+    "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink, "Isometric": _isometric,
     **{name: (lambda p, c=color, l=letter: _badge(p, c, l, 10 if l == "\u25b6" else 13))
        for name, (color, letter) in _OUTLINE_BADGES.items()},
 }

@@ -214,6 +214,10 @@ def constants_block() -> str:
     key_rows = ["| Key constant | Value |", "|---|---|"]
     key_rows += [f"| `{name}` | {value} |" for name, value in keys or []]
     key_rows += [f"| {names} | {values} |" for names, values in _key_ranges()]
+    # (the help's index: each of the key codes the ranges stand for)
+    ranged = [n for n in constants.__all__ if n.startswith("vpKey") and
+              n not in {name for name, _ in keys or []}]
+    key_rows.append(f"<!-- keywords: {', '.join(ranged)} -->")
     return "\n".join(rows) + "\n\n**Key codes** (for `KeyDown` / `KeyUp`):\n\n" + \
         "\n".join(key_rows)
 

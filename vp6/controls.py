@@ -9103,7 +9103,13 @@ class CommonDialog(Control):
         P("PrinterDefault", "bool", True,
           description="The Print dialog's choices (the printer, copies, orientation...) become "
                       "the Printer object's"),
-        P("HelpFile", "file", "", description="What ShowHelp opens: a file or web address"),
+        P("HelpFile", "file", "", description="What ShowHelp opens: a help file (.vp6help), "
+                                              "another file or a web address"),
+        P("HelpCommand", "int", 0,
+          description="What ShowHelp shows of a .vp6help file: vpHelpContents (also 0), "
+                      "vpHelpKey, vpHelpPartialKey or vpHelpSearch (with HelpKey)"),
+        P("HelpKey", "str", "",
+          description="The keyword (or search) HelpCommand looks up in the help file"),
         P("Tag", "str", "", description="Free for your own use"),
     )
 
@@ -9264,11 +9270,23 @@ class CommonDialog(Control):
         return True
 
     def ShowHelp(self) -> bool:
-        """Open HelpFile (a file, relative to the form's folder, or a web
-        address) with the program the system has for it."""
+        """Show HelpFile: a help file (.vp6help) in VP6's help window, as
+        HelpCommand and HelpKey ask; another file (relative to the form's
+        folder) or a web address with the program the system has for it."""
         target = self._values.get("HelpFile", "")
         if not target:
             raise ValueError(f"CommonDialog '{self.Name}': no HelpFile to show")
+        if "://" not in target and target.lower().endswith(".vp6help"):
+            from .app import ShowHelp
+            from .constants import vpHelpKey, vpHelpPartialKey, vpHelpSearch
+
+            command, key = self._values.get("HelpCommand", 0), self._values.get("HelpKey", "")
+            viewer = ShowHelp(resolve_path(self._form, target),
+                              Keyword=key if command == vpHelpKey else "",
+                              Search=key if command == vpHelpSearch else "")
+            if command == vpHelpPartialKey:
+                viewer.show_index(key)
+            return True
         url = QUrl(target) if "://" in target else \
             QUrl.fromLocalFile(resolve_path(self._form, target))
         return bool(QDesktopServices.openUrl(url))

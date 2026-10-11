@@ -4,3 +4,6 @@ include LICENSE README.md FEATURES.md BACKLOG.md
 recursive-include docs *.md
 recursive-include tests *.py
 include tools/*.py
+# The help system VP6 uses, its own project (setup.py makes VP6's help with it)
+include packages/vp6help/pyproject.toml packages/vp6help/README.md packages/vp6help/LICENSE
+recursive-include packages/vp6help/vp6help *.py

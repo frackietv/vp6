@@ -239,7 +239,8 @@ Properties.
 * **The methods:** `PSet` (a pixel, or a round dot), `Line` (a line, a box
   covering both corners, "BF" filled), `Circle` (a `QPainterPath`: an
   ellipse, or an arc from `arcMoveTo`/`arcTo` with radius lines for negative
-  ends, `math.copysign` so -0.0 counts; a closed one is filled), `Print`
+  ends, `math.copysign` so -0.0 counts; a closed one is filled), `Polygon`
+  (a closed `QPolygonF` path, filled as FillStyle says, antialiased), `Print`
   (`QFontMetricsF` of the surface's font; lines at ascent below the current
   point), `Cls`, `Point` (renders that one pixel of the surface without its
   children: `DrawWindowBackground`), `TextWidth`, `TextHeight`.
@@ -1265,6 +1266,24 @@ updated, and answers a `Report` (`changed`, `added`, `removed`, `running`,
   (`_code_by_name`): they go on with it until their next call;
 * `linecache` gets the new lines (tracebacks).
 
+### `vp6/helpdocs.py` (≈110 lines)
+
+VP6's own help, made with vp6help (`packages/vp6help`) from `DOCUMENTS`
+(README, the docs and FEATURES, in the order of the help's contents) and the
+`vp6` package (the Python reference). It uses only the standard library and
+vp6help, so that `setup.py` can load it on its own (without Qt).
+
+* `help_file()`: the help file to show: `packaged_help()` (any `.vp6help`
+  in `vp6/help/`, made when the wheel was built, or put in an executable by
+  `vp6-make`), else one made from the source into `cache_dir()`
+  (`VP6_HELP_DIR`, else `<temp>/vp6-help`) as `vp6-<hash>.vp6help`, where
+  the hash is `sources_hash()` (the documents, every `vp6/**/*.py` but the
+  templates, and vp6help's version): made again (≈1 s) only after a change;
+  None when there is neither.
+* `make_help(output, root)`: the `HelpMaker` run (`FLAT`: FEATURES has no
+  headings in the contents; the source folder put first on `sys.path` while
+  documenting `vp6`).
+
 ### `vp6/runner.py` (≈95 lines)
 
 It's deliberately not named `run.py`: importing a `vp6.run` submodule would
@@ -2262,6 +2281,55 @@ The Debug window: three parts side by side in a `QSplitter` (each a
   * `_on_text_changed` re-parses; signals `designReloaded` and `parseError`.
 * `open_document(path)` picks the class by content.
 
+### `vp6/ide/samples.py` (≈50 lines) and `vp6/ide/templates/projection/`
+
+The sample projects other than the Kitchen Sink: `SAMPLES` maps a template
+key to a `Sample` (its folder in `templates/`, forms, modules, startup object,
+description); `create(key, directory, name)` copies the files and returns the
+project (`create_project` saves it).
+
+* **`projection`** (Sample Projects/Graphics, `Form1.py`, its startup form): a
+  model turning in a PictureBox with AutoRedraw, in any parallel projection.
+  `PROJECTIONS` (the ComboBox `cboProjection` in the same order): a name, the
+  camera's azimuth and elevation (degrees) and where the camera's toward axis
+  is drawn (`ORTHOGRAPHIC`: not at all). `Camera()` is the camera's right, up
+  and toward axes; `skew` is a 2×3 matrix, the camera's axes on the screen;
+  `Projection()` = skew × camera, whose columns are the world axes' screen
+  vectors (`AxisVector`); `Toward()` is the direction it looks along (the
+  cross product of its rows; None when it can't tell, and then only the
+  wireframe is drawn); `Project` places a point on the picture. `Describe`
+  names the projection: one of `PROJECTIONS` (`SameAs`), else an orthographic
+  one by its axes' lengths, else a general parallel one. `AxisAngles` (shown
+  in `lblAngles`). The models: `MODELS` (the `optModel` control array in the
+  same order: a caption and the function that makes its parts: `cube`,
+  `pyramid`, `torus`, `house`, `boxes`, `downtown`, from `face` (corners, a
+  unit normal away from an inner point, a color), `box`, `tower`, `decal`);
+  `model(index)` makes a `Model` once: its `parts` (lists of faces), `points`
+  and `edges` (the wireframe's), `centers`, `convex` (all but the torus) and
+  `separations` ((a, b): the normal of a face's plane with part a on its
+  inner side and b on its outer one, `Model.Separation`); `SetModel`. The
+  turn: `roll`, `pitch`, `tumble` in degrees,
+  `Orientation()` = tumble (Z) × pitch (Y) × roll (X), `angles_of` back,
+  `SetAngles` (wrapped to ±180°), `ShowAngles` puts them and the rates on the
+  sliders (`syncing`: no Change back); Timer `tmrSpin` adds the rate sliders'
+  share of `FULL_RATE`. `DrawAxes` first (the negative halves dotted, the
+  dragged one thicker), then `DrawWireframe` (the model's edges, its corners
+  dotted) or `DrawSolid` (the faces facing `Toward()`, shaded by a light from
+  above the viewer's left, with `Polygon`, each part's farthest first; the
+  parts in `PartOrder`: a part with no face toward the viewer left out; of
+  two whose outlines (`hull`) `overlap` by more than a pixel, the one on the
+  far side of their separation first, by the turned normal's side of
+  `Toward()`; the farthest first otherwise, and when a cycle leaves no
+  choice). The mouse: `HitTest` (an axis's end or label within `GRAB`, the
+  model's faces with `inside`, an axis's line with `from_segment`, the
+  space); `MoveAxis` puts that axis's column where the
+  mouse is (at the `grip` taken) and the skew becomes projection × camera's
+  transpose; the space turns the camera (`DRAG_SPEED`, the elevation within
+  ±90°), the skew kept; `TurnModel` turns the model around the camera's up and
+  right axes (`rotation`). Double-click or Reset view: `SetProjection` again;
+  `Form_Resize` gives the picture the room the controls leave (`PanelControls`
+  moved with it).
+
 ### `vp6/ide/kitchensink.py` (≈70 lines) and `vp6/ide/templates/kitchensink/`
 
 The Kitchen Sink project template: a demo of every control and feature,
@@ -2382,7 +2450,7 @@ explorer-style.
   * `pgDrawing.py`: a sketch pad (a PictureBox with AutoRedraw: PSet on
     MouseDown, `Line(X, Y)` on MouseMove, DrawWidth from an HScrollBar,
     DrawStyle from a ComboBox, Cls), shapes (Line boxes, hatched and solid
-    fills, Circle, an ellipse, a pie and an arc, PSet, Print centered with
+    fills, Circle, an ellipse, a pie and an arc, a Polygon star, PSet, Print centered with
     TextWidth and TextHeight, Point), a clock drawn in its Paint (AutoRedraw
     False) that a Timer refreshes, in a User scale (Scale(-1.1, 1.1, 1.1,
     -1.1): the center 0, 0), and the page's own Form_Paint;
@@ -2505,12 +2573,16 @@ explorer-style.
 
 ### `vp6/ide/dialogs.py` (≈230 lines)
 
-* `NewProjectDialog` has the New tab (templates `exe`, `console` and
-  `kitchensink`, with name and location), the Existing tab (browse) and the
-  Recent tab. After `exec()`, `result_action` is `"new"` (see `template`,
-  `project_name`, `project_location`) or `"open"` (see `open_path`).
-  Also `DEFAULT_LOCATION` (`~/VP6 Projects`), `TEMPLATES` and
-  `next_free_name`.
+* `NewProjectDialog` has the New tab (the categories in a tree on the left;
+  a category's templates, then its folders, on the right: `exe` and `console`
+  at the top level, `kitchensink` in Sample Projects, `projection` in Sample
+  Projects/Graphics; double-click or Open on a folder opens it; with name and
+  location), the Existing tab (browse) and the Recent tab. `select_category`,
+  `select_template`; `template` is None while a folder is chosen. After
+  `exec()`, `result_action` is `"new"` (see `template`, `project_name`,
+  `project_location`) or `"open"` (see `open_path`). Also `DEFAULT_LOCATION`
+  (`~/VP6 Projects`), `TEMPLATES` (key, title, icon, description, category:
+  a `/` path, `""` the top level), `categories()` and `next_free_name`.
 * `ProjectPropertiesDialog` edits the name, type, startup object and color
   scheme (System / Light / Dark / Follow the IDE), and as VB's Make tab the
   version (three spin boxes, `version`), product name, company name,
@@ -2612,6 +2684,110 @@ Icons drawn with `QPainter`, in light and dark variants.
 
 ---
 
+## Help system: `packages/vp6help/`
+
+vp6help is a project of its own (its own `pyproject.toml`, on PyPI as
+`vp6help`, version `vp6help.__version__`), which VP6 depends on: the help
+maker (`vp6help-make`) and the viewer (`vp6help`). The maker is pure Python
+(no Qt), so VP6's wheel build can run it; only the viewer needs PySide6.
+(It lives in `packages/` because a `vp6help/` folder at the root would be
+imported instead of the package, as a namespace package.)
+
+### `packages/vp6help/vp6help/__init__.py`
+
+The version, and `HelpFile`, `IndexEntry`, `SearchHit`; `HelpMaker` and
+`show_help` are imported when first used (`__getattr__`), so importing the
+package doesn't need Qt.
+
+### `packages/vp6help/vp6help/helpfile.py` (≈170 lines)
+
+The `.vp6help` format: a zip archive with `vp6help.json` (the manifest:
+`format`, `title`, `home`, `pages`, `toc`, `index` as `[keyword, url,
+title]`, `sections` with the searchable text of each heading's section,
+`sources` hash) and the pages and files at their paths. `write_help` writes
+one with fixed dates (the same sources make the same bytes). `HelpFile`
+reads one: `read(path)`, `page_title`, `section_title`; the index sorted by
+keyword, a keyword's topics in the documents' order (`entries`);
+`keywords(text, regex, case)` (the Index tab's filter), `lookup(keyword)`
+(exact, else the keywords starting with it), `search(text, regex, case)`
+(sections, most matches first, counting the heading too).
+`compile_pattern` makes a filter or search a regular expression.
+
+### `packages/vp6help/vp6help/markdown.py` (≈430 lines)
+
+Markdown to HTML in pure Python, GitHub-style. `_blocks` parses lines into
+blocks (fenced and indented code, ATX and setext headings, rules, quotes,
+lists via `_list` (tight or loose, nested by indentation, lazy
+continuations, task items), raw HTML blocks (a comment ends at `-->`),
+tables (`_cells`: pipes in code spans and `\|` don't split)); `_render`
+writes them. `inline` handles a line: code spans first (`_code_spans`),
+then escapes, autolinks, raw tags, images, links, bare URLs, kept as
+placeholders while the rest is escaped and emphasized (`_emphasis`:
+`snake_case` and `__init__`-like words stay as they are).
+
+### `packages/vp6help/vp6help/pydoc.py` (≈620 lines)
+
+Python packages as help pages. `_modules` lists a package's modules without
+importing them (`pkgutil.iter_modules`, each finder's `find_spec`), leaving
+out `_private` ones and `__main__`. Modules with source are read with `ast`
+(`_module_from_source`: the docstring; classes with their constructor's
+signature, methods, static and class methods, properties and attributes
+(a string after an assignment documents it); functions; constants, grouped
+by `# --- Title ---` comments; `__all__` (a computed one, `[*X, "a"]`, only
+adds names); imports, for the names a package re-exports and the packages it
+uses); compiled modules are imported and inspected (`_module_by_import`).
+`package_pages(names, follow, follow_stdlib, private, exclude)` makes a
+`Page` for `python/index.html` and one per module (`python/<module>.html`,
+under its package's page in the contents); `follow` documents the top-level
+packages the documented ones import (not the standard library unless
+`follow_stdlib`). `_resolve_bases` finds where bases are defined (following
+re-exports) so pages link to them and list what is inherited (`_inherited`).
+Headings have ids (`#Class`, `#Class.member`), and members a
+`<!-- keywords: member -->` comment for the index.
+
+### `packages/vp6help/vp6help/maker.py` (≈540 lines)
+
+`HelpMaker`: `add(path)` (a document, or a folder's `.md` and `.html` files,
+README or index first), `add_page` (made by a program), `add_packages`,
+`build(output)`. Each page goes through `_Analyzer` (an `HTMLParser` that
+copies the HTML): headings get a `<a name>` (an `id`, else `slug()`,
+GitHub's, made unique), links and pictures are rewritten by the `_resolver`
+(documents to `/page.html#anchor`; pictures and linked files inside the root
+into the help file; missing targets warned about), and it collects the
+title, headings, sections (their text) and index keywords: headings
+(numbering removed), a lone code name starting a table row or a paragraph
+(not in a link), `<!-- keywords -->` comments and `<meta name="keywords">`.
+`_toc` nests each page's headings to `toc_depth` (`flat` patterns: none)
+under its title, and generated pages under their parent. `main()` is
+`vp6help-make` (arguments from `@files` too).
+
+### `packages/vp6help/vp6help/viewer.py` (≈650 lines)
+
+`HelpViewer` (a `QMainWindow`): a `QTabWidget` with Contents (a tree of the
+`toc`), Index (the filter `QLineEdit`, Regular expression and Match case,
+keywords with their topics as children when there are several) and Search
+(results: topic, location, matches); `HelpBrowser` (a `QTextBrowser`) reads
+pages and pictures from the file in `loadResource` for `vp6help:///path`
+addresses (`help_url`, `page_of`), a missing page shows `_missing_page`;
+links to other schemes go to `QDesktopServices`. The toolbar: Back,
+Forward, Home, Locate (`locate_in_contents`); zoom keys. `show_page`,
+`show_index`, `show_keyword(keyword, context)` (the topic whose title or
+page mentions the context first), `show_search` (the matches highlighted by
+`_highlight` with extra selections, the first one at or after the place
+shown selected), `apply(...)` (a request: a keyword not in the index is
+searched for). `_css` styles the pages from the palette (again on palette
+changes; links readable on dark). `show_help(path, ...)` keeps one window
+per file (`_viewers`); `main()` is `vp6help` (`--list` prints sections,
+lookups, searches or keywords instead).
+
+## Build: `setup.py`
+
+The rest of the build is in `pyproject.toml`; `setup.py` only adds
+`BuildWithHelp`, a `build_py` that makes VP6's help into the wheel
+(`vp6/help/vp6.vp6help`) with `vp6/helpdocs.py` loaded on its own (vp6help
+from the build's environment, else `packages/vp6help`). Not for editable
+installs, which make the help when it's needed.
+
 ## Tools: `tools/`
 
 ### `tools/apidocs.py` (≈200 lines)
@@ -2658,7 +2834,9 @@ All tests run headless. `conftest.py`:
   override or a slot run from the event loop), which PySide only prints
   through `sys.excepthook` (`_fail_on_errors_in_qt_callbacks`);
 * provides `wait_for(predicate, timeout_ms)` (PySide has no
-  `QTest.qWaitFor`).
+  `QTest.qWaitFor`);
+* makes VP6's help in a folder of the tests' own (`VP6_HELP_DIR`) and closes
+  the help windows a test opened (`_no_help_windows_left`).
 
 | File | Covers |
 |---|---|
@@ -2710,13 +2888,16 @@ All tests run headless. `conftest.py`:
 | `test_ide.py` | New projects (every template has Form1 and Module1 with `Main()`; the Standard EXE's `Main` really shows Form1; it opens in the designer), adding forms and modules, double-click creating handlers, completion, running a console project with stdin, traceback reporting, toolbar and layout reset, bottom-edge panels always tabbed (also after restoring a side-by-side layout), the theme toggle, ⌘/Ctrl+Enter, the Immediate Clear menu, `VP6_IDE_SCHEME` passing, the Project Explorer following the active window, project properties in the Properties window, the Properties panel following the Project panel's selection (or the active window when that panel is closed), module Names and all properties of unopened forms, renaming modules and forms from the Properties window (not to another form's name), a renamed Form1 still running, the IDE exiting without errors, Ctrl+C (SIGINT) quitting the IDE like File > Exit (also from the New Project dialog), `VP6_SETTINGS_DIR`, a form's window sized to show the whole form (or filling the MDI area when it can't, without maximizing), code and other windows kept inside the MDI area (also when reopened), and windows opened before the IDE is shown fitted when it is., the Project panel sorted by name within each group (not the project's order), its Name button cycling through A to Z with groups first, A to Z with groups among the files, and the same Z to A (keeping the selection, new files in their place), remembered; a group's (Name) in the Properties panel (any name but a sibling's, refused with a message; renamed in the project file, kept selected; its own description; switching groups refreshes the panel); Project panel groups (default Forms and Modules; New Group, Rename, Delete keeping the contents, Move to, drag and drop onto a group, a file or the project, a module in a group of forms, duplicate names refused with a message, new files in the selected group, saved in the project file without moving files on disk); the project item not collapsible (no arrow, keys and double-click), its groups still are; the +/- button expanding and collapsing every group (collapsed groups staying collapsed when the panel is refilled, another project starting open); the Project panel's Files view (folders first, hidden files on request, never the project file, `.git` or `__pycache__`, forms and modules working as in the Project view, no groups, other files not opened, following changes on disk, +/- on folders, the selection kept when switching, remembered); the Files view's changes on disk (new folders and subfolders, new modules in the selected folder, Move to and drag and drop with open windows and group places following, renaming files and folders, a renamed form's imports updated, names refused for forms and modules, deleting a folder to the Trash with its modules leaving the project, the project file protected); new folders and subfolders from Project > Add Folder… (switching to the Files view), the New Folder button (in the selected folder or the selected file's) and a file's context menu; moving several items at once in both views (Move N Items to from the context menu of one of them, dropping the selection onto a group, folder or file, a group or folder moving with what is in it, the moved items staying selected, failures in one message while the others move); the IDE's icon and every new project's (all templates), the project's Icon in the Properties panel; About VP6 (the logo, in the Help menu and, on macOS, the application menu); the Toolbox: its columns following its width (a row at a time, in order), `fitted_width` choosing the nearest whole number of columns, the scroll bar counted when the buttons scroll, the panel snapping to whole columns (two by default, again after Reset Window Layout), not while its edge is being dragged, floating too, not at the top edge (many columns there), user controls placed in its columns. |
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle; rounded bottom corners (the radius per style, none without a frame; `corner_path` holding the corners only), the designer painting them over the form (macOS and Windows 11: the workspace in the corner; GNOME and classic square; BorderStyle 0 square); the designer's title bar following the form where the OS allows, else the OS's. |
+| `test_help.py` | VP6's help: made once from the source into the tests' folder (named by the sources' hash), the installed one first, none without either; the documents and the Python reference in the contents (FEATURES flat); every control (its section of the API reference first) and every public name in the index; what the wheel build runs; ShowHelp (VP6's help at a keyword, a help file of the program's, searches with Regex and MatchCase, a Page, App.HelpFile relative to the program, a missing file); a CommonDialog showing a .vp6help file by HelpCommand (contents, a key, a partial key, a search); the IDE's Help menu (Contents, Index, Search, closed with the IDE) and F1 on a word in the code (a control's name: its type), the designer's control, a property (its control's topic), a Toolbox tool and the Object Browser; vp6-make putting the help and the viewer into executables. |
+| `test_vp6help.py` | The help system: Markdown to HTML (blocks, tight and loose and nested lists, task items, tables with alignment and escaped pipes, inline markup, links, pictures, autolinks); making a help file (pages, titles, links between documents rewritten, pictures included, missing links warned about, anchors on every heading, the contents to a depth or flat, index keywords from headings, lone code names, comments and meta tags (not linked code), sections' text without scripts; the same documents making the same bytes; the home page; errors; the command line with an @file); Python packages read without importing (classes, signatures, properties, attributes, constants in groups, private names, re-exports, bases linked and inherited members), following imported packages (not the standard library; excluded ones), compiled modules inspected, a package in a help file; the file (lookups, filters, regular expressions, case, search counts and order, not a help file); the viewer (home, contents, links, pictures, back and forward, web links, missing pages, Locate, the index's filter and options, keywords with several topics and a context, search highlighting with options, requests and one window per file, colors from the palette, the command line's `--list`); vp6help's pyproject. |
+| `test_samples.py` | The New Project dialog's categories (Standard EXE and Console Application at the top level then the Sample Projects folder; Kitchen Sink and the Graphics folder in it; Projection in that; folders opened by double-click and Open, no template while one is chosen, its contents described; `select_template`); Projection: a project of a single startup form; the isometric projection (the view along the diagonal, the axes 120° apart and equally long, Z up, the angles shown); the eight projections (their axes, angles and lengths; each drawn solid); solid faces covering the middle and the axes behind the model, the wireframe showing them through and its corners; the model turning at the rate sliders' speeds (a rate of 0, Rotate off, past 180°), its angle sliders setting it; what the mouse takes (the space, the model, an axis's end and label; the pointer); dragging an axis (just that one, the angles no longer 120°, a general parallel projection), then the space (the skew kept), double-click and Reset view going back; dragging the space turning the axes (still orthographic, the elevation stopping at 90°); dragging the model turning it around the camera's axes, the axes staying; resizing; the models' toggles (one at a time, each hit by the mouse; the torus's hole; the house's wireframe and edges); the models' faces (flat, unit normals, outward for convex parts and away from the torus's tube; within the axes); the separations (every pair of boxes, a street on the ground, none for overlapping boxes); the parts drawn back to front (the boxes turned round, the park before its trees, a part facing away left out); `hull` and `overlap`. |
 | `test_ide_terminal.py` | The IDE's Terminal window: hidden by default and tabbed with the Immediate window (Reset Window Layout hiding it again), View > Terminal Window and its key; the shell started in the project's folder (home without a project or for a missing folder), typing into it; its end announced and Enter starting a new one; New Shell replacing the one running without a word, End Shell at once; the menu (Copy, Paste, Clear, New Shell, End Shell, enabled as they apply); the editor theme's colors and font, light and dark; closing the IDE ending the shell; drawn. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
 | `test_webbrowser.py` | A real WebBrowser (Chromium, headless): a file and its title, a link (BeforeNavigate, DocumentComplete), Busy and Progress, Back and Forward; BeforeNavigate keeping it on its page; new windows opened here or ignored (NewWindow); a name that doesn't resolve (NavigateError); LoadHTML, TitleChange, RunScript's result, StatusTextChange; GotFocus through the page's focus widget; the designer's placeholder, Toolbox, icon and events. |
 | `test_webview.py` | The WebView with a stand-in view (`FakeView`): navigating to a file, a file relative to the form, a domain (https), an error, back and forward, Refresh, Stop, URL set at run time, the events; LoadHTML and RunScript with and without a callback; the designer's placeholder; a clear error without Qt WebView; Toolbox, icon and events. A real web view in a process of its own with VP6_TEST_WEBVIEW=1. |
 | `test_commondialog.py` | The CommonDialog: parse_filter; invisible at run time, in the Toolbox; the Open dialog (title, filters, the starting filter and folder, the file chosen, FileTitle, FileNames, FilterIndex, multi-select), Save As (the overwrite prompt only with the flag, DefaultExt), cancelling (False, FileName kept; CancelError raising DialogCancelled 32755), Color, Font, Printer (copies, page range) and Help; in the designer an icon without a size of its own. |
 | `test_container.py` | Container set at run time: to a Frame, PictureBox, DockPanel and back to the form, Left and Top kept, events still handled; a hidden control staying hidden, ZIndex in the new container; option buttons joining the new group; a container moving with its controls; a docked control leaving the form's layout; the tab order (Tab into a control moved into a frame); errors (not a container, another form's, into itself or something on it, a Menu, None). |
-| `test_drawing.py` | The graphics methods, checked with Point: lines (ForeColor, the end point not covered, from the current point, Step, DrawWidth, a dotted and an invisible DrawStyle), boxes (B, BF, FillStyle solid and hatched, Inside Solid), circles (fill, edge, an ellipse, an arc not filled, a pie from -0.0, Step), points (a round wide one, outside: -1), Print and the current point, TextWidth/TextHeight and the Font, Cls; AutoRedraw and Paint (Paint on show and Refresh, none with AutoRedraw), the drawing kept when the form shrinks and grows, under the controls; a PictureBox (inside its border, Cls keeping the Picture, its Paint), a form with a menu bar in the window, a user control's Paint; the properties, events and form file; no Paint in the designer, and the properties in its Properties window. |
+| `test_drawing.py` | The graphics methods, checked with Point: lines (ForeColor, the end point not covered, from the current point, Step, DrawWidth, a dotted and an invisible DrawStyle), boxes (B, BF, FillStyle solid and hatched, Inside Solid), circles (fill, edge, an ellipse, an arc not filled, a pie from -0.0, Step), polygons (filled, an outline only, in a User scale, too few points), points (a round wide one, outside: -1), Print and the current point, TextWidth/TextHeight and the Font, Cls; AutoRedraw and Paint (Paint on show and Refresh, none with AutoRedraw), the drawing kept when the form shrinks and grows, under the controls; a PictureBox (inside its border, Cls keeping the Picture, its Paint), a form with a menu bar in the window, a user control's Paint; the properties, events and form file; no Paint in the designer, and the properties in its Properties window. |
 | `test_docs.py` | The docs keep up with the code: every source file in the source reference, every test file in the test table, every public API name in `api.md` (key-code ranges count), the generated `api.md` tables up to date with a section per control, every property with a description, and every relative link and anchor in the Markdown files resolving. |
 | `test_outline.py` | The Outline replacing the Properties panel (in the same place) while a code window is active and giving it back for designers, View > Outline Window and F4, a closed panel staying closed, closing the last window, the default layout; the outline of the Kitchen Sink's Form1; kinds, lines and skipped statements; syntax errors; sorting (order, name, type, both directions, members too); the panel's sort buttons, icons, tooltips, live updates and syntax-error handling; in the IDE: following the Project panel or active window, clicking items goes to the line (unfolding the designer region); the items at a line (a method inside its class, from the first decorator, blank lines and imports at none), and the Outline highlighting the item at the code window's cursor (in a body, none on an import, after re-sorting and edits, another code window's cursor, none for a designer). |
 | `test_packaging.py` | The package as published: `pyproject.toml`'s version is `vp6.__version__`, the MIT license and its file, the author without an email, the dependencies and the `make` extra; every data file in `vp6/` (not a module of a package) matched by the package data, so the wheel has it; the `vp6`, `vp6-run` and `vp6-make` commands; the source distribution's docs and tests; the release workflow's version check and trusted publishing. |

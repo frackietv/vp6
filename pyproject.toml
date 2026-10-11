@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vp6"
-version = "0.4.50"
+version = "0.4.51"
 description = "VB6-style IDE and GUI framework for Python"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "FrackieTV" }]
 requires-python = ">=3.10"
-dependencies = ["PySide6>=6.6"]
+dependencies = ["PySide6>=6.6", "vp6help>=0.1"]  # (vp6help: packages/vp6help)
 keywords = ["vb6", "visual basic", "ide", "gui", "form designer", "rad", "qt", "pyside6"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -44,11 +44,11 @@ vp6-run = "vp6.runner:main"
 vp6-make = "vp6.make:main"
 
 [tool.setuptools.packages.find]
-include = ["vp6*"]
+include = ["vp6", "vp6.*"]
 
 [tool.setuptools.package-data]
-"vp6.ide" = ["templates/kitchensink/*.py", "images/*.png"]
-"vp6" = ["images/*.png"]
+"vp6.ide" = ["templates/kitchensink/*.py", "templates/projection/*.py", "images/*.png"]
+"vp6" = ["images/*.png", "help/*.vp6help"]  # (help/: made by setup.py)
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,6 +1,7 @@
 """Kitchen Sink page: MsgBox, InputBox, a modal form (by its default instance), Beep, the
-system's dialogs through a CommonDialog (Open, Save As, Color, Font, Print), and printing
-with the Printer object (Printers, NewPage, EndDoc; to a PDF file with OutputFile)."""
+system's dialogs through a CommonDialog (Open, Save As, Color, Font, Print), printing with
+the Printer object (Printers, NewPage, EndDoc; to a PDF file with OutputFile), and help
+(ShowHelp: VP6's help window, at a keyword)."""
 
 import os
 
@@ -54,6 +55,9 @@ class pgDialogs(Form):
                                 TabIndex=13)
         self.cboPrinter = ComboBox(self, Style=2, Left=270, Top=296, Width=350, Height=25,
                                    TabIndex=14, ToolTipText="Printers: the system's printers")
+        self.cmdHelp = CommandButton(self, Caption='&Help...', Left=440, Top=356, Width=180,
+                                     Height=32, TabIndex=15,
+                                     ToolTipText="ShowHelp: VP6's help, at what its index has for MsgBox")
     # endregion
 
     shell = None  # the Kitchen Sink window showing this page (None when run on its own)
@@ -185,6 +189,12 @@ class pgDialogs(Form):
             Printer.CurrentX, Printer.CurrentY = 10, height - 30
             Printer.Print(f"Printed on {Printer.DeviceName or Printer.OutputFile}")
         Printer.EndDoc()  # off to the printer
+
+    def cmdHelp_Click(self):
+        # A help file (.vp6help, made with vp6help-make): App.HelpFile, else VP6's own help.
+        # Keyword: what its index has for it; Search="..." lists the topics a search finds
+        ShowHelp(Keyword="MsgBox")
+        self.lblResult.Caption = "ShowHelp: VP6's help, at MsgBox (F1 in the IDE does the same)"
 
     def cmdBeep_Click(self):
         Beep()

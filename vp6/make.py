@@ -150,7 +150,13 @@ def vp6_search_path(site_folders: list[str] | None = None) -> str | None:
     it anyway: a normal install is in site-packages, which PyInstaller
     searches (and mustn't be given); an editable one (pip install -e) is
     imported through a hook PyInstaller can't see, from the source folder."""
-    folder = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return module_search_path(__file__, site_folders)
+
+
+def module_search_path(package_file: str, site_folders: list[str] | None = None) -> str | None:
+    """The folder PyInstaller must search to find a package (from a file of its
+    top folder), or None when it is installed in site-packages."""
+    folder = os.path.dirname(os.path.dirname(os.path.abspath(package_file)))
     if site_folders is None:
         site_folders = site.getsitepackages() + [site.getusersitepackages()]
     installed = {os.path.realpath(p) for p in site_folders if p}
@@ -175,7 +181,21 @@ def pyinstaller_command(project: Project, launcher: str, dist: str, work: str,
     if folder is not None:
         command += ["--paths", folder]
     command += ["--add-data", f"{os.path.join(package, 'images')}{os.pathsep}vp6/images"]
-    for module in imported_modules(project) + ["vp6"]:
+    # The help system (ShowHelp) and VP6's help
+    import vp6help
+
+    folder = module_search_path(vp6help.__file__)
+    if folder is not None:
+        command += ["--paths", folder]
+    try:
+        from .helpdocs import help_file
+
+        help_path = help_file()
+    except Exception:  # noqa: BLE001  (an executable without VP6's help, then)
+        help_path = None
+    if help_path is not None:
+        command += ["--add-data", f"{help_path}{os.pathsep}vp6/help"]
+    for module in imported_modules(project) + ["vp6", "vp6help.viewer"]:
         command += ["--hidden-import", module]
     for relative in project_files(project):
         destination = os.path.dirname(relative) or "."

@@ -1,6 +1,6 @@
 """Kitchen Sink page: drawing with the graphics methods. A sketch pad (a
 PictureBox with AutoRedraw: Line from the mouse, Cls), shapes (Line boxes,
-Circle, arcs and pie slices, PSet, Print centered with TextWidth and
+Circle, arcs and pie slices, a Polygon, PSet, Print centered with TextWidth and
 TextHeight), DrawWidth, DrawStyle, FillStyle and FillColor, a clock drawn in
 a Paint event (AutoRedraw False) that a Timer refreshes, in a User scale
 (Scale: its center 0, 0, up is up), and the page's own Form_Paint."""
@@ -96,6 +96,11 @@ class pgDrawing(Form):
         pic.Circle(290, 130, 45, vpBlue, -math.pi / 4, -7 * math.pi / 4)  # a pie (negative)
         pic.FillStyle = vpFSTransparent
         pic.Circle(290, 130, 55, vpBlue, math.pi / 4, 3 * math.pi / 4)  # an arc
+        pic.FillStyle, pic.FillColor = vpFSSolid, QBColor(14)  # a star: Polygon
+        star = [(358 + (16 if i % 2 == 0 else 7) * math.sin(i * math.pi / 5),
+                 178 - (16 if i % 2 == 0 else 7) * math.cos(i * math.pi / 5)) for i in range(10)]
+        pic.Polygon(star, QBColor(4))
+        pic.FillStyle = vpFSTransparent
         for i in range(36):  # points along a wave
             pic.PSet(20 + i * 10, 215 + 20 * math.sin(i / 3), QBColor(12))
         pic.DrawWidth = 1

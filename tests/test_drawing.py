@@ -148,6 +148,26 @@ def test_circles(form):
     assert (form.CurrentX, form.CurrentY) == (60, 150)
 
 
+def test_polygons(form):
+    form.FillStyle, form.FillColor = 0, vpYellow
+    form.DrawWidth = 3
+    form.Polygon([(20, 20), (120, 20), (70, 100)], vpBlue)  # a triangle, filled
+    form.DrawWidth = 1
+    assert form.Point(70, 50) == vpYellow and form.Point(70, 20) == vpBlue
+    assert form.Point(25, 90) == vpWhite and (form.CurrentX, form.CurrentY) == (20, 20)
+    form.FillStyle, form.DrawWidth = 1, 3  # Transparent: only the outline
+    form.Polygon([(150, 20), (250, 20), (250, 100), (150, 100)], vpRed)
+    form.DrawWidth = 1
+    assert form.Point(200, 60) == vpWhite and form.Point(200, 20) == vpRed
+    form.ScaleMode = 0  # (a User scale: Points are in its units)
+    form.Scale(0, 0, 3, 2)
+    form.FillStyle = 0
+    form.Polygon([(0.1, 1.1), (0.9, 1.1), (0.5, 1.9)], vpGreen)
+    assert form.Point(0.5, 1.4) == vpYellow
+    with pytest.raises(ValueError):
+        form.Polygon([(1, 1)])
+
+
 def test_points(form):
     form.PSet(5, 6, vpRed)
     assert form.Point(5, 6) == vpRed and form.Point(6, 6) == vpWhite

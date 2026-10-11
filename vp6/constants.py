@@ -407,6 +407,13 @@ vpPDSelection = 0x1
 vpPDPageNums = 0x2
 vpCdlCancel = 32755  # the error a cancelled dialog raises with CancelError (DialogCancelled)
 
+# --- CommonDialog.HelpCommand (ShowHelp with a .vp6help file) ------------------------------
+vpHelpContents = 3  # the contents (VB's cdlHelpContents)
+vpHelpIndex = 3  # (VB's cdlHelpIndex: the same)
+vpHelpKey = 0x101  # what the index has for HelpKey (cdlHelpKey)
+vpHelpPartialKey = 0x105  # the index, narrowed to the keywords containing HelpKey
+vpHelpSearch = 0x106  # VP6's: the topics a search for HelpKey finds
+
 # --- Data control: EOFAction and BOFAction ----------------------------------------------
 vpEOFActionMoveLast = 0
 vpEOFActionEOF = 1

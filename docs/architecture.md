@@ -43,6 +43,7 @@ vp6/                    runtime library - "from vp6 import *"
   debugagent.py         the debugger in a program the IDE runs (breakpoints, steps)
   hotpatch.py           Edit and Continue: new source applied to the running program
   make.py               package a project: a wheel, or a standalone executable (PyInstaller)
+  helpdocs.py           VP6's own help: its documents and code made into vp6.vp6help
   ide/                  the IDE - "python -m vp6.ide" or the "vp6" command
     __main__.py         entry point
     mainwindow.py       MainWindow: menus, docks, MDI, running programs
@@ -59,17 +60,30 @@ vp6/                    runtime library - "from vp6 import *"
     outline.py          the Outline window: structure of the current file
     objectbrowser.py    the Object Browser: VP6's and the project's classes and members
     documents.py        Document / FormDocument (open files)
-    dialogs.py          New Project, Project Properties, About
+    dialogs.py          New Project (templates in categories), Project Properties, About
     splash.py           the splash screen shown while the IDE starts
     kitchensink.py      the Kitchen Sink project template
+    samples.py          the other sample projects (templates/projection: Projection)
     templates/kitchensink/   its sources: Form1.py, frmDialog.py, Module1.py
     options.py          Tools > Options dialog
     theme.py            editor themes, IDE light/dark, settings store
     icons.py            icons drawn in code (light + dark variants)
+packages/vp6help/       the help system, a project (and wheel) of its own VP6 depends on
+  vp6help/
+    helpfile.py         the .vp6help file: write it, read it, index lookups and search
+    markdown.py         Markdown to HTML (pure Python)
+    pydoc.py            help pages of Python packages, read from their code
+    maker.py            vp6help-make: documents and packages made into a help file
+    viewer.py           vp6help: the help window (contents, index, search, pages)
+setup.py                building the wheel also makes VP6's help (vp6/help/vp6.vp6help)
 tests/                  pytest suite (runs headless)
 tools/apidocs.py        generates the reference tables in docs/api.md
 docs/                   this documentation
 ```
+
+vp6help doesn't know about VP6: VP6 uses it (`ShowHelp`, `CommonDialog.ShowHelp`,
+the IDE's Help menu and F1) and `vp6/helpdocs.py` says what VP6's help is made
+of.
 
 The runtime (`vp6/*.py`) never imports the IDE (`vp6/ide`). The IDE imports
 the runtime freely: the designer instantiates runtime forms and controls, the
@@ -614,6 +628,29 @@ separate debug mode.
   (choosing a frame makes the Immediate window and the watches evaluate in
   it) and every breakpoint of the project, to go to, enable or delete.
 
+### 5.9 Help
+
+The help is vp6help's (`packages/vp6help`), a package of its own: a help
+file (`.vp6help`, a zip of HTML pages and a JSON manifest with the
+contents, the index and each section's text) is made by `vp6help-make` and
+shown by `vp6help`'s `HelpViewer`, in the process that asks (the IDE, or a
+program calling `ShowHelp`; one window per file).
+
+```
+README.md, docs/*.md, FEATURES.md ─┐                     ┌─ Contents (the headings)
+vp6/**/*.py (read with ast) ───────┼─ HelpMaker ─ .vp6help ─ HelpViewer ─ Index (keywords)
+                                    │   (Markdown → HTML,   │                └─ Search (sections)
+packages/vp6help/README.md ────────┘    anchors, links)    └─ pages (QTextBrowser)
+```
+
+VP6's own help (`helpdocs.help_file()`) is in the wheel, made by `setup.py`
+when it's built; run from the source, it's made into a cache folder named by
+a hash of the documents and the code, so it's made again only after a change.
+F1 asks `MainWindow.help_context()` what the focus is on (a word in the code,
+a property and its control's type, a control, a tool, the Object Browser's
+member) and the viewer shows the index's topic for it (the one about that
+type first), or searches for it.
+
 ## 6. File formats
 
 ### 6.1 Form files (`*.py`)
@@ -766,6 +803,7 @@ suite redirects to a temporary INI file.
 | `VP6_IDE_SCHEME` | `appearance.ide_scheme` | IDE appearance passed to programs started with F5 |
 | `VP6_DEBUG_PORT` | `debugagent.start_from_environment` | the IDE's debugger: the port a program it starts connects to (removed once read) |
 | `VP6_DEBUG_ROOT` | `debugagent.start_from_environment` | the project's folder: the program's own code, which the debugger traces |
+| `VP6_HELP_DIR` | `helpdocs.cache_dir` | where VP6 run from its source makes its help (default: the system's temporary folder's `vp6-help`; the tests use one of their own) |
 | `VP6_NO_ERROR_DIALOG` | `app.report_runtime_error` | print tracebacks without showing the error box |
 | `VP6_NO_OUTPUT_CAPTURE` | `mainwindow.main` | don't capture the IDE's stdout/stderr for the Output window (e.g. to see the last messages of a hard crash directly) |
 | `VP6_SETTINGS_DIR` | `theme.ide_settings` | keep the IDE's settings in `VP6 IDE.ini` in this folder instead of the normal store (separate IDE instances; tests that start the IDE) |

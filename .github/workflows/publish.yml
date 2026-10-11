@@ -29,6 +29,8 @@ jobs:
       - name: Build and check
         run: |
           pip install build twine
+          python -m build packages/vp6help --outdir dist  # (the help system, which VP6 needs)
+          pip install packages/vp6help  # (VP6's build makes its help with it)
           python -m build
           twine check --strict dist/*
       - uses: actions/upload-artifact@v4
@@ -48,3 +50,5 @@ jobs:
           name: dist
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true  # (a vp6help version published with an earlier VP6)

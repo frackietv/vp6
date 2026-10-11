@@ -311,6 +311,7 @@ class _App:
     ProductName = ""
     CompanyName = ""
     FileDescription = ""
+    HelpFile = ""  # the program's help file (.vp6help): what ShowHelp shows
     _lock = None  # the QLockFile this instance holds (PrevInstance)
     _prev_instance = None
 
@@ -462,6 +463,35 @@ class _Fonts(list):
 
     def __call__(self, index: int) -> str:
         return self[index]
+
+
+# --- help --------------------------------------------------------------------------------------
+
+def ShowHelp(HelpFile: str = "", Keyword: str = "", Search: str = "", Page: str = "",
+             Regex: bool = False, MatchCase: bool = False):
+    """Shows a help file (``.vp6help``, made with vp6help-make) in its window:
+    at what its index has for a Keyword, with the topics a Search finds (text,
+    or a regular expression with Regex; matching case with MatchCase), at a
+    Page (``docs/guide.html#a-heading``), or at its contents. The file is
+    HelpFile, else ``App.HelpFile`` (relative paths: from the program's
+    folder), else VP6's own help. Returns the help window."""
+    ensure_app()
+    from vp6help.viewer import show_help
+
+    path = HelpFile or App.HelpFile
+    if path:
+        if not os.path.isabs(path):
+            path = os.path.join(App.Path, path)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"No help file {path}")
+    else:
+        from .helpdocs import help_file
+
+        path = help_file()
+        if path is None:
+            raise FileNotFoundError("VP6's help isn't installed")
+    return show_help(path, page=Page or None, keyword=Keyword or None, search=Search or None,
+                     regex=Regex, case=MatchCase)
 
 
 # --- the command line and settings -----------------------------------------------------------

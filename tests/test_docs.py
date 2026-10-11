@@ -35,7 +35,8 @@ def read(path: Path) -> str:
 def test_every_source_file_is_in_the_source_reference():
     reference = read(DOCS / "source-reference.md")
     missing = []
-    for path in sorted((ROOT / "vp6").rglob("*.py")) + sorted((ROOT / "tools").glob("*.py")):
+    for path in sorted((ROOT / "vp6").rglob("*.py")) + sorted((ROOT / "tools").glob("*.py")) + \
+            sorted((ROOT / "packages").rglob("*.py")) + [ROOT / "setup.py"]:
         relative = path.relative_to(ROOT).as_posix()
         if "templates" in path.parts:  # template files are described by name
             found = f"`{path.name}`" in reference or path.name in reference

@@ -105,3 +105,29 @@ def wait_for(predicate, timeout_ms=5000):
         if deadline.hasExpired():
             raise AssertionError("timed out waiting for condition")
         QTest.qWait(10)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _help_made_in_a_temporary_folder(tmp_path_factory):
+    """VP6's help (made from the source when it's needed) goes to a folder of
+    the tests' own, not the system's temporary folder."""
+    os.environ["VP6_HELP_DIR"] = str(tmp_path_factory.mktemp("help"))
+    yield
+    os.environ.pop("VP6_HELP_DIR", None)
+
+
+@pytest.fixture(autouse=True)
+def _no_help_windows_left():
+    """A help window a test opened (ShowHelp, F1) is closed after it."""
+    yield
+    import sys
+
+    viewer = sys.modules.get("vp6help.viewer")
+    if viewer is not None:
+        for window in list(viewer._viewers.values()):
+            try:
+                window.close()
+                window.deleteLater()
+            except RuntimeError:
+                pass
+        viewer._viewers.clear()

@@ -23,7 +23,8 @@ import math
 from contextlib import contextmanager
 
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QFontMetricsF, QImage, QPainter, QPainterPath, QPalette, QPen
+from PySide6.QtGui import (QFontMetricsF, QImage, QPainter, QPainterPath, QPalette, QPen,
+                           QPolygonF)
 
 from . import colors
 from ._props import P, enum_choices
@@ -544,6 +545,26 @@ class Drawing:
             painter.setBrush(Qt.NoBrush)
             painter.drawPath(path)
         state["x"], state["y"] = float(x), float(y)
+
+    def Polygon(self, Points, Color=None) -> None:
+        """Draw a closed polygon through Points (X, Y pairs, at least two),
+        filled as FillStyle says (FillColor), its outline in Color as the pen
+        draws (DrawWidth, DrawStyle). (VB programs called Windows' Polygon for
+        this.) The current point moves to the first point."""
+        points = [self._to_px(x, y) for x, y in Points]
+        if len(points) < 2:
+            raise ValueError("A polygon needs at least two points")
+        path = QPainterPath()
+        path.addPolygon(QPolygonF([QPointF(x, y) for x, y in points]))
+        path.closeSubpath()
+        color = self._draw_color(Color)
+        with self._draw_painter(antialias=True) as painter:
+            self._draw_fill(painter, path)
+            painter.setPen(self._draw_pen(color))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawPath(path)
+        state = self._draw_state()
+        state["x"], state["y"] = points[0]
 
     def Print(self, *values, sep: str = " ", end: str = "\n") -> None:
         """Write text at the current point, in the Font and ForeColor, like

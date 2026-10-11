@@ -379,7 +379,7 @@ Run-time only properties:
 | `Move(Left, Top=None, Width=None, Height=None)` | Moves or resizes the window. |
 | `PopupMenu(Menu, Flags=0, X=None, Y=None, DefaultMenu=None)` | Shows one of the form's menus as a context menu; see [Popup menus](#popup-menus). Returns the chosen item, or `None`. |
 | `Refresh()` | Repaints (with AutoRedraw False, `Form_Paint` fires). |
-| `Line`, `Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`, `PaintPicture` | The [graphics methods](#drawing-on-forms-and-pictureboxes); `Image` is a [Picture](#picture-objects) of what the form shows. |
+| `Line`, `Circle`, `Polygon`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`, `PaintPicture` | The [graphics methods](#drawing-on-forms-and-pictureboxes); `Image` is a [Picture](#picture-objects) of what the form shows. |
 | `SetFocus()` | Activates the window. |
 | `ShowPopup(X=None, Y=None, Owner=None)` | Shows the form as a [popup](#popup-forms): borderless, on top, without taking the focus. |
 | `ShowIn(Container, Fill=True)` | Shows the form inside a container of another form (a PictureBox or Frame) or inside another form; see [Forms inside forms](#forms-inside-forms). `ShowIn(None)` makes it a window again. |
@@ -543,6 +543,7 @@ def Form_Load(self):
 |---|---|
 | `Line(X1, Y1, X2, Y2, Color=None, Box="", Step=False)` | a line from X1, Y1 to X2, Y2 (VB's `Line (X1, Y1)-(X2, Y2)`); `Line(X, Y)` draws from the current point (`Line -(X, Y)`). `Step=True`: the second point is relative to the first. `Box="B"`: a box with those corners, filled as FillStyle says; `"BF"`: a box filled with the line's color. |
 | `Circle(X, Y, Radius, Color=None, Start=None, End=None, Aspect=1.0, Step=False)` | a circle, or an ellipse (`Aspect`: height to width; Radius is the larger one). `Start`, `End` (radians, counterclockwise from 3 o'clock) draw an arc; a negative one also draws the radius to that end (`-0.0` for 3 o'clock); both negative: a pie slice. Whole circles and pie slices are filled as FillStyle says. `Step`: X, Y relative to the current point. |
+| `Polygon(Points, Color=None)` | a closed polygon through `Points` (X, Y pairs, at least two), filled as FillStyle says (FillColor), its outline in `Color` as the pen draws (DrawWidth, DrawStyle); the current point moves to the first point. VB programs called Windows' `Polygon` for this. |
 | `PSet(X, Y, Color=None, Step=False)` | a point, DrawWidth across (with DrawStyle Transparent, none: just the current point moves) |
 | `Print(*values, sep=" ", end="\n")` | text at the current point, in the Font and ForeColor, like Python's `print`; after a new line the next text starts at the left, one line lower |
 | `Cls()` | clears what the graphics methods drew (not the `Picture`) and moves the current point to 0, 0 |
@@ -886,7 +887,7 @@ Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button
 <!-- END GENERATED -->
 
 Methods: the [graphics methods](#drawing-on-forms-and-pictureboxes) (`Line`,
-`Circle`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`,
+`Circle`, `Polygon`, `PSet`, `Print`, `Cls`, `Point`, `TextWidth`, `TextHeight`,
 `PaintPicture`), `Image` (a [Picture](#picture-objects) of what it shows) with
 `CurrentX` / `CurrentY`, and `ScaleWidth` / `ScaleHeight`, the size inside its
 border ([ScaleMode](#scalemode) and its other scale members too; its mouse
@@ -1590,6 +1591,7 @@ Events: `Timer`. Default event (double-click in the designer): `Timer`.
 <!-- END GENERATED -->
 
 ### DriveListBox, DirListBox and FileListBox
+<!-- keywords: DriveListBox, DirListBox, FileListBox -->
 
 VB's file system controls: a drop-down of the drives, the folders, and the
 files in a folder. Link them in their `Change` events, as in VB:
@@ -2209,8 +2211,12 @@ def cmdColor_Click(self):
   `Max`). With `PrinterDefault` (True by default) the [Printer](#printer)
   then prints with the dialog's choices: its printer (or the PDF file chosen
   in it), copies, orientation, paper, colors and two-sided printing.
-* **Help:** `ShowHelp()` opens `HelpFile` (a file or a web address) with the
-  program the system has for it.
+* **Help:** `ShowHelp()` shows `HelpFile`. A [help file](#help) (`.vp6help`)
+  opens in VP6's help window, as `HelpCommand` asks: `vpHelpContents` (or 0)
+  its contents, `vpHelpKey` what its index has for `HelpKey`,
+  `vpHelpPartialKey` its index narrowed to the keywords containing
+  `HelpKey`, `vpHelpSearch` the topics a search for `HelpKey` finds. Another
+  file or a web address opens with the program the system has for it.
 * `DialogTitle` titles any of them. Each `Show...` returns True, or False if
   the dialog was cancelled; with `CancelError = True` cancelling raises
   `DialogCancelled` instead (its `Number` is `vpCdlCancel`, 32755, VB's
@@ -2232,7 +2238,9 @@ Default size 32 × 32. Property groups: Font.
 | `Flags` | int | `0` | Options added together: vpOFN... (Open, Save), vpCC... (Color), vpCF... (Font), vpPD... (Printer) |
 | `FontStrikethru` | bool | `False` | Struck through |
 | `FromPage` | int | `0` | The first page to print (with vpPDPageNums) |
-| `HelpFile` | file path | `''` | What ShowHelp opens: a file or web address |
+| `HelpCommand` | int | `0` | What ShowHelp shows of a .vp6help file: vpHelpContents (also 0), vpHelpKey, vpHelpPartialKey or vpHelpSearch (with HelpKey) |
+| `HelpFile` | file path | `''` | What ShowHelp opens: a help file (.vp6help), another file or a web address |
+| `HelpKey` | str | `''` | The keyword (or search) HelpCommand looks up in the help file |
 | `InitDir` | str | `''` | The folder a file dialog starts in |
 | `Left` | int | `0` | Position in the designer only |
 | `Max` | int | `9999` | The last page there is |
@@ -3170,6 +3178,41 @@ registry, under `HKEY_CURRENT_USER\Software\VP6 Program Settings\AppName\Section
 `~/Library/Preferences/com.vp6-program-settings.AppName.plist`; on Linux
 `~/.config/VP6 Program Settings/AppName.conf`.
 
+### Help
+
+| Name | Description |
+|---|---|
+| `ShowHelp(HelpFile="", Keyword="", Search="", Page="", Regex=False, MatchCase=False)` | shows a help file in its window (one window per file, brought to the front): at what its index has for a `Keyword`, with the topics a `Search` finds (text, or a regular expression with `Regex`; matching case with `MatchCase`), at a `Page` (`"docs/guide.html#a-heading"`), or at its contents. The file is `HelpFile`, else `App.HelpFile` (relative paths are from the program's folder), else VP6's own help; `FileNotFoundError` when there is none. Returns the window. |
+
+```python
+def mnuHelpContents_Click(self):
+    ShowHelp()  # App.HelpFile's contents (set it in Sub Main: App.HelpFile = "MyApp.vp6help")
+
+def mnuHelpSearch_Click(self):
+    ShowHelp(Search=InputBox("Search the help for:"))
+```
+
+A help file (`.vp6help`) works like the old `.chm` help: on the left its
+Contents, an Index of keywords narrowed by what you type (text or a regular
+expression, matching case or not) and Search (the whole help, the most
+matches first; the matches are highlighted on the page); on the right the
+pages, with Back, Forward and Home. **vp6help-make**, part of
+[vp6help](../packages/vp6help/README.md) (installed with VP6), makes one from
+Markdown and HTML documents, with their pictures, and from Python packages
+documented from their code:
+
+```bash
+vp6help-make -o MyApp.vp6help --title "My App Help" README.md docs/
+vp6help-make -o MyApp.vp6help docs/ --package mymodule      # and a Python reference
+vp6help MyApp.vp6help --keyword Open                         # show it (--help: more)
+```
+
+The index has the documents' headings, a name in code that starts a table
+row or stands alone in a paragraph (`` **`Open(path)`** `` gives `Open`),
+and the keywords of `<!-- keywords: Open, Load -->` comments. VP6's own help
+is made the same way from its documents and the `vp6` package; F1 in the IDE
+shows it (see [the IDE's help](ide.md#help)).
+
 ### Printer
 
 `Printer` prints with the [graphics methods](#drawing-on-forms-and-pictureboxes),
@@ -3195,7 +3238,7 @@ def cmdPrint_Click(self):
   `ScaleHeight` are that area in those units, `Width`, `Height` the paper
   (as it is turned, in pixels). Font sizes are points, as on
   screen.
-* **Methods:** `Print`, `Line`, `Circle`, `PSet`, `PaintPicture`,
+* **Methods:** `Print`, `Line`, `Circle`, `Polygon`, `PSet`, `PaintPicture`,
   `TextWidth`, `TextHeight` (as on a form), `NewPage()` (the next page; the
   current point goes back to the top left), `EndDoc()` (send the document),
   `KillDoc()` (throw it away). The first graphics method starts a document;
@@ -3253,7 +3296,7 @@ Clipboard.SetData(badge)                         # and to other programs
 A Picture has `Width` and `Height` (pixels), `Type` (`vpPicTypeBitmap`, or
 `vpPicTypeNone` for an empty one), `Image` (a copy), and the
 [graphics methods](#drawing-on-forms-and-pictureboxes) with their properties
-(`Line`, `Circle`, `PSet`, `Print`, `PaintPicture`, `Point` (-1 where it is
+(`Line`, `Circle`, `Polygon`, `PSet`, `Print`, `PaintPicture`, `Point` (-1 where it is
 transparent), `Cls` (fills it with its BackColor), `DrawWidth`, `DrawStyle`,
 `FillStyle`, `FillColor`, `ForeColor`, `CurrentX`, `CurrentY`, `FontName`,
 `FontSize`, `FontBold`, `FontItalic`, and [ScaleMode](#scalemode) with its scale
@@ -3268,7 +3311,7 @@ A picture dropped from another program is in `OLEDragDrop`'s Data too:
 
 | Object | Members |
 |---|---|
-| `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started) |
+| `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started), `HelpFile` (the program's [help file](#help), what `ShowHelp` shows; a path relative to `Path`) |
 | `Screen` | `Width`, `Height` (primary screen, pixels), `TwipsPerPixelX`, `TwipsPerPixelY` (15), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FixedFonts` (the fixed-width ones among them, for code and terminals), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
 | `Clipboard` | `GetText(Format=vpCFText)`, `SetText(text, Format=vpCFText)` (`vpCFRTF`: rich text, as RTF source), `GetFormat(Format)` (`vpCFText`, `vpCFBitmap` / `vpCFDIB`, `vpCFRTF`, `vpCFFiles`), `GetData(Format=vpCFBitmap)` (a [Picture](#picture-objects), or with `vpCFFiles` the files' paths; `None` when there is none), `SetData(Picture)` (a Picture or a picture file), `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
@@ -3422,6 +3465,7 @@ All constants are plain ints or strings.
 | Clipboard and OLEDragDrop's Data: formats | `vpCFText`, `vpCFBitmap`, `vpCFDIB`, `vpCFFiles`, `vpCFRTF` | 1, 2, 8, 15, -16639 |
 | Picture.Type | `vpPicTypeNone`, `vpPicTypeBitmap`, `vpDropEffectNone`, `vpDropEffectCopy`, `vpDropEffectMove` | 0, 1, 0, 1, 2 |
 | CommonDialog Flags (added together) | `vpOFNReadOnly`, `vpOFNOverwritePrompt`, `vpOFNHideReadOnly`, `vpOFNNoChangeDir`, `vpOFNAllowMultiselect`, `vpOFNPathMustExist`, `vpOFNFileMustExist`, `vpOFNCreatePrompt`, `vpOFNExplorer`, `vpCCRGBInit`, `vpCCFullOpen`, `vpCFScreenFonts`, `vpCFEffects`, `vpPDAllPages`, `vpPDSelection`, `vpPDPageNums`, `vpCdlCancel` | 1, 2, 4, 8, 512, 2048, 4096, 8192, 524288, 1, 2, 1, 256, 0, 1, 2, 32755 |
+| CommonDialog.HelpCommand (ShowHelp with a .vp6help file) | `vpHelpContents`, `vpHelpIndex`, `vpHelpKey`, `vpHelpPartialKey`, `vpHelpSearch` | 3, 3, 257, 261, 262 |
 | Data control: EOFAction and BOFAction | `vpEOFActionMoveLast`, `vpEOFActionEOF`, `vpEOFActionAddNew`, `vpBOFActionMoveFirst`, `vpBOFActionBOF` | 0, 1, 2, 0, 1 |
 | Data control: Validate's Action | `vpDataActionCancel`, `vpDataActionMoveFirst`, `vpDataActionMovePrevious`, `vpDataActionMoveNext`, `vpDataActionMoveLast`, `vpDataActionAddNew`, `vpDataActionUpdate`, `vpDataActionDelete`, `vpDataActionFind`, `vpDataActionBookmark`, `vpDataActionClose`, `vpDataActionUnload` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 |
 | Recordset.EditMode | `vpEditNone`, `vpEditInProgress`, `vpEditAdd` | 0, 1, 2 |
@@ -3455,6 +3499,7 @@ All constants are plain ints or strings.
 | `vpKey0`..`vpKey9` | 48-57 |
 | `vpKeyA`..`vpKeyZ` | 65-90 |
 | `vpKeyF1`..`vpKeyF12` | 112-123 |
+<!-- keywords: vpKey0, vpKey1, vpKey2, vpKey3, vpKey4, vpKey5, vpKey6, vpKey7, vpKey8, vpKey9, vpKeyA, vpKeyB, vpKeyC, vpKeyD, vpKeyE, vpKeyF, vpKeyG, vpKeyH, vpKeyI, vpKeyJ, vpKeyK, vpKeyL, vpKeyM, vpKeyN, vpKeyO, vpKeyP, vpKeyQ, vpKeyR, vpKeyS, vpKeyT, vpKeyU, vpKeyV, vpKeyW, vpKeyX, vpKeyY, vpKeyZ, vpKeyF1, vpKeyF2, vpKeyF3, vpKeyF4, vpKeyF5, vpKeyF6, vpKeyF7, vpKeyF8, vpKeyF9, vpKeyF10, vpKeyF11, vpKeyF12 -->
 <!-- END GENERATED -->
 
 ---
@@ -3593,7 +3638,8 @@ It goes in the project's `dist` folder:
 * **Control arrays are `ControlArray` objects.** Elements are `self.cmd[i]`
   (or VB's `self.cmd(i)`); `Load` and `Unload` take the array and the Index
   (`Load(self.cmd, 5)` for `Load cmd(5)`).
-* **Drawing** (`Line`, `Circle`, `PSet`, `Print`): Python calls instead of
+* **Drawing** (`Line`, `Circle`, `PSet`, `Print`; and `Polygon`, which VB
+  left to Windows' API): Python calls instead of
   VB's syntax (`Line(X1, Y1, X2, Y2, Color, "BF")`, `Line(X, Y)` for
   `Line -(X, Y)`, `Step=True`); `Print` takes `sep` and `end` like Python's
   print instead of `;` and `,`. With AutoRedraw False, what is drawn outside
@@ -3678,7 +3724,9 @@ It goes in the project's `dist` folder:
 * **CommonDialog** methods return True or False (VB's returned nothing);
   cancelling with CancelError raises `DialogCancelled` (VB's error 32755); a
   multiple selection is `FileNames` (VB packed the names into FileName);
-  `ShowHelp` opens a file or web address (no WinHelp commands); `Flags`
+  `ShowHelp` shows a [.vp6help file](#help) (not WinHelp's `.hlp`; `HelpCommand`
+  has VB's Contents, Key and PartialKey, and VP6's own Search), else opens a
+  file or web address; `Flags`
   without a Qt equivalent are accepted and ignored.
 * **Drag and drop:** `Drag` starts a drag and waits until it is over (VB's
   returned at once); Drag's cancel action is `vpCancelDrag` (VB's `vbCancel`

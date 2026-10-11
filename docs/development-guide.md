@@ -10,6 +10,8 @@ and step-by-step recipes for extending the VP6 runtime and IDE. Read
 ```bash
 cd VP6
 python3 -m venv .venv
+.venv/bin/pip install -e packages/vp6help  # the help system VP6 depends on (first: it isn't
+                                           # on PyPI until released)
 .venv/bin/pip install -e ".[dev]"      # editable install: vp6, vp6-run, pytest, build
 .venv/bin/pip install -e ".[dev,make]" # ...and PyInstaller, for vp6-make
 
@@ -449,6 +451,19 @@ Rarely needed, and it affects every existing form, so be deliberate.
   Kitchen Sink forms, whose regions must stay
   canonical, see §5.11).
 
+### 5.10a Add a sample project
+
+1. Write its files in `vp6/ide/templates/<folder>/` (forms with canonical
+   regions: `formfile.replace_region(s, formfile.parse(s))`; a form that runs
+   on its own too, `if __name__ == "__main__": run(Form1)`).
+2. Add it to `SAMPLES` in `vp6/ide/samples.py` (its forms, modules, startup
+   object, description) and to `TEMPLATES` in `vp6/ide/dialogs.py` with its
+   category (`"Sample Projects/<Folder>"`; a new folder appears by itself) and
+   an icon (`icons.py`, drawn at 48 px by `large_icon`).
+3. Add `templates/<folder>/*.py` to `[tool.setuptools.package-data]`
+   (`tests/test_packaging.py` checks it), and test it in
+   `tests/test_samples.py`.
+
 ### 5.11 Keep the Kitchen Sink up to date
 
 The **Kitchen Sink** project template (New Project > Kitchen Sink)
@@ -512,6 +527,21 @@ depends on what it reports:
 | `docs/api.md is out of date` | run `python tools/apidocs.py` |
 | a control has no generated section | add `### Name`, a sentence about it, and an empty `<!-- BEGIN GENERATED: control Name -->` / `<!-- END GENERATED -->` pair to `docs/api.md` §4, then run the generator |
 | a broken link | fix the link, or the heading it points to (anchors are GitHub-style) |
+
+**The help.** VP6's help (Help menu, F1, `ShowHelp`) is made from these
+documents and the code (`vp6/helpdocs.py`: `DOCUMENTS` is the order of its
+contents; a new document goes there), so nothing needs regenerating: run from
+the source, VP6 makes it again after a change. Its index takes the headings,
+a lone code name starting a table row or a paragraph, and the names in
+`<!-- keywords: A, B -->` comments: add one under a heading that covers names
+it doesn't spell out (e.g. `### DriveListBox, DirListBox and FileListBox`).
+`tests/test_help.py` checks every control and public name is in the index.
+To look at it outside the IDE:
+
+```bash
+.venv/bin/python -c "from vp6.helpdocs import help_file; print(help_file())"
+.venv/bin/vp6help "$(.venv/bin/python -c 'from vp6.helpdocs import help_file; print(help_file())')"
+```
 
 **How `tools/apidocs.py` works.** It rewrites only the blocks between the
 `BEGIN GENERATED` / `END GENERATED` markers, from:
@@ -671,9 +701,16 @@ python3 -m venv /tmp/vp6-try                 # install the wheel somewhere clean
 
 * The **wheel** has the `vp6` package with its data files (pictures, the
   Kitchen Sink templates: `[tool.setuptools.package-data]`, which
-  `tests/test_packaging.py` checks covers every one), the license and the
-  `vp6`, `vp6-run` and `vp6-make` commands. The **source distribution** also
-  has the docs and the tests (`MANIFEST.in`).
+  `tests/test_packaging.py` checks covers every one), VP6's help
+  (`vp6/help/vp6.vp6help`, made by `setup.py` while building), the license
+  and the `vp6`, `vp6-run` and `vp6-make` commands. The **source
+  distribution** also has the docs, the tests and vp6help's source
+  (`MANIFEST.in`).
+* **vp6help** (`packages/vp6help`) is a distribution of its own, which VP6
+  requires (`vp6help>=0.1`): build it with
+  `.venv/bin/python -m build packages/vp6help --outdir dist`. Its version is
+  in its `pyproject.toml` and `vp6help/__init__.py`; raise it (and VP6's
+  requirement, when VP6 needs the new one) when it changes.
 * PyPI shows `README.md` as the project's page; its relative links (to
   `docs/`, `FEATURES.md`, `BACKLOG.md`) only work in the repository. Once the
   repository is public, add its address under `[project.urls]` and make those
@@ -684,9 +721,9 @@ with PyPI's *trusted publishing*, so no password or token is stored anywhere:
 
 1. Once: on pypi.org (logged in), *Your account > Publishing > Add a new
    pending publisher*: project name `vp6`, the repository's owner and name,
-   workflow `publish.yml`, environment `pypi`. (Test it first on
-   test.pypi.org the same way if you like.) In the GitHub repository's
-   settings, add an environment named `pypi`.
+   workflow `publish.yml`, environment `pypi`; and the same for the project
+   `vp6help`. (Test it first on test.pypi.org the same way if you like.) In
+   the GitHub repository's settings, add an environment named `pypi`.
 2. For each release: commit the new version, then tag and push it:
 
    ```bash
@@ -694,7 +731,8 @@ with PyPI's *trusted publishing*, so no password or token is stored anywhere:
    ```
 
    The workflow checks the tag is `v` + the version in `pyproject.toml`,
-   builds and checks the distributions, and uploads them. A version can be
+   builds and checks the distributions (VP6's and vp6help's), and uploads
+   them; a vp6help version already on PyPI is skipped. A version can be
    uploaded only once: a mistake needs a new version.
 
 Without GitHub, upload from your machine with an API token from pypi.org

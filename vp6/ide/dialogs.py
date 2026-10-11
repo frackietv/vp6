@@ -10,7 +10,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QPlainTextEdit, QPushButton, QSpinBox, QTabWidget,
-    QVBoxLayout, QWidget,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 import vp6
@@ -26,16 +26,39 @@ LOGO_WIDTH = 360
 
 DEFAULT_LOCATION = os.path.join(os.path.expanduser("~"), "VP6 Projects")
 
+# (key, title, icon, description, category): a category is a path of folders
+# ("Sample Projects/Graphics"); "" is the top level
 TEMPLATES = [
     ("exe", "Standard EXE", "Form",
-     "A windowed application: Sub Main in Module1 shows Form1."),
+     "A windowed application: Sub Main in Module1 shows Form1.", ""),
     ("console", "Console Application", "Console",
      "A text-mode program that starts in Sub Main (Module1) and uses print() / input(). "
-     "Form1 is included for when you need a window."),
+     "Form1 is included for when you need a window.", ""),
     ("kitchensink", "Kitchen Sink", "KitchenSink",
      "A demo that shows every VP6 control and feature working. A good place to learn "
-     "from and to copy code out of."),
+     "from and to copy code out of.", "Sample Projects"),
+    ("projection", "Projection", "Isometric",
+     "A model turning in a parallel projection on a single form, drawn with the graphics "
+     "methods: isometric, elevation, plan, dimetric, trimetric, military, cavalier or "
+     "top-down; a cube, a pyramid, a torus, a house, a few boxes or a downtown, solid and "
+     "shaded or as a wireframe, the axes behind it. Drag an axis to move it, the space "
+     "around to turn the axes, the model to turn it; sliders for its roll, pitch and "
+     "tumble and their rates; the angles between the axes.",
+     "Sample Projects/Graphics"),
 ]
+FOLDER_ROLE = Qt.UserRole + 1  # a folder item's category
+
+
+def categories() -> list[str]:
+    """Every category of TEMPLATES and the folders above them, in order."""
+    found: list[str] = []
+    for *_, category in TEMPLATES:
+        parts = category.split("/") if category else []
+        for i in range(1, len(parts) + 1):
+            path = "/".join(parts[:i])
+            if path not in found:
+                found.append(path)
+    return found
 
 
 def next_free_name(base: str, location: str) -> str:
@@ -59,8 +82,28 @@ class NewProjectDialog(QDialog):
         self.open_path = ""
         self.tabs = QTabWidget()
 
-        # New
+        # New: the categories (folders) on the left, a category's templates and
+        # folders on the right
         new_tab = QWidget()
+        self.categories = QTreeWidget()
+        self.categories.setHeaderHidden(True)
+        self.categories.setRootIsDecorated(True)
+        self._category_items: dict[str, QTreeWidgetItem] = {}
+        top = QTreeWidgetItem(self.categories, ["Projects"])
+        top.setIcon(0, icons.icon("Project"))
+        top.setData(0, FOLDER_ROLE, "")
+        self._category_items[""] = top
+        for path in categories():
+            parent, _, title = path.rpartition("/")
+            item = QTreeWidgetItem(self._category_items[parent], [title])
+            item.setIcon(0, icons.icon("Project"))
+            item.setData(0, FOLDER_ROLE, path)
+            self._category_items[path] = item
+        self.categories.expandAll()
+        self.categories.setMaximumWidth(170)
+        self.categories.currentItemChanged.connect(
+            lambda item, _: item is not None and self._show_category(item.data(0, FOLDER_ROLE)))
+        self.category = None
         self.templates = QListWidget()
         self.templates.setViewMode(QListWidget.IconMode)
         self.templates.setIconSize(QSize(48, 48))
@@ -68,13 +111,7 @@ class NewProjectDialog(QDialog):
         self.templates.setMovement(QListWidget.Static)
         self.templates.setResizeMode(QListWidget.Adjust)
         self.templates.setWordWrap(True)
-        for key, title, icon_name, tip in TEMPLATES:
-            item = QListWidgetItem(icons.large_icon(icon_name), title)
-            item.setData(Qt.UserRole, key)
-            item.setToolTip(tip)
-            self.templates.addItem(item)
-        self.templates.setCurrentRow(0)
-        self.templates.itemDoubleClicked.connect(lambda _: self._accept_new())
+        self.templates.itemDoubleClicked.connect(self._open_item)
         self.templates.currentItemChanged.connect(self._template_changed)
         self.template_help = QLabel()
         self.template_help.setWordWrap(True)
@@ -89,7 +126,10 @@ class NewProjectDialog(QDialog):
         form.addRow("Name:", self.name)
         form.addRow("Location:", location_row)
         new_layout = QVBoxLayout(new_tab)
-        new_layout.addWidget(self.templates)
+        lists = QHBoxLayout()
+        lists.addWidget(self.categories)
+        lists.addWidget(self.templates, 1)
+        new_layout.addLayout(lists, 1)
         new_layout.addWidget(self.template_help)
         new_layout.addLayout(form)
         self.tabs.addTab(new_tab, "New")
@@ -129,17 +169,67 @@ class NewProjectDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(self.tabs)
         layout.addWidget(buttons)
-        self.resize(520, 420)
+        self.resize(640, 440)
+        self.categories.setCurrentItem(top)  # (the top level: Standard EXE chosen)
+
+    # -- categories --------------------------------------------------------------------------
+    def _show_category(self, path: str) -> None:
+        """Show a category: its templates, then its folders."""
+        self.category = path
+        self.templates.clear()
+        for key, title, icon_name, tip, category in TEMPLATES:
+            if category == path:
+                item = QListWidgetItem(icons.large_icon(icon_name), title)
+                item.setData(Qt.UserRole, key)
+                item.setToolTip(tip)
+                self.templates.addItem(item)
+        for folder in categories():
+            if folder.rpartition("/")[0] == path:  # (its folders, not theirs)
+                item = QListWidgetItem(icons.large_icon("Project"), folder.rpartition("/")[2])
+                item.setData(FOLDER_ROLE, folder)
+                item.setToolTip(f"{folder}: double-click to open")
+                self.templates.addItem(item)
+        # The first template chosen, else the first folder
+        rows = [i for i in range(self.templates.count())
+                if self.templates.item(i).data(Qt.UserRole)]
+        self.templates.setCurrentRow(rows[0] if rows else 0)
         self._template_changed()
+
+    def select_category(self, path: str) -> None:
+        """Show a category ("" the top level, "Sample Projects/Graphics")."""
+        self.categories.setCurrentItem(self._category_items[path])
+
+    def select_template(self, key: str) -> None:
+        """Choose a template, in its category."""
+        category = next(t[4] for t in TEMPLATES if t[0] == key)
+        self.select_category(category)
+        for i in range(self.templates.count()):
+            if self.templates.item(i).data(Qt.UserRole) == key:
+                self.templates.setCurrentRow(i)
+
+    def _open_item(self, item) -> None:
+        """Double-click: a folder opens, a template makes the project."""
+        folder = item.data(FOLDER_ROLE)
+        if folder is not None:
+            self.select_category(folder)
+        else:
+            self._accept_new()
 
     def _template_changed(self, *_):
         item = self.templates.currentItem()
+        if item is not None and item.data(FOLDER_ROLE) is not None:
+            names = [t[1] for t in TEMPLATES if t[4] == item.data(FOLDER_ROLE) or
+                     t[4].startswith(item.data(FOLDER_ROLE) + "/")]
+            self.template_help.setText(f"{item.text()}: {', '.join(names)}.")
+            return
         key = item.data(Qt.UserRole) if item else None
         self.template_help.setText(next((t[3] for t in TEMPLATES if t[0] == key), ""))
 
     @property
-    def template(self) -> str:
-        return self.templates.currentItem().data(Qt.UserRole)
+    def template(self) -> str | None:
+        """The template chosen (None when a folder is)."""
+        item = self.templates.currentItem()
+        return item.data(Qt.UserRole) if item is not None else None
 
     @property
     def project_name(self) -> str:
@@ -166,6 +256,12 @@ class NewProjectDialog(QDialog):
         self.accept()
 
     def _accept_new(self):
+        item = self.templates.currentItem()
+        if item is not None and item.data(FOLDER_ROLE) is not None:
+            self.select_category(item.data(FOLDER_ROLE))  # (Open on a folder opens it)
+            return
+        if self.template is None:
+            return
         name = self.project_name
         if not name.isidentifier():
             self.template_help.setText("<font color='#c0392b'>The project name must be a valid "

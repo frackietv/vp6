@@ -509,6 +509,18 @@ class ObjectBrowser(QWidget):
                 return True
         return False
 
+    def help_topic(self) -> tuple[str, str]:
+        """What F1 asks the help about here: the member chosen (and its class),
+        else the class."""
+        row = self.class_list.currentRow()
+        if not 0 <= row < len(self.classes):
+            return "", ""
+        info = self.classes[row]
+        member = self.member_list.currentRow()
+        if self.member_list.hasFocus() and 0 <= member < len(self.shown_members):
+            return self.shown_members[member].name, info.name
+        return info.name, ""
+
     def _on_class_chosen(self, row: int) -> None:
         self.member_list.clear()
         if not 0 <= row < len(self.classes):

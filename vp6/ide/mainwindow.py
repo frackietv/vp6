@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shlex
 import shutil
 import sys
@@ -13,7 +14,7 @@ from PySide6.QtCore import (QEvent, QFile, QProcess, QProcessEnvironment, QSize,
 from PySide6.QtGui import QAction, QActionGroup, QColor, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QDockWidget, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMdiArea,
-    QMdiSubWindow, QMessageBox, QPlainTextEdit, QSizePolicy, QTabWidget, QWidget,
+    QMdiSubWindow, QMessageBox, QPlainTextEdit, QSizePolicy, QTabWidget, QTextEdit, QWidget,
 )
 
 import vp6
@@ -27,7 +28,7 @@ from ..project import EXTENSION, SUB_MAIN, Project, copy_project
 from ..runner import import_folders
 from ..usercontrol import (load_user_control, register_user_control,
                            unregister_user_controls, user_control_types)
-from . import icons, kitchensink
+from . import icons, kitchensink, samples
 from .codeeditor import CodeWindow
 from .debugger import DebugSession, WatchWindow, describe, same_file
 from .debugpanel import DebugPanel
@@ -71,6 +72,7 @@ class MainWindow(QMainWindow):
         self._last_designer: FormDesigner | None = None
         self.find_dialog: FindReplaceDialog | None = None  # created when first needed
         self.object_browser: ObjectBrowser | None = None  # (View > Object Browser)
+        self.help_viewer = None  # VP6's help window (Help menu, F1)
         self._pending_fits: list = []  # subwindows to fit once the window is shown
         # The project's user controls are loaded again a moment after one is edited
         self._user_control_timer = QTimer(self)
@@ -320,6 +322,18 @@ class MainWindow(QMainWindow):
         self.act_view_outline = a("Outli&ne Window", self._show_outline,
                                   tip="The structure of the current file")
 
+        self.act_help_contents = a("&Contents", lambda: self.show_help(),
+                                   tip="VP6's help: its table of contents")
+        self.act_help_index = a("&Index", lambda: self.show_help(index=""),
+                                tip="VP6's help: the index of keywords")
+        self.act_help_search = a("&Search…", lambda: self.show_help(search_tab=True),
+                                 tip="VP6's help: search all of it")
+        self.act_context_help = a("Context &Help", lambda: self.context_help(), "F1",
+                                  tip="Help on what is selected: the word in the code, the "
+                                      "property, the control or the tool")
+        # (F1 in the IDE's other windows too: the Object Browser, the help itself)
+        self.act_context_help.setShortcutContext(Qt.ApplicationShortcut)
+
         self.act_run = a("&Start", lambda: self.run_project(), "F5", "Run", "Run the project")
         # Also Cmd+Enter on macOS / Ctrl+Enter elsewhere (Qt's "Ctrl" is Command on macOS),
         # from the main keyboard or the keypad
@@ -439,6 +453,9 @@ class MainWindow(QMainWindow):
             self.act_tabbed.setChecked(True)
 
         help_menu = bar.addMenu("&Help")
+        for act in (self.act_help_contents, self.act_help_index, self.act_help_search,
+                    None, self.act_context_help, None):
+            help_menu.addSeparator() if act is None else help_menu.addAction(act)
         # Qt moves an "About" item into the application menu on macOS
         # (AboutRole), which would leave Help without one: this one stays put
         self.act_about = help_menu.addAction("&About VP6", self.show_about)
@@ -450,6 +467,74 @@ class MainWindow(QMainWindow):
     def show_about(self):
         """Help > About VP6 (and the application menu's About on macOS)."""
         AboutDialog(self).exec()
+
+    # -- Help ----------------------------------------------------------------------------------
+    def show_help(self, keyword: str | None = None, context: str = "", page: str | None = None,
+                  search: str | None = None, index: str | None = None,
+                  search_tab: bool = False):
+        """VP6's help window (vp6help): at what the index has for a keyword
+        (the topic about ``context`` first, e.g. a property's control), a
+        page, a search, the index (narrowed), the Search tab or the contents.
+        Returns the window, or None when there is no help."""
+        from vp6help.viewer import show_help
+
+        from .. import helpdocs
+
+        self.statusBar().showMessage("Preparing VP6's help…")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            path = helpdocs.help_file()  # (made first when run from the source)
+        except Exception as error:  # noqa: BLE001
+            path = None
+            print(f"VP6's help couldn't be made: {error}", file=sys.stderr)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if path is None:
+            self.statusBar().showMessage("VP6's help isn't installed", 5000)
+            return None
+        self.statusBar().clearMessage()
+        viewer = self.help_viewer = show_help(path, page, keyword, search, index,
+                                              context=context)
+        if search_tab:
+            viewer.tabs.setCurrentIndex(2)
+            viewer.search_text.setFocus()
+        return viewer
+
+    def context_help(self):
+        """Help > Context Help (F1): help on the word at the cursor in the code
+        (a form's control: its type), the property chosen in the Properties
+        window, the control selected in the designer or the tool chosen in the
+        Toolbox; else the contents."""
+        keyword, context = self.help_context()
+        return self.show_help(keyword or None, context)
+
+    def help_context(self) -> tuple[str, str]:
+        """What F1 asks the help about: (keyword, context)."""
+        widget = QApplication.focusWidget()
+        browser = self.object_browser
+        if widget is not None and browser is not None and browser.isAncestorOf(widget):
+            return browser.help_topic()
+        properties = self.properties
+        if widget is not None and (widget is properties or properties.isAncestorOf(widget)):
+            name, type_name = properties.current_property()
+            if name:
+                return name, type_name
+        designer = self._current_designer()
+        if widget is not None and isinstance(self._active_widget(), FormDesigner) and \
+                (widget is self._active_widget() or self._active_widget().isAncestorOf(widget)):
+            objects = self._active_widget().selected_objects()
+            if len(objects) == 1:
+                return objects[0].TypeName, ""
+        if widget is not None and self.toolbox.isAncestorOf(widget) and self.current_tool:
+            return self.current_tool, ""
+        word = _word_at_cursor(widget)
+        if word and designer is not None:
+            types = {c.name: c.type for c in designer.form_def.controls}
+            if word in types:  # a control of the form: its type
+                return types[word], ""
+            if word == designer.form_def.class_name:
+                return "Form", ""
+        return word, ""
 
     def _create_toolbar(self):
         toolbar = self.toolbar = self.addToolBar("Standard")
@@ -2292,6 +2377,11 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self.terminal.end_shell()
+        if self.help_viewer is not None:
+            try:
+                self.help_viewer.close()
+            except RuntimeError:  # (already deleted)
+                pass
         path = self.__dict__.get("_ide_scheme_file")
         if path is not None:
             try:
@@ -2310,6 +2400,26 @@ class MainWindow(QMainWindow):
 # View > Terminal Window: Ctrl+` as in VS Code (the Control key on macOS too, where Qt
 # calls it Meta: Cmd+` goes through the windows)
 _TERMINAL_KEY = "Meta+`" if sys.platform == "darwin" else "Ctrl+`"
+
+
+def _word_at_cursor(widget) -> str:
+    """The name at the text cursor of a text box (the part of a dotted name the
+    cursor is in: ``Caption`` of ``self.Text1.Caption``), or its selection."""
+    if isinstance(widget, (QPlainTextEdit, QTextEdit)):
+        cursor = widget.textCursor()
+        if cursor.hasSelection():
+            return cursor.selectedText().strip()
+        text, column = cursor.block().text(), cursor.positionInBlock()
+    elif isinstance(widget, QLineEdit):
+        if widget.hasSelectedText():
+            return widget.selectedText().strip()
+        text, column = widget.text(), widget.cursorPosition()
+    else:
+        return ""
+    for match in re.finditer(r"[A-Za-z_]\w*", text):
+        if match.start() <= column <= match.end():
+            return match.group(0)
+    return ""
 
 
 def _lock_key(path: str) -> str:
@@ -2347,8 +2457,11 @@ def create_project(location: str, name: str, template: str) -> str:
     directory = os.path.join(location, name)
     os.makedirs(directory, exist_ok=True)
     path = os.path.join(directory, name + EXTENSION)
-    if template == "kitchensink":
-        project = kitchensink.create(directory, name)
+    if template == "kitchensink" or template in samples.SAMPLES:
+        if template == "kitchensink":
+            project = kitchensink.create(directory, name)
+        else:
+            project = samples.create(template, directory, name)
         project.path = path
         project.save(path)
         return path

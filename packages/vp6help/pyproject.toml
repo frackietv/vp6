@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=77"]  # (license as an SPDX expression)
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vp6help"
+version = "0.1.0"
+description = "Help files like the old .chm help: a maker (Markdown, HTML, Python packages) and a viewer with contents, index and search"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "FrackieTV" }]
+requires-python = ">=3.10"
+dependencies = ["PySide6>=6.6"]
+keywords = ["help", "chm", "documentation", "markdown", "javadoc", "qt", "pyside6", "vp6"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Documentation",
+    "Topic :: Software Development :: Documentation",
+]
+
+[project.scripts]
+vp6help = "vp6help.viewer:main"
+vp6help-make = "vp6help.maker:main"
+
+[tool.setuptools]
+packages = ["vp6help"]

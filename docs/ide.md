@@ -20,6 +20,7 @@ and built on PySide6 (Qt).
 | Menu Editor (Ctrl+E)        | Tools > Menu Editor designs the form's menus like VB's: Caption (`-` for a separator), Name, Index, Shortcut, Checked, Enabled, Visible, with arrows to indent and move items. The designer shows the menu bar; click a menu to see it and an item to open its Click code |
 | MDI forms                   | Project > Add MDI Form: an MDIForm, a window for the forms whose MDIChild is True (its workspace around docked controls, Arrange, ActiveForm, the active child's menus, a WindowList menu); `ShowPopup` shows a form as a popup that doesn't take the focus |
 | Format menu                 | Align, Make Same Size, Center in Form, Bring to Front (Ctrl+J), Send to Back (Ctrl+K), Lock Controls (the form's controls can't be moved or resized with the mouse or the arrow keys; hollow handles; remembered per form) |
+| Help (F1)                   | Help > Contents, Index and Search open VP6's help (see [Help](#help)); F1 is help on what you're on: the word in the code, the property, the control, the tool or the Object Browser's member |
 | Run (F5 or Cmd+Enter / Ctrl+Enter, Shift+F5, End) | Saves everything and runs the project in a separate process; the title shows `[design]` / `[run]` |
 | Toolbar and layout          | Sun/moon switch at the right end of the toolbar toggles light/dark; View > Toolbars shows a hidden toolbar; View > Reset Window Layout restores all panels; panels at the bottom edge are always tabs; a form's window opens just large enough to show the whole form (or filling the main area when it can't), and every window opens inside the main area |
 
@@ -70,6 +71,31 @@ scheme, exactly as it will run. The workspace around the form follows the
 IDE's light/dark mode. When a form runs on its own (`python Form1.py`),
 "Project Default" is read from a `.vp6p` file in the same folder, if there
 is one.
+
+### Help
+
+VP6's help works like VB6's `.chm` help, in a window of its own: on the
+left its **Contents** (these documents, the API reference, the development
+guides, the release notes and the Python reference of every `vp6` module),
+an **Index** of keywords (every control, property, event, function, class,
+method and constant; type to narrow it down, with *Regular expression* and
+*Match case*) and **Search** (all of the help, text or a regular expression;
+the topics with the most matches first, and the matches highlighted on the
+page); on the right the page, with Back, Forward, Home and Locate (the page
+in the contents).
+
+* **Help > Contents, Index, Search…** open it at that tab.
+* **F1** (Help > Context Help) is help on what you're on: in a code window,
+  the word at the cursor (a control's name: its type's help; `Caption` in
+  `self.Label1.Caption`); in the Properties window, the property, for the
+  selected control's type; in a form's designer, the selected control; in
+  the Toolbox, the tool chosen; in the Object Browser, the member or class
+  chosen. A word the index doesn't have is searched for.
+
+The help is made from VP6's documents and code: an installed VP6 has it
+ready; run from its source, VP6 makes it again after a change (in about a
+second, the first time F1 is pressed). Programs can have help of their own:
+see [Help](api.md#help) in the API reference.
 
 ## Files
 
