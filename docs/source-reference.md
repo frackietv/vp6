@@ -2281,7 +2281,7 @@ The Debug window: three parts side by side in a `QSplitter` (each a
   * `_on_text_changed` re-parses; signals `designReloaded` and `parseError`.
 * `open_document(path)` picks the class by content.
 
-### `vp6/ide/samples.py` (≈50 lines) and `vp6/ide/templates/projection/`
+### `vp6/ide/samples.py` (≈50 lines), `vp6/ide/templates/projection/` and `vp6/ide/templates/perspectives/`
 
 The sample projects other than the Kitchen Sink: `SAMPLES` maps a template
 key to a `Sample` (its folder in `templates/`, forms, modules, startup object,
@@ -2329,6 +2329,41 @@ project (`create_project` saves it).
   right axes (`rotation`). Double-click or Reset view: `SetProjection` again;
   `Form_Resize` gives the picture the room the controls leave (`PanelControls`
   moved with it).
+* **`perspectives`** (Sample Projects/Graphics, `Form1.py`, its startup form):
+  the same models (`MODELS`, copied from Projection; `Model.separations` keep
+  a point on each plane, `Model.Closed`) and turns (sliders, rates, `tmrSpin`,
+  `TurnModel`) in perspective. `PERSPECTIVES` (the ComboBox `cboPerspective` in
+  the same order): a name, a mode (`LINEAR`, `CYLINDRICAL`, `FISHEYE`,
+  `SPHERICAL`), the eye's yaw and pitch (`look`), distance and shift.
+  The state is `columns` (each axis's column: where a step along it takes the
+  ray; `Rows()` is A), `distance` along `toward_center` (`Eye()` is o), `focal`
+  (F) and `pan`; `SetPerspective` makes them from a real camera. `Ray(p)` =
+  A p + o; `Camera()` finds the eye from the 3×4 matrix's null vector (a point,
+  or a direction for a parallel projection; `Facing`, `Depth`). `Pieces` clips
+  a polygon or segment of rays where the picture is (`clip`: in front, z ≥
+  `NEAR`, for linear; the half in front for fisheye; both halves for
+  spherical, region 1 behind; the cylinder's seam, `crosses_seam`, regions 1
+  and 2); `Arc` draws a segment straight (linear) or in `slerp` steps of
+  `STEP`; `Map` draws a ray (linear F·(x, y)/z; cylindrical F·angle across,
+  F·y/√(x²+z²) up, within `CYLINDER_HEIGHT`; `Fisheye` F·θ from the middle;
+  spherical: two fisheyes, `Centers`, `Beside` or one above the other);
+  `Scale` fits the picture; `ToPicture`/`FromPicture`, `Direction` (the
+  inverse, for dragging). Vanishing points: `VanishingPoints` (linear: one per
+  axis, None at infinity; curvilinear: each way, both rim halves on the
+  sphere), `Count` and `Describe` (N-point), `Marker` (one off the picture or
+  at infinity shown at the edge, `EDGE`), `Place`/`SetPlace` and the
+  `cboPlace` control array (`PLACES`, `DIRECTIONS`: at infinity a column has
+  no depth), `MoveVanishingPoint` (the column turned to look at the mouse,
+  its length kept), `TurnScene` (dragging the space: A × the turn, sideways
+  around Z), the Distance slider (`sldDistance`, tenths: the eye along o, the
+  vanishing points staying). `Draw`: `DrawRims`, `DrawLines` (chkLines: the
+  cube's edges from -`FRAME` to `FRAME` along each axis, extended `FAR` both
+  ways; the horizon: the XY plane's directions), then `DrawWireframe` or
+  `DrawSolid` (`Faces`: those facing the eye, every face of a closed part
+  the eye is inside; a face cut by `Pieces` outlined along its own edges
+  only; `PartOrder`: parts around the eye first), then `DrawVanishingPoints`.
+  `HitTest`: a vanishing point's marker, the model (`inside`, any polygon),
+  the space.
 
 ### `vp6/ide/kitchensink.py` (≈70 lines) and `vp6/ide/templates/kitchensink/`
 
@@ -2575,8 +2610,8 @@ explorer-style.
 
 * `NewProjectDialog` has the New tab (the categories in a tree on the left;
   a category's templates, then its folders, on the right: `exe` and `console`
-  at the top level, `kitchensink` in Sample Projects, `projection` in Sample
-  Projects/Graphics; double-click or Open on a folder opens it; with name and
+  at the top level, `kitchensink` in Sample Projects, `projection` and
+  `perspectives` in Sample Projects/Graphics; double-click or Open on a folder opens it; with name and
   location), the Existing tab (browse) and the Recent tab. `select_category`,
   `select_template`; `template` is None while a folder is chosen. After
   `exec()`, `result_action` is `"new"` (see `template`, `project_name`,
@@ -2890,7 +2925,7 @@ All tests run headless. `conftest.py`:
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle; rounded bottom corners (the radius per style, none without a frame; `corner_path` holding the corners only), the designer painting them over the form (macOS and Windows 11: the workspace in the corner; GNOME and classic square; BorderStyle 0 square); the designer's title bar following the form where the OS allows, else the OS's. |
 | `test_help.py` | VP6's help: made once from the source into the tests' folder (named by the sources' hash), the installed one first, none without either; the documents and the Python reference in the contents (FEATURES flat); every control (its section of the API reference first) and every public name in the index; what the wheel build runs; ShowHelp (VP6's help at a keyword, a help file of the program's, searches with Regex and MatchCase, a Page, App.HelpFile relative to the program, a missing file); a CommonDialog showing a .vp6help file by HelpCommand (contents, a key, a partial key, a search); the IDE's Help menu (Contents, Index, Search, closed with the IDE) and F1 on a word in the code (a control's name: its type), the designer's control, a property (its control's topic), a Toolbox tool and the Object Browser; vp6-make putting the help and the viewer into executables. |
 | `test_vp6help.py` | The help system: Markdown to HTML (blocks, tight and loose and nested lists, task items, tables with alignment and escaped pipes, inline markup, links, pictures, autolinks); making a help file (pages, titles, links between documents rewritten, pictures included, missing links warned about, anchors on every heading, the contents to a depth or flat, index keywords from headings, lone code names, comments and meta tags (not linked code), sections' text without scripts; the same documents making the same bytes; the home page; errors; the command line with an @file); Python packages read without importing (classes, signatures, properties, attributes, constants in groups, private names, re-exports, bases linked and inherited members), following imported packages (not the standard library; excluded ones), compiled modules inspected, a package in a help file; the file (lookups, filters, regular expressions, case, search counts and order, not a help file); the viewer (home, contents, links, pictures, back and forward, web links, missing pages, Locate, the index's filter and options, keywords with several topics and a context, search highlighting with options, requests and one window per file, colors from the palette, the command line's `--list`); vp6help's pyproject. |
-| `test_samples.py` | The New Project dialog's categories (Standard EXE and Console Application at the top level then the Sample Projects folder; Kitchen Sink and the Graphics folder in it; Projection in that; folders opened by double-click and Open, no template while one is chosen, its contents described; `select_template`); Projection: a project of a single startup form; the isometric projection (the view along the diagonal, the axes 120° apart and equally long, Z up, the angles shown); the eight projections (their axes, angles and lengths; each drawn solid); solid faces covering the middle and the axes behind the model, the wireframe showing them through and its corners; the model turning at the rate sliders' speeds (a rate of 0, Rotate off, past 180°), its angle sliders setting it; what the mouse takes (the space, the model, an axis's end and label; the pointer); dragging an axis (just that one, the angles no longer 120°, a general parallel projection), then the space (the skew kept), double-click and Reset view going back; dragging the space turning the axes (still orthographic, the elevation stopping at 90°); dragging the model turning it around the camera's axes, the axes staying; resizing; the models' toggles (one at a time, each hit by the mouse; the torus's hole; the house's wireframe and edges); the models' faces (flat, unit normals, outward for convex parts and away from the torus's tube; within the axes); the separations (every pair of boxes, a street on the ground, none for overlapping boxes); the parts drawn back to front (the boxes turned round, the park before its trees, a part facing away left out); `hull` and `overlap`. |
+| `test_samples.py` | The New Project dialog's categories (Standard EXE and Console Application at the top level then the Sample Projects folder; Kitchen Sink and the Graphics folder in it; Projection and Perspectives in that; folders opened by double-click and Open, no template while one is chosen, its contents described; `select_template`); Projection: a project of a single startup form; the isometric projection (the view along the diagonal, the axes 120° apart and equally long, Z up, the angles shown); the eight projections (their axes, angles and lengths; each drawn solid); solid faces covering the middle and the axes behind the model, the wireframe showing them through and its corners; the model turning at the rate sliders' speeds (a rate of 0, Rotate off, past 180°), its angle sliders setting it; what the mouse takes (the space, the model, an axis's end and label; the pointer); dragging an axis (just that one, the angles no longer 120°, a general parallel projection), then the space (the skew kept), double-click and Reset view going back; dragging the space turning the axes (still orthographic, the elevation stopping at 90°); dragging the model turning it around the camera's axes, the axes staying; resizing; the models' toggles (one at a time, each hit by the mouse; the torus's hole; the house's wireframe and edges); the models' faces (flat, unit normals, outward for convex parts and away from the torus's tube; within the axes); the separations (every pair of boxes, a street on the ground, none for overlapping boxes); the parts drawn back to front (the boxes turned round, the park before its trees, a part facing away left out); `hull` and `overlap`. Perspectives: a project of a single startup form, 3-point first; the six perspectives (each N-point, its vanishing points' places, drawn solid); linear (2-point: X and Y on the horizon, lines along an axis heading for its vanishing point, upright lines upright, nearer bigger; 1-point: Y's up and right of the model's center); curvilinear (fisheye: +Y in the middle, four on the rim, edges bending; cylindrical: four on the horizon a quarter turn apart, Z's at infinity; spherical: −Y in the middle of the half behind, rim points in both halves); dragging a vanishing point (just that one; double-click going back; one at infinity at the edge, dragged to a point; a fisheye's, the other way going behind); vanishing points at infinity (parallel lines that way; none left: a parallel projection, still solid; back to a point inside the picture; on the fisheye's rim); dragging the space (sideways: along the horizon, Z still at infinity; down: 3-point) and the model; the Distance (the vanishing points staying, the model smaller; inside the cube: every face, ahead and behind); the perspective lines (each axis's and the horizon, none when off) and the fisheye's rim; what the mouse takes; every model in every perspective, solid and wireframe, the boxes back to front; resizing (the sphere's halves side by side); `clip`, `crosses_seam`, `slerp`, `inside`, `look`. |
 | `test_ide_terminal.py` | The IDE's Terminal window: hidden by default and tabbed with the Immediate window (Reset Window Layout hiding it again), View > Terminal Window and its key; the shell started in the project's folder (home without a project or for a missing folder), typing into it; its end announced and Enter starting a new one; New Shell replacing the one running without a word, End Shell at once; the menu (Copy, Paste, Clear, New Shell, End Shell, enabled as they apply); the editor theme's colors and font, light and dark; closing the IDE ending the shell; drawn. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
 | `test_webbrowser.py` | A real WebBrowser (Chromium, headless): a file and its title, a link (BeforeNavigate, DocumentComplete), Busy and Progress, Back and Forward; BeforeNavigate keeping it on its page; new windows opened here or ignored (NewWindow); a name that doesn't resolve (NavigateError); LoadHTML, TitleChange, RunScript's result, StatusTextChange; GotFocus through the page's focus widget; the designer's placeholder, Toolbox, icon and events. |

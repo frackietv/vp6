@@ -45,6 +45,15 @@ TEMPLATES = [
      "around to turn the axes, the model to turn it; sliders for its roll, pitch and "
      "tumble and their rates; the angles between the axes.",
      "Sample Projects/Graphics"),
+    ("perspectives", "Perspectives", "Perspective",
+     "A model turning in perspective on a single form, drawn with the graphics methods: "
+     "1-, 2- or 3-point linear perspective, or 4-, 5- or 6-point curvilinear perspective "
+     "(cylindrical, fisheye, the whole sphere); the same models and turns as Projection, "
+     "with perspective lines to the vanishing points and the horizon instead of axes. Drag "
+     "a vanishing point to move it, the space around to turn the scene, the model to turn "
+     "it; put any axis's vanishing point at infinity up, down, left or right; move the eye "
+     "nearer or farther, even inside the model.",
+     "Sample Projects/Graphics"),
 ]
 FOLDER_ROLE = Qt.UserRole + 1  # a folder item's category
 

@@ -47,7 +47,8 @@ vp6-make = "vp6.make:main"
 include = ["vp6", "vp6.*"]
 
 [tool.setuptools.package-data]
-"vp6.ide" = ["templates/kitchensink/*.py", "templates/projection/*.py", "images/*.png"]
+"vp6.ide" = ["templates/kitchensink/*.py", "templates/projection/*.py",
+                "templates/perspectives/*.py", "images/*.png"]
 "vp6" = ["images/*.png", "help/*.vp6help"]  # (help/: made by setup.py)
 
 [tool.pytest.ini_options]

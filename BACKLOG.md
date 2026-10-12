@@ -1,6 +1,6 @@
 # VP6 backlog
 
-- **[Sample Projects]** - add a new sample projects under graphics, called perspectives - allowing 1-point, 2-point, 3-point, 4-point, 5-point, or 6-point perspectives.  Follow the projection project for the shapes and rotation controls.  Instead of axis, have toggable perspective lines.  Allow dragging of the vanishing points by the user.  Allow setting the vanishing points to infinity in any direction (up down left right).
+- **[IDE - Toolbox]** - Add toggle to toolbox allowing swtiching between icon view (current) and a list view (icon on the left, label/name on right, listed top to bottom).  Add another toggle to show all controls same as now, or to group them by category.
 - **[Controls]** SpinBox (`QSpinBox`/`QDoubleSpinBox`): a number box with arrows in one control: `Value`, `Min`, `Max`, `Increment`, `DecimalPlaces`, `Prefix`/`Suffix`, `Wrap`, `Change` event; data-bound like TextBox (UpDown stays the separate buddy control).
 - **[Controls]** DTPicker (`QDateEdit`/`QTimeEdit`/`QDateTimeEdit`): VB's date and time picker: `Value` (a `datetime`), `Format` (vpShortDate, vpLongDate, vpTime, vpCustom with `CustomFormat`), `MinDate`/`MaxDate`, `CalendarDropDown`, `UpDown`, `Change` and `CloseUp` events; data-bound.
 - **[Controls]** MonthView (`QCalendarWidget`): VB's month calendar: `Value`, `MinDate`/`MaxDate`, `StartOfWeek`, `ShowWeekNumbers`, `ShowToday`, `DayBold(date)`, `DateClick`/`DateDblClick`/`SelChange` events.

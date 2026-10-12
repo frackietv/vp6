@@ -549,6 +549,20 @@ def _isometric(p):
         p.drawPolygon([QPointF(x, y) for x, y in corners])
 
 
+def _perspective(p):
+    # A box in two-point perspective: its edges heading for vanishing points on the
+    # horizon at the sides, the horizon dashed
+    top, left, right = QColor("#f2c879"), QColor("#d9822b"), QColor("#a8541c")
+    p.setPen(QPen(QColor("#888888"), 0.6, Qt.DashLine))
+    p.drawLine(QPointF(1, 4), QPointF(23, 4))
+    p.setPen(QPen(QColor("#4a2a10"), 0.8))
+    for color, corners in ((top, ((12, 7.5), (21, 8.8), (12, 10.8), (3, 8.8))),
+                           (left, ((3, 8.8), (12, 10.8), (12, 22), (3, 17.6))),
+                           (right, ((12, 10.8), (21, 8.8), (21, 17.6), (12, 22)))):
+        p.setBrush(color)
+        p.drawPolygon([QPointF(x, y) for x, y in corners])
+
+
 def _badge(p, color: str, letter: str, size: int = 13):
     """Outline item icon: a colored rounded square with a white letter."""
     p.setPen(Qt.NoPen)
@@ -593,6 +607,7 @@ _DRAWERS = {
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop, "Pause": _pause,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink, "Isometric": _isometric,
+    "Perspective": _perspective,
     **{name: (lambda p, c=color, l=letter: _badge(p, c, l, 10 if l == "\u25b6" else 13))
        for name, (color, letter) in _OUTLINE_BADGES.items()},
 }

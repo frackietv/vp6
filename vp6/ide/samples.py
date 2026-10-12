@@ -33,6 +33,12 @@ SAMPLES = {
         "A model turning in eight parallel projections (orthographic and oblique): a cube, a "
         "pyramid, a torus, a house, a few boxes or a downtown; drag an axis, the axes or the "
         "model"),
+    "perspectives": Sample(
+        "perspectives", ("Form1.py",), "Form1",
+        "A model turning in 1-, 2- or 3-point linear perspective or 4-, 5- or 6-point "
+        "curvilinear perspective (cylindrical, fisheye, spherical): a cube, a pyramid, a torus, "
+        "a house, a few boxes or a downtown; drag a vanishing point, the scene or the model; "
+        "vanishing points at infinity in any direction"),
 }
 
 

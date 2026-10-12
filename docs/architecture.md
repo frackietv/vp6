@@ -63,7 +63,8 @@ vp6/                    runtime library - "from vp6 import *"
     dialogs.py          New Project (templates in categories), Project Properties, About
     splash.py           the splash screen shown while the IDE starts
     kitchensink.py      the Kitchen Sink project template
-    samples.py          the other sample projects (templates/projection: Projection)
+    samples.py          the other sample projects (templates/projection: Projection,
+                        templates/perspectives: Perspectives)
     templates/kitchensink/   its sources: Form1.py, frmDialog.py, Module1.py
     options.py          Tools > Options dialog
     theme.py            editor themes, IDE light/dark, settings store

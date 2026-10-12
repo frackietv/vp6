@@ -79,6 +79,13 @@ The samples are in the **Sample Projects** folder:
   behind it; drag an axis to move just that one, the space around to turn
   them all, the model to turn it; sliders for its roll, pitch and tumble and
   their rates, and the angles between the axes.
+* *Graphics > Perspectives:* the same models in 1-, 2- or 3-point linear
+  perspective, or 4-, 5- or 6-point curvilinear perspective (cylindrical,
+  fisheye, the whole sphere), with perspective lines to the vanishing points
+  and the horizon; drag a vanishing point to move it, the space around to
+  turn the scene, the model to turn it; put any axis's vanishing point at
+  infinity up, down, left or right; move the eye nearer, farther or inside
+  the model.
 
 ## Further documentation
 

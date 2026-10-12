@@ -3,6 +3,16 @@
 **Version:** 0.4.52
 **Date:** 2026-10-11
 
+## Sample Projects
+
+- Sample Projects > Graphics > Perspectives: a single form with a model turning in perspective, solid and shaded or as a wireframe, Rotate; the same models, turn and rate sliders as Projection
+  - Perspective: 1-point, 2-point or 3-point (linear); 4-point (curvilinear: cylindrical, four vanishing points on the horizon, upright lines straight), 5-point (curvilinear: a fisheye of the half in front, one in the middle and four on the rim) or 6-point (curvilinear: the whole sphere as two fisheyes touching, the one behind too); what the perspective has become is named as the vanishing points move (N-point, or a parallel projection with none)
+  - Perspective lines instead of axes (Lines): the edges of a cube around the model extended to their vanishing points both ways, bending as the perspective bends them, and the horizon
+  - Drag a vanishing point to move it (one off the picture or at infinity is shown at the edge, an arrow its way); drag the space to turn the whole scene (sideways around the vertical, so upright lines stay upright); drag the model to turn it; double-click or Reset view to go back to the perspective chosen
+  - Vanishing points: each axis's at a point or at infinity up, down, left or right (its lines parallel that way; in a curvilinear perspective, square to the line of sight: on the rim)
+  - Distance: the eye nearer or farther, the vanishing points staying; even inside the model, its faces seen from inside all round
+  - Faces cut where the picture ends (behind the eye, the rim, the cylinder's seam) and their edges bent; only those facing the eye drawn, the parts back to front
+
 ## Backlog
 
 - The backlog has an item for each Qt widget that VP6 doesn't have a control for yet: SpinBox, DTPicker, MonthView, Dial, LCDNumber, FontComboBox, HotKey, CommandLink, ToolButton, ButtonBox, ToolBox, PageFrame, ScrollPanel, ColumnView, DBGrid, GraphicsView, Chart, SvgImage, MediaPlayer, PdfViewer, OpenGLView, QuickView, UndoView, the Wizard form, ProgressDialog and ErrorMessage, SplashScreen
