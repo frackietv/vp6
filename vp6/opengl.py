@@ -9,7 +9,14 @@
   OpenGL.GL import *``); ``PixelRatio`` is how many of the screen's pixels
   (OpenGL's) one of its pixels is. ``Update()`` asks for a Paint; ``Animate`` paints
   ``FrameRate`` times a second (a render loop), ``FrameCount`` and
-  ``ElapsedTime`` (seconds) tell how far it got.
+  ``ElapsedTime`` (seconds) tell how far it got. After OpenGL, the graphics
+  methods (``Line``, ``Circle``, ``Polygon``, ``Print``, ``PaintPicture``...)
+  draw over its picture in Paint, as on a PictureBox (release what OpenGL
+  bound first: buffers, shader programs); drawn outside Paint, they stay over
+  every frame until ``Cls``. ``Available`` tells whether OpenGL draws it (not
+  in the designer, without QtOpenGLWidgets or on a platform without OpenGL:
+  a program can draw some other way then); ``Samples`` smooths its edges
+  (multisampling, e.g. 4).
 * **QuickView** shows a Qt Quick (QML) user interface: ``Source`` (a .qml
   file, relative to the form's folder) or ``QmlText`` (the QML itself).
   In QML, ``context`` holds the values of its ``Context``
@@ -31,12 +38,13 @@ import time
 import warnings
 
 from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Slot
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QOpenGLContext, QPainter
 from PySide6.QtWidgets import QFrame, QLabel, QWidget
 
 from ._props import P, enum_choices
-from .controls import (_COMMON, CONTROL_TYPES, EVENT_ARGS, Control, _add_mouse_members,
+from .controls import (_COMMON, _FONT, CONTROL_TYPES, EVENT_ARGS, Control, _add_mouse_members,
                        _add_validation, _geometry, resolve_path)
+from .drawing import DRAWING_PROPERTIES, Drawing
 
 EVENT_ARGS.update({"InitializeGL": "", "Paint": "", "QmlEvent": "Name, Args"})
 
@@ -50,6 +58,22 @@ def _placeholder(parent: QWidget, text: str) -> QLabel:
 
 
 # --- OpenGLView -------------------------------------------------------------------------------
+
+_GL_WORKS: list[bool] = []  # (asked once: whether an OpenGL context can be made here)
+
+
+def _gl_works() -> bool:
+    """Whether OpenGL works on this platform: not offscreen (no OpenGL there),
+    and a context with the default format can be made."""
+    if not _GL_WORKS:
+        if QGuiApplication.platformName() in ("offscreen", "minimal"):
+            _GL_WORKS.append(False)
+        else:
+            context = QOpenGLContext()
+            _GL_WORKS.append(bool(context.create()))
+            del context
+    return _GL_WORKS[0]
+
 
 def _gl_widget_class():
     try:
@@ -65,6 +89,7 @@ def _gl_widget_class():
             self._vp_control = control
 
         def initializeGL(self):
+            self._vp_control.__dict__["_initialized"] = True
             self._vp_control._fire("InitializeGL")
 
         def resizeGL(self, width, height):
@@ -73,12 +98,12 @@ def _gl_widget_class():
         def paintGL(self):
             control = self._vp_control
             control.__dict__["_frames"] += 1
-            control._fire("Paint")
+            control._paint_gl(self)
 
     return _GLWidget
 
 
-class OpenGLView(Control):
+class OpenGLView(Drawing, Control):
     """A control drawn with OpenGL (the module's documentation)."""
 
     TypeName = "OpenGLView"
@@ -92,13 +117,21 @@ class OpenGLView(Control):
         P("FrameRate", "int", 60, description="How many times a second Animate paints it"),
         P("Animate", "bool", False,
           description="Paint it again and again, FrameRate times a second (at run time)"),
-        *_COMMON,
+        P("Samples", "int", 0,
+          description="Multisampling: samples a pixel (e.g. 4: smoother edges; 0: none); "
+                      "taken when it is first shown"),
+        *(spec for spec in DRAWING_PROPERTIES if spec.name != "AutoRedraw"),
+        P("ForeColor", "color", None,
+          description="The color of the graphics methods' lines and text; unset = the "
+                      "default"),
+        *_FONT, *_COMMON,
     )
 
     def _create_widget(self, parent):
-        self.__dict__.update(_frames=0, _started=time.monotonic(), _loop=None)
+        self.__dict__.update(_frames=0, _started=time.monotonic(), _loop=None,
+                             _initialized=False, _painting=None)
         widget_class = _gl_widget_class()
-        no_gl = QGuiApplication.platformName() in ("offscreen", "minimal")  # (no OpenGL there)
+        no_gl = not self._design_mode and widget_class is not None and not _gl_works()
         if self._design_mode or widget_class is None or no_gl:
             return _placeholder(parent, "OpenGLView" if self._design_mode else
                                 "OpenGLView: no OpenGL here" if widget_class is not None
@@ -106,6 +139,18 @@ class OpenGLView(Control):
         widget = widget_class(parent, self)
         widget.setFocusPolicy(Qt.StrongFocus)
         return widget
+
+    @property
+    def Available(self) -> bool:
+        """Whether OpenGL draws it: False in the designer, without PySide6's
+        QtOpenGLWidgets, or where OpenGL doesn't work (the offscreen platform)."""
+        return hasattr(self._widget, "makeCurrent")
+
+    def _apply_Samples(self, v):
+        if hasattr(self._widget, "makeCurrent") and not self._initialized:
+            surface_format = self._widget.format()
+            surface_format.setSamples(max(0, int(v)))
+            self._widget.setFormat(surface_format)
 
     @property
     def GL(self):
@@ -160,6 +205,35 @@ class OpenGLView(Control):
         if self._loop is not None:
             self._loop.stop()
         super()._dispose()
+
+    # -- the graphics methods (drawing.Drawing), over what OpenGL drew -----------------------
+    def _drawing_surface(self) -> QWidget:
+        return self._widget
+
+    def _apply_ForeColor(self, v):
+        pass  # (just the graphics methods' color: read when they draw)
+
+    def _draw_painter(self, antialias=False):
+        state = self._draw_state()
+        if self._painting is not None and state["painter"] is None:  # (the first in Paint)
+            state["painter"] = QPainter(self._painting)
+        return super()._draw_painter(antialias)
+
+    def _paint_gl(self, widget) -> None:
+        """paintGL: the Paint event (OpenGL, then the graphics methods over
+        it, on widget), then what they drew outside Paint."""
+        state = self._draw_state()
+        self.__dict__["_painting"] = widget
+        try:
+            self._fire("Paint")
+        finally:
+            self.__dict__["_painting"] = None
+            painter, state["painter"] = state["painter"], None
+            if state["image"] is not None:
+                painter = painter or QPainter(widget)
+                painter.drawImage(0, 0, state["image"])
+            if painter is not None:
+                painter.end()
 
 
 # --- QuickView ------------------------------------------------------------------------------------

@@ -63,6 +63,52 @@ def test_opengl_view_without_opengl(form):
     assert view.FrameCount == 0 and view.ElapsedTime >= 0 and view.PixelRatio >= 1
 
 
+def test_opengl_view_graphics_methods(qapp):
+    """The graphics methods over what OpenGL drew: in Paint on its picture,
+    outside Paint kept over every frame until Cls."""
+    from PySide6.QtGui import QColor, QImage
+
+    from vp6 import RGB, vpFSSolid
+
+    class Over(Form):
+        def InitializeComponent(self):
+            self.glvOver = OpenGLView(self, Width=100, Height=80, Samples=4,
+                                      ForeColor=RGB(0, 0, 255))
+
+        def glvOver_Paint(self):
+            view = self.glvOver
+            view.FillStyle, view.FillColor = vpFSSolid, RGB(255, 0, 0)
+            view.Line(10, 10, 40, 40, RGB(255, 0, 0), "BF")  # (OpenGL would have drawn first)
+            view.CurrentX, view.CurrentY = 50, 50
+            view.Print("Hi")
+
+    f = Over()
+    f.Show()
+    try:
+        view = f.glvOver
+        assert not view.Available  # (offscreen: no OpenGL, a program draws another way)
+        assert view.Samples == 4 and view.ScaleWidth == 100 and view.ScaleHeight == 80
+        assert view.TextWidth("Hi") > 0 and view.TextHeight("Hi") > 0
+        assert view._widget.styleSheet() == ""  # (ForeColor: just the graphics methods')
+        frame = QImage(100, 80, QImage.Format_ARGB32_Premultiplied)
+        frame.fill(QColor(0, 0, 0))
+        view._paint_gl(frame)  # (as paintGL would, on its framebuffer)
+        assert frame.pixelColor(25, 25) == QColor(255, 0, 0)
+        assert frame.pixelColor(80, 20) == QColor(0, 0, 0)
+        assert view._draw_state()["painter"] is None and view._draw_state()["image"] is None
+        view.Line(0, 70, 99, 70, RGB(0, 255, 0))  # outside Paint: over every frame
+        frame.fill(QColor(0, 0, 0))
+        view._paint_gl(frame)
+        assert frame.pixelColor(25, 25) == QColor(255, 0, 0)
+        assert frame.pixelColor(60, 70) == QColor(0, 255, 0)
+        view.Cls()
+        frame.fill(QColor(0, 0, 0))
+        view._paint_gl(frame)
+        assert frame.pixelColor(60, 70) == QColor(0, 0, 0)
+    finally:
+        f.Unload()
+
+
 def test_quick_view(form):
     view = form.qmlHello
     view.Context["name"] = "Ada"

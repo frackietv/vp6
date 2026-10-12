@@ -3914,11 +3914,22 @@ def glvScene_Paint(self):
   screen's pixels (2 to one of the control's on a Retina display).
 * `Update()` asks for a Paint; `Animate` paints it `FrameRate` times a
   second; `FrameCount` and `ElapsedTime` (seconds) tell how far it got.
-* Where there is no OpenGL (a headless test platform) it shows a note
-  instead.
+* The graphics methods (`Line`, `Circle`, `Polygon`, `PSet`, `Print`,
+  `PaintPicture`, `Cls`, `TextWidth`, ScaleMode...) draw over OpenGL's
+  picture: in Paint, after the OpenGL calls (release the buffers and shader
+  programs bound first), as on a PictureBox without AutoRedraw; drawn outside
+  Paint, they stay over every frame until `Cls`. `ForeColor` and the Font are
+  theirs.
+* `Samples` smooths its edges (multisampling: e.g. 4), taken when it is
+  first shown.
+* `Available` tells whether OpenGL draws it: False in the designer, without
+  PySide6's QtOpenGLWidgets and where OpenGL doesn't work (the offscreen test
+  platform, where it shows a note instead), so a program can draw some other
+  way (the Projection and Perspectives samples fall back to a PictureBox).
+<!-- keywords: Available, Samples -->
 
 <!-- BEGIN GENERATED: control OpenGLView -->
-Default size 241 × 181. Property groups: Position, Common.
+Default size 241 × 181. Property groups: Position, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
@@ -3926,10 +3937,17 @@ Default size 241 × 181. Property groups: Position, Common.
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `DrawStyle` | enum | 0 - Solid | 0 - Solid, 1 - Dash, 2 - Dot, 3 - Dash-Dot, 4 - Dash-Dot-Dot, 5 - Transparent, 6 - Inside Solid. The lines the graphics methods draw |
+| `DrawWidth` | int | `1` | The width of the lines the graphics methods draw |
+| `FillColor` | color | (default) | The fill of Circle and Line boxes (FillStyle); unset = ForeColor |
+| `FillStyle` | enum | 1 - Transparent | 0 - Solid, 1 - Transparent, 2 - Horizontal Line, 3 - Vertical Line, 4 - Upward Diagonal, 5 - Downward Diagonal, 6 - Cross, 7 - Diagonal Cross. How Circle and Line with a box (B) fill what they draw |
+| `ForeColor` | color | (default) | The color of the graphics methods' lines and text; unset = the default |
 | `FrameRate` | int | `60` | How many times a second Animate paints it |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
+| `Samples` | int | `0` | Multisampling: samples a pixel (e.g. 4: smoother edges; 0: none); taken when it is first shown |
+| `ScaleMode` | enum | 3 - Pixels | 0 - User, 1 - Twips, 2 - Points, 3 - Pixels, 4 - Characters, 5 - Inches, 6 - Millimeters, 7 - Centimeters. The units of the graphics methods, CurrentX / CurrentY, ScaleWidth / ScaleHeight and its mouse events' X, Y (User: set by ScaleLeft, ScaleTop, ScaleWidth, ScaleHeight or Scale) |
 
 Events: `Paint`, `InitializeGL`, `Resize`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Paint`.
 <!-- END GENERATED -->

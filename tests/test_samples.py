@@ -424,6 +424,63 @@ def test_hull_and_overlap():
     assert not module.overlap(square, module.hull([(12, 0), (20, -8), (21, 1)]))
 
 
+def on_picture(form, view, point):
+    """Where OpenGL draws a point (x, y, z, w) by a View: on the picture, and its depth."""
+    x, y, z, w = (sum(r * c for r, c in zip(row, point)) for row in view)
+    pic = form.Surface()
+    return (pic.ScaleWidth / 2 * (1 + x / w), pic.ScaleHeight / 2 * (1 - y / w)), z / w
+
+
+def test_projection_without_opengl(projection):
+    _, module, form = projection
+    # (offscreen: no OpenGL, so the PictureBox draws and there is nothing to choose)
+    assert not form.glView.Available and not form.opengl and form.scene is None
+    assert form.chkOpenGL.Value == vp6.vpUnchecked and not form.chkOpenGL.Enabled
+    assert form.picView.Visible and not form.glView.Visible
+    assert form.Surface() is form.picView
+    form.UseOpenGL(True)
+    assert not form.opengl and form.picView.Visible
+    assert form.glView.Left == form.picView.Left and form.glView.Width == form.picView.Width
+    form.Width, form.Height = 1100, 820
+    QTest.qWait(20)
+    assert (form.glView.Width, form.glView.Height) == (form.picView.Width, form.picView.Height)
+
+
+def test_projection_for_opengl(projection):
+    """OpenGL's projection places points where Project does, nearer ones in
+    front; its vertices are the model's faces (decals apart) and edges."""
+    _, module, form = projection
+    form.SetAngles(20, 30, 40)
+    for kind in (2, 5, 6, "skewed"):
+        if kind == "skewed":  # (an axis dragged: the axes no longer square)
+            form.grip = 1.0
+            form.MoveAxis(0, 100, 500)
+        else:
+            form.SetProjection(kind)
+        projection_rows = form.Projection()
+        view, turn = form.View(projection_rows), form.Orientation()
+        for point in form.model.points:
+            turned = form.Turned(point, turn)
+            place, _ = on_picture(form, view, (*turned, 1.0))
+            assert place == pytest.approx(form.Project(turned, projection_rows))
+        toward = form.Toward(projection_rows)
+        _, near = on_picture(form, view, (*toward, 1.0))
+        _, far = on_picture(form, view, (*(-c for c in toward), 1.0))
+        assert -1 < near < far < 1  # (the depth buffer: nearer, smaller)
+    for index in range(len(module.MODELS)):
+        model = module.model(index)
+        pieces = dict(module.model_vertices(model))
+        faces = [f for part in model.parts if len(part) > 1 for f in part]
+        decals = [f for part in model.parts if len(part) == 1 for f in part]
+        assert len(pieces["faces"]) == sum(3 * (len(f[0]) - 2) for f in faces)
+        assert len(pieces["decals"]) == sum(3 * (len(f[0]) - 2) for f in decals)
+        assert len(pieces["edges"]) == 2 * len(model.edges)
+        assert all(len(v) == module.FLOATS for v in pieces["faces"])
+    axes = dict(module.axis_vertices())
+    assert sorted(axes) == ["back 0", "back 1", "back 2", "front 0", "front 1", "front 2"]
+    assert axes["front 2"][1][:4] == (0.0, 0.0, module.AXIS_LENGTH, 1.0)
+    assert module.rgb(vp6.RGB(255, 128, 0)) == pytest.approx((1.0, 128 / 255, 0.0))
+
 
 # --- Perspectives -------------------------------------------------------------------------
 
@@ -755,3 +812,57 @@ def test_perspective_geometry():
     right, up, forward = module.look(-45, 0)
     assert forward == pytest.approx((-math.sqrt(0.5), math.sqrt(0.5), 0))
     assert up == pytest.approx((0, 0, 1)) and module.dot(right, forward) == pytest.approx(0)
+
+
+def test_perspectives_without_opengl(perspectives):
+    _, _, form = perspectives
+    assert not form.glView.Available and not form.opengl and form.scene is None
+    assert form.chkOpenGL.Value == vp6.vpUnchecked and not form.chkOpenGL.Enabled
+    assert form.picView.Visible and not form.glView.Visible and form.Surface() is form.picView
+
+
+def test_perspectives_for_opengl(perspectives):
+    """OpenGL's linear picture places points where Map does, and a direction
+    (at infinity) at its vanishing point, the farthest; each of the cube's
+    faces sees its own quarter turn around the eye."""
+    _, module, form = perspectives
+    form.SetAngles(20, 30, 40)
+    for kind in (0, 1, 2):
+        choose(form, kind)
+        view, turn, rays = form.View(), form.Orientation(), form.Rays()
+        for point in form.model.points:
+            turned = form.Turned(point, turn)
+            place, depth = on_picture(form, view, (*turned, 1.0))
+            assert place == pytest.approx(form.ToPicture(form.Map(form.Ray(turned))))
+            assert -1 < depth < 1
+        for i, sign, place, _ in form.VanishingPoints():
+            if place is not None:
+                axis = [0.0, 0.0, 0.0, 0.0]
+                axis[i] = sign
+                at, depth = on_picture(form, view, axis)
+                assert at == pytest.approx(place) and depth == pytest.approx(1 - module.EVEN)
+    choose(form, 4)
+    for k, (forward, right, up) in enumerate(module.CUBE):
+        view = form.View(k)
+        for a, b in ((0, 0), (0.5, -0.3), (-0.9, 0.9)):
+            ray = tuple(f + a * r + b * u for f, r, u in zip(forward, right, up))
+            # The point of the world seen along that ray, 2 away
+            point = solve(form.Rows(), tuple(2 * c - o for c, o in zip(ray, form.Eye())))
+            x, y, z, w = (sum(r * c for r, c in zip(row, (*point, 1.0))) for row in view)
+            assert (x / w, y / w) == pytest.approx((module.MARGIN * a, module.MARGIN * b))
+            assert -1 < z / w < 1
+    lines = dict(module.line_vertices())
+    assert sorted(lines) == ["axis 0", "axis 1", "axis 2", "horizon"]
+    assert len(lines["axis 0"]) == 16 and len(lines["horizon"]) == 48
+    assert all(v[3] == 0.0 for v in lines["horizon"])  # (directions: at infinity)
+
+
+def solve(rows, value):
+    """x with rows x = value (Cramer's rule)."""
+    def det(m):
+        return (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+                - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
+    whole = det(rows)
+    return tuple(det([[value[r] if c == k else rows[r][c] for c in range(3)] for r in range(3)])
+                 / whole for k in range(3))

@@ -33,11 +33,26 @@ shaded: only those facing the viewer, the parts back to front, a part's faces
 farthest first. Every part but the torus is convex, so its faces toward the
 viewer never hide each other; which of two parts is in front is found by a
 face's plane with one on each side of it (`Model.separations`: worked out
-once, in the model's own coordinates)."""
+once, in the model's own coordinates).
+
+Where OpenGL works, the picture is an OpenGLView (`glView`): OpenGL draws the
+axes and the faces with a depth buffer, so each pixel shows what is nearest
+(the model hides just the parts of the axes behind it, and the torus needs no
+sorting), shaded by the same light (`Scene`, `VERTEX_SHADER`,
+`FRAGMENT_SHADER`); the axes' names and the wireframe are drawn over it by the
+same graphics methods as on the PictureBox. Without OpenGL (or with OpenGL
+unchecked) the PictureBox (`picView`) shows the picture drawn as above."""
 
 import math
+from array import array
 
 from vp6 import *
+
+try:  # (the shaders and buffers OpenGL draws with; without them: the PictureBox)
+    from PySide6.QtGui import QMatrix4x4, QVector2D, QVector3D, QVector4D
+    from PySide6.QtOpenGL import QOpenGLBuffer, QOpenGLShader, QOpenGLShaderProgram
+except ImportError:
+    QOpenGLShaderProgram = None
 
 AXIS_LENGTH = 2.4  # (the cube is 2 across: from -1 to 1)
 AXES = (((1, 0, 0), RGB(230, 76, 60), "X"), ((0, 1, 0), RGB(80, 200, 100), "Y"),
@@ -346,6 +361,204 @@ def model(index):
     return _built[index]
 
 
+# --- OpenGL ----------------------------------------------------------------------------------
+# OpenGL's numbers (Qt's OpenGL functions take them as they are)
+GL_LINES, GL_TRIANGLES = 0x0001, 0x0004
+GL_DEPTH_BUFFER_BIT, GL_COLOR_BUFFER_BIT = 0x0100, 0x4000
+GL_DEPTH_TEST, GL_LEQUAL, GL_POLYGON_OFFSET_FILL, GL_FLOAT = 0x0B71, 0x0203, 0x8037, 0x1406
+DEPTH = 4.0  # how far in front of and behind the center the depth buffer reaches
+
+# The shaders: OpenGL's own language (GLSL 1.10, which OpenGL ES 2 takes too). A
+# vertex's position goes through the model's turn (turn: none for the axes) and the
+# projection (view); a line's other end gives its direction on the picture, along
+# which dash makes it dotted (on, period: OpenGL's pixels; period 0: solid). A face
+# is shaded as in DrawSolid; facing away from the eye, it is hidden (unless its part
+# is closed: then the eye is inside it, and it is seen from inside).
+VERTEX_SHADER = """
+attribute vec4 position;
+attribute vec4 other;
+attribute vec3 normal;
+attribute vec3 color;
+attribute float closed;
+uniform mat4 view;
+uniform mat4 turn;
+uniform vec2 pixels;
+varying vec3 v_world;
+varying vec3 v_normal;
+varying vec3 v_color;
+varying float v_closed;
+varying vec2 v_along;
+void main() {
+    vec4 world = turn * position;
+    vec4 here = view * world;
+    vec4 there = view * (turn * other);
+    vec2 along = (there.xy * here.w - here.xy * there.w) * pixels;
+    if (along.x < 0.0 || (along.x == 0.0 && along.y < 0.0)) along = -along;
+    v_along = length(along) > 0.0 ? normalize(along) : vec2(1.0, 0.0);
+    v_world = world.xyz;
+    v_normal = (turn * vec4(normal, 0.0)).xyz;
+    v_color = color;
+    v_closed = closed;
+    gl_Position = here;
+}
+"""
+FRAGMENT_SHADER = """
+#ifdef GL_ES
+precision highp float;
+#endif
+uniform vec4 eye;
+uniform vec3 light;
+uniform float lit;
+uniform vec2 dash;
+varying vec3 v_world;
+varying vec3 v_normal;
+varying vec3 v_color;
+varying float v_closed;
+varying vec2 v_along;
+void main() {
+    vec3 color = v_color;
+    if (lit > 0.5) {
+        vec3 n = normalize(v_normal);
+        if (dot(n, eye.xyz - eye.w * v_world) <= 0.0) {
+            if (v_closed < 0.5) discard;
+            n = -n;
+        }
+        color *= 0.35 + 0.65 * max(0.0, dot(n, light));
+    }
+    if (dash.y > 0.0 && mod(dot(gl_FragCoord.xy, v_along), dash.y) >= dash.x) discard;
+    gl_FragColor = vec4(color, 1.0);
+}
+"""
+# A vertex in a buffer: its position (x, y, z, w: 0 for a direction), a line's
+# other end, its normal, its color and whether its part is closed: (name, floats)
+ATTRIBUTES = (("position", 4), ("other", 4), ("normal", 3), ("color", 3), ("closed", 1))
+FLOATS = sum(size for _, size in ATTRIBUTES)
+
+
+def vertex(position, other=None, normal=(0.0, 0.0, 0.0), color=(1.0, 1.0, 1.0), closed=0.0):
+    """A vertex's floats: a point is (x, y, z), or (x, y, z, w)."""
+    position = tuple(position) + (1.0,) * (4 - len(position))
+    other = position if other is None else tuple(other) + (1.0,) * (4 - len(other))
+    return (*position, *other, *normal, *color, float(closed))
+
+
+def rgb(color):
+    """A color (RGB()) as OpenGL's red, green and blue, from 0 to 1."""
+    return (color & 0xFF) / 255, (color >> 8 & 0xFF) / 255, (color >> 16 & 0xFF) / 255
+
+
+def matrix(rows):
+    """A 4x4 matrix (rows) for OpenGL; a 3x3 one is a turn."""
+    if len(rows) == 3:
+        rows = [tuple(row) + (0.0,) for row in rows] + [(0.0, 0.0, 0.0, 1.0)]
+    return QMatrix4x4(*[float(v) for row in rows for v in row])
+
+
+def model_vertices(model):
+    """A model's pieces for OpenGL: its faces as triangles (fans), those of
+    parts that are a single face (decals: on another part's face) apart, and
+    its edges as lines."""
+    triangles, decals, lines = [], [], []
+    for part in model.parts:
+        closed = model.convex and len(part) >= 4  # (a solid: the eye can be inside it)
+        into = decals if len(part) == 1 else triangles
+        for corners, normal, color in part:
+            color = tuple(c / 255 for c in color)
+            for k in range(1, len(corners) - 1):
+                into += [vertex(c, normal=normal, color=color, closed=closed)
+                              for c in (corners[0], corners[k], corners[k + 1])]
+    outline = rgb(RGB(20, 20, 30))
+    for a, b in model.edges:
+        lines += [vertex(a, b, color=outline), vertex(b, a, color=outline)]
+    return [("faces", triangles), ("decals", decals), ("edges", lines)]
+
+
+def axis_vertices():
+    """The axes for OpenGL: each one's negative half (back) and positive half (front)."""
+    pieces = []
+    for i, (axis, color, _) in enumerate(AXES):
+        end = tuple(AXIS_LENGTH * a for a in axis)
+        back, color = tuple(-c for c in end), rgb(color)
+        pieces += [(f"back {i}", [vertex(back, (0, 0, 0), color=color),
+                                  vertex((0, 0, 0), back, color=color)]),
+                   (f"front {i}", [vertex((0, 0, 0), end, color=color),
+                                   vertex(end, (0, 0, 0), color=color)])]
+    return pieces
+
+
+class Scene:
+    """What OpenGL draws with, made in InitializeGL (its context current): the
+    shader program, and buffers of vertices made the first time they're drawn
+    (their pieces: name -> (first vertex, count))."""
+
+    def __init__(self):
+        program = QOpenGLShaderProgram()
+        if not (program.addShaderFromSourceCode(QOpenGLShader.Vertex, VERTEX_SHADER)
+                and program.addShaderFromSourceCode(QOpenGLShader.Fragment, FRAGMENT_SHADER)
+                and program.link()):
+            raise RuntimeError(program.log())
+        self.program = program
+        self.buffers = {}
+
+    def Buffer(self, key, make):
+        """The buffer called key, made from make()'s pieces: [(name, vertices)]."""
+        if key not in self.buffers:
+            data, pieces = array("f"), {}
+            for name, vertices in make():
+                pieces[name] = (len(data) // FLOATS, len(vertices))
+                for v in vertices:
+                    data.extend(v)
+            buffer = QOpenGLBuffer(QOpenGLBuffer.VertexBuffer)
+            buffer.create()
+            buffer.bind()
+            buffer.allocate(data.tobytes(), len(data) * data.itemsize)
+            buffer.release()
+            self.buffers[key] = buffer, pieces
+        return self.buffers[key]
+
+    def Begin(self, view, pixels, eye, light):
+        """The program with what every piece shares: the projection (rows), the
+        picture's size (OpenGL's pixels), the eye (x, y, z, w: 0 for the way
+        toward it) and the light."""
+        program = self.program
+        program.bind()
+        program.setUniformValue("view", matrix(view))
+        program.setUniformValue("pixels", QVector2D(*pixels))
+        program.setUniformValue("eye", QVector4D(*eye))
+        program.setUniformValue("light", QVector3D(*light))
+
+    def Draw(self, gl, key, make, names, mode, turn=None, lit=False, width=1.0,
+             dash=(0.0, 0.0)):
+        """Pieces of a buffer: triangles (lit: shaded) or lines (width, dash)."""
+        buffer, pieces = self.Buffer(key, make)
+        program = self.program
+        program.setUniformValue("turn", matrix(turn or ((1, 0, 0), (0, 1, 0), (0, 0, 1))))
+        program.setUniformValue1f("lit", 1.0 if lit else 0.0)
+        program.setUniformValue("dash", QVector2D(*dash))
+        gl.glLineWidth(width)
+        buffer.bind()
+        offset = 0
+        for name, size in ATTRIBUTES:
+            program.enableAttributeArray(name)
+            program.setAttributeBuffer(name, GL_FLOAT, offset * 4, size, FLOATS * 4)
+            offset += size
+        for name in names:
+            first, count = pieces[name]
+            gl.glDrawArrays(mode, first, count)
+        for name, _ in ATTRIBUTES:
+            program.disableAttributeArray(name)
+        buffer.release()
+
+    def End(self):
+        self.program.release()  # (the graphics methods draw next)
+
+    def Destroy(self):
+        for buffer, _ in self.buffers.values():
+            buffer.destroy()
+        self.buffers.clear()
+        self.program.removeAllShaders()
+
+
 class Form1(Form):
     # region VP6 Designer - generated by the form designer, do not edit
     def InitializeComponent(self):
@@ -355,89 +568,95 @@ class Form1(Form):
         self.picView = PictureBox(self, Left=12, Top=12, Width=588, Height=720, AutoRedraw=True,
                                   BackColor=0x302420, ForeColor=0xE0E0E0, TabIndex=1,
                                   ToolTipText="Drag an axis's end to move it, the model to turn it, the space around them to turn the axes; double-click: the projection again")
+        self.glView = OpenGLView(self, Left=12, Top=12, Width=588, Height=720, Samples=4,
+                                 Visible=False, TabIndex=2,
+                                 ToolTipText="Drag an axis's end to move it, the model to turn it, the space around them to turn the axes; double-click: the projection again")
         self.lblProjection = Label(self, Caption='&Projection:', Left=616, Top=12, Width=268,
-                                   Height=20, TabIndex=2)
+                                   Height=20, TabIndex=3)
         self.cboProjection = ComboBox(self, Style=2, Left=616, Top=34, Width=268, Height=25,
                                       List=['Elevation (orthographic)', 'Plan (orthographic)', 'Isometric (orthographic)', 'Dimetric (orthographic)', 'Trimetric (orthographic)', 'Military (oblique)', 'Cavalier (oblique)', 'Top-down (oblique)'],
-                                      TabIndex=3,
+                                      TabIndex=4,
                                       ToolTipText='The parallel projection to draw with')
-        self.cmdReset = CommandButton(self, Caption='&Reset view', Left=616, Top=68, Width=268,
-                                      Height=30, TabIndex=4,
+        self.cmdReset = CommandButton(self, Caption='&Reset view', Left=616, Top=68, Width=176,
+                                      Height=30, TabIndex=5,
                                       ToolTipText='The projection chosen again, its axes where they belong')
+        self.chkOpenGL = CheckBox(self, Caption='Open&GL', Left=800, Top=71, Width=84, Height=24,
+                                  Value=1, TabIndex=6,
+                                  ToolTipText="Draw the axes and the model with OpenGL (each pixel the nearest, by a depth buffer), or with the PictureBox's graphics methods; off where there is no OpenGL")
         self.chkWireframe = CheckBox(self, Caption='&Wireframe', Left=616, Top=106, Width=130,
-                                     Height=24, TabIndex=5,
+                                     Height=24, TabIndex=7,
                                      ToolTipText="The model's edges, or its faces solid and shaded")
         self.chkRotate = CheckBox(self, Caption='R&otate', Left=754, Top=106, Width=130, Height=24,
-                                  Value=1, TabIndex=6,
+                                  Value=1, TabIndex=8,
                                   ToolTipText='Turn the model at the rates below')
         self.lblModel = Label(self, Caption='Model', Left=616, Top=142, Width=268, Height=20,
-                              FontBold=True, TabIndex=7)
+                              FontBold=True, TabIndex=9)
         self.optModel = ControlArray()
         self.optModel[0] = OptionButton(self, Caption='&Cube', Left=616, Top=164, Width=88,
-                                        Height=24, Value=True, TabIndex=8,
+                                        Height=24, Value=True, TabIndex=10,
                                         ToolTipText='The model to draw')
         self.optModel[1] = OptionButton(self, Caption='P&yramid', Left=706, Top=164, Width=88,
-                                        Height=24, TabIndex=9, ToolTipText='The model to draw')
-        self.optModel[2] = OptionButton(self, Caption='&Torus', Left=796, Top=164, Width=88,
-                                        Height=24, TabIndex=10, ToolTipText='The model to draw')
-        self.optModel[3] = OptionButton(self, Caption='&House', Left=616, Top=190, Width=88,
                                         Height=24, TabIndex=11, ToolTipText='The model to draw')
-        self.optModel[4] = OptionButton(self, Caption='&Boxes', Left=706, Top=190, Width=88,
+        self.optModel[2] = OptionButton(self, Caption='&Torus', Left=796, Top=164, Width=88,
                                         Height=24, TabIndex=12, ToolTipText='The model to draw')
-        self.optModel[5] = OptionButton(self, Caption='&Downtown', Left=796, Top=190, Width=88,
+        self.optModel[3] = OptionButton(self, Caption='&House', Left=616, Top=190, Width=88,
                                         Height=24, TabIndex=13, ToolTipText='The model to draw')
+        self.optModel[4] = OptionButton(self, Caption='&Boxes', Left=706, Top=190, Width=88,
+                                        Height=24, TabIndex=14, ToolTipText='The model to draw')
+        self.optModel[5] = OptionButton(self, Caption='&Downtown', Left=796, Top=190, Width=88,
+                                        Height=24, TabIndex=15, ToolTipText='The model to draw')
         self.lblTurns = Label(self, Caption="The model's turn (degrees)", Left=616, Top=222,
-                              Width=268, Height=20, FontBold=True, TabIndex=14)
+                              Width=268, Height=20, FontBold=True, TabIndex=16)
         self.lblRoll = Label(self, Caption='Roll (X)', Left=616, Top=250, Width=76, Height=20,
-                             TabIndex=15)
+                             TabIndex=17)
         self.sldRoll = Slider(self, Left=692, Top=244, Width=146, Height=30, Min=-180, Max=180,
-                              LargeChange=15, TickStyle=3, TabIndex=16,
+                              LargeChange=15, TickStyle=3, TabIndex=18,
                               ToolTipText="The model's turn around X")
         self.lblRollValue = Label(self, Caption='0°', Left=840, Top=250, Width=44, Height=20,
-                                  Alignment=1, TabIndex=17)
+                                  Alignment=1, TabIndex=19)
         self.lblPitch = Label(self, Caption='Pitch (Y)', Left=616, Top=284, Width=76, Height=20,
-                              TabIndex=18)
+                              TabIndex=20)
         self.sldPitch = Slider(self, Left=692, Top=278, Width=146, Height=30, Min=-180, Max=180,
-                               LargeChange=15, TickStyle=3, TabIndex=19,
+                               LargeChange=15, TickStyle=3, TabIndex=21,
                                ToolTipText="The model's turn around Y")
         self.lblPitchValue = Label(self, Caption='0°', Left=840, Top=284, Width=44, Height=20,
-                                   Alignment=1, TabIndex=20)
+                                   Alignment=1, TabIndex=22)
         self.lblTumble = Label(self, Caption='Tumble (Z)', Left=616, Top=318, Width=76, Height=20,
-                               TabIndex=21)
+                               TabIndex=23)
         self.sldTumble = Slider(self, Left=692, Top=312, Width=146, Height=30, Min=-180, Max=180,
-                                LargeChange=15, TickStyle=3, TabIndex=22,
+                                LargeChange=15, TickStyle=3, TabIndex=24,
                                 ToolTipText="The model's turn around Z")
         self.lblTumbleValue = Label(self, Caption='0°', Left=840, Top=318, Width=44, Height=20,
-                                    Alignment=1, TabIndex=23)
+                                    Alignment=1, TabIndex=25)
         self.lblRates = Label(self, Caption='Rates (of full speed)', Left=616, Top=356, Width=268,
-                              Height=20, FontBold=True, TabIndex=24)
+                              Height=20, FontBold=True, TabIndex=26)
         self.lblRollRate = Label(self, Caption='Roll', Left=616, Top=384, Width=76, Height=20,
-                                 TabIndex=25)
+                                 TabIndex=27)
         self.sldRollRate = Slider(self, Left=692, Top=378, Width=146, Height=30, Max=100, Value=15,
-                                  LargeChange=10, TickStyle=3, TabIndex=26,
+                                  LargeChange=10, TickStyle=3, TabIndex=28,
                                   ToolTipText='How fast Rotate rolls the model')
         self.lblRollRateValue = Label(self, Caption='15%', Left=840, Top=384, Width=44, Height=20,
-                                      Alignment=1, TabIndex=27)
+                                      Alignment=1, TabIndex=29)
         self.lblPitchRate = Label(self, Caption='Pitch', Left=616, Top=418, Width=76, Height=20,
-                                  TabIndex=28)
+                                  TabIndex=30)
         self.sldPitchRate = Slider(self, Left=692, Top=412, Width=146, Height=30, Max=100,
-                                   Value=10, LargeChange=10, TickStyle=3, TabIndex=29,
+                                   Value=10, LargeChange=10, TickStyle=3, TabIndex=31,
                                    ToolTipText='How fast Rotate pitches the model')
         self.lblPitchRateValue = Label(self, Caption='10%', Left=840, Top=418, Width=44, Height=20,
-                                       Alignment=1, TabIndex=30)
+                                       Alignment=1, TabIndex=32)
         self.lblTumbleRate = Label(self, Caption='Tumble', Left=616, Top=452, Width=76, Height=20,
-                                   TabIndex=31)
+                                   TabIndex=33)
         self.sldTumbleRate = Slider(self, Left=692, Top=446, Width=146, Height=30, Max=100,
-                                    Value=40, LargeChange=10, TickStyle=3, TabIndex=32,
+                                    Value=40, LargeChange=10, TickStyle=3, TabIndex=34,
                                     ToolTipText='How fast Rotate tumbles the model')
         self.lblTumbleRateValue = Label(self, Caption='40%', Left=840, Top=452, Width=44,
-                                        Height=20, Alignment=1, TabIndex=33)
+                                        Height=20, Alignment=1, TabIndex=35)
         self.lblAxes = Label(self, Caption='Angles between the axes', Left=616, Top=490, Width=268,
-                             Height=20, FontBold=True, TabIndex=34)
+                             Height=20, FontBold=True, TabIndex=36)
         self.lblAngles = Label(self, Caption='', Left=616, Top=512, Width=268, Height=64,
-                               TabIndex=35)
+                               TabIndex=37)
         self.lblView = Label(self, Caption='', Left=616, Top=584, Width=268, Height=148,
-                             WordWrap=True, TabIndex=36)
+                             WordWrap=True, TabIndex=38)
         self.tmrSpin = Timer(self, Left=616, Top=700, Interval=30)
     # endregion
 
@@ -446,22 +665,50 @@ class Form1(Form):
         self.drag = None  # what the mouse is dragging: ("axis", i), ("model",), ("space",)
         self.model = model(0)
         self.syncing = False  # (the sliders being set from the angles: no Change)
+        self.opengl = False  # (drawing with OpenGL: see UseOpenGL)
+        self.scene = None  # what OpenGL draws with (made in glView_InitializeGL)
         self.SetProjection(ISOMETRIC)
         self.cboProjection.ListIndex = ISOMETRIC  # (its Click sets it again)
         self.ShowAngles()
+        # OpenGL where it works: otherwise the PictureBox, and no choice
+        available = self.glView.Available and QOpenGLShaderProgram is not None
+        self.chkOpenGL.Enabled = available
+        self.chkOpenGL.Value = vpChecked if available else vpUnchecked
+        self.UseOpenGL(available)
 
     def Form_Resize(self):
         # The picture takes what the controls on the right leave
+        for pic in (self.picView, self.glView):
+            pic.Width = max(120, self.ScaleWidth - 312)
+            pic.Height = max(120, self.ScaleHeight - 24)
         pic = self.picView
-        pic.Width = max(120, self.ScaleWidth - 312)
-        pic.Height = max(120, self.ScaleHeight - 24)
         shift = pic.Left + pic.Width + 16 - self.cboProjection.Left
         for control in self.PanelControls():
             control.Left += shift
         self.Draw()
 
+    def Form_Unload(self):
+        if self.scene is not None:  # (its buffers and shaders go with OpenGL's context)
+            self.glView.MakeCurrent()
+            self.scene.Destroy()
+            self.scene = None
+
     def PanelControls(self):
-        return [c for c in self.Controls if c is not self.picView and not isinstance(c, Timer)]
+        return [c for c in self.Controls
+                if c is not self.picView and c is not self.glView and not isinstance(c, Timer)]
+
+    # --- the surface: OpenGL or the PictureBox ---------------------------------------------
+    def UseOpenGL(self, on):
+        """Draw with OpenGL, on the OpenGLView, or with the graphics methods, on
+        the PictureBox (where OpenGL doesn't work, always)."""
+        self.opengl = bool(on) and self.glView.Available
+        self.glView.Visible = self.opengl
+        self.picView.Visible = not self.opengl
+        self.Draw()
+
+    def Surface(self):
+        """What the picture is drawn on (the same size either way)."""
+        return self.glView if self.opengl else self.picView
 
     # --- the projection --------------------------------------------------------------------
     def SetProjection(self, index):
@@ -499,14 +746,14 @@ class Form1(Form):
         return normalized(toward) if dot(toward, toward) > TOLERANCE else None
 
     def Scale(self):
-        pic = self.picView
+        pic = self.Surface()
         return min(pic.ScaleWidth, pic.ScaleHeight) / (2.4 * AXIS_LENGTH)
 
     def Project(self, point, projection=None):
         """A point's place on the picture: x times X's screen vector, plus y
         times Y's, plus z times Z's (how far it is along the view is lost)."""
         sx, sy = times(projection or self.Projection(), point)
-        pic, size = self.picView, self.Scale()
+        pic, size = self.Surface(), self.Scale()
         return pic.ScaleWidth / 2 + size * sx, pic.ScaleHeight / 2 - size * sy
 
     def AxisAngles(self):
@@ -587,14 +834,16 @@ class Form1(Form):
     def Draw(self):
         if not hasattr(self, "skew"):  # (a Resize before Form_Load)
             return
-        pic = self.picView
         projection = self.Projection()
-        pic.Cls()
-        self.DrawAxes(projection)
-        if self.chkWireframe.Value == vpChecked or self.Toward(projection) is None:
-            self.DrawWireframe(projection)
+        if self.opengl:
+            self.glView.Update()  # (glView_Paint draws it)
         else:
-            self.DrawSolid(projection)
+            self.picView.Cls()
+            self.DrawAxes(projection)
+            if self.Solid(projection):
+                self.DrawSolid(projection)
+            else:
+                self.DrawWireframe(projection)
         angles = self.AxisAngles()
         self.lblAngles.Caption = "\n".join(
             f"{pair}:  " + ("—" if angle is None else f"{angle:.1f}°")
@@ -608,18 +857,32 @@ class Form1(Form):
             "Drag an axis's end to move it, the model to turn it, the space around them to "
             "turn the axes; double-click for the projection again.")
 
-    def DrawAxes(self, projection):
+    def Solid(self, projection):
+        """Whether the model is drawn solid (not as a wireframe, and the
+        projection tells near from far)."""
+        return self.chkWireframe.Value != vpChecked and self.Toward(projection) is not None
+
+    def Light(self, projection):
+        """Where the light comes from: above the viewer's left shoulder."""
+        toward = self.Toward(projection)
+        right, up = normalized(projection[0]), normalized(projection[1])
+        return normalized(tuple(0.75 * t + 0.55 * u - 0.35 * r
+                                for r, u, t in zip(right, up, toward)))
+
+    def DrawAxes(self, projection, lines=True):
         """The axes through the model's center: the negative halves dotted, then
-        the positive ones with their names (the one being dragged thicker)."""
-        pic = self.picView
+        the positive ones with their names (the one being dragged thicker);
+        just the names over the axes OpenGL drew (lines False)."""
+        pic = self.Surface()
         origin = self.Project((0, 0, 0), projection)
         for i, (axis, color, name) in enumerate(AXES):
             end = self.Project(tuple(AXIS_LENGTH * a for a in axis), projection)
             back = self.Project(tuple(-AXIS_LENGTH * a for a in axis), projection)
-            pic.DrawWidth, pic.DrawStyle = 1, vpDot
-            pic.Line(back[0], back[1], origin[0], origin[1], color)
-            pic.DrawWidth, pic.DrawStyle = (4 if self.drag == ("axis", i) else 2), vpSolid
-            pic.Line(origin[0], origin[1], end[0], end[1], color)
+            if lines:
+                pic.DrawWidth, pic.DrawStyle = 1, vpDot
+                pic.Line(back[0], back[1], origin[0], origin[1], color)
+                pic.DrawWidth, pic.DrawStyle = (4 if self.drag == ("axis", i) else 2), vpSolid
+                pic.Line(origin[0], origin[1], end[0], end[1], color)
             label = self.LabelPlace(i, projection)
             pic.CurrentX = label[0] - pic.TextWidth(name) / 2
             pic.CurrentY = label[1] - pic.TextHeight(name) / 2
@@ -632,7 +895,7 @@ class Form1(Form):
 
     def DrawWireframe(self, projection):
         """The model's edges, its corners dotted."""
-        pic = self.picView
+        pic = self.Surface()
         orientation = self.Orientation()
         place = {point: self.Project(self.Turned(point, orientation), projection)
                  for point in self.model.points}
@@ -649,11 +912,8 @@ class Form1(Form):
     def DrawSolid(self, projection):
         """The faces toward the viewer, the parts back to front (a part's own
         faces farthest first), lit from above the viewer's left shoulder."""
-        pic = self.picView
-        toward = self.Toward(projection)
-        right, up = normalized(projection[0]), normalized(projection[1])
-        light = normalized(tuple(0.75 * t + 0.55 * u - 0.35 * r
-                                 for r, u, t in zip(right, up, toward)))
+        pic = self.Surface()
+        toward, light = self.Toward(projection), self.Light(projection)
         orientation = self.Orientation()
         place = {point: self.Project(self.Turned(point, orientation), projection)
                  for point in self.model.points}
@@ -707,6 +967,69 @@ class Form1(Form):
             order.append(index)
         return order
 
+    # --- drawing with OpenGL ----------------------------------------------------------------
+    def glView_InitializeGL(self):
+        """OpenGL is ready: the shaders (if they can't be made, the PictureBox
+        draws, and says why in its tooltip)."""
+        try:
+            self.scene = Scene()
+        except RuntimeError as error:
+            self.scene = None
+            self.chkOpenGL.ToolTipText = f"OpenGL's shaders didn't compile: {error}"
+            self.chkOpenGL.Value = vpUnchecked  # (its Click: the PictureBox)
+            self.chkOpenGL.Enabled = False
+
+    def View(self, projection):
+        """The projection for OpenGL (rows of a 4x4 matrix): x and y as Project
+        places them, from -1 to 1 across the picture; the depth (z) nearer the
+        nearer a point is toward the viewer."""
+        pic, size = self.Surface(), self.Scale()
+        across, up = 2 * size / pic.ScaleWidth, 2 * size / pic.ScaleHeight
+        toward = self.Toward(projection) or (0.0, 0.0, 0.0)
+        return (tuple(across * c for c in projection[0]) + (0.0,),
+                tuple(up * c for c in projection[1]) + (0.0,),
+                tuple(-c / DEPTH for c in toward) + (0.0,), (0.0, 0.0, 0.0, 1.0))
+
+    def glView_Paint(self):
+        """The axes and the faces by OpenGL, nearest first by the depth buffer
+        (the faces' edges drawn on them); then the axes' names and the
+        wireframe over them, by the graphics methods."""
+        gl, scene = self.glView.GL, self.scene
+        if gl is None or scene is None or not hasattr(self, "skew"):
+            return
+        projection = self.Projection()
+        solid = self.Solid(projection)
+        pic, ratio = self.glView, self.glView.PixelRatio  # (OpenGL counts the screen's pixels)
+        gl.glClearColor(*rgb(self.picView.BackColor), 1.0)
+        gl.glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        gl.glEnable(GL_DEPTH_TEST)
+        gl.glDepthFunc(GL_LEQUAL)
+        toward = self.Toward(projection) or (0.0, 0.0, 1.0)
+        scene.Begin(self.View(projection), (pic.ScaleWidth * ratio, pic.ScaleHeight * ratio),
+                    (*toward, 0.0), self.Light(projection) if solid else toward)
+        for i in range(3):
+            scene.Draw(gl, "axes", axis_vertices, [f"back {i}"], GL_LINES, width=ratio,
+                       dash=(ratio, 3 * ratio))
+            scene.Draw(gl, "axes", axis_vertices, [f"front {i}"], GL_LINES,
+                       width=(4 if self.drag == ("axis", i) else 2) * ratio)
+        if solid:
+            turn, key = self.Orientation(), ("model", self.model.name)
+            model = self.model
+            gl.glEnable(GL_POLYGON_OFFSET_FILL)
+            # The faces a little behind their edges, and behind the decals on them
+            for piece, offset in (("faces", 4.0), ("decals", 2.0)):
+                gl.glPolygonOffset(offset, offset)
+                scene.Draw(gl, key, lambda: model_vertices(model), [piece], GL_TRIANGLES,
+                           turn, lit=True)
+            gl.glDisable(GL_POLYGON_OFFSET_FILL)
+            scene.Draw(gl, key, lambda: model_vertices(model), ["edges"], GL_LINES, turn,
+                       width=ratio)
+        scene.End()
+        gl.glDisable(GL_DEPTH_TEST)
+        self.DrawAxes(projection, lines=False)
+        if not solid:
+            self.DrawWireframe(projection)
+
     # --- the mouse -------------------------------------------------------------------------
     def HitTest(self, X, Y):
         """What is at a point of the picture: an axis's end, the model, an
@@ -752,7 +1075,7 @@ class Form1(Form):
 
     def picView_MouseMove(self, Button, Shift, X, Y):
         if self.drag is None or not Button & vpLeftButton:
-            self.picView.MousePointer = {"axis": vpCrosshair, "model": vpSizeAll}.get(
+            self.Surface().MousePointer = {"axis": vpCrosshair, "model": vpSizeAll}.get(
                 self.HitTest(X, Y)[0], vpDefault)
             return
         if self.drag[0] == "axis":
@@ -794,6 +1117,18 @@ class Form1(Form):
     def picView_DblClick(self):
         self.SetProjection(self.kind)
 
+    def glView_MouseDown(self, Button, Shift, X, Y):
+        self.picView_MouseDown(Button, Shift, X, Y)
+
+    def glView_MouseMove(self, Button, Shift, X, Y):
+        self.picView_MouseMove(Button, Shift, X, Y)
+
+    def glView_MouseUp(self, Button, Shift, X, Y):
+        self.picView_MouseUp(Button, Shift, X, Y)
+
+    def glView_DblClick(self):
+        self.picView_DblClick()
+
     # --- the controls ----------------------------------------------------------------------
     def tmrSpin_Timer(self):
         if self.chkRotate.Value == vpChecked and self.drag != ("model",):
@@ -818,6 +1153,9 @@ class Form1(Form):
 
     def chkRotate_Click(self):
         self.Draw()
+
+    def chkOpenGL_Click(self):
+        self.UseOpenGL(self.chkOpenGL.Value == vpChecked)
 
     def sldRoll_Scroll(self):
         self.AnglesSlid()

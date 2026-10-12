@@ -1,5 +1,6 @@
-"""Kitchen Sink page: OpenGLView (drawn with OpenGL in its Paint event, Animate repaints it
-30 times a second) and QuickView (a Qt Quick user interface written in QML, talking to the
+"""Kitchen Sink page: OpenGLView (drawn with OpenGL in its Paint event, then the graphics
+methods over it; Animate repaints it 30 times a second; Samples smooths it; Available
+tells whether OpenGL works here) and QuickView (a Qt Quick user interface written in QML, talking to the
 form: context values in, QmlEvent and vp6.set out)."""
 
 import colorsys
@@ -42,7 +43,7 @@ class pgGL(Form):
         self.Width = 640
         self.Height = 440
         self.glvSpin = OpenGLView(self, Left=16, Top=16, Width=296, Height=260, FrameRate=30,
-                                  Animate=True, TabIndex=1,
+                                  Animate=True, Samples=4, ForeColor=0xFFFFFF, TabIndex=1,
                                   ToolTipText='An OpenGLView: its Paint event draws with OpenGL')
         self.lblGL = Label(self, Caption='', Left=16, Top=284, Width=296, Height=44, WordWrap=True,
                            TabIndex=2)
@@ -58,6 +59,8 @@ class pgGL(Form):
     def Form_Load(self):
         self.qmlHello.Context["name"] = App.Title or "VP6"  # (context.name in QML)
         self.qmlHello.QmlText = QML
+        if not self.glvSpin.Available:  # (no OpenGL here: a program draws some other way)
+            self.lblGL.Caption = "Available is False: no OpenGL here"
 
     def glvSpin_InitializeGL(self):
         self.lblGL.Caption = "InitializeGL: OpenGL is ready"
@@ -79,6 +82,11 @@ class pgGL(Form):
         gl.glClearColor(r, g, b, 1)
         gl.glClear(GL_COLOR_BUFFER_BIT)
         gl.glDisable(GL_SCISSOR_TEST)
+        # Then the graphics methods, over what OpenGL drew
+        view = self.glvSpin
+        view.Circle(x / ratio + 40, view.ScaleHeight - 130, 52)
+        view.CurrentX, view.CurrentY = 8, 8
+        view.Print(f"Frame {view.FrameCount}")
 
     def chkAnimate_Click(self):
         self.glvSpin.Animate = self.chkAnimate.Value == vpChecked

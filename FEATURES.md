@@ -1,5 +1,21 @@
 # VP6 features
 
+**Version:** 0.4.60
+**Date:** 2026-10-12
+
+## Sample Projects
+
+- Projection and Perspectives draw with OpenGL where it works: the model's faces and the axes or perspective lines with a depth buffer, so each pixel shows what is nearest (the model hides just the parts of the lines behind it; the torus and parts that cross need no sorting), shaded by the same light, smoothed by multisampling
+- Perspectives' curvilinear pictures (cylindrical, fisheye, spherical) are drawn as six linear pictures around the eye, then each pixel looked up on them, so every line and edge bends as it should
+- The names, the wireframe, the vanishing points and the rims are drawn over OpenGL's picture as before; dragging, double-clicking and the controls work the same on both
+- An OpenGL check box beside Reset view switches between OpenGL and the PictureBox drawn with the graphics methods; without OpenGL (or when its shaders don't compile) the PictureBox draws, and the box is off and disabled
+
+## Controls
+
+- OpenGLView: the graphics methods (Line, Circle, Polygon, PSet, Print, PaintPicture, Cls, TextWidth, ScaleMode, CurrentX/CurrentY, ForeColor, Font) draw over what OpenGL drew in Paint; drawn outside Paint, they stay over every frame until Cls
+- OpenGLView.Available: whether OpenGL draws it (False in the designer, without QtOpenGLWidgets, or where OpenGL doesn't work), so a program can draw another way; OpenGLView.Samples: multisampling for smoother edges
+- The Kitchen Sink's OpenGL page shows them: Samples, a circle and the frame count over OpenGL's square, Available
+
 **Version:** 0.4.59
 **Date:** 2026-10-12
 
