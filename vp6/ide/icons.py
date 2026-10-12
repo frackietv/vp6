@@ -851,6 +851,22 @@ def _console(p):
           Qt.AlignLeft | Qt.AlignVCenter)
 
 
+def _chat(p):  # a speech bubble with a spark: Claude's sessions
+    path = QPainterPath()
+    path.addRoundedRect(QRectF(2, 3, 20, 14), 4, 4)
+    tail = QPainterPath()
+    tail.moveTo(6, 16)
+    tail.lineTo(5, 21)
+    tail.lineTo(11, 16.5)
+    p.setBrush(C.paper)
+    p.drawPath(path.united(tail))
+    p.setPen(QPen(QColor("#d97757"), 1.6))
+    for angle in range(0, 180, 45):
+        dx, dy = 4 * math.cos(math.radians(angle)), 4 * math.sin(math.radians(angle))
+        p.drawLine(QPointF(12 - dx, 10 - dy), QPointF(12 + dx, 10 + dy))
+    p.setPen(QPen(C.ink, 1))
+
+
 _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
@@ -865,7 +881,7 @@ _DRAWERS = {
     "CodeBox": _codebox, "MarkdownBox": _markdownbox, "FlexGrid": _flexgrid,
     "DockPanel": _dockpanel, "UserControl": _usercontrol,
     "CommonDialog": _commondialog, "WebView": _webview, "WebBrowser": _webbrowser,
-    "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
+    "Form": _form, "Module": _module, "Project": _folder, "Console": _console, "Chat": _chat,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop, "Pause": _pause,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink, "Isometric": _isometric,
     "SpinBox": _spinbox, "DTPicker": _dtpicker, "MonthView": _monthview, "Dial": _dial,

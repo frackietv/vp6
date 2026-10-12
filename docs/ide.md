@@ -17,6 +17,7 @@ and built on PySide6 (Qt).
 | Immediate window (Ctrl+G)   | Program output and `Debug.Print`, stdin for console apps, double-click a traceback line to jump to it |
 | Outline window              | The structure of the current file: constants, variables, classes and their members, functions, top-level code, with type icons; sort by file order, name or type; click an item to go to its line; the item the cursor is in is highlighted. It takes the Properties panel's place while a code window is active, and gives it back for designers (also View > Outline Window and F4) |
 | Output window               | The IDE's own output, including library messages such as Qt warnings (hidden by default; View > Output Window) |
+| Claude window               | View > Claude Window: Claude Code's login (Log In / Log Out; one login lasts across projects and sessions) and the project folder's sessions with Claude (New, Open, Rename, Delete); each session opens in a window next to the designers and code windows (see [Claude](#claude)) |
 | Menu Editor (Ctrl+E)        | Tools > Menu Editor designs the form's menus like VB's: Caption (`-` for a separator), Name, Index, Shortcut, Checked, Enabled, Visible, with arrows to indent and move items. The designer shows the menu bar; click a menu to see it and an item to open its Click code |
 | Pages                       | Controls in a ToolBox, a PageFrame or a WizardForm are on one of its pages: the designer edits the page shown (its `CurrentPage`). Click a ToolBox's page header, or choose Previous Page / Next Page in the designer's context menu (with the container, or a control in it, selected), to edit another; controls drawn or pasted there go on that page, and selecting a control on another page (in the Properties window's list) shows its page. The mouse wheel over a ScrollPanel scrolls it, to reach its controls further away |
 | Wizard forms and splash screens | Project > Add Wizard Form: a WizardForm, a window that is a wizard (its Pages, Back/Next/Finish/Cancel, ValidatePage and NextPage in the code window's Form list); Project > Add Splash Screen: a borderless form with the project's title, version and company that closes itself after a few seconds |
@@ -98,6 +99,40 @@ The help is made from VP6's documents and code: an installed VP6 has it
 ready; run from its source, VP6 makes it again after a change (in about a
 second, the first time F1 is pressed). Programs can have help of their own:
 see [Help](api.md#help) in the API reference.
+
+### Claude
+
+<!-- keywords: Claude, Claude Code, AI, chat, session -->
+
+VP6 works with **Claude Code** (Anthropic's `claude` command, which has to
+be installed: see [its setup](https://docs.anthropic.com/en/docs/claude-code/setup)).
+View > Claude Window opens the **Claude window** at the bottom, as a tab
+with the Immediate window:
+
+* **The login.** It says whether Claude Code is logged in. **Log In** runs
+  `claude auth login` in the Terminal window (answer it there; the window
+  notices when it's done); **Log Out** logs out. The login is Claude Code's
+  own, kept by it (in the system's keychain or its folder), so it lasts:
+  every project, every session and the next start of the IDE use it, and so
+  does `claude` in a terminal. If the `claude` command isn't found (the IDE
+  looks on the PATH and in the installers' usual places), **Locate…** chooses
+  it.
+* **The sessions** of the project's folder (or of the home folder without a
+  project), the latest first: Claude Code's own, so sessions started with
+  `claude` in a terminal are listed too. **New** starts one; **Open** (or a
+  double click) goes on with the one selected; **Rename** names it (in the
+  IDE); **Delete** deletes its transcript; **Refresh** lists them again.
+
+A session opens in a **window of its own**, among the form designers and
+code windows. It shows the conversation (Claude's answers as Markdown, each
+tool it uses on a line of its own) and takes your next message: **Enter**
+sends it, **Shift+Enter** starts a new line, and **Stop** stops Claude.
+Claude works in the project's folder. When it wants to use a tool (run a
+command, change a file) it asks: **Allow**, **Always Allow** (that tool,
+for the rest of the session) or **Deny**. The box at the bottom chooses
+what it may do without asking: *Ask Before Using Tools*, *Accept Edits*,
+*Plan Only* or *Bypass Permissions* (new sessions start in the last one
+chosen).
 
 ## Files
 

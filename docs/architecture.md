@@ -67,6 +67,8 @@ vp6/                    runtime library - "from vp6 import *"
     panels.py           Toolbox, Project Explorer, Immediate and Output windows
     outputcapture.py    captures the IDE's own stdout/stderr for the Output window
     terminalpanel.py    the Terminal window: a shell in the project's folder
+    claude.py           Claude Code: finding it, its login, sessions, a chat (ClaudeChat)
+    claudepanel.py      the Claude window (login, sessions) and chat windows
     outline.py          the Outline window: structure of the current file
     objectbrowser.py    the Object Browser: VP6's and the project's classes and members
     documents.py        Document / FormDocument (open files)
@@ -375,15 +377,19 @@ flowchart TD
 
 * a central `QMdiArea` holding designer windows (`FormDesigner`) and code
   windows (`CodeWindow`), one of each per file at most, created on demand and
-  hidden rather than deleted when closed;
-* seven docks: **Toolbox** (`panels.Toolbox`), **Project**
+  hidden rather than deleted when closed, and Claude's chat windows
+  (`claudepanel.ClaudeChatWindow`, one per session, deleted when closed);
+* eight docks: **Toolbox** (`panels.Toolbox`), **Project**
   (`panels.ProjectExplorer`), **Properties**
   (`properties.PropertiesWindow`), **Immediate** (`panels.ImmediateWindow`, the
   running program's output) and **Output** (`panels.OutputWindow`, the IDE's
   own stdout/stderr), **Terminal** (`terminalpanel.TerminalPanel`, a shell
-  run by the Terminal control) and **Debug** (`debugpanel.DebugPanel`: the
-  Watches, the Call Stack and the Breakpoints, §5.8). Output, Terminal and
-  Debug are hidden by default and tabbed with Immediate;
+  run by the Terminal control), **Debug** (`debugpanel.DebugPanel`: the
+  Watches, the Call Stack and the Breakpoints, §5.8) and **Claude**
+  (`claudepanel.ClaudePanel`: Claude Code's login and the project folder's
+  sessions, run by `claude.ClaudeChat` as `claude -p` with stream-json).
+  Output, Terminal, Debug and Claude are hidden by default and tabbed with
+  Immediate;
   `outputcapture.OutputCapture` redirects file descriptors 1 and 2 through
   pipes, so library output such as Qt's warnings is included, and still
   copies everything to the terminal;

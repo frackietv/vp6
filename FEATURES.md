@@ -1,5 +1,17 @@
 # VP6 features
 
+**Version:** 0.4.56
+**Date:** 2026-10-12
+
+## IDE
+
+- Claude in the IDE, through Claude Code (the `claude` command): View > Claude Window, a panel at the bottom with the Immediate window
+- Its login: whether Claude Code is logged in (and as whom), Log In (`claude auth login` in the Terminal window, noticed when done) and Log Out; the login is Claude Code's own, so one lasts across projects, sessions and restarts of the IDE; Locate… when the `claude` command isn't found
+- The project folder's sessions (the home folder's without a project), the latest first, Claude Code's own (sessions started in a terminal too): New, Open (or a double click), Rename, Delete, Refresh, also in a context menu
+- Each session in a window of its own among the designers and code windows: the conversation (Claude's answers as Markdown, the tools it uses), Enter to send and Shift+Enter for a new line, Stop, the model, the cost and time of each answer; a resumed session shows what was said before
+- Claude asks before using a tool: Allow, Always Allow (for the rest of the session) or Deny; or a permission mode: Ask Before Using Tools, Accept Edits, Plan Only, Bypass Permissions (remembered for new sessions)
+- Edit > Copy and Select All in a chat; closing a chat, its project or the IDE ends Claude Code (the session can be resumed)
+
 **Version:** 0.4.55
 **Date:** 2026-10-12
 

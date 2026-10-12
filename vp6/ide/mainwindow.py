@@ -29,6 +29,8 @@ from ..runner import import_folders
 from ..usercontrol import (load_user_control, register_user_control,
                            unregister_user_controls, user_control_types)
 from . import icons, kitchensink, samples
+from .claude import find_claude, shell_quote
+from .claudepanel import ClaudeChatWindow, ClaudePanel
 from .codeeditor import CodeWindow
 from .debugger import DebugSession, WatchWindow, describe, same_file
 from .debugpanel import DebugPanel
@@ -105,6 +107,11 @@ class MainWindow(QMainWindow):
         self.output = OutputWindow()  # the IDE's own stdout/stderr (hidden by default)
         # A shell in the project's folder (hidden by default: it starts when first shown)
         self.terminal = TerminalPanel(lambda: self.project.directory if self.project else None)
+        # View > Claude Window: Claude Code's login and the project's sessions (hidden by
+        # default); its sessions open in the MDI area
+        self.claude_panel = ClaudePanel(lambda: self.project.directory if self.project else None)
+        self.claude_panel.openSession.connect(self.open_claude_session)
+        self.claude_panel.loginRequested.connect(self.claude_login)
         # View > Debug Window: the Watches, the Call Stack and the Breakpoints (hidden at first)
         self.watches = WatchWindow()
         self.debug_panel = DebugPanel(self.watches)
@@ -121,6 +128,8 @@ class MainWindow(QMainWindow):
                                         "terminal")
         self.debug_dock = self._dock("Debug", self.debug_panel, Qt.BottomDockWidgetArea,
                                      "debug")
+        self.claude_dock = self._dock("Claude", self.claude_panel, Qt.BottomDockWidgetArea,
+                                      "claude")
         self.watches.changed.connect(self._refresh_watches)
         self._connect_debug_panel()
         self.outline_dock = self._dock("Outline", self.outline, Qt.RightDockWidgetArea,
@@ -327,6 +336,8 @@ class MainWindow(QMainWindow):
                                  tip="The IDE's own output, including library messages")
         self.act_view_terminal = a("&Terminal Window", self.show_terminal, _TERMINAL_KEY,
                                    tip="A shell in the project's folder")
+        self.act_view_claude = a("C&laude Window", self.show_claude,
+                                 tip="Claude Code: the login and the project's sessions")
         self.act_view_outline = a("Outli&ne Window", self._show_outline,
                                   tip="The structure of the current file")
 
@@ -397,6 +408,7 @@ class MainWindow(QMainWindow):
         for act in (self.act_view_code, self.act_view_object, self.act_view_browser, None,
                     self.act_view_immediate,
                     self.act_view_output, self.act_view_debug, self.act_view_terminal,
+                    self.act_view_claude,
                     self.act_view_project, self.act_view_props,
                     self.act_view_outline, self.act_view_toolbox):
             view.addSeparator() if act is None else view.addAction(act)
@@ -602,6 +614,9 @@ class MainWindow(QMainWindow):
         self.debug_dock.setFloating(False)  # (the same for the Debug window)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.debug_dock)
         self.debug_dock.hide()
+        self.claude_dock.setFloating(False)  # (and for the Claude window)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.claude_dock)
+        self.claude_dock.hide()
         self.immediate_dock.raise_()
         self._place_outline()  # in the Properties panel's place, shown for code windows
         self.outline_dock.hide()
@@ -684,6 +699,63 @@ class MainWindow(QMainWindow):
         """View > Terminal Window: the shell (started the first time), with the focus."""
         self._show_bottom(self.terminal_dock)
         self.terminal.view.setFocus()
+
+    def show_claude(self):
+        """View > Claude Window: the login and the project folder's sessions."""
+        self._show_bottom(self.claude_dock)
+        self.claude_panel.refresh()
+        self.claude_panel.tree.setFocus()
+
+    def claude_folder(self) -> str:
+        """Where Claude works: the project's folder, else the home folder."""
+        return self.claude_panel.folder()
+
+    def claude_windows(self) -> list[QMdiSubWindow]:
+        return [sub for sub in self.mdi.subWindowList()
+                if isinstance(sub.widget(), ClaudeChatWindow)]
+
+    def open_claude_session(self, session_id: str = "") -> ClaudeChatWindow:
+        """A session with Claude in a window of the MDI area: the one with that
+        id (already open, or resumed), or a new one ("")."""
+        for sub in self.claude_windows():
+            if session_id and sub.widget().session_id == session_id:
+                self._activate(sub)
+                return sub.widget()
+        session = next((s for s in self.claude_panel.sessions if s.id == session_id), None) \
+            if session_id else None
+        window = ClaudeChatWindow(self.claude_folder(), session)
+        sub = self.mdi.addSubWindow(window)
+        sub.setAttribute(Qt.WA_DeleteOnClose, True)  # (resumed from the panel's list)
+        sub.installEventFilter(self)
+        sub.setWindowIcon(icons.icon("Chat"))
+        sub.setWindowTitle(window.title)
+        sub.resize(760, 520)
+        window.titleChanged.connect(sub.setWindowTitle)
+        window.replied.connect(self._claude_replied)
+        window.sessionChanged.connect(self._claude_replied)
+        window.loginRequested.connect(self.claude_login)
+        self._activate(sub)
+        return window
+
+    def _claude_replied(self, *_):
+        panel = self.claude_panel
+        if not self.claude_dock.isHidden():
+            panel.refresh()
+
+    def claude_login(self):
+        """Log in to Claude Code: ``claude auth login`` in the Terminal window,
+        where its questions can be answered (the login is Claude Code's own: it
+        lasts across projects and sessions)."""
+        command = find_claude()
+        if command is None:
+            self.show_claude()  # (it says how to install it)
+            return
+        self.show_terminal()
+        terminal = self.terminal.terminal
+        if not terminal.Running:
+            self.terminal.new_shell()
+        terminal.Write(f"{shell_quote(command)} auth login\r")
+        self.claude_panel.log_in_started()
 
     def _show_bottom(self, dock: QDockWidget):
         """Show a panel of the bottom edge's tabs (Terminal, Watches) there now."""
@@ -879,6 +951,7 @@ class MainWindow(QMainWindow):
         self._refresh_explorer()
         self._update_title()
         self._update_actions()
+        self._claude_replied()  # (the new folder's sessions)
         # Show the startup object. A windowed project opens a form's designer: the
         # startup form, or the first form when it starts in Sub Main (which
         # normally shows that form). A console project opens its Main module.
@@ -949,6 +1022,7 @@ class MainWindow(QMainWindow):
         self._refresh_explorer()
         self._update_title()
         self._update_actions()
+        self._claude_replied()  # (the home folder's sessions)
         return True
 
     def save_all(self) -> bool:
@@ -1875,7 +1949,8 @@ class MainWindow(QMainWindow):
         widget = self._active_widget()
         in_window = widget is not None and focus is not None and \
             (focus is widget or widget.isAncestorOf(focus))
-        if not in_window and isinstance(focus, (QLineEdit, QPlainTextEdit)):
+        if (not in_window or isinstance(widget, ClaudeChatWindow)) and \
+                isinstance(focus, (QLineEdit, QPlainTextEdit, QTextEdit)):
             # A text field outside the MDI area (property editor, Immediate input)
             if op == "delete":
                 if isinstance(focus, QLineEdit):
@@ -2408,6 +2483,9 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self.terminal.end_shell()
+        for sub in self.claude_windows():
+            sub.widget().end()
+        self.claude_panel.end()
         if self.help_viewer is not None:
             try:
                 self.help_viewer.close()

@@ -1559,6 +1559,17 @@ prepended to `PYTHONPATH` for programs started with F5.
     (`show_terminal`, Ctrl+` (the Control key on macOS too: `_TERMINAL_KEY`))
     shows it, tabs it with the others at once (`_tab_bottom_docks`) and
     gives it the focus. Its shell starts in the project's folder; `closeEvent` ends it.
+  * **Claude window** (`claude_panel`, a `claudepanel.ClaudePanel`; dock
+    `claude_dock`): hidden by default at the bottom edge like the Terminal
+    window; View > Claude Window (`show_claude`) shows it, tabbed, and lists
+    the sessions. `open_claude_session(id)` activates the chat open on that
+    session or opens a `ClaudeChatWindow` in the MDI area (deleted when
+    closed: Claude Code ends; `claude_windows()` lists them), working in
+    `claude_folder()`; `_claude_replied` refreshes the panel after a reply, a
+    new session, and opening or closing a project (whose `close_project`
+    closes the chats). `claude_login()` runs `claude auth login` in the
+    Terminal window's shell. `closeEvent` ends every chat and the panel's
+    login check. Edit's commands work on a chat's text fields (`_edit`).
   * **Toolbox** (`toolbox`, dock `toolbox_dock`): resizable, two columns by
     default. `_snap_toolbox` (a 50 ms `_toolbox_snap` timer started by the
     Toolbox's `resized` and the dock's moves) fits its width to
@@ -2409,6 +2420,80 @@ The Terminal window: a shell in the IDE, run by the Terminal control.
     Shell; not while the program has the mouse;
   * `titleChanged(str)`: the title the shell gave the terminal.
 
+### `vp6/ide/claude.py` (≈530 lines)
+
+Claude in the IDE, through Claude Code (the `claude` command): finding it,
+the login, the sessions on disk, and a chat.
+
+* `find_claude()`: `$VP6_CLAUDE` (`CLAUDE_ENV`; the tests' stand-in, or a
+  missing path), else the setting `claude/command` (`COMMAND_KEY`, Locate…),
+  else the PATH, else an installer's usual place (`_PLACES`); None if none
+  runs. `environment(command)`: the PATH with the command's folder and
+  Homebrew's (an npm install runs under `env node`).
+* `config_dir()` (`$CLAUDE_CONFIG_DIR` or `~/.claude`), `project_key(folder)`
+  (every character but letters and digits a dash), `sessions_folder(folder)`:
+  where Claude Code keeps a folder's transcripts (`<id>.jsonl`).
+* **Sessions:** `SessionInfo` (id, path, title, modified, messages);
+  `list_sessions(folder)`, the latest first, each read once per mtime and size
+  (`_cache`); the title is the IDE's name (`session_title`, settings group
+  `claude/titles`), else Claude Code's `custom-title` or `summary`, else the
+  first thing asked (`message_text` skips tool results and Claude Code's own
+  notes: `_NOT_ASKED`; meta and sidechain entries are skipped);
+  `load_transcript(path)`; `rename_session`, `delete_session` (the
+  transcript and its subagents' folder); `describe_time`.
+* **Login:** `parse_auth_status(code, output)` reads `claude auth status`
+  (JSON's `loggedIn`, `email`, `subscriptionType`; else the exit code);
+  `AuthStatus` asks it without waiting (`checked(bool, str)`; `cancel()`);
+  `log_out(command)`.
+* **`ClaudeChat(QObject)`** (`folder`, `session_id`, `command`, `mode`): runs
+  `claude -p` with stream-json both ways, `--permission-prompt-tool stdio`
+  and `--permission-mode`, `--resume` once it has a session (`arguments()`),
+  started by the first `send(text)` and kept for the next ones. Lines of
+  JSON (`_read`, `_handle`) become `message(dict)`; `sessionChanged(id)`
+  from any message's `session_id`; `busyChanged` (until the `result`);
+  `can_use_tool` control requests become `permissionRequested(id, tool,
+  input)` unless the tool is in `allowed`, answered by `answer()` (a
+  `control_response`: allow with the input, or deny; `always` adds the tool
+  to `allowed`); `stop()` sends an `interrupt` request and kills it after 3 s
+  (`_stop_timer`); `set_mode()` ends an idle process (the next message
+  resumes in the new mode); `end()` closes its input and waits; `failed(text)`
+  when it can't start or ends with an error while busy (not after `stop`/`end`:
+  `_stopping`). `finished` is connected to a bound method (`_on_finished`), so
+  a process destroyed with the chat calls nothing.
+* `PERMISSION_MODES`, `default_mode()` (setting `claude/mode`: `MODE_KEY`),
+  `shell_quote(path)`.
+
+### `vp6/ide/claudepanel.py` (≈580 lines)
+
+The Claude window and the chat windows.
+
+* **`ClaudePanel(QWidget)`** (`folder`: a callable giving the project's
+  folder; else home): `status` (the login, from `AuthStatus`, or how to
+  install Claude Code with `locate_button` shown), `login_button` (Log In:
+  `loginRequested`, the main window runs the login and calls
+  `log_in_started()`, which asks again every 3 s (`_login_poll`) until
+  logged in; Log Out: `log_out()` after asking), `tree` of `sessions`
+  (Session, Changed), `buttons` New, Open, Rename, Delete, Refresh (and the
+  same `_context_menu`); `openSession(id)` ("" for New); `refresh()` keeps the
+  selection and checks the login; `refresh_if_moved()`; the first
+  `showEvent` lists them; `end()` stops checking.
+* `tool_summary(name, input)`: one line about a tool's use (its command,
+  file, pattern, address...).
+* **`ClaudeChatWindow(QWidget)`** (`folder`, `session`: a `SessionInfo` to
+  resume, its transcript shown): `chat` (a `ClaudeChat` in the last mode
+  chosen), `view` (a `QTextBrowser`: "You" and "Claude" headings by
+  `_append` when the speaker changes; the user's text escaped, Claude's as
+  Markdown with `vp6help.markdown.to_html`; tool uses dimmed, tool errors
+  and failed results red, with a `vp6:login` link (`_link_clicked`:
+  `loginRequested`) when it's about the login), `question` (Allow, Always
+  Allow, Deny for the first of `_questions`: `answer()`; Always Allow also
+  answers the others about that tool), `input` (Enter sends, Shift+Enter a
+  new line: `eventFilter`), `send_button` (Send / Stop), `mode` (the
+  permission mode, remembered), `state` (the model, working, the cost and
+  time). `send(text)` names a new session after its first message
+  (`titleChanged`); `sessionChanged`, `replied`; `apply_theme()` picks the
+  colors; `end()` and `closeEvent` end Claude Code.
+
 ### `vp6/ide/debugger.py` (≈280 lines)
 
 The IDE's side of the debugger (the program's: `vp6/debugagent.py`).
@@ -3165,6 +3250,7 @@ All tests run headless. `conftest.py`:
 | `test_views.py` | ColumnView (Nodes like a TreeView's, SelectedItem, NodeClick and Expand, Remove, the PreviewWidget, PathSeparator; FileSystem: SelectedPath, file nodes, back to the Items), UndoStack (code and functions, Undo, Redo, Index, SetClean, Clear; one of its own), an UndoView of an editor's history (typed steps, going back and forth, the editor's own Undo followed). |
 | `test_vp6help.py` | The help system: Markdown to HTML (blocks, tight and loose and nested lists, task items, tables with alignment and escaped pipes, inline markup, links, pictures, autolinks); making a help file (pages, titles, links between documents rewritten, pictures included, missing links warned about, anchors on every heading, the contents to a depth or flat, index keywords from headings, lone code names, comments and meta tags (not linked code), sections' text without scripts; the same documents making the same bytes; the home page; errors; the command line with an @file); Python packages read without importing (classes, signatures, properties, attributes, constants in groups, private names, re-exports, bases linked and inherited members), following imported packages (not the standard library; excluded ones), compiled modules inspected, a package in a help file; the file (lookups, filters, regular expressions, case, search counts and order, not a help file); the viewer (home, contents, links, pictures, back and forward, web links, missing pages, Locate, the index's filter and options, keywords with several topics and a context, search highlighting with options, requests and one window per file, colors from the palette, the command line's `--list`); vp6help's pyproject. |
 | `test_samples.py` | The New Project dialog's categories (Standard EXE and Console Application at the top level then the Sample Projects folder; Kitchen Sink and the Graphics folder in it; Projection and Perspectives in that; folders opened by double-click and Open, no template while one is chosen, its contents described; `select_template`); Projection: a project of a single startup form; the isometric projection (the view along the diagonal, the axes 120° apart and equally long, Z up, the angles shown); the eight projections (their axes, angles and lengths; each drawn solid); solid faces covering the middle and the axes behind the model, the wireframe showing them through and its corners; the model turning at the rate sliders' speeds (a rate of 0, Rotate off, past 180°), its angle sliders setting it; what the mouse takes (the space, the model, an axis's end and label; the pointer); dragging an axis (just that one, the angles no longer 120°, a general parallel projection), then the space (the skew kept), double-click and Reset view going back; dragging the space turning the axes (still orthographic, the elevation stopping at 90°); dragging the model turning it around the camera's axes, the axes staying; resizing; the models' toggles (one at a time, each hit by the mouse; the torus's hole; the house's wireframe and edges); the models' faces (flat, unit normals, outward for convex parts and away from the torus's tube; within the axes); the separations (every pair of boxes, a street on the ground, none for overlapping boxes); the parts drawn back to front (the boxes turned round, the park before its trees, a part facing away left out); `hull` and `overlap`. Perspectives: a project of a single startup form, 3-point first; the six perspectives (each N-point, its vanishing points' places, drawn solid); linear (2-point: X and Y on the horizon, lines along an axis heading for its vanishing point, upright lines upright, nearer bigger; 1-point: Y's up and right of the model's center); curvilinear (fisheye: +Y in the middle, four on the rim, edges bending; cylindrical: four on the horizon a quarter turn apart, Z's at infinity; spherical: −Y in the middle of the half behind, rim points in both halves); dragging a vanishing point (just that one; double-click going back; one at infinity at the edge, dragged to a point; a fisheye's, the other way going behind); vanishing points at infinity (parallel lines that way; none left: a parallel projection, still solid; back to a point inside the picture; on the fisheye's rim); dragging the space (sideways: along the horizon, Z still at infinity; down: 3-point) and the model; the Distance (the vanishing points staying, the model smaller; inside the cube: every face, ahead and behind); the perspective lines (each axis's and the horizon, none when off) and the fisheye's rim; what the mouse takes; every model in every perspective, solid and wireframe, the boxes back to front; resizing (the sphere's halves side by side); `clip`, `crosses_seam`, `slerp`, `inside`, `look`. |
+| `test_claude.py` | The IDE's Claude window and chats, with a stand-in for Claude Code (a script speaking stream-json, keeping transcripts and a login as it does): the transcripts folder's name; sessions listed with their titles (the IDE's name, Claude Code's, the first thing asked; its own commands and notes skipped; empty ones not listed), renamed and deleted; a transcript's messages; times; `claude auth status` read; finding the command; tool summaries; a chat kept running between messages and resumed (in a new mode) after it ended; no Claude Code; asking before a tool (Deny, Always Allow, not asked again); the chat window (Enter and Shift+Enter, its title, Send/Stop, Markdown, the cost, an error with the login link); Stop; a resumed session's transcript; the panel without Claude Code and with it (the login, the sessions, New/Open/Rename/Delete, the menu); in the IDE: hidden by default and tabbed, sessions in the MDI area in the project's folder, listed after a reply, opened once, Edit > Copy, closed with the project or their window (Claude Code ending), Log In through the Terminal window; drawn. |
 | `test_ide_terminal.py` | The IDE's Terminal window: hidden by default and tabbed with the Immediate window (Reset Window Layout hiding it again), View > Terminal Window and its key; the shell started in the project's folder (home without a project or for a missing folder), typing into it; its end announced and Enter starting a new one; New Shell replacing the one running without a word, End Shell at once; the menu (Copy, Paste, Clear, New Shell, End Shell, enabled as they apply); the editor theme's colors and font, light and dark; closing the IDE ending the shell; drawn. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
 | `test_webbrowser.py` | A real WebBrowser (Chromium, headless): a file and its title, a link (BeforeNavigate, DocumentComplete), Busy and Progress, Back and Forward; BeforeNavigate keeping it on its page; new windows opened here or ignored (NewWindow); a name that doesn't resolve (NavigateError); LoadHTML, TitleChange, RunScript's result, StatusTextChange; GotFocus through the page's focus widget; the designer's placeholder, Toolbox, icon and events. |
