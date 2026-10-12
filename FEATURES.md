@@ -1,5 +1,12 @@
 # VP6 features
 
+**Version:** 0.4.61
+**Date:** 2026-10-12
+
+## Backlog
+
+- The gaps between VP6 and what its own IDE uses from Qt directly, written as backlog items for self-hosting (writing the IDE in VP6): Process environment and arguments, opening URLs and folders, choosing a folder, TCP sockets, watching files, application and thread events, the app-wide color scheme and style, docking and tabbed MDI windows, menu pictures, richer graphics, code completion and search, the Properties grid, control metadata, a form designer control, and projects inside packages
+
 **Version:** 0.4.60
 **Date:** 2026-10-12
 
