@@ -336,6 +336,14 @@ class ProjectPropertiesDialog(QDialog):
         self.arguments_help.setToolTip("The program's own arguments, one per line, as "
                                        "--help lists them.")
         self.arguments_help.setFixedHeight(64)
+        self.package = QLineEdit(project.package)
+        found = project.found_package()
+        self.package.setPlaceholderText(f"none (its folders make {found})" if found else "none")
+        self.package.setToolTip("The Python package the project's folder is (e.g. myapp.gui): "
+                                "its files are imported by package name.")
+        self.command = QLineEdit(project.command)
+        self.command.setPlaceholderText(project.name)
+        self.command.setToolTip("The command its wheel installs (vp6-make).")
         form = QFormLayout()
         form.addRow("Project Name:", self.name)
         form.addRow("Project Type:", self.type)
@@ -347,6 +355,8 @@ class ProjectPropertiesDialog(QDialog):
         form.addRow("Description:", self.description)
         form.addRow("Command Line Arguments:", self.arguments)
         form.addRow("Arguments Help:", self.arguments_help)
+        form.addRow("Package:", self.package)
+        form.addRow("Command:", self.command)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -366,6 +376,13 @@ class ProjectPropertiesDialog(QDialog):
         project.description = self.description.text().strip()
         project.arguments = self.arguments.text().strip()
         project.arguments_help = self.arguments_help.toPlainText().strip("\n")
+        package, old = self.package.text().strip(), project.package
+        project.package = package
+        if project.package_problem():  # (not the package it is in: unchanged)
+            project.package = old
+        command = self.command.text().strip()
+        if all(c.isalnum() or c in "-_." for c in command):
+            project.command = command
 
 
 ABOUT_HTML = f"""

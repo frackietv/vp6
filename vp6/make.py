@@ -13,7 +13,22 @@ window on Windows), a console script for a console one. It requires VP6 (this
 version or later) and the installed distributions of what the code imports
 (not the standard library's modules). Its version is the project's Version,
 its summary the Description, its author the CompanyName. A wheel is written
-by VP6 itself: nothing more needs to be installed.
+by VP6 itself: nothing more needs to be installed. The command is the
+project's Command (empty: its name).
+
+**A project in a package** (its ``package``, e.g. ``myapp.gui``) goes into the
+wheel of the whole package it is part of: every file of the top package
+(``myapp``, named after it: ``myapp-1.0.0-py3-none-any.whl``), at its place,
+and the command runs the project's package's ``__main__`` (``main()``), which
+``run_package`` the project; without a ``__main__.py`` of its own the wheel
+gets one. Built by setuptools instead, the larger package lists the project's
+files as package data and the entry point itself::
+
+    [project.scripts]
+    myapp-gui = "myapp.gui.__main__:main"
+
+    [tool.setuptools.package-data]
+    "myapp.gui" = ["*.vp6p", "images/*.png"]
 
 **An executable**:
 
@@ -72,7 +87,21 @@ class MakeError(Exception):
 def project_files(project: Project) -> list[str]:
     """The project's files that go into the executable, relative to its
     folder (with /)."""
-    top = project.directory
+    return _files_in(project.directory)
+
+
+def package_files(project: Project) -> list[str]:
+    """What goes into a wheel or an executable, relative to where it is
+    imported from (with /): the project's files, or for a project in a
+    package every file of its top package (``myapp/...``)."""
+    if not project.package:
+        return project_files(project)
+    top = project.package.split(".")[0]
+    return [f"{top}/{relative}"
+            for relative in _files_in(os.path.join(project.package_root(), top))]
+
+
+def _files_in(top: str) -> list[str]:
     files = []
     for folder, subfolders, names in os.walk(top):
         subfolders[:] = sorted(d for d in subfolders
@@ -87,14 +116,19 @@ def project_files(project: Project) -> list[str]:
 def imported_modules(project: Project) -> list[str]:
     """The top-level modules the project's Python files import, except its own
     forms and modules (and files): what PyInstaller must bundle for them."""
-    own = {os.path.splitext(os.path.basename(f))[0] for f in project_files(project)
-           if f.endswith(".py")}
+    if project.package:  # (the whole top package is its own)
+        own = {project.package.split(".")[0]}
+        root = project.package_root()
+    else:
+        own = {os.path.splitext(os.path.basename(f))[0] for f in project_files(project)
+               if f.endswith(".py")}
+        root = project.directory
     names = set()
-    for relative in project_files(project):
+    for relative in package_files(project):
         if not relative.endswith(".py"):
             continue
         try:
-            with open(project.abspath(relative), encoding="utf-8") as f:
+            with open(os.path.join(root, relative), encoding="utf-8") as f:
                 tree = ast.parse(f.read(), relative)
         except (OSError, SyntaxError, ValueError):
             continue  # (not ours to judge: the program will report it)
@@ -109,7 +143,7 @@ def imported_modules(project: Project) -> list[str]:
 def launcher_source(project: Project) -> str:
     """The executable's entry point: run the bundled project, as its project
     file does."""
-    filename = os.path.basename(project.path)
+    filename = _bundled_path(project)
     return (f'"""Starts {project.name}, made with VP6 (vp6.make)."""\n\n'
             "import os\n"
             "import sys\n\n"
@@ -117,6 +151,14 @@ def launcher_source(project: Project) -> str:
             "# The bundled project: next to this script, or where PyInstaller unpacked it\n"
             'folder = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))\n'
             f"sys.exit(run_project(os.path.join(folder, {filename!r})))\n")
+
+
+def _bundled_path(project: Project) -> str:
+    """The project file's path in an executable or a wheel's files: beside the
+    launcher, or in a package at its place (``myapp/gui/App.vp6p``)."""
+    if not project.package:
+        return os.path.basename(project.path)
+    return os.path.relpath(project.path, project.package_root()).replace(os.sep, "/")
 
 
 def icon_file(project: Project) -> str | None:
@@ -197,9 +239,11 @@ def pyinstaller_command(project: Project, launcher: str, dist: str, work: str,
         command += ["--add-data", f"{help_path}{os.pathsep}vp6/help"]
     for module in imported_modules(project) + ["vp6", "vp6help.viewer"]:
         command += ["--hidden-import", module]
-    for relative in project_files(project):
+    root = project.package_root()
+    for relative in package_files(project):
         destination = os.path.dirname(relative) or "."
-        command += ["--add-data", f"{project.abspath(relative)}{os.pathsep}{destination}"]
+        command += ["--add-data",
+                    f"{os.path.join(root, relative)}{os.pathsep}{destination}"]
     command.append(launcher)
     return command
 
@@ -212,6 +256,8 @@ def make(project_path: str, dist: str | None = None, onefile: bool = False,
         raise MakeError("Making an executable needs PyInstaller: "
                         'pip install "vp6[make]" (or: pip install pyinstaller pillow)')
     project = Project.load(project_path)
+    if project.package_problem():
+        raise MakeError(project.package_problem())
     dist = os.path.abspath(dist or os.path.join(project.directory, "dist"))
     work = tempfile.mkdtemp(prefix="vp6-make-")
     try:
@@ -239,13 +285,20 @@ def make(project_path: str, dist: str | None = None, onefile: bool = False,
 # --- wheels -------------------------------------------------------------------------------
 
 def wheel_package(project: Project) -> str:
-    """The package the wheel installs the project's files in: its name in lowercase."""
-    return project.name.lower()
+    """The package the wheel installs the project's files in: its name in
+    lowercase, or the package it is in."""
+    return project.package or project.name.lower()
+
+
+def wheel_distribution(project: Project) -> str:
+    """The wheel's name: the project's, or for a project in a package the top
+    package's (the wheel is the whole package)."""
+    return project.package.split(".")[0] if project.package else project.name
 
 
 def wheel_name(project: Project) -> str:
     """The wheel's file name: Name-major.minor.revision-py3-none-any.whl."""
-    return f"{project.name}-{wheel_version(project)}-py3-none-any.whl"
+    return f"{wheel_distribution(project)}-{wheel_version(project)}-py3-none-any.whl"
 
 
 def wheel_version(project: Project) -> str:
@@ -276,6 +329,15 @@ def wheel_requirements(project: Project, log=print) -> list[str]:
 
 def _wheel_launcher(project: Project) -> str:
     filename = os.path.basename(project.path)
+    if project.package:
+        return (f'"""Runs {project.name} (a VP6 program): its command, or python -m '
+                f'{project.package}."""\n\n'
+                "import sys\n\n\n"
+                "def main():\n"
+                "    from vp6.runner import run_package\n\n"
+                f"    return run_package(__package__ or {project.package!r}, {filename!r})\n\n\n"
+                'if __name__ == "__main__":\n'
+                "    sys.exit(main())\n")
     return (f'"""Runs {project.name} (a VP6 program): its command, or python -m '
             f'{wheel_package(project)}."""\n\n'
             "import os\n"
@@ -289,7 +351,7 @@ def _wheel_launcher(project: Project) -> str:
 
 
 def _metadata(project: Project, requirements: list[str]) -> str:
-    lines = ["Metadata-Version: 2.1", f"Name: {project.name}",
+    lines = ["Metadata-Version: 2.1", f"Name: {wheel_distribution(project)}",
              f"Version: {wheel_version(project)}",
              f"Summary: {project.description or project.product_name or project.name}"]
     if project.company_name:
@@ -311,44 +373,67 @@ def make_wheel(project_path: str, dist: str | None = None, log=print) -> str:
 
     project = Project.load(project_path)
     package = wheel_package(project)
-    files = project_files(project)
-    if "__main__.py" in files:
+    folder = package.replace(".", "/")  # (where the project's files are in the wheel)
+    if project.package_problem():
+        raise MakeError(project.package_problem())
+    files = package_files(project)
+    own_main = f"{folder}/__main__.py" if project.package else "__main__.py"
+    if own_main in files and not project.package:
         raise MakeError("The project has a __main__.py of its own: the wheel's launcher "
                         "goes there (rename the project's)")
-    if not package.isidentifier():
+    if own_main in files and not _defines_main(os.path.join(project.package_root(), own_main)):
+        raise MakeError(f"{own_main} has no main(): the command runs it (e.g. "
+                        f"def main(): return run_package(__package__))")
+    if not package.replace(".", "_").isidentifier():
         raise MakeError(f"'{project.name}' can't be a package name")
     dist = os.path.abspath(dist or os.path.join(project.directory, "dist"))
     os.makedirs(dist, exist_ok=True)
     path = os.path.join(dist, wheel_name(project))
-    info = f"{project.name}-{wheel_version(project)}.dist-info"
+    info = f"{wheel_distribution(project)}-{wheel_version(project)}.dist-info"
     script_kind = "console_scripts" if project.type == "console" else "gui_scripts"
-    log(f"Building the wheel of {project.name} {wheel_version(project)}...")
+    log(f"Building the wheel of {wheel_distribution(project)} {wheel_version(project)}...")
     contents: list[tuple[str, bytes]] = []
     for relative in files:
-        with open(project.abspath(relative), "rb") as f:
-            contents.append((f"{package}/{relative}", f.read()))
-    if "__init__.py" not in files:
+        with open(os.path.join(project.package_root(), relative), "rb") as f:
+            contents.append((relative if project.package else f"{package}/{relative}",
+                             f.read()))
+    if "__init__.py" not in files and not project.package:
         contents.append((f"{package}/__init__.py",
                          f'"""{project.name}, a VP6 program."""\n'.encode()))
+    if own_main not in files:
+        contents.append((f"{folder}/__main__.py", _wheel_launcher(project).encode()))
+    command = project.command_name()
+    top = wheel_distribution(project) if project.package else package
     contents += [
-        (f"{package}/__main__.py", _wheel_launcher(project).encode()),
         (f"{info}/METADATA",
          _metadata(project, wheel_requirements(project, log)).encode()),
         (f"{info}/WHEEL", (f"Wheel-Version: 1.0\nGenerator: vp6-make ({__version__})\n"
                            "Root-Is-Purelib: true\nTag: py3-none-any\n").encode()),
         (f"{info}/entry_points.txt",
-         f"[{script_kind}]\n{project.name} = {package}.__main__:main\n".encode()),
-        (f"{info}/top_level.txt", f"{package}\n".encode()),
+         f"[{script_kind}]\n{command} = {package}.__main__:main\n".encode()),
+        (f"{info}/top_level.txt", f"{top}\n".encode()),
     ]
     record = [_record_line(name, data) for name, data in contents] + [f"{info}/RECORD,,"]
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as wheel:
         for name, data in contents:
             wheel.writestr(name, data)
         wheel.writestr(f"{info}/RECORD", "\n".join(record) + "\n")
-    log(f"{len(files)} files of the project, in the package '{package}'; the command "
-        f"'{project.name}' runs it")
+    what = f"the package '{top}'" if project.package else "the project"
+    log(f"{len(files)} files of {what}, in the package '{package}'; the command "
+        f"'{command}' runs it")
     log(f"Made {path}")
     return path
+
+
+def _defines_main(path: str) -> bool:
+    """Whether a Python file defines a ``main`` function (a command runs it)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            tree = ast.parse(f.read(), path)
+    except (OSError, SyntaxError, ValueError):
+        return False
+    return any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "main"
+               for node in tree.body)
 
 
 def main(argv: list[str] | None = None) -> int:

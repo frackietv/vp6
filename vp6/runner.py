@@ -8,6 +8,24 @@ The startup object is either a form (shown, then the event loop runs until
 all forms are closed) or ``Sub Main`` - a ``Main()`` function in one of the
 project's modules. After Main returns, the event loop keeps running while
 any form is still open, like VB6.
+
+A project in a package (its ``package``) is imported by package name: only the
+folder holding the package goes on ``sys.path``, the working folder stays
+where the program was started, and ``run_package`` starts it from the package
+(a console entry point's ``main`` or the package's ``__main__``)::
+
+    # myapp/gui/__main__.py
+    import sys
+
+    from vp6.runner import run_package
+
+
+    def main():
+        return run_package(__package__)
+
+
+    if __name__ == "__main__":
+        sys.exit(main())
 """
 
 from __future__ import annotations
@@ -25,7 +43,10 @@ def import_folders(project: Project) -> list[str]:
     """Where the project's files are imported from: its folder, then every
     folder (subfolders too) holding a form or module. Files are imported by
     their name (``from Module1 import *``) wherever they are, which is why the
-    IDE keeps the file names of forms and modules unique in a project."""
+    IDE keeps the file names of forms and modules unique in a project. A
+    project in a package: only the folder holding the package."""
+    if project.package:
+        return [project.package_root()]
     folders = [project.directory]
     for relative in project.files():
         folder = os.path.dirname(project.abspath(relative))
@@ -35,8 +56,49 @@ def import_folders(project: Project) -> list[str]:
 
 
 def _import_file(project: Project, relative: str):
-    name = os.path.splitext(os.path.basename(relative))[0]
-    return importlib.import_module(name)
+    return importlib.import_module(project.module_name(relative))
+
+
+def _check_package(project: Project) -> None:
+    """A project in a package: its folder must be the package, and the package
+    mustn't be imported from somewhere else already."""
+    problem = project.package_problem()
+    if problem:
+        raise SystemExit(problem)
+    top = project.package.split(".")[0]
+    module = sys.modules.get(top)
+    folders = list(getattr(module, "__path__", ())) if module is not None else []
+    expected = os.path.realpath(os.path.join(project.package_root(), top))
+    if module is not None and expected not in {os.path.realpath(f) for f in folders}:
+        raise SystemExit(f"The package '{top}' is already imported from "
+                         f"{', '.join(folders) or module}, not from {expected}")
+
+
+def package_project(package: str, project_file: str | None = None) -> str:
+    """The project file of a project in a package: ``project_file`` (its name)
+    in the package's folder, else the one .vp6p file there."""
+    import importlib.util
+
+    spec = importlib.util.find_spec(package)
+    if spec is None or not spec.submodule_search_locations:
+        raise SystemExit(f"No package '{package}'")
+    folder = list(spec.submodule_search_locations)[0]
+    if project_file:
+        return os.path.join(folder, project_file)
+    found = sorted(name for name in os.listdir(folder) if name.endswith(".vp6p"))
+    if not found:
+        raise SystemExit(f"The package '{package}' has no project file (.vp6p)")
+    if len(found) > 1:
+        raise SystemExit(f"The package '{package}' has {len(found)} project files "
+                         f"({', '.join(found)}): name the one to run")
+    return os.path.join(folder, found[0])
+
+
+def run_package(package: str, project_file: str | None = None) -> int:
+    """Run the project that is a package (its ``package``): what a console entry
+    point or the package's ``__main__`` calls. The command line arguments are
+    the program's (``Command()``)."""
+    return run_project(package_project(package, project_file))
 
 
 def find_form_class(project: Project, class_name: str):
@@ -101,8 +163,15 @@ def run_project(path: str) -> int:
     if HELP_OPTION in sys.argv[1:]:  # (before anything starts)
         show_help(program_help(project, os.path.basename(sys.argv[0]) or project.name))
         return 0
-    sys.path[:0] = import_folders(project)
-    os.chdir(project.directory)
+    if project.package:  # (by package name: the working folder stays the user's)
+        root = project.package_root()
+        if root in sys.path:
+            sys.path.remove(root)
+        sys.path.insert(0, root)
+        _check_package(project)
+    else:
+        sys.path[:0] = import_folders(project)
+        os.chdir(project.directory)
     from . import debugagent
 
     debugagent.start_from_environment()  # (run by the IDE's Start: its debugger)

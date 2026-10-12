@@ -386,6 +386,7 @@ class _App:
     and descriptions (the project's properties)."""
 
     _title = ""
+    _path = ""  # the project's folder (the runner sets it)
     Major, Minor, Revision = 1, 0, 0
     ProductName = ""
     CompanyName = ""
@@ -398,6 +399,7 @@ class _App:
     def _set_project(self, project) -> None:
         cls = type(self)
         cls._title = project.name
+        cls._path = project.directory
         cls.Major, cls.Minor, cls.Revision = project.version_numbers()
         cls.ProductName = project.product_name or project.name
         cls.CompanyName = project.company_name
@@ -430,6 +432,10 @@ class _App:
 
     @property
     def Path(self) -> str:
+        """The program's folder: its project's (in a package: the package's
+        folder, where its files are), else the main script's."""
+        if type(self)._path:
+            return type(self)._path
         main = sys.modules.get("__main__")
         path = getattr(main, "__file__", None)
         return os.path.dirname(os.path.abspath(path)) if path else os.getcwd()

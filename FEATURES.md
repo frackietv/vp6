@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.4.63
+**Date:** 2026-10-12
+
+## Projects
+
+- Projects in a package: a project whose folder is part of a Python package (its Package, e.g. myapp.gui) has its forms and modules imported by package name (myapp.gui.Form1, relative imports between them), so module names like options or designer shadow nothing; it is started from the package (vp6.runner.run_package, for a console entry point or the package's __main__), keeps the working folder it was started in, and finds its files there (App.Path, LoadPicture, ShowHelp)
+- vp6-make builds a project in a package into the wheel of its whole package (every file of the top package, the project at its place), its command running the package's __main__ (one is written when the project has none); setuptools builds of a larger package list the project as package data and an entry point
+- A project's Command: the command its wheel installs (e.g. myapp-gui), in the Properties window and Project Properties beside Package
+- App.Path is the project's folder however the program was started (vp6-run and wheels too)
+
+## Backlog
+
+- The VP6 IDE written with VP6 itself, as fourteen implementation steps (the studio: a package project started by vp6-ide)
+
 **Version:** 0.4.62
 **Date:** 2026-10-12
 

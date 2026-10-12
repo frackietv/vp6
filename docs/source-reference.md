@@ -91,8 +91,8 @@ Application-level services.
   `os._exit(0)`, like VB's `End`, without running `Form_Unload` handlers:
   it doesn't close the windows first, since closing them would run them.
 * Singleton objects:
-  * `App`: `Title` (`_title`, else `EXEName`), `Path` (folder of
-    `__main__`), `EXEName`; `Major`, `Minor`, `Revision`, `ProductName`,
+  * `App`: `Title` (`_title`, else `EXEName`), `Path` (`_path`, the
+    project's folder `_set_project` sets, else the folder of `__main__`), `EXEName`; `Major`, `Minor`, `Revision`, `ProductName`,
     `CompanyName` and `FileDescription`, which `_set_project(project)` (the
     runner) fills in; `PrevInstance` is `_claim_instance()`: a `QLockFile` in
     the temporary folder named by a hash of Path and EXEName, taken once
@@ -1364,8 +1364,15 @@ architecture §6.2).
   * fields `name`, `type` (`"exe"` / `"console"`), `startup` (a form class
     name or `SUB_MAIN = "Sub Main"`), `forms`, `modules`, `color_scheme`,
     `icon`, `version`, `product_name`, `company_name`, `description`,
-    `arguments`, `arguments_help`, `path` (the ones missing from older projects get their
-    defaults); `version_numbers()` is `version` as (major, minor, revision);
+    `arguments`, `arguments_help`, `package`, `command`, `path` (the ones missing from
+    older projects get their defaults); `version_numbers()` is `version` as (major, minor,
+    revision); `command_name()` is `command` or the name;
+  * **a project in a package** (`package`, dotted): `module_name(relative)` is
+    what a file is imported by (its file name, or `package.sub.Name`);
+    `package_root()` the folder holding the top package; `package_problem()`
+    why the folder can't be that package (a name, a folder that doesn't
+    match, a missing `__init__.py`) or None; `found_package()` the package the
+    `__init__.py` files around the folder make;
   * **the icon:** `icon` lists image files relative to the project (`load`
     turns a single string into a list); `icon_paths()` gives them as absolute
     paths. An empty `icon` (new projects) means the VP6 icon,
@@ -1445,9 +1452,10 @@ Your own controls (VB's UserControl).
   (the code window's "UserControl" object).
 * The IDE's registry: `register_user_control` adds a class to
   `CONTROL_TYPES` (not over a built-in name), `unregister_user_controls`,
-  `user_control_types`; `load_user_control(path, text)` executes a file's
-  text as a module named after the file (as forms import it) and sets the
-  class's DefaultSize to its designed surface.
+  `user_control_types`; `load_user_control(path, text, module_name)` executes a file's
+  text as a module named after the file (as forms import it; `module_name`:
+  its package name in a project in a package, the package imported first so
+  its relative imports work) and sets the class's DefaultSize to its designed surface.
 
 ### `vp6/make.py` (≈330 lines)
 
@@ -1471,6 +1479,15 @@ executables for the system it runs on only.
   windowed project, `console_scripts` for a console one) and RECORD
   (`_record_line`: sha256, size). `wheel_name(project)` is its file name.
   Its last line is `Made <path>`.
+
+* **A project in a package:** `package_files(project)` is every file of its
+  top package (relative to `package_root`, `myapp/...`), what the wheel and
+  the executable get instead of `project_files`; the wheel is the top
+  package's (`wheel_distribution`), the project's `__main__.py` written by
+  `_wheel_launcher` (`run_package`) unless it has one with a `main()`
+  (`_defines_main`), the command `command_name()`; `_bundled_path` is the
+  project file's place in an executable; `imported_modules` leaves out the
+  top package. A `package_problem` is a MakeError.
 
 * `project_files(project)`: the files that go in (relative, with `/`), all
   but `EXCLUDED_FOLDERS` (`build`, `dist`, `__pycache__`, `venv`), hidden
@@ -1612,7 +1629,10 @@ Starts a project. `run_project(path)`:
    windowed executable on Windows) and returns 0 without starting anything;
 2. puts `import_folders(project)` on `sys.path` (the project's folder, then
    every folder holding a form or module, so files in subfolders import each
-   other by name) and `chdir`s into the project's folder;
+   other by name) and `chdir`s into the project's folder; a project in a
+   package (`package`) gets only its `package_root()` (first, and no `chdir`),
+   and `_check_package` stops it when its folder isn't the package or the
+   package is imported from elsewhere already;
 3. sets `App`'s title, version and descriptions (`App._set_project`) and
    `appearance.project_scheme`, and for a windowed
    project with an `icon`, the application's icon (`app.set_program_icon`;
@@ -1626,7 +1646,12 @@ Starts a project. `run_project(path)`:
      Ctrl+C before any window exists (e.g. at a console `input()`) ends the
      program quietly with exit code 130.
    * **A form:** calls `run(find_form_class(project, startup))`. Modules are
-     imported by file name (`_import_file`).
+     imported by file name, or in a package by `module_name` (`_import_file`).
+
+`run_package(package, project_file=None)` runs a project in a package (what a
+console entry point or the package's `__main__` calls): `package_project`
+finds its project file in the package's folder (the one named, else the only
+`.vp6p` there).
 
 `main(argv)` implements `python -m vp6.runner PROJECT.vp6p [ARGUMENTS...]`
 and the `vp6-run` console script (`argument_parser()`: argparse, the
@@ -2197,7 +2222,9 @@ of the Properties window.
   text. `StartupObject`'s choices are the project's
   forms plus `Sub Main`. `Icon` is a `file`: the icon's last file (the
   largest size, as new projects list them); setting it makes that one file
-  the icon, and an empty value none (the VP6 icon).
+  the icon, and an empty value none (the VP6 icon). `Package` (refused with
+  the `package_problem` when the folder isn't that package) and `Command`
+  (letters, digits, `-`, `_`, `.`) are text.
 * `set_property` validates the name, updates the `Project`, and calls the main
   window's `_project_changed` (save, update designers, explorer and titles).
 * `_ProjectObject` is the "selected object" the grid reads values from.
@@ -3253,7 +3280,8 @@ explorer-style.
   scheme (System / Light / Dark / Follow the IDE), and as VB's Make tab the
   version (three spin boxes, `version`), product name, company name,
   description, command line arguments and the arguments' help (a
-  `QPlainTextEdit`); `apply(project)`.
+  `QPlainTextEdit`), the package (its placeholder names `found_package()`; one that
+  isn't the folder's is left unchanged) and the command; `apply(project)`.
 * `MakeDialog(project)`: File > Make Executable…: what will be made and
   where (`make.output_path`), and a "One file" check box, disabled where it
   can't apply (`make.can_be_one_file`).
@@ -3559,6 +3587,7 @@ All tests run headless. `conftest.py`:
 | `test_list_items.py` | ListBox and ComboBox per-item properties: ItemData read and set (any value, None until set, `IndexError` past the end), values and fonts moving with their items when sorted or another is removed, VB's `ItemData(ListIndex)`, ItemBold, ItemItalic and ItemForeColor (and None again), ItemImage by Key or Index in the ImageList (an unknown one raising, following its changes, cleared), a picture file without one.; NewIndex (at an Index, sorted in, the mark removed, -1 after RemoveItem and Clear), TopIndex, Selected set and SelCount with MultiSelect, a Checkbox ListBox (ItemCheck from the user only, not for other item changes, new items checkable, back to Standard), a Simple Combo (its list shown, choosing an item, free text, ItemData, changing Style keeping everything without Click), DropDown. |
 | `test_listview.py` | The ListView: its designer lines (`parse_column`, `parse_list_item`); ListItems (Index and Key, SubItems read and set, Add at an Index, Text, Key changes, errors, Remove, Clear); ColumnHeaders (labels, widths, alignments of existing and new cells, a new column, HideColumnHeaders); the four views keeping one selection, MultiSelect; sorting by the Text or a SubItem (as text), new and renamed items sorted in; ItemClick, HitTest and ColumnClick from the mouse, ItemCheck from the user but not code, Checkboxes off; Icons in the Icon view and SmallIcons in the others, unknown ones raising, an ImageList's changes; the form file round trip; the designer (the Properties window's Columns and Items); Toolbox, icon and constants. |
 | `test_make.py` | Wheels: the package of the project's files and its launcher, METADATA (version, summary, author, requirements: VP6, not the standard library), console or GUI scripts, WHEEL and RECORD; requirements from the installed distributions (noting missing ones); a project's own `__main__.py`; the command line (a wheel by default, `--exe`, `--onefile` implying it); a wheel installed with pip run by its command and `python -m`; Project > Build Wheel. Making executables: the files that go in (not `dist`, `build`, caches or hidden files), the modules their code imports (not the project's own, nor relative imports; files with syntax errors skipped), the launcher, where the result goes on each system (apps, folders, one file, `.exe`), the PyInstaller command (console or windowed, one file, the project's or VP6's icon and none without Pillow, `--add-data` into the same folders with `os.pathsep`, hidden imports, VP6's folder and icons), the message without PyInstaller, `make()` with PyInstaller faked, File > Make Executable… with the process faked (success with the path, failure); with `VP6_TEST_MAKE=1` a real one-file executable made and run (its output, its data file, a module in a subfolder, its exit code). |
+| `test_package_project.py` | A project in a package: `package` and `command` saved, module names by package (subfolders too), `import_folders` only the package's root, `package_problem` (a wrong name, a folder that isn't the package, no `__init__.py`) and `found_package`; run by `run_package`, `python -m` with a `__main__` and the project file from another working folder (relative imports, a module named `options`, `App.Path`); `package_project`'s errors and a package imported from elsewhere; `App.Path` and `LoadPicture` finding files in the package; the wheel of the whole package (its name, files, entry point, `top_level`, the generated `__main__`) run from where it is extracted; a `__main__.py` of its own (with or without `main()`); the executable's files and launcher; Package and Command in the Properties window and Project Properties; user controls loaded under their package names. |
 | `test_designer.py` | Creating controls, nesting in frames, mouse move with snapping and undo, rubber band, properties and rename, copy/paste, TabIndex renumbering (add, delete, paste, setting one, undo), z-order and Format, code-side undo reloading the designer, region protection in the editor, the workspace filling the window after maximize/restore. |
 | `test_debugger.py` | The debugger: breakpoints following the edits (a line above, Enter at its start, a rename), only on code lines; F9, the gutter's click, a blank line refused, Clear All; the editor's breakpoint and execution point backgrounds and red dot; the Watches window (results, errors, stale answers left alone, an edited watch asked again, out of context, Delete, the menu); `describe`; the agent's idea of the program's own code (VP6's, the standard library's, site-packages, relative and missing files left out); no agent without the IDE; real programs: a console program at a breakpoint (break mode: the title, Continue, the status bar, the Immediate window evaluating with `?`, running a statement that changes a variable, an error), watches with values, types and errors, Continue to the breakpoint again, Clear All reaching the program, the end; stepping (Step Into before it runs, Over, Into a call with the stack, Out, Over a call, End); Break in an endless loop, a breakpoint set while it runs; a GUI program stopped at an error in Form_Load (its frame's variables), Break between events (the forms by name, assigning, VP6's names), stepping on from there; the session alone; the Debug menu, its keys and VB6's menu order; disabled breakpoints (kept, not sent, through a rename too); the Debug window (its three parts; the call stack without the project file, the current frame in bold, a frame chosen); the breakpoint list (shown, enabling, going to, Delete, the menu); in the IDE: View > Debug Window as a tab, the list following the edits, disabling from the list (only enabled ones sent), going to one, Enable All, deleting; paused: the call stack, a frame chosen for the watches and the Immediate window (its line shown, the execution point kept), emptied at the end and the list when the project closes; Edit and Continue: a procedure changed in break mode applied on Continue (the program's result), a running one going on with its old code, Apply Code Changes staying paused, the execution point and breakpoints following an edit, an error in the changes keeping it paused until fixed (a step going on then), a form's method changed for the form the program has. |
 | `test_hotpatch.py` | Edit and Continue's patching: functions, classes, nested classes, properties, static and class methods keeping their identity with the new code (super() too), only what changed reported; added and removed procedures; variables keeping the program's values, constants and class variables, new names; a closure that changes; a method gaining a `__class__` cell; syntax and run-time errors changing nothing; a running procedure reported; the new lines for tracebacks; not inheriting `__future__` flags. |

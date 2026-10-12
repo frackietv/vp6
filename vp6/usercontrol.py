@@ -302,9 +302,10 @@ def _builtin_types() -> frozenset:
 _BUILTIN_TYPES = _builtin_types()
 
 
-def load_user_control(path: str, text: str | None = None) -> type:
+def load_user_control(path: str, text: str | None = None, module_name: str = "") -> type:
     """A user control's class from its file (or ``text``, e.g. not saved yet),
-    as a module named after the file, the way forms import it. Its
+    as a module named after the file, the way forms import it (``module_name``:
+    another name, e.g. ``myapp.gui.Gauge`` in a project in a package). Its
     DefaultSize is its designed surface's size. Raises what its code raises."""
     import os
     import sys
@@ -316,9 +317,15 @@ def load_user_control(path: str, text: str | None = None) -> type:
         with open(path, encoding="utf-8") as f:
             text = f.read()
     form_def = formfile.parse(text)
-    module_name = os.path.splitext(os.path.basename(path))[0]
+    module_name = module_name or os.path.splitext(os.path.basename(path))[0]
     module = types.ModuleType(module_name)
     module.__file__ = os.path.abspath(path)
+    parent = module_name.rpartition(".")[0]
+    if parent:  # (in a package: its relative imports need the package)
+        import importlib
+
+        importlib.import_module(parent)
+        module.__package__ = parent
     sys.modules[module_name] = module
     exec(compile(text, path, "exec"), module.__dict__)  # noqa: S102 - the project's code
     cls = getattr(module, form_def.class_name, None)

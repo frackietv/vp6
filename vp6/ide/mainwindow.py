@@ -1477,7 +1477,8 @@ class MainWindow(QMainWindow):
                 if not isinstance(doc, FormDocument):
                     continue
                 try:
-                    register_user_control(load_user_control(doc.path, doc.text))
+                    register_user_control(load_user_control(
+                        doc.path, doc.text, self.project.module_name(relative)))
                 except Exception as exc:  # noqa: BLE001 - the user's code
                     problems.append(f"{relative}: {exc}")
         self.toolbox.set_user_controls(user_control_types())

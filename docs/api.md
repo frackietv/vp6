@@ -4729,7 +4729,7 @@ parameters, e.g. `["KeyCode", "Shift"]`), `IsDefault`.
 
 | Object | Members |
 |---|---|
-| `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started), `HelpFile` (the program's [help file](#help), what `ShowHelp` shows; a path relative to `Path`), `ShowSplash(Picture, Message="", Alignment=vpCenter, Color=None)` (a splash screen: the picture, a file relative to `Path` or a Picture, in a window of its own while the program starts; it closes when the first form is shown), `SplashMessage(Text, Alignment=vpCenter, Color=None)` (a message at its bottom), `HideSplash()`, `SplashVisible`, `Active` (whether the program is the active application; forms get `AppActivate` and `AppDeactivate`), `RunOnMainThread(Procedure, *Args, Wait=False)` (runs it on the main thread, where forms live: the safe way for a `threading.Thread` to show what it did; `Wait=True` waits for its result, or its error), `ColorScheme` (the program's [color scheme](#7-color-schemes-lightdark), changeable while it runs), `Style` (`"Native"`, or a Qt style such as `"Fusion"`: how every control is drawn; `Styles` lists them) |
+| `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (the project's folder however it was started: its project file, `vp6-run`, a wheel's command or, for a project in a package, wherever the package is; without a project, the main script's folder), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started), `HelpFile` (the program's [help file](#help), what `ShowHelp` shows; a path relative to `Path`), `ShowSplash(Picture, Message="", Alignment=vpCenter, Color=None)` (a splash screen: the picture, a file relative to `Path` or a Picture, in a window of its own while the program starts; it closes when the first form is shown), `SplashMessage(Text, Alignment=vpCenter, Color=None)` (a message at its bottom), `HideSplash()`, `SplashVisible`, `Active` (whether the program is the active application; forms get `AppActivate` and `AppDeactivate`), `RunOnMainThread(Procedure, *Args, Wait=False)` (runs it on the main thread, where forms live: the safe way for a `threading.Thread` to show what it did; `Wait=True` waits for its result, or its error), `ColorScheme` (the program's [color scheme](#7-color-schemes-lightdark), changeable while it runs), `Style` (`"Native"`, or a Qt style such as `"Fusion"`: how every control is drawn; `Styles` lists them) |
 | `Screen` | `Width`, `Height` (primary screen, pixels), `TwipsPerPixelX`, `TwipsPerPixelY` (15), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FixedFonts` (the fixed-width ones among them, for code and terminals), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
 | `Clipboard` | `GetText(Format=vpCFText)`, `SetText(text, Format=vpCFText)` (`vpCFRTF`: rich text, as RTF source), `GetFormat(Format)` (`vpCFText`, `vpCFBitmap` / `vpCFDIB`, `vpCFRTF`, `vpCFFiles`), `GetData(Format=vpCFBitmap)` (a [Picture](#picture-objects), or with `vpCFFiles` the files' paths; `None` when there is none), `SetData(Picture)` (a Picture or a picture file), `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
@@ -4992,11 +4992,66 @@ Its `PROJECT` dict:
 | `arguments` | the command line the IDE gives the program when it runs it (`Command()`); a program started from a shell gets the shell's: `./Calculator.vp6p --open "a file.txt"` |
 | `arguments_help` | the program's own arguments, one per line, as `--help` lists them (`ArgumentsHelp` in the Properties window), e.g. `--open FILE    open FILE at the start` |
 | `icon` | the program's icon (its windows, and the Dock or taskbar): image files relative to the project folder, sizes of one picture; `[]` (new projects) = the VP6 icon, from the VP6 installation (nothing is copied into the project); set your own with the project's `Icon` in the Properties window |
+| `package` | the Python package the project's folder is (`""`: none), e.g. `"myapp.gui"`: see [Projects in a package](#projects-in-a-package) (`Package` in the Properties window) |
+| `command` | the command its wheel installs (`""`: the project's name), e.g. `"myapp-gui"` (`Command` in the Properties window) |
 | `groups` | how the IDE's Project panel groups the forms and modules (not folders on disk) |
 
 The IDE maintains this dict; code you add elsewhere in the file is kept. See
 [architecture.md §6.2](architecture.md#62-project-files-vp6p) for the full
 format.
+
+### Projects in a package
+<!-- keywords: package, run_package, entry point -->
+
+A project can be part of a larger Python package: its folder is a package
+(`myapp/gui/`, with an `__init__.py` there and in `myapp/`), and its
+`package` says which (`"myapp.gui"`; the Properties window suggests the one
+the folders make). Then:
+
+* **Its files are imported by package name:** `myapp.gui.Form1`,
+  `myapp.gui.pages.Page1` for a file in a subfolder. Only the folder holding
+  `myapp` goes on `sys.path`, so a module named like another one (`options`,
+  `designer`) shadows nothing. Its code imports its own files relatively
+  (`from .Module1 import *`, `from ..core import answer`) or by the full name.
+* **It starts from the package:** `vp6.runner.run_package(package)` runs the
+  project file in the package's folder (the only `.vp6p` there, or the one
+  named), so a console entry point or the package's `__main__.py` starts it:
+
+  ```python
+  # myapp/gui/__main__.py: python -m myapp.gui, and the myapp-gui command
+  import sys
+
+  from vp6.runner import run_package
+
+
+  def main():
+      return run_package(__package__)
+
+
+  if __name__ == "__main__":
+      sys.exit(main())
+  ```
+
+  The project file still runs it too; either way the working folder stays
+  where the program was started (a project of its own runs in its folder).
+* **Its files are found in the package:** `App.Path` is the project's folder
+  wherever it is installed; `LoadPicture` and `ShowHelp` look for relative
+  paths there, and a form's pictures are relative to its file as always.
+* **vp6-make builds the whole package:** the wheel of `myapp`
+  (`myapp-1.0.0-py3-none-any.whl`: every file of the top package, the
+  project's at its place) with the project's `command` running
+  `myapp.gui.__main__:main` (a `__main__.py` of the project's own needs a
+  `main()`; without one the wheel gets the launcher above). Built by
+  setuptools instead, the larger package lists the project's files as package
+  data and the entry point itself:
+
+  ```toml
+  [project.scripts]
+  myapp-gui = "myapp.gui.__main__:main"
+
+  [tool.setuptools.package-data]
+  "myapp.gui" = ["*.vp6p", "images/*.png"]
+  ```
 
 ### Building a wheel
 
@@ -5027,6 +5082,9 @@ Calculator                                          # its command (or: python -m
   installed there is mentioned and left out.
 * Nothing more is needed to build one (no PyInstaller). A project with a
   `__main__.py` of its own can't be built: the wheel's launcher goes there.
+  The command is the project's `Command` when it has one (e.g. `calc-tool`).
+  A project in a package makes the wheel of its whole package: see
+  [Projects in a package](#projects-in-a-package).
 
 ### Making an executable
 

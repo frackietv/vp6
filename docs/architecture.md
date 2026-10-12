@@ -764,6 +764,8 @@ PROJECT = {
     "description": "A calculator",      # App.FileDescription
     "arguments": "",                    # the command line the IDE runs it with (Command())
     "arguments_help": "--open FILE    open FILE at the start",   # listed by --help
+    "package": "",                      # the Python package it is ("": none)
+    "command": "",                      # its wheel's command ("": its name)
     "groups": [                         # how the Project panel shows them (not folders)
         {"group": "Forms", "items": ["frmCalculator.py"]},
         {"group": "Modules", "items": []}

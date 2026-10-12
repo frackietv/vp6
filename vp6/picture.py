@@ -177,10 +177,17 @@ def LoadPicture(FileName: str = "", Dark: bool = False) -> Picture:
     ``LoadPicture()`` is an empty one (setting a Picture property to it clears
     it). Dark=True takes the file's dark version where there is one beside it
     (``open.dark.png`` for ``open.png``), e.g. ``Dark=Me.DarkMode``. A missing
-    or unreadable file raises FileNotFoundError / ValueError."""
+    or unreadable file raises FileNotFoundError / ValueError. A relative path
+    not found in the working folder is looked for in the program's (App.Path:
+    a project in a package is started elsewhere)."""
     if not FileName:
         return Picture()
     path = str(FileName)
+    if not os.path.isabs(path) and not os.path.isfile(path):
+        from .app import _App  # (a project in a package: its files are in the package)
+
+        if _App._path and os.path.isfile(os.path.join(_App._path, path)):
+            path = os.path.join(_App._path, path)
     if Dark:
         path = dark_variant(path)
     if not os.path.isfile(path):

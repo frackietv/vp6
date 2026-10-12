@@ -22,6 +22,8 @@ A project file is an executable Python script that starts the program::
         "description": "",            # App.FileDescription
         "arguments": "",              # the command line when the IDE runs it
         "arguments_help": "",         # the program's arguments, for --help
+        "package": "",                # the Python package it is ("": none)
+        "command": "",                # its wheel's command ("": its name)
         "groups": [                   # how the Project panel shows them
             {"group": "Forms", "items": ["Form1.py"]},
             {"group": "Modules", "items": ["Module1.py"]},
@@ -57,6 +59,16 @@ groups, "Forms" and "Modules", holding the forms and the modules.
 ``arguments`` is the command line the IDE gives the program when it runs it
 (``Command()``), and ``arguments_help`` lists the program's own arguments
 for ``--help``. Older projects without them get the defaults.
+
+``package`` makes the project part of a Python package: its folder is that
+package (dotted, e.g. ``"myapp.gui"``: the folders ``myapp/gui`` with an
+``__init__.py`` each), and its forms and modules are imported by package name
+(``myapp.gui.Form1``, ``myapp.gui.pages.Page1`` for a subfolder) instead of
+from folders put on ``sys.path``, so names such as ``options`` can't shadow
+other modules. The program is started from the package (``run_package``, e.g.
+by a console entry point) and finds its files there (``App.Path``).
+``command`` is the command a wheel installs for it (empty: the project's name),
+e.g. ``myapp-gui``.
 """
 
 from __future__ import annotations
@@ -78,7 +90,7 @@ _END_RE = re.compile(r"^# endregion\b.*$", re.M)
 
 _FIELDS = ("name", "type", "startup", "forms", "modules", "user_controls", "color_scheme", "icon",
            "version", "product_name", "company_name", "description", "arguments",
-           "arguments_help", "groups")
+           "arguments_help", "package", "command", "groups")
 _COMMENTS = {
     "icon": "the program's icon: image files (sizes of it), or []",
     "type": '"exe" (GUI) or "console"',
@@ -90,6 +102,8 @@ _COMMENTS = {
     "product_name": 'App.ProductName ("": the project\'s name)',
     "arguments": "the command line the IDE runs it with (Command())",
     "arguments_help": "the program's own arguments, shown by --help",
+    "package": 'the Python package it is ("": none), e.g. "myapp.gui"',
+    "command": 'the command its wheel installs ("": its name)',
 }
 
 _TEMPLATE = '''#!/bin/sh
@@ -144,6 +158,8 @@ class Project:
     description: str = ""  # App.FileDescription
     arguments: str = ""  # the command line when the IDE runs the program (Command())
     arguments_help: str = ""  # the program's own arguments, listed by --help
+    package: str = ""  # the Python package the project's folder is ("": none)
+    command: str = ""  # the command its wheel installs ("": the project's name)
     # The Project panel's tree (None: Forms and Modules groups); compared by tree()
     groups: list | None = field(default=None, compare=False)
     path: str = field(default="", compare=False)  # the .vp6p file
@@ -166,6 +182,57 @@ class Project:
     def files(self) -> list[str]:
         """Every form, user control and module (relative paths)."""
         return self.forms + self.user_controls + self.modules
+
+    # -- a project in a package -----------------------------------------------------------------
+    def module_name(self, relative: str) -> str:
+        """What a form or module is imported by: its file's name, or in a package
+        its dotted path there (``myapp.gui.pages.Page1``)."""
+        stem = os.path.splitext(relative.replace("\\", "/"))[0]
+        if not self.package:
+            return os.path.basename(stem)
+        return ".".join([self.package] + [part for part in stem.split("/") if part])
+
+    def package_root(self) -> str:
+        """The folder holding the package's top folder (what goes on ``sys.path``);
+        the project's folder when it isn't in a package."""
+        folder = self.directory
+        for _ in self.package.split(".") if self.package else ():
+            folder = os.path.dirname(folder)
+        return folder
+
+    def package_problem(self) -> str | None:
+        """Why the project's folder can't be its ``package``, or None."""
+        if not self.package:
+            return None
+        parts = self.package.split(".")
+        if not all(part.isidentifier() for part in parts):
+            return f"'{self.package}' is not a package name (e.g. myapp.gui)"
+        folder = self.directory
+        for part in reversed(parts):
+            if os.path.basename(folder) != part:
+                return (f"The project's folder isn't the package '{self.package}': "
+                        f"{self.directory} doesn't end with {'/'.join(parts)}")
+            if not os.path.isfile(os.path.join(folder, "__init__.py")):
+                return f"{folder} has no __init__.py: it isn't a package"
+            folder = os.path.dirname(folder)
+        return None
+
+    def found_package(self) -> str:
+        """The package the project's folder is, from the __init__.py files
+        around it (``""``: none)."""
+        parts, folder = [], self.directory
+        while os.path.isfile(os.path.join(folder, "__init__.py")) and \
+                os.path.basename(folder).isidentifier():
+            parts.insert(0, os.path.basename(folder))
+            parent = os.path.dirname(folder)
+            if parent == folder:
+                break
+            folder = parent
+        return ".".join(parts)
+
+    def command_name(self) -> str:
+        """The command a wheel installs for the program."""
+        return self.command or self.name
 
     # -- the icon -------------------------------------------------------------------------------
     def version_numbers(self) -> tuple[int, int, int]:

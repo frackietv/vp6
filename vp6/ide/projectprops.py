@@ -81,6 +81,14 @@ class _ProjectObject:
         return self._target.project.arguments_help
 
     @property
+    def Package(self) -> str:
+        return self._target.project.package
+
+    @property
+    def Command(self) -> str:
+        return self._target.project.command
+
+    @property
     def Icon(self) -> str:
         """The icon's last file: the largest size, as new projects list them."""
         icon = self._target.project.icon
@@ -119,6 +127,9 @@ class ProjectTarget(QObject):
             P("ArgumentsHelp", "text", "",
               description="The program's own command line arguments, one per line, as "
                           "--help lists them, e.g. --open FILE    open FILE at the start."),
+            P("Command", "str", "",
+              description="The command its wheel installs (vp6-make), e.g. myapp-gui; "
+                          "empty: the project's name."),
             P("CompanyName", "str", "", description="App.CompanyName."),
             P("Description", "str", "", description="App.FileDescription: what the "
                                                     "program is."),
@@ -127,6 +138,12 @@ class ProjectTarget(QObject):
                           "image file in the project's folder, square, e.g. 256 x 256 "
                           "pixels. Empty (as in new projects): the VP6 icon, from the VP6 "
                           "installation."),
+            P("Package", "str", "",
+              description="The Python package the project's folder is, e.g. myapp.gui "
+                          "(folders myapp/gui with an __init__.py each): its forms and "
+                          "modules are imported by package name (myapp.gui.Form1), and it "
+                          "is started from the package (vp6.runner.run_package). Empty: "
+                          "a project of its own."),
             P("ProductName", "str", "",
               description="App.ProductName; empty: the project's name."),
             P("StartupObject", "enum", "Form1", startup,
@@ -174,6 +191,18 @@ class ProjectTarget(QObject):
             setattr(project, {"ProductName": "product_name", "CompanyName": "company_name",
                               "Description": "description", "Arguments": "arguments"}[prop],
                     str(value).strip())
+        elif prop == "Package":
+            package = str(value or "").strip()
+            old, project.package = project.package, package
+            problem = project.package_problem()
+            if problem:
+                project.package = old
+                return problem
+        elif prop == "Command":
+            command = str(value or "").strip()
+            if command and not all(c.isalnum() or c in "-_." for c in command):
+                return f"'{command}' is not a command name (letters, digits, - _ .)"
+            project.command = command
         elif prop == "ArgumentsHelp":
             project.arguments_help = str(value or "").strip("\n")
         elif prop == "Icon":  # one file now, whatever sizes it had
