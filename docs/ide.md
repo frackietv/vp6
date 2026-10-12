@@ -18,6 +18,7 @@ and built on PySide6 (Qt).
 | Outline window              | The structure of the current file: constants, variables, classes and their members, functions, top-level code, with type icons; sort by file order, name or type; click an item to go to its line; the item the cursor is in is highlighted. It takes the Properties panel's place while a code window is active, and gives it back for designers (also View > Outline Window and F4) |
 | Output window               | The IDE's own output, including library messages such as Qt warnings (hidden by default; View > Output Window) |
 | Claude window               | View > Claude Window: Claude Code's login (Log In / Log Out; one login lasts across projects and sessions) and the project folder's sessions with Claude (New, Open, Rename, Delete); each session opens in a window next to the designers and code windows (see [Claude](#claude)) |
+| Codex window                | View > Codex Window: OpenAI's Codex, as the Claude window: its login (Log In opens ChatGPT's login in the browser; one login lasts across projects and sessions) and the project folder's sessions with Codex (New, Open, Rename, Delete), each in a window among the designers and code windows |
 | Menu Editor (Ctrl+E)        | Tools > Menu Editor designs the form's menus like VB's: Caption (`-` for a separator), Name, Index, Shortcut, Checked, Enabled, Visible, with arrows to indent and move items. The designer shows the menu bar; click a menu to see it and an item to open its Click code |
 | Pages                       | Controls in a ToolBox, a PageFrame or a WizardForm are on one of its pages: the designer edits the page shown (its `CurrentPage`). Click a ToolBox's page header, or choose Previous Page / Next Page in the designer's context menu (with the container, or a control in it, selected), to edit another; controls drawn or pasted there go on that page, and selecting a control on another page (in the Properties window's list) shows its page. The mouse wheel over a ScrollPanel scrolls it, to reach its controls further away |
 | Wizard forms and splash screens | Project > Add Wizard Form: a WizardForm, a window that is a wizard (its Pages, Back/Next/Finish/Cancel, ValidatePage and NextPage in the code window's Form list); Project > Add Splash Screen: a borderless form with the project's title, version and company that closes itself after a few seconds |
@@ -140,6 +141,40 @@ program changes it). Only what changed is replaced, as one edit that Undo
 takes back, and the cursor stays where it was. Before each message the IDE
 saves the files changed in it, so Claude works on them as they are; a file
 changed both in the IDE and on disk is read again only if you say so.
+
+### Codex
+
+<!-- keywords: Codex, OpenAI, ChatGPT, AI, chat, session -->
+
+VP6 works with OpenAI's **Codex** too (the `codex` command, which has to be
+installed: see [Codex CLI](https://developers.openai.com/codex/cli)), the
+same way as with Claude. View > Codex Window opens the **Codex window** at
+the bottom, as a tab with the Immediate window:
+
+* **The login.** It says whether Codex is logged in (and as whom). **Log In**
+  opens ChatGPT's login page in the browser; the window notices when it's
+  done (**Cancel Login** gives up). **Log Out** logs out. The login is
+  Codex's own, kept in its folder (`~/.codex`), so every project, every
+  session, the next start of the IDE and `codex` in a terminal use it.
+  **Locate…** chooses the `codex` command if it isn't found.
+* **The sessions** of the project's folder, the latest first: Codex's own,
+  so sessions started with `codex` in a terminal (or Codex's app) are listed
+  too. **New**, **Open**, **Rename** (the name Codex keeps), **Delete** and
+  **Refresh**, as in the Claude window.
+
+A session opens in a **window of its own** among the form designers and code
+windows: Codex's answers as Markdown, each command it runs and each file it
+changes on a line of its own; **Enter** sends, **Shift+Enter** starts a new
+line, **Stop** stops it. Codex works in the project's folder. When it wants
+to do what its mode doesn't allow (run a command outside the sandbox, change
+files) it asks: **Allow**, **Always Allow** (for the rest of the session) or
+**Deny**. The box at the bottom chooses the mode: *Ask Outside the Folder*
+(it changes the project's files and runs commands in it freely), *Ask
+Before Running Commands*, *Read Only* or *Full Access*.
+
+Files Codex changes show at once in the form designer and the code window,
+and the files changed in the IDE are saved before each message, as for
+Claude.
 
 ## Files
 

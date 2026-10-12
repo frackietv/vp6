@@ -69,6 +69,8 @@ vp6/                    runtime library - "from vp6 import *"
     terminalpanel.py    the Terminal window: a shell in the project's folder
     claude.py           Claude Code: finding it, its login, sessions, a chat (ClaudeChat)
     claudepanel.py      the Claude window (login, sessions) and chat windows
+    codex.py            Codex: finding it, its app-server (CodexServer), a chat (CodexChat)
+    codexpanel.py       the Codex window and its chat windows (kinds of Claude's)
     outline.py          the Outline window: structure of the current file
     objectbrowser.py    the Object Browser: VP6's and the project's classes and members
     documents.py        Document / FormDocument (open files)
@@ -377,9 +379,10 @@ flowchart TD
 
 * a central `QMdiArea` holding designer windows (`FormDesigner`) and code
   windows (`CodeWindow`), one of each per file at most, created on demand and
-  hidden rather than deleted when closed, and Claude's chat windows
-  (`claudepanel.ClaudeChatWindow`, one per session, deleted when closed);
-* eight docks: **Toolbox** (`panels.Toolbox`), **Project**
+  hidden rather than deleted when closed, and Claude's and Codex's chat
+  windows (`claudepanel.ClaudeChatWindow`, `codexpanel.CodexChatWindow`: kinds
+  of `claudepanel.ChatWindow`, one per session, deleted when closed);
+* nine docks: **Toolbox** (`panels.Toolbox`), **Project**
   (`panels.ProjectExplorer`), **Properties**
   (`properties.PropertiesWindow`), **Immediate** (`panels.ImmediateWindow`, the
   running program's output) and **Output** (`panels.OutputWindow`, the IDE's
@@ -387,9 +390,12 @@ flowchart TD
   run by the Terminal control), **Debug** (`debugpanel.DebugPanel`: the
   Watches, the Call Stack and the Breakpoints, §5.8) and **Claude**
   (`claudepanel.ClaudePanel`: Claude Code's login and the project folder's
-  sessions, run by `claude.ClaudeChat` as `claude -p` with stream-json).
-  Output, Terminal, Debug and Claude are hidden by default and tabbed with
-  Immediate;
+  sessions, run by `claude.ClaudeChat` as `claude -p` with stream-json) and
+  **Codex** (`codexpanel.CodexPanel`, a kind of `ClaudePanel`: Codex's login
+  and sessions through one `codex app-server`, `codex.CodexServer`, shared
+  with the chats, each a `codex.CodexChat` on a thread of its own).
+  Output, Terminal, Debug, Claude and Codex are hidden by default and tabbed
+  with Immediate;
   `outputcapture.OutputCapture` redirects file descriptors 1 and 2 through
   pipes, so library output such as Qt's warnings is included, and still
   copies everything to the terminal;

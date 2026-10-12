@@ -140,3 +140,11 @@ def _no_real_claude(tmp_path_factory, monkeypatch):
     Claude Code's folder is one of the test's own."""
     monkeypatch.setenv("VP6_CLAUDE", "/nonexistent/claude")
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path_factory.mktemp("claude")))
+
+
+@pytest.fixture(autouse=True)
+def _no_real_codex(tmp_path_factory, monkeypatch):
+    """The same for the Codex window: no codex command (tests give a
+    stand-in), and Codex's folder (its login, its sessions) is the test's own."""
+    monkeypatch.setenv("VP6_CODEX", "/nonexistent/codex")
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path_factory.mktemp("codex")))

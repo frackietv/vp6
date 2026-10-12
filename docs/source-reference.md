@@ -1579,7 +1579,18 @@ prepended to `PYTHONPATH` for programs started with F5.
     new session, and opening or closing a project (whose `close_project`
     closes the chats). `claude_login()` runs `claude auth login` in the
     Terminal window's shell. `closeEvent` ends every chat and the panel's
-    login check. Edit's commands work on a chat's text fields (`_edit`).
+    login check. Edit's commands work on a chat's text fields (`_edit`: any
+    `ChatWindow`). Both kinds of chat window are opened by `_open_chat(subs,
+    panel, id, make)` (the one open on that session, else `make(session)`'s,
+    added to the MDI area; `sending` saves the files first).
+  * **Codex window** (`codex_panel`, a `codexpanel.CodexPanel` whose
+    `server` the chats share; dock `codex_dock`): as the Claude window. View
+    > Codex Window (`show_codex`); `open_codex_session(id)` opens a
+    `CodexChatWindow` (`codex_windows()`); `_codex_replied` refreshes the
+    panel; `_on_codex_message` starts `_disk_check` when an item that runs a
+    command or changes files completes, and when a turn completes;
+    `codex_login()` (a chat's login link) shows the panel and logs in.
+    `closeEvent` ends the chats and the panel (its server).
   * **Toolbox** (`toolbox`, dock `toolbox_dock`): resizable, two columns by
     default. `_snap_toolbox` (a 50 ms `_toolbox_snap` timer started by the
     Toolbox's `resized` and the dock's moves) fits its width to
@@ -2473,9 +2484,9 @@ the login, the sessions on disk, and a chat.
 * `PERMISSION_MODES`, `default_mode()` (setting `claude/mode`: `MODE_KEY`),
   `shell_quote(path)`.
 
-### `vp6/ide/claudepanel.py` (≈580 lines)
+### `vp6/ide/claudepanel.py` (≈650 lines)
 
-The Claude window and the chat windows.
+The Claude window and the chat windows (the Codex window's are kinds of them).
 
 * **`ClaudePanel(QWidget)`** (`folder`: a callable giving the project's
   folder; else home): `status` (the login, from `AuthStatus`, or how to
@@ -2484,14 +2495,26 @@ The Claude window and the chat windows.
   `log_in_started()`, which asks again every 3 s (`_login_poll`) until
   logged in; Log Out: `log_out()` after asking), `tree` of `sessions`
   (Session, Changed), `buttons` New, Open, Rename, Delete, Refresh (and the
-  same `_context_menu`); `openSession(id)` ("" for New); `refresh()` keeps the
-  selection and checks the login; `refresh_if_moved()`; the first
-  `showEvent` lists them; `end()` stops checking.
+  same `_context_menu`); `openSession(id)` ("" for New); `refresh()` lists
+  them (`_list(folder)`, which calls `show_sessions(list)`: the selection
+  kept) and checks the login; `refresh_if_moved()`; the first `showEvent`
+  lists them; `end()` stops checking. What differs for another assistant is
+  in class attributes (`NAME`, `PRODUCT`, `COMMAND`, `COMMAND_KEY`,
+  `INSTALL_URL`) and methods a subclass overrides: `find_command()`,
+  `_ask_login(command)` (answered by `_auth_checked(logged in, text)`),
+  `log_in()`, `_log_out(command)` (after `log_out(confirm)`), `_list`,
+  `_tip(info)`, `_rename(info, title)`, `_delete(info)`;
+  `locate_command(path)` saves the command in `COMMAND_KEY`.
 * `tool_summary(name, input)`: one line about a tool's use (its command,
   file, pattern, address...).
-* **`ClaudeChatWindow(QWidget)`** (`folder`, `session`: a `SessionInfo` to
-  resume, its transcript shown): `chat` (a `ClaudeChat` in the last mode
-  chosen), `view` (a `QTextBrowser`: "You" and "Claude" headings by
+* **`ChatWindow(QWidget)`** (`folder`, `session`): a chat with an
+  assistant, its `NAME`, `PRODUCT`, `MODES`, `MODE_KEY` and `COLORS` given by
+  a subclass, which also makes the `chat` (`_make_chat(folder, session)`:
+  signals `message`, `sessionChanged`, `busyChanged`, `permissionRequested`,
+  `failed`; `send`, `stop`, `answer`, `set_mode`, `end`, `busy`, `mode`,
+  `session_id`), shows its messages (`show_message`) and a resumed
+  session's (`_show_session`), with `_show_text`, `_show_tool(name,
+  summary)`, `_show_tool_error(text)` and `_show_error`. It has `view` (a `QTextBrowser`: "You" and "Claude" headings by
   `_append` when the speaker changes; the user's text escaped, Claude's as
   Markdown with `vp6help.markdown.to_html`; tool uses dimmed, tool errors
   and failed results red, with a `vp6:login` link (`_link_clicked`:
@@ -2502,7 +2525,77 @@ The Claude window and the chat windows.
   permission mode, remembered), `state` (the model, working, the cost and
   time). `send(text)` names a new session after its first message
   (`titleChanged`) and emits `sending` first; `sessionChanged`, `replied`; `apply_theme()` picks the
-  colors; `end()` and `closeEvent` end Claude Code.
+  colors; `end()` and `closeEvent` end the chat.
+* **`ClaudeChatWindow(ChatWindow)`**: `chat` a `ClaudeChat` in the last mode
+  chosen (`PERMISSION_MODES`); a resumed `SessionInfo`'s transcript shown;
+  `show_message` reads Claude Code's stream-json messages (text, tool uses,
+  tool errors, the init's model, the result's cost and time).
+
+### `vp6/ide/codex.py` (≈520 lines)
+
+Codex in the IDE, through OpenAI's Codex CLI (the `codex` command) run as
+`codex app-server` (JSON-RPC, one message per line).
+
+* `find_codex()`: `$VP6_CODEX` (`CODEX_ENV`; the tests' stand-in, or a
+  missing path), else the setting `codex/command` (`COMMAND_KEY`), else the
+  PATH, else the installers' usual places (`_PLACES`, Codex's app's too).
+  `codex_home()` (`$CODEX_HOME` or `~/.codex`: Codex's login and sessions).
+* `MODES`: (mode, label, approval policy, sandbox policy): `auto`
+  (on-request, workspace-write), `untrusted`, `read-only`, `full` (never,
+  danger-full-access); `mode_policies(mode)`, `default_mode()` (setting
+  `codex/mode`: `MODE_KEY`).
+* **`CodexServer(QObject)`** (`command`): `request(method, params, callback,
+  error)` starts `codex app-server` if it isn't running (`_start`: then
+  `initialize`; requests wait in `_waiting` until it answers, then the
+  `initialized` notification and they go), calls back with the result or
+  an error's message (also when the server can't start or ends: `stopped`);
+  `respond(id, result)` / `respond_error` answer `serverRequest(id, method,
+  params)`; `notification(method, params)`; `generation` (one more for each
+  start), `ready`, `running`, `end()`. `finished` goes to a bound method.
+* `describe_account(result)`: (logged in, text) from `account/read`.
+* `CodexSession` (id, path, title, modified, preview, cwd) and
+  `session_of(thread)`; `list_params(folder, cursor)` (`thread/list` for
+  exactly that folder, `SOURCE_KINDS`, the latest first); `user_text(item)`.
+* **`CodexChat(QObject)`** (`server`, `folder`, `session_id`, `mode`): the
+  same signals as `ClaudeChat` and `resumed(thread)`. `open()` resumes the
+  session (`thread/resume`: its turns); `send(text)` starts the thread first
+  if it isn't loaded in this server's `generation` (`thread/start`, or
+  `thread/resume`; the message waits in `_pending`), then `turn/start` with
+  the mode's approval and sandbox policies (the folder writable). The
+  server's notifications for its thread become `message({"method",
+  "params"})` (and `vp6/threadLoaded` with the model); `turn/started` gives
+  `turn_id` (for `stop()`: `turn/interrupt`), `turn/completed` ends `busy`;
+  a fileChange item's files are kept for its question. Server requests for
+  its thread: `item/commandExecution/requestApproval` ("Shell", the
+  command) and `item/fileChange/requestApproval` ("Edit Files") become
+  `permissionRequested`, answered by `answer()` (accept, acceptForSession,
+  decline); others get an error. The server ending while busy: `failed`.
+  `end()` unsubscribes the thread and cancels open questions.
+
+### `vp6/ide/codexpanel.py` (≈300 lines)
+
+The Codex window and its chat windows.
+
+* **`CodexPanel(ClaudePanel)`** (`folder`, `server`: its own if not given):
+  the login from `account/read` (`_ask_login`, one at a time); `log_in()`
+  starts `account/login/start` (ChatGPT) and opens its `authUrl`
+  (`open_url`, which the tests replace), the button then Cancel Login
+  (`cancel_login`); `account/login/completed` and `account/updated` check
+  again; `_log_out` is `account/logout`. Sessions from `thread/list`
+  (`_page`, following `nextCursor`; an older listing's answer dropped:
+  `_listing`), renamed with `thread/name/set`, deleted with
+  `thread/delete`. `end()` ends the server too.
+* `command_line(item)`: a commandExecution item's command without its
+  shell.
+* **`CodexChatWindow(ChatWindow)`** (`server`, `folder`, `session`): a
+  `CodexChat`; a resumed session's turns shown when Codex sends them
+  (`_show_thread`); `show_message` shows each item when it starts
+  (`_item_started`: commands, file changes as Add/Edit/Delete and the path,
+  MCP and other tools, searches, images viewed) and completes
+  (`_item_completed`: Codex's text as Markdown, failed or declined
+  commands and changes, the user's text from a resumed session), an `error`
+  given up on, and the turn's end (`_turn_completed`: Done and the time,
+  Stopped, or the error with the login link).
 
 ### `vp6/ide/debugger.py` (≈280 lines)
 
@@ -3203,7 +3296,11 @@ All tests run headless. `conftest.py`:
 * provides `wait_for(predicate, timeout_ms)` (PySide has no
   `QTest.qWaitFor`);
 * makes VP6's help in a folder of the tests' own (`VP6_HELP_DIR`) and closes
-  the help windows a test opened (`_no_help_windows_left`).
+  the help windows a test opened (`_no_help_windows_left`);
+* never runs the user's Claude Code or Codex, nor reads their sessions or
+  logins: `VP6_CLAUDE` and `VP6_CODEX` name missing commands (tests give
+  stand-ins), `CLAUDE_CONFIG_DIR` and `CODEX_HOME` folders of the test's own
+  (`_no_real_claude`, `_no_real_codex`).
 
 | File | Covers |
 |---|---|
@@ -3268,6 +3365,7 @@ All tests run headless. `conftest.py`:
 | `test_vp6help.py` | The help system: Markdown to HTML (blocks, tight and loose and nested lists, task items, tables with alignment and escaped pipes, inline markup, links, pictures, autolinks); making a help file (pages, titles, links between documents rewritten, pictures included, missing links warned about, anchors on every heading, the contents to a depth or flat, index keywords from headings, lone code names, comments and meta tags (not linked code), sections' text without scripts; the same documents making the same bytes; the home page; errors; the command line with an @file); Python packages read without importing (classes, signatures, properties, attributes, constants in groups, private names, re-exports, bases linked and inherited members), following imported packages (not the standard library; excluded ones), compiled modules inspected, a package in a help file; the file (lookups, filters, regular expressions, case, search counts and order, not a help file); the viewer (home, contents, links, pictures, back and forward, web links, missing pages, Locate, the index's filter and options, keywords with several topics and a context, search highlighting with options, requests and one window per file, colors from the palette, the command line's `--list`); vp6help's pyproject. |
 | `test_samples.py` | The New Project dialog's categories (Standard EXE and Console Application at the top level then the Sample Projects folder; Kitchen Sink and the Graphics folder in it; Projection and Perspectives in that; folders opened by double-click and Open, no template while one is chosen, its contents described; `select_template`); Projection: a project of a single startup form; the isometric projection (the view along the diagonal, the axes 120° apart and equally long, Z up, the angles shown); the eight projections (their axes, angles and lengths; each drawn solid); solid faces covering the middle and the axes behind the model, the wireframe showing them through and its corners; the model turning at the rate sliders' speeds (a rate of 0, Rotate off, past 180°), its angle sliders setting it; what the mouse takes (the space, the model, an axis's end and label; the pointer); dragging an axis (just that one, the angles no longer 120°, a general parallel projection), then the space (the skew kept), double-click and Reset view going back; dragging the space turning the axes (still orthographic, the elevation stopping at 90°); dragging the model turning it around the camera's axes, the axes staying; resizing; the models' toggles (one at a time, each hit by the mouse; the torus's hole; the house's wireframe and edges); the models' faces (flat, unit normals, outward for convex parts and away from the torus's tube; within the axes); the separations (every pair of boxes, a street on the ground, none for overlapping boxes); the parts drawn back to front (the boxes turned round, the park before its trees, a part facing away left out); `hull` and `overlap`. Perspectives: a project of a single startup form, 3-point first; the six perspectives (each N-point, its vanishing points' places, drawn solid); linear (2-point: X and Y on the horizon, lines along an axis heading for its vanishing point, upright lines upright, nearer bigger; 1-point: Y's up and right of the model's center); curvilinear (fisheye: +Y in the middle, four on the rim, edges bending; cylindrical: four on the horizon a quarter turn apart, Z's at infinity; spherical: −Y in the middle of the half behind, rim points in both halves); dragging a vanishing point (just that one; double-click going back; one at infinity at the edge, dragged to a point; a fisheye's, the other way going behind); vanishing points at infinity (parallel lines that way; none left: a parallel projection, still solid; back to a point inside the picture; on the fisheye's rim); dragging the space (sideways: along the horizon, Z still at infinity; down: 3-point) and the model; the Distance (the vanishing points staying, the model smaller; inside the cube: every face, ahead and behind); the perspective lines (each axis's and the horizon, none when off) and the fisheye's rim; what the mouse takes; every model in every perspective, solid and wireframe, the boxes back to front; resizing (the sphere's halves side by side); `clip`, `crosses_seam`, `slerp`, `inside`, `look`. |
 | `test_claude.py` | The IDE's Claude window and chats, with a stand-in for Claude Code (a script speaking stream-json, keeping transcripts and a login as it does): the transcripts folder's name; sessions listed with their titles (the IDE's name, Claude Code's, the first thing asked; its own commands and notes skipped; empty ones not listed), renamed and deleted; a transcript's messages; times; `claude auth status` read; finding the command; tool summaries; a chat kept running between messages and resumed (in a new mode) after it ended; no Claude Code; asking before a tool (Deny, Always Allow, not asked again); the chat window (Enter and Shift+Enter, its title, Send/Stop, Markdown, the cost, an error with the login link); Stop; a resumed session's transcript; the panel without Claude Code and with it (the login, the sessions, New/Open/Rename/Delete, the menu); in the IDE: hidden by default and tabbed, sessions in the MDI area in the project's folder, listed after a reply, opened once, Edit > Copy, closed with the project or their window (Claude Code ending), Log In through the Terminal window; drawn; files Claude changes shown at once in the designer and the code window (unsaved changes saved before the message, the change undoable), files changed by another program (the watcher; its own saves not a change), a file changed here and on disk (kept or read again, as the user says), reloading only what changed (a cursor, a breakpoint, an emoji). |
+| `test_codex.py` | The IDE's Codex window and chats, with a stand-in for `codex app-server` (a script speaking its JSON-RPC, keeping threads and a login as it does): finding the command and Codex's folder; the account described; sessions from threads, the listing's parameters, the modes' policies, a command without its shell; the server started when asked (initialized first, kept running, errors); no Codex; a chat (the thread started in the folder, the mode's policies on each turn, unsubscribed at the end); two chats on one server each taking their own thread's messages; asking before a command (accept, decline, acceptForSession); a resumed thread's turns, the server ending while busy and started again (the thread resumed); Stop (turn/interrupt); the chat window (its title, Send/Stop, the time, a denied command, a file change asked about and made, the mode remembered, an error with the login link); a resumed session shown; the panel without Codex and with it (Log In in the browser, Log Out, the folder's sessions only, the latest first, Open/New/Rename/Delete); in the IDE: hidden by default and tabbed, sessions in the MDI area sharing the panel's server, listed after a reply, opened once, closed with the project; logging in from a chat's link; files Codex changes shown at once in the designer and the code window; the server ended with the IDE; drawn. |
 | `test_ide_terminal.py` | The IDE's Terminal window: hidden by default and tabbed with the Immediate window (Reset Window Layout hiding it again), View > Terminal Window and its key; the shell started in the project's folder (home without a project or for a missing folder), typing into it; its end announced and Enter starting a new one; New Shell replacing the one running without a word, End Shell at once; the menu (Copy, Paste, Clear, New Shell, End Shell, enabled as they apply); the editor theme's colors and font, light and dark; closing the IDE ending the shell; drawn. |
 | `test_appearance.py` | Forced schemes styling forms and controls, System/Light switching, BackColor overrides, project defaults (runner and `.vp6p` lookup), dialogs matching forms, the project scheme field, designer schemes, the IDE scheme. |
 | `test_webbrowser.py` | A real WebBrowser (Chromium, headless): a file and its title, a link (BeforeNavigate, DocumentComplete), Busy and Progress, Back and Forward; BeforeNavigate keeping it on its page; new windows opened here or ignored (NewWindow); a name that doesn't resolve (NavigateError); LoadHTML, TitleChange, RunScript's result, StatusTextChange; GotFocus through the page's focus widget; the designer's placeholder, Toolbox, icon and events. |

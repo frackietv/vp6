@@ -1,5 +1,18 @@
 # VP6 features
 
+**Version:** 0.4.58
+**Date:** 2026-10-12
+
+## IDE
+
+- Codex in the IDE, through OpenAI's Codex CLI (the `codex` command, run as `codex app-server`): View > Codex Window, a panel at the bottom with the Immediate window
+- Its login: whether Codex is logged in (and as whom), Log In (ChatGPT's login page in the browser, noticed when done; Cancel Login) and Log Out; the login is Codex's own, so one lasts across projects, sessions and restarts of the IDE (and is shared with `codex` in a terminal); Locate… when the `codex` command isn't found
+- The project folder's sessions, the latest first, Codex's own (sessions started in a terminal or Codex's app too): New, Open, Rename, Delete, Refresh, also in a context menu
+- Each session in a window of its own among the designers and code windows: Codex's answers as Markdown, the commands it runs and the files it changes, Enter to send and Shift+Enter for a new line, Stop, the model and the time of each answer; a resumed session shows what was said before
+- Codex asks before doing what its mode doesn't allow: Allow, Always Allow (for the rest of the session) or Deny; modes Ask Outside the Folder, Ask Before Running Commands, Read Only and Full Access (new sessions start in the last one chosen)
+- Files Codex changes are shown at once in the form designer and the code window; the files changed in the IDE are saved before each message
+- One Codex server for the window and every session, started only when first needed and ended with the IDE
+
 **Version:** 0.4.57
 **Date:** 2026-10-12
 

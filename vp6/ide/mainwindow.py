@@ -30,7 +30,8 @@ from ..usercontrol import (load_user_control, register_user_control,
                            unregister_user_controls, user_control_types)
 from . import icons, kitchensink, samples
 from .claude import find_claude, shell_quote
-from .claudepanel import ClaudeChatWindow, ClaudePanel
+from .claudepanel import ChatWindow, ClaudeChatWindow, ClaudePanel
+from .codexpanel import CodexChatWindow, CodexPanel
 from .codeeditor import CodeWindow
 from .debugger import DebugSession, WatchWindow, describe, same_file
 from .debugpanel import DebugPanel
@@ -122,6 +123,10 @@ class MainWindow(QMainWindow):
         self.claude_panel = ClaudePanel(lambda: self.project.directory if self.project else None)
         self.claude_panel.openSession.connect(self.open_claude_session)
         self.claude_panel.loginRequested.connect(self.claude_login)
+        # View > Codex Window: the same for OpenAI's Codex (its app-server, shared by the
+        # panel and the chats, started when first needed)
+        self.codex_panel = CodexPanel(lambda: self.project.directory if self.project else None)
+        self.codex_panel.openSession.connect(self.open_codex_session)
         # View > Debug Window: the Watches, the Call Stack and the Breakpoints (hidden at first)
         self.watches = WatchWindow()
         self.debug_panel = DebugPanel(self.watches)
@@ -140,6 +145,8 @@ class MainWindow(QMainWindow):
                                      "debug")
         self.claude_dock = self._dock("Claude", self.claude_panel, Qt.BottomDockWidgetArea,
                                       "claude")
+        self.codex_dock = self._dock("Codex", self.codex_panel, Qt.BottomDockWidgetArea,
+                                     "codex")
         self.watches.changed.connect(self._refresh_watches)
         self._connect_debug_panel()
         self.outline_dock = self._dock("Outline", self.outline, Qt.RightDockWidgetArea,
@@ -348,6 +355,8 @@ class MainWindow(QMainWindow):
                                    tip="A shell in the project's folder")
         self.act_view_claude = a("C&laude Window", self.show_claude,
                                  tip="Claude Code: the login and the project's sessions")
+        self.act_view_codex = a("Code&x Window", self.show_codex,
+                                tip="OpenAI's Codex: the login and the project's sessions")
         self.act_view_outline = a("Outli&ne Window", self._show_outline,
                                   tip="The structure of the current file")
 
@@ -418,7 +427,7 @@ class MainWindow(QMainWindow):
         for act in (self.act_view_code, self.act_view_object, self.act_view_browser, None,
                     self.act_view_immediate,
                     self.act_view_output, self.act_view_debug, self.act_view_terminal,
-                    self.act_view_claude,
+                    self.act_view_claude, self.act_view_codex,
                     self.act_view_project, self.act_view_props,
                     self.act_view_outline, self.act_view_toolbox):
             view.addSeparator() if act is None else view.addAction(act)
@@ -627,6 +636,9 @@ class MainWindow(QMainWindow):
         self.claude_dock.setFloating(False)  # (and for the Claude window)
         self.addDockWidget(Qt.BottomDockWidgetArea, self.claude_dock)
         self.claude_dock.hide()
+        self.codex_dock.setFloating(False)  # (and for the Codex window)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.codex_dock)
+        self.codex_dock.hide()
         self.immediate_dock.raise_()
         self._place_outline()  # in the Properties panel's place, shown for code windows
         self.outline_dock.hide()
@@ -724,16 +736,46 @@ class MainWindow(QMainWindow):
         return [sub for sub in self.mdi.subWindowList()
                 if isinstance(sub.widget(), ClaudeChatWindow)]
 
+    def codex_windows(self) -> list[QMdiSubWindow]:
+        return [sub for sub in self.mdi.subWindowList()
+                if isinstance(sub.widget(), CodexChatWindow)]
+
     def open_claude_session(self, session_id: str = "") -> ClaudeChatWindow:
         """A session with Claude in a window of the MDI area: the one with that
         id (already open, or resumed), or a new one ("")."""
-        for sub in self.claude_windows():
+        def make(session):
+            window = ClaudeChatWindow(self.claude_folder(), session)
+            window.replied.connect(self._claude_replied)
+            window.sessionChanged.connect(self._claude_replied)
+            window.loginRequested.connect(self.claude_login)
+            window.chat.message.connect(self._on_claude_message)
+            return window
+        return self._open_chat(self.claude_windows(), self.claude_panel, session_id, make)
+
+    def open_codex_session(self, session_id: str = "") -> CodexChatWindow:
+        """A session with Codex in a window of the MDI area (as Claude's)."""
+        panel = self.codex_panel
+
+        def make(session):
+            window = CodexChatWindow(panel.server, panel.folder(), session)
+            window.replied.connect(self._codex_replied)
+            window.sessionChanged.connect(self._codex_replied)
+            window.loginRequested.connect(self.codex_login)
+            window.chat.message.connect(self._on_codex_message)
+            return window
+        return self._open_chat(self.codex_windows(), panel, session_id, make)
+
+    def _open_chat(self, subs: list[QMdiSubWindow], panel: ClaudePanel, session_id: str,
+                   make) -> ChatWindow:
+        """The chat window open on that session, activated, or a new one (made
+        by ``make(the session or None)``) in the MDI area."""
+        for sub in subs:
             if session_id and sub.widget().session_id == session_id:
                 self._activate(sub)
                 return sub.widget()
-        session = next((s for s in self.claude_panel.sessions if s.id == session_id), None) \
+        session = next((s for s in panel.sessions if s.id == session_id), None) \
             if session_id else None
-        window = ClaudeChatWindow(self.claude_folder(), session)
+        window = make(session)
         sub = self.mdi.addSubWindow(window)
         sub.setAttribute(Qt.WA_DeleteOnClose, True)  # (resumed from the panel's list)
         sub.installEventFilter(self)
@@ -741,11 +783,7 @@ class MainWindow(QMainWindow):
         sub.setWindowTitle(window.title)
         sub.resize(760, 520)
         window.titleChanged.connect(sub.setWindowTitle)
-        window.replied.connect(self._claude_replied)
-        window.sessionChanged.connect(self._claude_replied)
-        window.loginRequested.connect(self.claude_login)
         window.sending.connect(self._before_claude)
-        window.chat.message.connect(self._on_claude_message)
         self._activate(sub)
         return window
 
@@ -764,6 +802,31 @@ class MainWindow(QMainWindow):
         panel = self.claude_panel
         if not self.claude_dock.isHidden():
             panel.refresh()
+
+    def show_codex(self):
+        """View > Codex Window: the login and the project folder's sessions."""
+        self._show_bottom(self.codex_dock)
+        self.codex_panel.refresh()
+        self.codex_panel.tree.setFocus()
+
+    def _on_codex_message(self, data: dict):
+        # A command run, files changed, or the end of an answer: look at the files
+        params = data.get("params") or {}
+        if data.get("method") == "turn/completed" or (
+                data.get("method") == "item/completed" and (params.get("item") or {}).get(
+                    "type") in ("commandExecution", "fileChange", "mcpToolCall",
+                                "dynamicToolCall")):
+            self._disk_check.start()
+
+    def _codex_replied(self, *_):
+        if not self.codex_dock.isHidden():
+            self.codex_panel.refresh()
+
+    def codex_login(self):
+        """Log in to Codex: ChatGPT's login page in the browser (the login is
+        Codex's own: it lasts across projects and sessions)."""
+        self.show_codex()
+        self.codex_panel.log_in()
 
     def claude_login(self):
         """Log in to Claude Code: ``claude auth login`` in the Terminal window,
@@ -975,6 +1038,7 @@ class MainWindow(QMainWindow):
         self._update_title()
         self._update_actions()
         self._claude_replied()  # (the new folder's sessions)
+        self._codex_replied()
         # Show the startup object. A windowed project opens a form's designer: the
         # startup form, or the first form when it starts in Sub Main (which
         # normally shows that form). A console project opens its Main module.
@@ -1094,6 +1158,7 @@ class MainWindow(QMainWindow):
         self._update_title()
         self._update_actions()
         self._claude_replied()  # (the home folder's sessions)
+        self._codex_replied()
         return True
 
     def save_all(self) -> bool:
@@ -2021,7 +2086,7 @@ class MainWindow(QMainWindow):
         widget = self._active_widget()
         in_window = widget is not None and focus is not None and \
             (focus is widget or widget.isAncestorOf(focus))
-        if (not in_window or isinstance(widget, ClaudeChatWindow)) and \
+        if (not in_window or isinstance(widget, ChatWindow)) and \
                 isinstance(focus, (QLineEdit, QPlainTextEdit, QTextEdit)):
             # A text field outside the MDI area (property editor, Immediate input)
             if op == "delete":
@@ -2558,6 +2623,9 @@ class MainWindow(QMainWindow):
         for sub in self.claude_windows():
             sub.widget().end()
         self.claude_panel.end()
+        for sub in self.codex_windows():
+            sub.widget().end()
+        self.codex_panel.end()
         if self.help_viewer is not None:
             try:
                 self.help_viewer.close()
