@@ -1599,7 +1599,7 @@ prepended to `PYTHONPATH` for programs started with F5.
     the floating panel; `eventFilter`), at the left or right edge (`resizeDocks`) or floating
     (`resize`, both in `_resize_toolbox`); not at the top or bottom edge. Its view is
     restored from the settings `toolbox/list` and `toolbox/grouped` and saved by
-    `_toolbox_view_changed`, which also gives the panel `Toolbox.wanted_width()` (the
+    `_toolbox_view_changed` (its order from `toolbox/sort`, saved on `sortChanged`), which also gives the panel `Toolbox.wanted_width()` (the
     width it had last in that view; the list view's first time: its names in full).
     `_default_layout` makes it two columns wide, or `list_width()` in the list view.
   * `_default_layout` / `reset_layout`, `_set_tabbed`, `_show_dock`;
@@ -2292,6 +2292,13 @@ Captures the IDE process's stdout and stderr for the Output window.
     so the columns line up; `_content_height` counts the headings (`HEADING`)
     for `_bar_width`, which takes the scroll bar's own size hint (Fusion's is
     wider than `PM_ScrollBarExtent`);
+  * order: the sort button (`sort_button`, not checkable) goes round
+    `SORT_ORDERS` ("natural", "ascending", "descending", each with its icon
+    and tooltip; `next_sort`, `_choose_sort` emitting `sortChanged(order)`);
+    `set_sort(order)` (an unknown one: "natural") rebuilds. `_sorted` puts
+    the tools by name (case-folded), the Pointer first; when grouped,
+    `_section_tools` also sorts the categories (Other and User Controls
+    among them) by title. The order is the same in both views;
   * `reset()` goes back to the pointer; `refresh_icons()` is used after
     light/dark changes.
 * **`ProjectExplorer`:**
@@ -3128,7 +3135,8 @@ Icons drawn with `QPainter`, in light and dark variants.
     `_image`, `TreeView`: `_treeview`, `Splitter`: `_splitter`),
     plus `Pointer`;
   * project icons `Form`, `Module`, `Project`, `Console`;
-  * the Toolbox's view buttons `ToolboxList`, `ToolboxGroups`;
+  * the Toolbox's view buttons `ToolboxList`, `ToolboxGroups`, and its sort
+    button's `ToolboxSort`, `ToolboxSortAscending`, `ToolboxSortDescending`;
   * toolbar icons `New`, `Open`, `Save`, `Run`, `Pause` (Break), `Stop`, `Sun`,
     `Moon`;
   * the `KitchenSink` template icon;

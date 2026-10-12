@@ -1,5 +1,13 @@
 # VP6 features
 
+**Version:** 0.4.59
+**Date:** 2026-10-12
+
+## IDE
+
+- The Toolbox's order button, beside List View and Group by Category: the tools in their own order, by name A to Z, or by name Z to A (each click the next order; the Pointer stays first)
+- Grouped by category, the categories are sorted by name too, and the tools in each; the order stays the same in the icon and list views, and is remembered
+
 **Version:** 0.4.58
 **Date:** 2026-10-12
 

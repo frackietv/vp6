@@ -79,13 +79,23 @@ class Toolbox(QWidget):
     width holds (``fitted_width`` gives the width of a whole number of them,
     which the main window snaps the panel to), scrolling when they don't all
     fit its height. The buttons along its top switch to the list view (a
-    column of icons with their names) and group the tools by category
-    (``TOOLBOX_CATEGORIES``), each under a heading."""
+    column of icons with their names), group the tools by category
+    (``TOOLBOX_CATEGORIES``), each under a heading, and choose their order:
+    their own (``SORT_ORDERS``' "natural") or by name, A to Z or Z to A (the
+    categories too, and the tools in each; the Pointer stays first)."""
 
     toolSelected = Signal(object)  # control type name or None for the pointer
     toolActivated = Signal(str)  # double-click: add the control to the form
     resized = Signal()
     viewChanged = Signal(bool, bool)  # the user chose: the list view, grouped by category
+    sortChanged = Signal(str)  # the user chose an order (one of SORT_ORDERS)
+
+    # The sort button's orders, in turn: (order, icon, tooltip)
+    SORT_ORDERS = (
+        ("natural", "ToolboxSort", "The tools in their own order"),
+        ("ascending", "ToolboxSortAscending", "The tools by name, A to Z"),
+        ("descending", "ToolboxSortDescending", "The tools by name, Z to A"),
+    )
 
     BUTTON = 34  # a button's side
     SPACING = 2  # between buttons
@@ -106,6 +116,7 @@ class Toolbox(QWidget):
         self.columns = 0
         self.list_view = False  # a column of icons with their names
         self.grouped = False  # under the categories' headings
+        self.sort = "natural"  # or by name: "ascending", "descending"
         self._widths: dict[bool, int] = {}  # the width it had last in each view
         # (heading or None, grid, tools): one section, or one per category
         self.sections: list[tuple[QLabel | None, QGridLayout, list]] = []
@@ -121,8 +132,12 @@ class Toolbox(QWidget):
         self.list_button = self._toggle("ToolboxList", "List view: each tool's name beside "
                                         "its icon, top to bottom")
         self.groups_button = self._toggle("ToolboxGroups", "Group the tools by category")
+        self.sort_button = self._toggle("ToolboxSort", "")
+        self.sort_button.setCheckable(False)
         self.list_button.clicked.connect(lambda on: self._choose_view(on, self.grouped))
         self.groups_button.clicked.connect(lambda on: self._choose_view(self.list_view, on))
+        self.sort_button.clicked.connect(lambda: self._choose_sort(self.next_sort()))
+        self._update_sort_button()
         toggles = QWidget()
         toggles.setFixedHeight(self.TOGGLES)
         row = QHBoxLayout(toggles)
@@ -130,6 +145,7 @@ class Toolbox(QWidget):
         row.setSpacing(self.SPACING)
         row.addWidget(self.list_button)
         row.addWidget(self.groups_button)
+        row.addWidget(self.sort_button)
         row.addStretch(1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -197,6 +213,37 @@ class Toolbox(QWidget):
         self.set_view(list_view, grouped)
         self.viewChanged.emit(self.list_view, self.grouped)
 
+    def set_sort(self, order: str) -> None:
+        """Show the tools in their own order ("natural") or by name, A to Z
+        ("ascending") or Z to A ("descending"), in either view."""
+        orders = [entry[0] for entry in self.SORT_ORDERS]
+        self.sort = order if order in orders else "natural"
+        self._update_sort_button()
+        self._build()
+
+    def next_sort(self) -> str:
+        """The order after the one shown, in SORT_ORDERS."""
+        orders = [entry[0] for entry in self.SORT_ORDERS]
+        return orders[(orders.index(self.sort) + 1) % len(orders)]
+
+    def _choose_sort(self, order: str) -> None:
+        self.set_sort(order)
+        self.sortChanged.emit(self.sort)
+
+    def _update_sort_button(self) -> None:
+        _order, icon_name, tip = next(entry for entry in self.SORT_ORDERS
+                                      if entry[0] == self.sort)
+        self.sort_button.setIcon(icons.icon(icon_name))
+        self.sort_button.setToolTip(f"{tip} (click for the next order)")
+
+    def _sorted(self, names: list) -> list:
+        """``names`` in the order chosen (the Pointer, None, first)."""
+        if self.sort == "natural":
+            return list(names)
+        tools = sorted((name for name in names if name), key=lambda name: (name.casefold(), name),
+                       reverse=self.sort == "descending")
+        return [None, *tools] if None in names else tools
+
     def wanted_width(self) -> int:
         """The width for the panel in the view it shows: the one it had last
         in it; else for the list view the longest name's, for the icons whole
@@ -217,7 +264,7 @@ class Toolbox(QWidget):
 
     def _section_tools(self) -> list[tuple[str | None, list]]:
         if not self.grouped:
-            return [(None, list(self.buttons))]
+            return [(None, self._sorted(list(self.buttons)))]
         built_in = [name for name in self.buttons if name and name not in self.user_buttons]
         sections, placed = [(None, [None])], set()
         for title, names in TOOLBOX_CATEGORIES:
@@ -229,6 +276,10 @@ class Toolbox(QWidget):
         for title, tools in (("Other", others), ("User Controls", self.user_buttons)):
             if tools:
                 sections.append((title, list(tools)))
+        if self.sort != "natural":  # the categories by name, and the tools in each
+            sections[1:] = sorted(((title, self._sorted(tools)) for title, tools in sections[1:]),
+                                  key=lambda section: section[0].casefold(),
+                                  reverse=self.sort == "descending")
         return sections
 
     def _build(self) -> None:
@@ -236,7 +287,8 @@ class Toolbox(QWidget):
         while self.column.count():
             item = self.column.takeAt(0)
             if item.widget() is not None:
-                item.widget().deleteLater()  # (a heading)
+                item.widget().hide()  # (a heading: gone at once, deleted later)
+                item.widget().deleteLater()
             elif item.layout() is not None:
                 grid = item.layout()
                 while grid.count():
@@ -349,6 +401,7 @@ class Toolbox(QWidget):
                                       else type_name or "Pointer"))
         self.list_button.setIcon(icons.icon("ToolboxList"))
         self.groups_button.setIcon(icons.icon("ToolboxGroups"))
+        self._update_sort_button()
 
     def reset(self) -> None:
         self.buttons[None].setChecked(True)

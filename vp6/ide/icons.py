@@ -578,6 +578,19 @@ def _toolbox_groups(p):  # the Toolbox by category: two headings, each over its 
             p.drawRect(QRectF(x, y + 4, 4, 4))
 
 
+def _toolbox_sort(p):  # the Toolbox in its own order: rows of different lengths
+    for y, width in ((4, 12), (10.5, 18), (17, 8)):
+        p.fillRect(QRectF(3, y + 1, width, 2.2), C.ink)
+
+
+def _toolbox_sorted(p, first: str, last: str):  # by name: two letters and an arrow down
+    _text(p, QRectF(1, 0, 11, 12), first, 10, True)
+    _text(p, QRectF(1, 12, 11, 12), last, 10, True)
+    p.fillRect(QRectF(16, 3, 2, 14), C.blue)
+    p.setBrush(C.blue)
+    p.drawPolygon([QPointF(13, 15), QPointF(21, 15), QPointF(17, 21)])
+
+
 def _badge(p, color: str, letter: str, size: int = 13):
     """Outline item icon: a colored rounded square with a white letter."""
     p.setPen(Qt.NoPen)
@@ -893,7 +906,9 @@ _DRAWERS = {
     "PdfViewer": _pdfviewer, "OpenGLView": _openglview, "QuickView": _quickview,
     "UndoView": _undoview, "WizardForm": _wizardform,
     "Perspective": _perspective, "ToolboxList": _toolbox_list,
-    "ToolboxGroups": _toolbox_groups,
+    "ToolboxGroups": _toolbox_groups, "ToolboxSort": _toolbox_sort,
+    "ToolboxSortAscending": lambda p: _toolbox_sorted(p, "A", "Z"),
+    "ToolboxSortDescending": lambda p: _toolbox_sorted(p, "Z", "A"),
     **{name: (lambda p, c=color, l=letter: _badge(p, c, l, 10 if l == "\u25b6" else 13))
        for name, (color, letter) in _OUTLINE_BADGES.items()},
 }

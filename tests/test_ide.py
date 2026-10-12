@@ -1242,7 +1242,12 @@ def test_toolbox_waits_for_the_mouse_and_keeps_out_of_the_top(window):
     assert toolbox.width() == before + Toolbox.BUTTON  # dragged, not snapped yet
     assert toolbox.width() != toolbox.fitted_width(toolbox.width())
     QTest.mouseRelease(window, Qt.LeftButton, Qt.NoModifier, edge)  # let go
-    _settle(window)
+    # (the snap comes after a timer, the panel's new width after the layout: under load
+    # later than _settle's wait)
+    for _ in range(100):
+        QTest.qWait(20)
+        if toolbox.width() == toolbox.fitted_width(toolbox.width()):
+            break
     assert toolbox.width() == toolbox.fitted_width(toolbox.width())
     # Floating, it snaps too
     dock.setFloating(True)
@@ -1347,6 +1352,53 @@ def test_toolbox_grouped_by_category(qapp):
     toolbox.deleteLater()
 
 
+def test_toolbox_sorted_by_name(qapp):
+    from vp6.ide.panels import TOOLBOX_CATEGORIES, Toolbox
+
+    def key(name):
+        return name.casefold()
+
+    toolbox = Toolbox()
+    toolbox.resize(3 * (Toolbox.BUTTON + Toolbox.SPACING) + 2 * Toolbox.MARGIN, 5000)
+    toolbox.set_user_controls(["Rating", "badge"])
+    natural = list(toolbox.buttons)
+    assert toolbox.sort == "natural" and toolbox.sections[0][2] == natural
+    # The button goes round the orders: A to Z, Z to A, their own again
+    toolbox.sort_button.click()
+    assert toolbox.sort == "ascending"
+    tools = toolbox.sections[0][2]
+    assert tools[0] is None and tools[1:] == sorted(natural[1:], key=key)
+    assert "badge" in tools[1:3] and tools.index("Rating") > tools.index("ProgressBar")
+    assert "A to Z" in toolbox.sort_button.toolTip()
+    # The grid follows: row by row in that order
+    assert _grid_cells(toolbox.grid, [toolbox.buttons[n] for n in tools[:4]]) == \
+        [(0, 0), (0, 1), (0, 2), (1, 0)]
+    toolbox.sort_button.click()
+    assert toolbox.sort == "descending"
+    assert toolbox.sections[0][2] == [None, *sorted(natural[1:], key=key, reverse=True)]
+    # By category: the categories by name, and the tools in each (the Pointer first)
+    toolbox.set_view(False, True)
+    titles = [heading.text() if heading else None for heading, _grid, _tools in toolbox.sections]
+    expected = sorted([title for title, _names in TOOLBOX_CATEGORIES] + ["User Controls"],
+                      key=key, reverse=True)
+    assert titles == [None, *expected]
+    sections = dict(zip(titles, toolbox.sections))
+    assert sections["Common"][2] == sorted(TOOLBOX_CATEGORIES[0][1], key=key, reverse=True)
+    assert sections["User Controls"][2] == ["Rating", "badge"]
+    # The list view keeps the order
+    toolbox.set_view(True, True)
+    assert [s[2] for s in toolbox.sections] == [sections[t][2] for t in titles]
+    toolbox.set_view(True, False)
+    assert toolbox.sections[0][2] == [None, *sorted(natural[1:], key=key, reverse=True)]
+    assert _grid_cells(toolbox.grid, [toolbox.buttons[n] for n in toolbox.sections[0][2]]) == \
+        [(row, 0) for row in range(len(natural))]
+    toolbox.sort_button.click()  # their own order again, by category as before
+    assert toolbox.sort == "natural" and toolbox.sections[0][2] == natural
+    toolbox.set_sort("sideways")  # (an unknown order: their own)
+    assert toolbox.sort == "natural"
+    toolbox.deleteLater()
+
+
 def test_toolbox_view_remembered_and_its_width_kept(window):
     from vp6.ide.theme import ide_settings
 
@@ -1365,10 +1417,14 @@ def test_toolbox_view_remembered_and_its_width_kept(window):
     assert not toolbox.list_view and toolbox.width() == icons_width
     toolbox.list_button.click()
     _settle(window)
-    other = type(window)()  # a new IDE window: the same view
+    toolbox.sort_button.click()
+    assert ide_settings().value("toolbox/sort") == "ascending"
+    other = type(window)()  # a new IDE window: the same view and order
     try:
         assert other.toolbox.list_view and other.toolbox.grouped
+        assert other.toolbox.sort == "ascending"
         assert other.toolbox.list_button.isChecked() and other.toolbox.groups_button.isChecked()
     finally:
         other.close()
     window.toolbox.set_view(False, False)
+    window.toolbox.set_sort("natural")

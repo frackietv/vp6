@@ -167,10 +167,13 @@ class MainWindow(QMainWindow):
         # Opening/closing the Project panel changes what Properties follows
         self.explorer_dock.visibilityChanged.connect(self._on_explorer_changed)
 
-        # Its view (icons or a list, by category or not) is remembered
+        # Its view (icons or a list, by category or not) and its order are remembered
+        self.toolbox.set_sort(self.settings.value("toolbox/sort", "natural", type=str))
         self.toolbox.set_view(self.settings.value("toolbox/list", False, type=bool),
                               self.settings.value("toolbox/grouped", False, type=bool))
         self.toolbox.viewChanged.connect(self._toolbox_view_changed)
+        self.toolbox.sortChanged.connect(lambda order: self.settings.setValue("toolbox/sort",
+                                                                              order))
         self.toolbox.toolSelected.connect(self._on_tool_selected)
         self.toolbox.toolActivated.connect(self._on_tool_activated)
         self.explorer.openObject.connect(self.view_object)

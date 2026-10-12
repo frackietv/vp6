@@ -39,7 +39,7 @@ from .picture import LoadPicture, Picture, SavePicture
 from .printer import Printer, Printers
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.58"
+__version__ = "0.4.59"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Command", "Debug", "DeleteSetting", "DoEvents", "End",
