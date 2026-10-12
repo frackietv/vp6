@@ -1,5 +1,12 @@
 # VP6 features
 
+**Version:** 0.4.52
+**Date:** 2026-10-11
+
+## Backlog
+
+- The backlog has an item for each Qt widget that VP6 doesn't have a control for yet: SpinBox, DTPicker, MonthView, Dial, LCDNumber, FontComboBox, HotKey, CommandLink, ToolButton, ButtonBox, ToolBox, PageFrame, ScrollPanel, ColumnView, DBGrid, GraphicsView, Chart, SvgImage, MediaPlayer, PdfViewer, OpenGLView, QuickView, UndoView, the Wizard form, ProgressDialog and ErrorMessage, SplashScreen
+
 **Version:** 0.4.51
 **Date:** 2026-10-06
 
