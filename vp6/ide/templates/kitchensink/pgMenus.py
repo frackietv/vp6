@@ -1,7 +1,12 @@
-"""Kitchen Sink page: menus, a menu control array grown at run time, and a popup menu
-(PopupMenu) for a right-click."""
+"""Kitchen Sink page: menus, a menu control array grown at run time, a popup menu
+(PopupMenu) for a right-click, menu pictures (with their dark versions, and the
+toolbar's own) and a group of choices (Group)."""
+
+import os
 
 from vp6 import *
+
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 class pgMenus(Form):
@@ -25,7 +30,13 @@ class pgMenus(Form):
                                       Height=40, TabIndex=6,
                                       ToolTipText='PopupMenu at a place: centered under the button')
         self.mnuPage = Menu(self, Caption='&Page', NegotiatePosition=3)
-        self.mnuPageHello = Menu(self.mnuPage, Caption='&Say hello', Shortcut='Ctrl+H')
+        self.mnuPageHello = Menu(self.mnuPage, Caption='&Say hello', Picture='images/star.png',
+                                 Shortcut='Ctrl+H')
+        self.mnuPageBack = Menu(self.mnuPage, Caption='&Back a page')
+        self.mnuPageSep = Menu(self.mnuPage, Caption='-')
+        self.mnuPageSmall = Menu(self.mnuPage, Caption='S&mall text', Group='size')
+        self.mnuPageMedium = Menu(self.mnuPage, Caption='M&edium text', Checked=True, Group='size')
+        self.mnuPageLarge = Menu(self.mnuPage, Caption='&Large text', Group='size')
         self.mnuPopup = Menu(self, Caption='Popup', Visible=False)
         self.mnuPopupHello = Menu(self.mnuPopup, Caption='&Say hello')
         self.mnuPopupShout = Menu(self.mnuPopup, Caption='S&hout')
@@ -36,12 +47,38 @@ class pgMenus(Form):
     shell = None  # the Kitchen Sink window showing this page (None when run on its own)
 
     def Form_Load(self):
+        # Pictures: a file in code (its dark version when the page is dark), and the
+        # window's Toolbar picture, shared with its Back button (a ListImage)
+        self.mnuPageLarge.Picture = LoadPicture(os.path.join(HERE, "images", "sun.png"),
+                                                Dark=self.DarkMode)
+        if self.shell is not None:
+            self.mnuPageBack.Picture = self.shell.imlToolbar.ListImages("back")
         self.pages = self.shell.page_titles() if self.shell is not None else []
         for _key, title in self.pages:
             self.cboPages.AddItem(title)
         if self.pages:
             self.cboPages.ListIndex = 0
         self.cmdBookmark.Enabled = bool(self.pages)
+
+    def mnuPageBack_Click(self):
+        if self.shell is not None:
+            self.shell.tbrMain_ButtonClick(self.shell.tbrMain.Buttons("back"))
+
+    # A group of choices: choosing one checks it and unchecks the others (then Click)
+    def mnuPageSmall_Click(self):
+        self.size_chosen(9)
+
+    def mnuPageMedium_Click(self):
+        self.size_chosen(0)
+
+    def mnuPageLarge_Click(self):
+        self.size_chosen(16)
+
+    def size_chosen(self, size):
+        self.lblPage.FontSize = size
+        checked = [m.Caption for m in (self.mnuPageSmall, self.mnuPageMedium, self.mnuPageLarge)
+                   if m.Checked]
+        self.lblPage.Caption = f"Checked: {checked[0].replace('&', '')}"
 
     def mnuPageHello_Click(self):
         # This page's own menu, on the window's menu bar while the page is visible

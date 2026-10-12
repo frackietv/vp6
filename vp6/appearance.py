@@ -59,6 +59,8 @@ ide_scheme_provider = None
 
 # Set by the project runner; None = look for a .vp6p next to the form
 project_scheme: int | None = None
+# App.ColorScheme set while running: what Project Default means now (None: not set)
+app_scheme: int | None = None
 _found_schemes: dict[str, int] = {}
 _fusion = None  # see fusion_style
 _fusion_address = None
@@ -104,7 +106,10 @@ def resolve(scheme: int) -> int:
 
 
 def project_scheme_for(directory: str) -> int:
-    """The project scheme for a form in ``directory``."""
+    """The project scheme for a form in ``directory`` (App.ColorScheme's, once
+    the program has set it)."""
+    if app_scheme is not None:
+        return app_scheme
     if project_scheme is not None:
         return project_scheme
     if directory not in _found_schemes:
@@ -119,6 +124,16 @@ def project_scheme_for(directory: str) -> int:
                 continue
         _found_schemes[directory] = scheme
     return _found_schemes[directory]
+
+
+def set_app_scheme(scheme: int | None) -> None:
+    """App.ColorScheme: the program's scheme (None: the project's again); every
+    form draws itself again (watcher().changed)."""
+    global app_scheme
+    if scheme == app_scheme:
+        return
+    app_scheme = scheme
+    watcher().changed.emit()
 
 
 def _qt_scheme_is_dark() -> bool:

@@ -843,6 +843,14 @@ def test_docking_page(sink):
     assert page.grdProps.Width == 188
     page.cmdShowAll_Click()
     assert all(p.Visible for p in (tools, props, output))
+    # Notes tabbed with Output, Layers below Properties: back so after the restore
+    notes, layers = page.dckNotes, page.dckLayers
+    assert props.SplitPanels == [props, layers] and notes.TabPanels == [output, notes]
+    assert output.ActiveTab is output  # (as saved)
+    page.cmdTabs_Click()  # Separate
+    assert notes.TabPanels == [notes] and "Notes is tabbed with" in page.rtbLog.Text
+    page.cmdTabs_Click()  # TabWith again: in front
+    assert notes.TabPanels == [output, notes] and notes.ActiveTab is notes
 
 
 def test_scrolling_page(sink):
@@ -1020,6 +1028,10 @@ def test_mdi_page(sink):
         notes.cmdTile._widget.click()
         subs = [c._mdi_sub for c in notes._mdi_children]
         assert subs[0].y() == subs[1].y() and subs[0].x() < subs[1].x()  # side by side
+        notes.chkTabs.Value = vp6.vpChecked  # the notes in tabs
+        assert notes.ViewMode == vp6.vpMDITabs and notes._area.tabsClosable()
+        notes.chkTabs.Value = vp6.vpUnchecked
+        assert notes.ViewMode == vp6.vpMDIWindows
     finally:
         notes.Unload()
     assert not notes._mdi_children
@@ -1044,6 +1056,10 @@ def test_process_page(sink, monkeypatch):
     assert page.prcEcho.Running and not page.cmdStart.Enabled and page.cmdSend.Enabled
     assert not page.cmdMissing.Enabled  # (one program at a time: not while it runs)
     wait_for(lambda: "Ready" in page.txtOutput.Text)
+    # Its Environment and Arguments reached the program
+    wait_for(lambda: "Hello from the Kitchen Sink" in page.txtOutput.Text)
+    assert """Hello from the Kitchen Sink ['a file name with spaces.txt', 'say "hi"']""" in \
+        page.txtOutput.Text
     page.txtSend.Text = "hello"
     page.cmdSend._widget.click()  # (its standard input)
     wait_for(lambda: "HELLO" in page.txtOutput.Text)
@@ -1065,6 +1081,12 @@ def test_process_page(sink, monkeypatch):
                         lambda program, args: started.append((program, args)) or (True, 42))
     page.cmdShell._widget.click()  # (the file manager: not really, here)
     assert started[0][1] == [vp6.App.Path] and page.lblStatus.Caption.endswith("(process 42)")
+    page.cmdWeb._widget.click()  # ShellExecute (recorded by conftest: nothing opens)
+    page.cmdShow._widget.click()
+    from vp6 import process
+
+    assert process._opened[0] == "https://www.python.org"
+    assert "pgProcess.py" in process._opened[1] and "folder" in page.lblStatus.Caption
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="a pseudo-terminal")
@@ -1520,3 +1542,101 @@ def test_dialogs_page_new_buttons(sink, monkeypatch):
     assert vp6.App.SplashVisible
     page.tmrSplash_Timer()
     assert not vp6.App.SplashVisible and "HideSplash" in page.lblResult.Caption
+
+
+# --- the pages for the IDE's own needs ---------------------------------------------------------
+
+def test_network_page(sink):
+    from conftest import wait_for
+
+    page = _page(sink, "network")
+    page.cmdListen._widget.click()
+    assert page.wskServer.State == vp6.vpSckListening and page.cmdConnect.Enabled
+    page.cmdConnect._widget.click()
+    wait_for(lambda: page.cmdSend.Enabled)
+    assert len(page.wskPeer) == 2 and page.cmdConnect.Caption == "Dis&connect"
+    page.txtSend.Text = "ping"
+    page.cmdSend._widget.click()
+    wait_for(lambda: any("Client got: 'PING'" in item for item in page.lstNet.List))
+    page.cmdConnect._widget.click()  # closed: the server's Close event
+    wait_for(lambda: any("closed by the client" in item for item in page.lstNet.List))
+    # The FileWatcher: the file written, a file added to the folder
+    page.cmdWrite._widget.click()
+    wait_for(lambda: any("FileChanged: notes.txt (2 lines)" in item
+                         for item in page.lstFiles.List))
+    page.cmdAdd._widget.click()
+    wait_for(lambda: any("FolderChanged: watched has new 1.txt" in item
+                         for item in page.lstFiles.List))
+    page.chkWatch.Value = vp6.vpUnchecked
+    assert not page.fwNotes.Enabled
+
+
+def test_designer_page(sink):
+    page = _page(sink, "designer")
+    assert page.cboCategory.List == vp6.ControlCategories()
+    assert page.lstTypes.List == vp6.ControlTypes("Common")
+    dsg = page.dsgForm
+    assert dsg.ControlNames == ["lblPrompt", "txtItem", "cmdOK", "cmdCancel"]
+    assert page.lblSelected.Caption == "Selected: the form"
+    page.lstTypes.ListIndex = page.lstTypes.List.index("CheckBox")
+    page.lstTypes_Click()
+    assert dsg.Tool == "CheckBox" and "CheckBox:" in page.lblInfo.Caption
+    assert page.picIcon.Picture is not None
+    dsg.AddControl("CheckBox", 16, 72, 120, 24)  # (as drawing it)
+    assert page.lstEvents.List[-1] == "ControlAdded: Check1 (CheckBox)"
+    assert page.lblSelected.Caption == "Selected: Check1"
+    page.cmdUndo._widget.click()
+    assert "Check1" not in dsg.ControlNames and "ControlDeleted: Check1" in page.lstEvents.List
+    page.cmdRedo._widget.click()
+    assert "Check1" in dsg.ControlNames and dsg.Modified
+
+
+def test_more_of_the_ides_needs_on_the_pages(sink, monkeypatch):
+    from conftest import wait_for
+
+    # Menus: a group of choices, pictures
+    page = _page(sink, "menus")
+    page.mnuPageLarge._action.trigger()
+    assert page.mnuPageLarge.Checked and not page.mnuPageMedium.Checked
+    assert page.lblPage.Caption == "Checked: Large text" and page.lblPage.FontSize == 16
+    assert not page.mnuPageHello._action.icon().isNull()  # images/star.png
+    assert not page.mnuPageBack._action.icon().isNull()  # the Toolbar's ListImage
+    # FlexGrid: a property grid with categories
+    grid = _page(sink, "grid").grdSheet
+    assert grid.RowHeading(1) and grid.RowOutlineLevel(2) == 1
+    grid.IsCollapsed[1] = True
+    assert grid._widget.isRowHidden(1) and "Appearance collapsed" in \
+        sink.pages["grid"].lblEvent.Caption
+    assert grid._widget.description.isVisible()
+    # CodeBox: marks, completion
+    code_page = _page(sink, "code")
+    code_page.cmdMark._widget.click()
+    found = code_page.codSample.FindAll("name", vp6.vpFindWholeWord)
+    assert code_page.codSample.MarkCount == len(found) + 1  # (and the first one's line)
+    assert f"{len(found)} found" in code_page.lblEvent.Caption
+    code_page.cmdMark._widget.click()
+    assert code_page.codSample.MarkCount == 0
+    assert "MsgBox" in code_page.codSample_CompletionRequest("", "Msg")
+    code_page.cmdComment._widget.click()
+    assert code_page.codSample.GetLine(code_page.codSample.CurrentLine).lstrip().startswith("#")
+    # Schemes: the whole program's
+    schemes = _page(sink, "schemes")
+    schemes.cboAppScheme.ListIndex = 3  # Dark
+    assert vp6.App.ColorScheme == vp6.vpSchemeDark
+    schemes.cboStyle.ListIndex = schemes.cboStyle.List.index("Fusion")
+    assert vp6.App.Style == "Fusion"
+    # Globals: a thread showing its progress through RunOnMainThread
+    globals_page = _page(sink, "globals")
+    globals_page.cmdThread._widget.click()
+    wait_for(lambda: globals_page.cmdThread.Enabled)
+    assert globals_page.lblResult.Caption == "The thread is done (1 + ... + 100 = 5050)"
+    assert "App.Active" in globals_page.lblActive.Caption
+    # Dialogs: a folder
+    dialogs = _page(sink, "dialogs")
+    monkeypatch.setattr("vp6.controls.QFileDialog.getExistingDirectory",
+                        lambda parent, title, start: start)
+    dialogs.cmdFolder._widget.click()
+    assert dialogs.lblResult.Caption.startswith("ShowFolder: ")
+    # Drawing: the icon
+    icon = _page(sink, "drawing").picIcon
+    assert (icon.Point(10, 80) >> 16) & 0xFF > 150  # (the gradient's blue, at the bottom)

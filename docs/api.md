@@ -262,10 +262,13 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `Highlight` | Line, Text, State |
 | `GutterClick` | Line |
 | `ProtectedEdit` | Line |
+| `CompletionRequest` | Context, Prefix |
+| `CompletionChosen` | Text |
 | `EnterCell` | none |
 | `LeaveCell` | none |
 | `RowColChange` | none |
 | `BeforeEdit` | Row, Col |
+| `AfterCollapse` | Row, Collapsed |
 | `ValidateEdit` | Row, Col, Text |
 | `AfterEdit` | Row, Col |
 | `CellButtonClick` | Row, Col |
@@ -283,6 +286,8 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `BeforeNavigate` | URL |
 | `NewWindow` | URL |
 | `StatusTextChange` | Text |
+| `AppActivate` | none |
+| `AppDeactivate` | none |
 | `ValidatePage` | Page |
 | `NextPage` | Page |
 | `PageChange` | none |
@@ -292,6 +297,12 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `ErrorOutput` | Text |
 | `Exited` | ExitCode |
 | `Error` | Description |
+| `ConnectionRequest` | RequestID |
+| `Connect` | none |
+| `DataArrival` | BytesTotal |
+| `SendComplete` | none |
+| `FileChanged` | Path |
+| `FolderChanged` | Path |
 | `Reposition` | none |
 | `DropDown` | none |
 | `CloseUp` | none |
@@ -313,6 +324,13 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `InitializeGL` | none |
 | `Paint` | none |
 | `QmlEvent` | Name, Args |
+| `ControlAdded` | Name |
+| `ControlDeleted` | Name |
+| `ControlMoved` | Name |
+| `ControlResized` | Name |
+| `PropertyChanged` | Name, Property |
+| `GoToCode` | Name, Event |
+| `Error` (Winsock) | Number, Description |
 | `Validate` (Data) | Action, Save |
 | `SelChange` (MonthView) | StartDate, EndDate |
 | `ButtonClick` (ButtonBox) | Index |
@@ -490,6 +508,11 @@ class frmDocument(Form):
   fire as it becomes the active child or stops. `Arrange(vpCascade /
   vpTileHorizontal / vpTileVertical / vpArrangeIcons)`. `ScrollBars`:
   scroll bars when children reach beyond the workspace.
+* **Tabs:** `ViewMode = vpMDITabs` shows one child at a time, filling the
+  workspace, with a tab for each (its Caption): a click on a tab activates
+  that child, its close button closes it (QueryUnload and Unload first), and
+  tabs can be dragged into another order. `vpMDIWindows` (the default): the
+  children in windows of their own.
 * **Menus:** while the active child has menus, they replace the MDI form's
   on its menu bar, as in VB (give the child the menus it needs, e.g. its own
   Window menu). A Menu with `WindowList` (the Menu Editor's check box) lists
@@ -568,7 +591,7 @@ shows one without a form.
 ### Form events
 
 <!-- BEGIN GENERATED: form-events -->
-Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`, `Paint`, `ColorSchemeChanged(Dark)`. Default event (double-click in the designer): `Load`.
+Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `Deactivate`, `Resize`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`, `Paint`, `ColorSchemeChanged(Dark)`, `AppActivate`, `AppDeactivate`. Default event (double-click in the designer): `Load`.
 <!-- END GENERATED -->
 
 * `Initialize` fires when the object is created.
@@ -583,6 +606,10 @@ Events: `Load`, `QueryUnload(UnloadMode)`, `Unload`, `Initialize`, `Activate`, `
   VB's other value, not reported yet.
 * `ColorSchemeChanged(Dark)` fires when the form turns light or dark; see
   [color schemes](#7-color-schemes-lightdark).
+* `AppActivate` and `AppDeactivate` fire on every loaded form when the
+  program becomes the active application or stops being it (the user
+  switched to another program and back): e.g. to look whether files changed
+  meanwhile. `App.Active` tells which it is now.
 * `Paint` fires when the form needs drawing again (AutoRedraw False); see
   [drawing](#drawing-on-forms-and-pictureboxes).
 
@@ -618,6 +645,31 @@ def Form_Load(self):
 | `Point(X, Y)` | the color at X, Y (under any controls), or -1 outside |
 | `TextWidth(Text)`, `TextHeight(Text)` | the size Print would give Text in the Font (the longest line; all its lines) |
 | `PaintPicture(Picture, X1, Y1, Width1=None, Height1=None, X2=0, Y2=0, Width2=None, Height2=None)` | draws a [picture](#picture-objects) (a Picture, a file relative to the form's folder, another control's `Image`) at X1, Y1, scaled to Width1 x Height1 when given; X2, Y2, Width2, Height2 take just that part of it |
+| `RoundRect(X1, Y1, X2, Y2, Radius, Color=None, Fill=None)` | a box with corners rounded by Radius, its outline in Color as the pen draws (an invisible `RGBA` color: none), filled with `Fill` (a color, an RGBA one or a `LinearGradient`; left out: as FillStyle says); the current point moves to X2, Y2. Not VB's. |
+| `DrawPath(Path, Color=None, Fill=None)` | a `GraphicsPath` (lines and Bézier curves): its outline in Color, its closed figures filled with Fill, as RoundRect's. Not VB's. |
+
+<!-- keywords: GraphicsPath, LinearGradient, RGBA, RoundRect, DrawPath -->
+Beyond VB's methods, for pictures such as icons and window frames:
+
+* **Colors you can see through:** `RGBA(red, green, blue, alpha)` (255
+  opaque, 0 invisible) works wherever the graphics methods take a color.
+* **Gradients:** `LinearGradient(X1, Y1, X2, Y2, Color1, Color2)` blends from
+  Color1 at X1, Y1 to Color2 at X2, Y2 (in the drawing's units);
+  `AddStop(Position, Color)` adds colors between (Position from 0 to 1). It
+  is the Fill of RoundRect and DrawPath.
+* **Paths:** a `GraphicsPath` is a shape made of `MoveTo(X, Y)`, `LineTo(X,
+  Y)`, `CurveTo(X1, Y1, X2, Y2, X, Y)` (a cubic Bézier curve: two control
+  points and its end), `QuadTo(X1, Y1, X, Y)` and `Close()`, and whole
+  figures: `AddRect(X, Y, Width, Height, Radius=0)`, `AddEllipse(X, Y,
+  Width, Height)`, `AddPolygon(Points)`. Each returns the path, so they
+  chain; its points are in the drawing's ScaleMode when drawn.
+
+```python
+path = GraphicsPath().MoveTo(4, 20).CurveTo(4, 4, 28, 4, 28, 20).Close()
+self.picIcon.DrawPath(path, RGBA(0, 0, 0, 160),
+                      LinearGradient(0, 4, 0, 20, vpYellow, RGB(255, 140, 0)))
+self.picIcon.RoundRect(2, 22, 30, 30, 3, Fill=RGBA(0, 120, 255, 90))
+```
 
 `Image` (read-only) is a [Picture](#picture-objects) of what the form or
 PictureBox shows: its background, `Picture` and drawing, without its
@@ -1242,6 +1294,41 @@ self.codMain.HideLines(7, 10)                     # fold them: line 6 gets a + i
 * `WordWrap` wraps long lines; `Locked` makes it read-only. Without a
   `FontName` it uses the system's fixed-width font.
 * Setting `Text` starts over: no protected, hidden or marked lines.
+* **Completion.** While a word is typed (three letters, or after a dot) and
+  on Ctrl+Space, `CompletionRequest(Context, Prefix)` asks for the choices
+  (Context is the dotted name before the word, e.g. `"self."`, Prefix the
+  word so far): return a list, or call `ShowCompletion(Items)`. The list
+  under the caret shows the items starting with the word (any case),
+  narrowed as more is typed; Enter, Tab or a click puts the one chosen in
+  place of the word and fires `CompletionChosen(Text)`, Esc closes it.
+  `HideCompletion()`, `CompletionVisible`.
+* **Finding and replacing.** `Find(String, Start=None, End=None, Options=0)`
+  selects the next match and returns where it starts (-1: none; again finds
+  the next one); `FindAll(String, Options=0)` gives every `(Start, Length)`;
+  `Replace(String, ReplaceWith, Options=0)` replaces them all as one undo
+  step and returns how many. Options, added together: `vpFindMatchCase`,
+  `vpFindWholeWord`, `vpFindRegex` (a regular expression; `\1` and
+  `\g<name>` in ReplaceWith are its groups), `vpFindBackward`,
+  `vpFindNoHighlight` (Find doesn't select it).
+* **Marks** over the text, apart from its coloring, moving with the text:
+  `MarkRange(Start, Length, Color, Group="", Underline=False)` (a color
+  behind it, or a wavy line under it, as for errors), `MarkLine(Line, Color,
+  Group="")` (the whole line across the editor: the statement the debugger
+  stopped at), `ClearMarks(Group=None)` (one group's, or all), `MarkCount`.
+* `ReplaceRange(Start, Length, Text)` replaces a span as one undo step,
+  keeping the caret (moved along when the text before it changes) and the
+  scrolling: e.g. what changed in a file on disk.
+* `ToggleComment()` comments out the selected lines (`# ` at their common
+  indentation), or uncomments them when they all are; `CommentLines()`,
+  `UncommentLines()`. One undo step each.
+
+```python
+def codMain_CompletionRequest(self, Context, Prefix):
+    return dir(self) if Context == "self." else KEYWORDS
+
+for start, length in self.codMain.FindAll(self.txtFind.Text, vpFindWholeWord):
+    self.codMain.MarkRange(start, length, vpYellow, "found")
+```
 
 <!-- BEGIN GENERATED: control CodeBox -->
 Default size 321 × 201. Property groups: Position, Colors, Font, Common.
@@ -1269,7 +1356,7 @@ Default size 321 × 201. Property groups: Position, Colors, Font, Common.
 | `UseTabs` | bool | `False` | Indent with tab characters instead of spaces |
 | `WordWrap` | bool | `False` | Wrap long lines instead of scrolling |
 
-Events: `Change`, `SelChange`, `Highlight(Line, Text, State)`, `GutterClick(Line)`, `ProtectedEdit(Line)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `SelChange`, `Highlight(Line, Text, State)`, `GutterClick(Line)`, `ProtectedEdit(Line)`, `CompletionRequest(Context, Prefix)`, `CompletionChosen(Text)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### MarkdownBox
@@ -2021,9 +2108,36 @@ def Form_Unload(self):
   it again, docked or floating as it was.
 * `DockChange` fires after it is docked, floated, moved to another edge,
   closed or shown again; `Resize` when its size changes.
+* **Tabbed together.** `TabWith(Panel)` puts it in tabs with another panel
+  (and the ones already tabbed with it), in that panel's place: one shows at
+  a time, with a tab for each visible one under them (a click shows that
+  one); it comes to the front, `Activate()` brings another. A hidden panel
+  has no tab; shown again (`Visible = True`), it gets its tab back, in
+  front: as the IDE's Terminal joins Immediate and Output. `TabPanels` lists
+  them, `ActiveTab` is the one shown.
+* **Side by side.** `SplitWith(Panel)` puts it beside another panel in that
+  panel's place: below it at the left and right edges, right of it at the
+  top and bottom ones, sharing the place by their `Height`s (or `Width`s);
+  the edge between them can be dragged. `SplitPanels` lists them. Panels
+  tabbed together can be beside others too.
+* `Separate()` takes it out of its tabs or from beside the others; moving it
+  to another edge (`Align`) or floating it does too. In a shared place, the
+  thickness (Width at the left and right, Height at the top and bottom) is
+  the same for all of them.
 * The form's `DockLayout` is where all its DockPanels are (their edges,
-  sizes, order, floating windows and visibility) as text: keep it, and set it
-  to put them back.
+  sizes, order, tabs and panels side by side, floating windows and
+  visibility) as text: keep it, and set it to put them back. `SaveLayout()`
+  adds the window's place, size and state; `LoadLayout(Layout)` puts them
+  all back, e.g. through `SaveSetting` and `GetSetting`:
+
+```python
+self.dckOutput.TabWith(self.dckImmediate)
+self.dckProperties.SplitWith(self.dckProject)
+self.LoadLayout(GetSetting(App.Title, "Window", "Layout"))
+
+def Form_Unload(self):
+    SaveSetting(App.Title, "Window", "Layout", self.SaveLayout())
+```
 
 <!-- BEGIN GENERATED: control DockPanel -->
 Default size 161 × 201. A container: other controls can be placed on it. Property groups: Position, Colors, Font, Common.
@@ -2272,6 +2386,8 @@ def cmdColor_Click(self):
   (its name), `FileNames` (all of them, with `vpOFNAllowMultiselect`) and
   `FilterIndex`. `DefaultExt` is added to a name typed without an extension;
   `vpOFNOverwritePrompt` asks before replacing a file.
+* **A folder:** `ShowFolder()` (VB's BrowseForFolder) chooses a folder,
+  starting in `InitDir` (else `FileName`); `FileName` is the folder chosen.
 * **Color:** `ShowColor()` starts with `Color` and sets it.
 * **Font:** `ShowFont()` starts with `FontName`, `FontSize`, `FontBold`,
   `FontItalic`, `FontUnderline`, `FontStrikethru` and sets them.
@@ -2301,7 +2417,7 @@ Default size 32 × 32. Property groups: Font.
 | `Copies` | int | `1` | Copies to print (the Print dialog) |
 | `DefaultExt` | str | `''` | Added to a file name typed without an extension (Save As) |
 | `DialogTitle` | str | `''` | The dialog's title; unset = the system's |
-| `FileName` | str | `''` | The file chosen (a full path); also the first one suggested |
+| `FileName` | str | `''` | The file (or ShowFolder's folder) chosen, a full path; also the first one suggested |
 | `Filter` | str | `''` | The file types offered: description|patterns pairs, e.g. Text Files (*.txt)|*.txt|All Files (*.*)|*.* |
 | `FilterIndex` | int | `1` | The Filter pair chosen, from 1 |
 | `Flags` | int | `0` | Options added together: vpOFN... (Open, Save), vpCC... (Color), vpCF... (Font), vpPD... (Printer) |
@@ -2356,14 +2472,32 @@ def cmdAnswer_Click(self):
   `Terminate()` (asks it to end), `Kill()`, `WaitForExit(Timeout=-1)` (ms;
   True once it has ended; its events still fire); `Running`, `ExitCode`
   (-1 before it ends), `ProcessID` (0 when not running).
+* `Arguments` (a list, one per line in the Properties window) come after the
+  command line's, each passed as it is: paths with spaces and quotes need no
+  quoting.
+* `Environment` is what the program gets as its environment variables, the
+  system's to start with: `Environment("PATH")` (or `["PATH"]`) reads one,
+  `Environment["LANG"] = "C"` (or `Add(Name, Value)`) sets one,
+  `Remove(Name)` (or `del`) drops one, `Clear()` drops all, `Reset()` goes
+  back to the system's; `Count`, `in`, iterating the names. What it holds
+  when `Start` runs is what the program gets.
 * Starting it again while it runs is a RuntimeError; a Process still running
   when its form unloads is killed.
+
+```python
+self.prcTool.Environment["PYTHONPATH"] = App.Path
+self.prcTool.Environment.Remove("VIRTUAL_ENV")
+self.prcTool.CommandLine = "python3"
+self.prcTool.Arguments = ["-m", "build", "--outdir", "/My Folder/dist"]
+self.prcTool.Start()
+```
 
 <!-- BEGIN GENERATED: control Process -->
 Default size 32 × 32.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `Arguments` | list[str] | `[]` | Arguments after the CommandLine's, one per line, each passed as it is (spaces and quotes need no quoting) |
 | `CommandLine` | str | `''` | The program and its arguments, as a command line (double quotes group words): what Start runs |
 | `Left` | int | `0` | Position in the designer only |
 | `Tag` | str | `''` | Free for your own use |
@@ -2371,6 +2505,162 @@ Default size 32 × 32.
 | `WorkingDirectory` | str | `''` | Where the program runs (relative to the form's folder); empty: here |
 
 Events: `Output(Text)`, `ErrorOutput(Text)`, `Exited(ExitCode)`, `Error(Description)`. Default event (double-click in the designer): `Output`.
+<!-- END GENERATED -->
+
+### Winsock
+
+TCP connections, VB's Winsock control: one end of a connection, or a server
+waiting for them. Invisible at run time, like a Timer.
+
+```python
+# A client
+self.wskClient.Connect("localhost", 8000)
+
+def wskClient_Connect(self):
+    self.wskClient.SendData("hello\n")
+
+def wskClient_DataArrival(self, BytesTotal):
+    self.txtLog.SelText = self.wskClient.GetData()
+
+# A server: one Winsock listens, a control array takes the connections
+def Form_Load(self):
+    self.wskServer.LocalPort = 8000
+    self.wskServer.Listen()
+
+def wskServer_ConnectionRequest(self, RequestID):
+    index = len(self.wskPeer)
+    Load(self.wskPeer, index)
+    self.wskPeer[index].Accept(RequestID)
+```
+
+* `Connect(RemoteHost=None, RemotePort=None)` connects (to the properties
+  when left out; given, they are kept); `Connect` fires once connected,
+  `Error(Number, Description)` if it can't be (`vpSckConnectionRefused`,
+  `vpSckHostNotFound`, `vpSckTimedout`...).
+* `Listen()` waits for connections on `LocalPort` (0: a free one, which
+  LocalPort then is). Each fires `ConnectionRequest(RequestID)`;
+  `Accept(RequestID)` on another Winsock (or this one, which stops
+  listening) takes it. One not accepted by the end of the event is refused.
+* `SendData(Data)` sends text (as UTF-8) or bytes; `SendComplete` fires when
+  it has all gone. `DataArrival(BytesTotal)` fires when data comes:
+  `GetData()` takes it as text (a character not all here yet is left for
+  later), `GetData(bytes)` as bytes, `MaxLen` only that many bytes;
+  `PeekData` leaves it there; `BytesReceived` is how much is waiting.
+* `Close()` ends the connection or stops listening; the `Close` event fires
+  when the other end closes it. `State`: `vpSckClosed`, `vpSckListening`,
+  `vpSckResolvingHost`, `vpSckConnecting`, `vpSckConnected`,
+  `vpSckClosing`, `vpSckError` (after an error, until Close). `RemoteHostIP`,
+  `LocalIP`, `LocalHostName`.
+* A Winsock still connected (or listening) when its form unloads is closed.
+
+<!-- BEGIN GENERATED: control Winsock -->
+Default size 32 × 32.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Left` | int | `0` | Position in the designer only |
+| `LocalPort` | int | `0` | The port Listen waits on (0: any free one, which it then tells) |
+| `RemoteHost` | str | `''` | The computer Connect connects to: a name or an IP address |
+| `RemotePort` | int | `0` | The port Connect connects to |
+| `Tag` | str | `''` | Free for your own use |
+| `Top` | int | `0` | Position in the designer only |
+
+Events: `ConnectionRequest(RequestID)`, `Connect`, `DataArrival(BytesTotal)`, `SendComplete`, `Close`, `Error(Number, Description)`. Default event (double-click in the designer): `DataArrival`.
+<!-- END GENERATED -->
+
+### FileWatcher
+
+Tells when files and folders change on disk, e.g. a document another
+program edited. Invisible at run time, like a Timer.
+
+```python
+def Form_Load(self):
+    self.fwDocs.Add("notes.txt")            # a file (relative to the form's folder)
+    self.fwDocs.Add(App.Path)               # a folder
+
+def fwDocs_FileChanged(self, Path):         # written, replaced or removed
+    if os.path.exists(Path):
+        self.txtNotes.Text = open(Path).read()
+
+def fwDocs_FolderChanged(self, Path):       # files added, removed, renamed in it
+    self.filDocs.Refresh()
+```
+
+* `Add(Path)` watches a file or a folder (False when there is none there: a
+  file is watched once it is made); `Remove(Path)`, `Clear()`; `Files` and
+  `Folders` list what it watches (full paths).
+* A file an editor replaces (writing a new one and renaming it over the old
+  one) stays watched; a file removed and made again is watched again, and
+  `FileChanged` says so each time.
+* `Enabled = False` holds its events back. It stops watching when its form
+  unloads.
+
+<!-- BEGIN GENERATED: control FileWatcher -->
+Default size 32 × 32.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `Enabled` | bool | `True` | Whether its events fire (False: changes go unreported) |
+| `Left` | int | `0` | Position in the designer only |
+| `Tag` | str | `''` | Free for your own use |
+| `Top` | int | `0` | Position in the designer only |
+
+Events: `FileChanged(Path)`, `FolderChanged(Path)`. Default event (double-click in the designer): `FileChanged`.
+<!-- END GENERATED -->
+
+### DesignerView
+
+A form designer in a program: it shows a form from its file (`Form1.py`)
+as the IDE's designer does, its controls in design mode (none of their
+events run) in the platform's window frame with its menu bar, ready to be
+changed: selecting (a click, Shift or Ctrl for more, a rubber band), grab
+handles to resize, moving (into and out of containers and pages), the grid
+and snapping, arrow keys to nudge, a context menu, and drawing new
+controls with `Tool`.
+
+```python
+def Form_Load(self):
+    self.dsgForm.FileName = "Form1.py"
+
+def lstToolbox_Click(self):
+    self.dsgForm.Tool = self.lstToolbox.Text        # the next drag draws one
+
+def dsgForm_SelChange(self):
+    names = self.dsgForm.SelectedControls            # [] when it is the form
+    self.lblSelected.Caption = ", ".join(names) or "(form)"
+
+def dsgForm_GoToCode(self, Name, Event):            # a control double-clicked
+    self.show_code(f"{Name or 'Form'}_{Event}")
+```
+
+* `FileName` (or `LoadForm(FileName)`) opens a form's file; `Source` is its
+  text with the changes, `Modified` whether there are any, `Save(FileName=
+  None)` writes it (to another file: the view goes on with that one).
+* `SelectedControls`, `SelectControls(Names)` (none: the form),
+  `ControlNames`, `ControlType(Name)`; `GetProperty(Name, Property)` and
+  `SetProperty(Property, Value)` (on the selection, as the Properties
+  window; a value it can't take raises ValueError); `AddControl(TypeName,
+  Left=None, Top=None, Width=None, Height=None, Container="")`,
+  `DeleteSelection()`; `Undo()`, `Redo()`, `CanUndo`, `CanRedo`.
+* `Tool`: the control type the next drag (or click) on the form draws (the
+  pointer again after it); `Locked`: the controls stay where they are.
+* Events: `SelChange`; `ControlAdded(Name)`, `ControlDeleted(Name)`,
+  `ControlMoved(Name)`, `ControlResized(Name)`, `PropertyChanged(Name,
+  Property)` (Name `""` is the form) and `Change` after each change, undoing
+  too; `GoToCode(Name, Event)` when a control (or the form) is
+  double-clicked, with its default event.
+* In the IDE's designer it is a placeholder; it designs at run time.
+
+<!-- BEGIN GENERATED: control DesignerView -->
+Default size 401 × 301. Property groups: Position, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `FileName` | file path | `''` | The form's file being designed (relative to the form's folder) |
+| `Locked` | bool | `False` | The controls stay where they are: the mouse and the arrow keys don't move or resize them |
+| `Tool` | str | `''` | The control type the next drag (or click) on the form draws; "" is the pointer |
+
+Events: `SelChange`, `Change`, `ControlAdded(Name)`, `ControlDeleted(Name)`, `ControlMoved(Name)`, `ControlResized(Name)`, `PropertyChanged(Name, Property)`, `GoToCode(Name, Event)`. Default event (double-click in the designer): `SelChange`.
 <!-- END GENERATED -->
 
 ### Terminal
@@ -2701,14 +2991,39 @@ def grdProps_ValidateEdit(self, Row, Col, Text):
   (`ColEditor[c]`, `ColList[c]`), one of `vpGridEditText` (the default),
   `vpGridEditList` (choices from the list), `vpGridEditCheck` (a check box:
   the text is `"True"` or `"False"`, toggled by a click or Space),
-  `vpGridEditColor` (a color dialog: the text is `"#rrggbb"`, shown with a
-  swatch), `vpGridEditButton` (a `...` button firing `CellButtonClick(Row,
+  `vpGridEditColor` (a palette under the cell: VB's colors, a System tab with
+  the theme's colors by what they are for, (Default) for none and More... for
+  any color; the text is `"#rrggbb"`, shown with a swatch),
+  `vpGridEditNumber` (a number box, with as many decimals as the text has),
+  `vpGridEditFont` (the font dialog: the text is `"Name, Size[, Bold][,
+  Italic]"`), `vpGridEditPicture` (a picture file, relative to the form's
+  folder), `vpGridEditButton` (a `...` button firing `CellButtonClick(Row,
   Col)`, e.g. to open your own dialog) or `vpGridEditNone` (read-only).
   `EditCell()` starts editing the current cell from code.
 * **Edit events:** `BeforeEdit(Row, Col)` (return True to cancel the edit),
   `ValidateEdit(Row, Col, Text)` (return True to refuse the new text),
   `AfterEdit(Row, Col)` once it is in.
 * `AllowUserResizing` (columns, rows, both) and `GridLines`.
+* **Outline rows** (a property sheet's categories): `RowOutlineLevel[r] = 1`
+  puts a row a level deeper; the rows right after a row, deeper than it, are
+  under it, and it shows an arrow in its first cell (indented by its level)
+  that collapses them into it. `IsCollapsed[r] = True` collapses them, False
+  shows them again (with the ones under them that aren't collapsed
+  themselves); `AfterCollapse(Row, Collapsed)` fires.
+* **Heading rows:** `RowHeading[r] = True` shows the row's first cell across
+  the row, bold on a shade, not edited.
+* **The description pane** (`DescriptionVisible`, `DescriptionHeight`) under
+  the cells shows the current row's first cell in bold and its
+  `RowDescription[r]`, as the Properties window does.
+
+```python
+grid.RowHeading[1] = True                    # "Appearance"
+for row in (2, 3):
+    grid.RowOutlineLevel[row] = 1             # under it
+grid.RowDescription[2] = "The background color"
+grid.DescriptionVisible = True
+grid.IsCollapsed[1] = True
+```
 
 <!-- BEGIN GENERATED: control FlexGrid -->
 Default size 321 × 161. Property groups: Position, Colors, Font, Common.
@@ -2719,6 +3034,8 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Cols` | int | `2` | How many columns, the fixed one included |
 | `DataSource` | str | `''` | The Data control (its Name) whose records it shows; choosing a row goes to that record |
+| `DescriptionHeight` | int | `60` | The description pane's height |
+| `DescriptionVisible` | bool | `False` | A pane under the cells: the current row's first cell and its RowDescription |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Editable` | bool | `False` | The user can edit the cells, each with its column's or its own editor |
@@ -2732,7 +3049,7 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | `Rows` | int | `2` | How many rows, the fixed one included |
 | `SelectionMode` | enum | 0 - Free | 0 - Free, 1 - By Row, 2 - By Column. What a click selects: cells, whole rows or whole columns |
 
-Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `AfterCollapse(Row, Collapsed)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### Data
@@ -4060,6 +4377,14 @@ def mnuFileOpen_Click(self):
   `Click` handler does, as in VB (`self.mnuBold.Checked = not
   self.mnuBold.Checked`).
 * `&` marks the access key; `-` as the Caption makes a separator.
+* **Pictures.** `Picture` shows a picture beside the caption: a file
+  (relative to the form's folder; while the form is dark, its dark version
+  beside it, `open.dark.png` for `open.png`, redrawn when the form turns
+  light or dark), a Picture, or an ImageList's ListImage, e.g. the one a
+  Toolbar button shows: `mnuOpen.Picture = imlIcons.ListImages("open")`.
+* **Choices.** Items of one menu with the same `Group` are a set of choices:
+  choosing one checks it and unchecks the others, before its Click (e.g. a
+  Light / Dark / System menu). The Menu Editor has Group and Picture too.
 * Menus can be [control arrays](#control-arrays), e.g. a list of recent
   files: `Load(self.mnuRecent, i)` adds an item right after the array's
   last one.
@@ -4093,7 +4418,9 @@ Not in the Toolbox: designed with the Menu Editor.
 | `Caption` | str | `''` | The text shown; & marks the access key (&File), and '-' makes a separator line |
 | `Checked` | bool | `False` | Shows a check mark next to the item |
 | `Enabled` | bool | `True` | Whether the item can be chosen |
+| `Group` | str | `''` | Items of one menu with the same Group are choices: choosing one checks it and unchecks the others |
 | `NegotiatePosition` | enum | 0 - None | 0 - None, 1 - Left, 2 - Middle, 3 - Right. For a menu on the menu bar, when its form is shown in another form: None = not shown; Left = before that window's menus, Middle = after its first menu, Right = after its menus (before its Right ones) |
+| `Picture` | file path | `''` | A picture beside the caption: a file (relative to the form's folder; its .dark version while the form is dark), a Picture or a ListImage |
 | `Shortcut` | shortcut key | `''` | A key that chooses the item without opening the menu, from VB's list: Ctrl+A..Z, F1..F12, Ctrl+, Shift+ and Ctrl+Shift+F1..F12, Ctrl+Shift+A..Z, Ctrl+Ins, Shift+Ins, Del, Shift+Del, Alt+Backspace |
 | `Tag` | str | `''` | Free for your own use |
 | `Visible` | bool | `True` | Whether the item is shown |
@@ -4211,6 +4538,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 | Ctrl+C | Not a function, but part of how programs end. Pressed in the terminal that started a program, it closes the program's forms like their close buttons would: an open `MsgBox` or modal form closes first, each `Form_Unload` runs and may cancel, and the program ends when the last form is gone. A console program waiting at `input()` ends with exit code 130. |
 | `Beep()` | system beep |
 | `Shell(PathName, WindowStyle=vpNormalFocus)` | starts a program on its own (a command line, double quotes grouping words, or a list) and returns its process ID; `FileNotFoundError` when it can't be started. WindowStyle is accepted for VB's sake (programs open their windows themselves). To follow a program, its output and its end, use a [Process](#process). |
+| `ShellExecute(File, Operation="open")` | opens a URL, document or folder with what the system uses for it (VB programs called Windows' `ShellExecute`): a web page or `mailto:` in the browser or mail program, a document in its program, a folder in Finder or Explorer. `Operation="show"` shows a file selected in its folder instead. Returns whether it could be opened (False for a file that isn't there). |
 | `SendKeys(Keys, Wait=False)` | types keys into the control with the focus, as if pressed (VB's syntax): text as it is; `+` Shift, `^` Ctrl, `%` Alt for the next key or a `(group)`; `~` Enter; `{ENTER}`, `{TAB}`, `{ESC}`, `{BS}`, `{DEL}`, `{HOME}`, `{END}`, `{LEFT}`, `{RIGHT}`, `{UP}`, `{DOWN}`, `{PGUP}`, `{PGDN}`, `{INS}`, `{F1}`..`{F16}` and VB's others; `{LEFT 3}` repeats; `{+}`, `{^}`, `{%}`, `{~}`, `{(}`, `{)}`, `{{}`, `{}}` are those characters. Each key goes to what has the focus when it arrives (`{TAB}` moves on, Enter clicks the Default button), menu shortcuts and Label access keys included. They arrive once the calling code is done; `Wait=True` sends them before returning. |
 
 ### The command line and settings
@@ -4350,7 +4678,7 @@ Clipboard.SetData(badge)                         # and to other programs
 
 | Name | Description |
 |---|---|
-| `LoadPicture(FileName="")` | a Picture from an image file (PNG, JPEG, BMP, GIF, ICO, SVG...; a relative name is from the current folder, which is the project's when it runs); `LoadPicture()` is an empty one, which clears a picture property. A missing file raises `FileNotFoundError`, one that isn't a picture `ValueError`. |
+| `LoadPicture(FileName="", Dark=False)` | a Picture from an image file (PNG, JPEG, BMP, GIF, ICO, SVG...; a relative name is from the current folder, which is the project's when it runs); `LoadPicture()` is an empty one, which clears a picture property. `Dark=True` takes the file's dark version where there is one beside it (`open.dark.png` or `open-dark.png` for `open.png`), e.g. `LoadPicture("open.png", Dark=self.DarkMode)`. A missing file raises `FileNotFoundError`, one that isn't a picture `ValueError`. |
 | `SavePicture(Picture, FileName)` | saves a Picture (or a picture file's picture) in the format the extension says (`.png`, `.jpg`, `.bmp`...); without one, BMP as in VB. Raises `OSError` when it can't. |
 | `Picture(Width=0, Height=0, BackColor=None)` | a new picture, transparent without a BackColor |
 
@@ -4368,11 +4696,40 @@ Reading the property gives what was set (a Picture, or a file name).
 A picture dropped from another program is in `OLEDragDrop`'s Data too:
 `Data.GetFormat(vpCFBitmap)`, `Data.GetData(vpCFBitmap)`.
 
+### Control metadata
+
+What VP6 knows about its controls, the way the IDE's Toolbox, Properties
+window and Object Browser see them:
+
+```python
+for name in ControlTypes("Common"):                 # the Toolbox's order
+    info = ControlInfo(name)
+    self.lstTypes.AddItem(f"{info.Name}: {info.Description}")
+
+info = ControlInfo("TextBox")
+info.Property("MaxLength").Description               # the Properties window's text
+[e.Name for e in info.Events]                        # Change, Click, ...
+self.picIcon.Picture = info.Icon                     # its Toolbox icon
+```
+
+| Name | Description |
+|---|---|
+| `ControlTypes(Category=None)` | the control types' names in the Toolbox's order (each category's own order, then others such as user controls); with a Category, just its own |
+| `ControlCategories()` | the Toolbox's categories, in order |
+| `ControlInfo(TypeName)` | what a control type is (also `"Menu"`, `"Form"`, `"MDIForm"`): `Name`, `Category`, `Description`, `DefaultSize` (width, height), `DefaultEvent`, `IsContainer`, `InToolbox`, `Icon` (a Picture), `Properties` (sorted by name), `Events` (in order), `Property(Name)`, `Event(Name)` |
+
+Each property is a `PropertyInfo`: `Name`, `Kind` (str, text, int, number,
+bool, enum, color, font, file, shortcut, list...), `Default`, `Choices`
+(`(value, label)` pairs for an enum), `Category` (the Categorized view's),
+`Description` (the Properties window's), `Always` (always written to the
+form file). Each event is an `EventInfo`: `Name`, `Arguments` (its handler's
+parameters, e.g. `["KeyCode", "Shift"]`), `IsDefault`.
+
 ### Global objects
 
 | Object | Members |
 |---|---|
-| `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started), `HelpFile` (the program's [help file](#help), what `ShowHelp` shows; a path relative to `Path`), `ShowSplash(Picture, Message="", Alignment=vpCenter, Color=None)` (a splash screen: the picture, a file relative to `Path` or a Picture, in a window of its own while the program starts; it closes when the first form is shown), `SplashMessage(Text, Alignment=vpCenter, Color=None)` (a message at its bottom), `HideSplash()`, `SplashVisible` |
+| `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (folder of the main script, i.e. the project folder when run from the project file), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started), `HelpFile` (the program's [help file](#help), what `ShowHelp` shows; a path relative to `Path`), `ShowSplash(Picture, Message="", Alignment=vpCenter, Color=None)` (a splash screen: the picture, a file relative to `Path` or a Picture, in a window of its own while the program starts; it closes when the first form is shown), `SplashMessage(Text, Alignment=vpCenter, Color=None)` (a message at its bottom), `HideSplash()`, `SplashVisible`, `Active` (whether the program is the active application; forms get `AppActivate` and `AppDeactivate`), `RunOnMainThread(Procedure, *Args, Wait=False)` (runs it on the main thread, where forms live: the safe way for a `threading.Thread` to show what it did; `Wait=True` waits for its result, or its error), `ColorScheme` (the program's [color scheme](#7-color-schemes-lightdark), changeable while it runs), `Style` (`"Native"`, or a Qt style such as `"Fusion"`: how every control is drawn; `Styles` lists them) |
 | `Screen` | `Width`, `Height` (primary screen, pixels), `TwipsPerPixelX`, `TwipsPerPixelY` (15), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FixedFonts` (the fixed-width ones among them, for code and terminals), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
 | `Clipboard` | `GetText(Format=vpCFText)`, `SetText(text, Format=vpCFText)` (`vpCFRTF`: rich text, as RTF source), `GetFormat(Format)` (`vpCFText`, `vpCFBitmap` / `vpCFDIB`, `vpCFRTF`, `vpCFFiles`), `GetData(Format=vpCFBitmap)` (a [Picture](#picture-objects), or with `vpCFFiles` the files' paths; `None` when there is none), `SetData(Picture)` (a Picture or a picture file), `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
@@ -4386,7 +4743,7 @@ A picture dropped from another program is in `OLEDragDrop`'s Data too:
 [`RichTextBox`](#richtextbox), [`CodeBox`](#codebox), [`MarkdownBox`](#markdownbox), [`TreeView`](#treeview) (and its `Node`), [`Splitter`](#splitter), [`DockPanel`](#dockpanel),
 [`ProgressBar`](#progressbar), [`Slider`](#slider), [`UpDown`](#updown),
 [`ImageList`](#imagelist) (and its `ListImage`), [`CommonDialog`](#commondialog) (and `DialogCancelled`), [`Toolbar`](#toolbar) (and its `Button`),
-[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`Data`](#data) (and its `Recordset`, `Field` and `Database`, `OpenDatabase`, `CreateDatabase`), [`WebView`](#webview), [`WebBrowser`](#webbrowser), [`Process`](#process), [`Terminal`](#terminal),
+[`ListView`](#listview) (and its `ListItem` and `ColumnHeader`), [`FlexGrid`](#flexgrid), [`Data`](#data) (and its `Recordset`, `Field` and `Database`, `OpenDatabase`, `CreateDatabase`), [`WebView`](#webview), [`WebBrowser`](#webbrowser), [`Process`](#process), [`Winsock`](#winsock), [`FileWatcher`](#filewatcher), [`DesignerView`](#designerview), [`Terminal`](#terminal),
 [`StatusBar`](#statusbar) (and its
 `Panel`), [`TabStrip`](#tabstrip) (and its `Tab`),
 [`SpinBox`](#spinbox), [`DTPicker`](#dtpicker), [`MonthView`](#monthview), [`Dial`](#dial),
@@ -4417,6 +4774,7 @@ self.Text1.BackColor = None             # back to the default color
 |---|---|
 | `RGB(red, green, blue)` | a color from 0-255 components |
 | `QBColor(index)` | one of the 16 classic QuickBasic colors (0-15) |
+| `RGBA(red, green, blue, alpha)` | a color you can see through, for the [graphics methods](#drawing-on-forms-and-pictureboxes): alpha 255 is opaque (the same as RGB), 0 invisible. Color properties keep just the color. |
 | `vpBlack` `0x000000`, `vpRed` `0x0000FF`, `vpGreen` `0x00FF00`, `vpYellow` `0x00FFFF`, `vpBlue` `0xFF0000`, `vpMagenta` `0xFF00FF`, `vpCyan` `0xFFFF00`, `vpWhite` `0xFFFFFF` | color constants |
 
 Reading a color property always returns the BGR int, or `None` for the
@@ -4447,10 +4805,15 @@ file's `color_scheme` sets the default for forms left on Project Default.
 * When a form runs on its own (`python Form1.py`), Project Default is read
   from a `.vp6p` file in the same folder, if there is one.
 
-The scheme can be changed at run time:
+The scheme can be changed at run time, for a form or for the whole program
+(`App.ColorScheme`: what Project Default means while it runs, e.g. a
+program's own Light / Dark / System menu; `vpSchemeProjectDefault` goes back
+to the project's):
 
 ```python
 self.ColorScheme = vpSchemeDark
+App.ColorScheme = vpSchemeLight          # every Project Default form, at once
+App.Style = "Fusion"                     # every control drawn the same everywhere
 ```
 
 **Light or dark now.** A form's `DarkMode` (read-only) is whether it looks
@@ -4515,7 +4878,8 @@ All constants are plain ints or strings.
 | ListView.SortOrder | `vpLvwAscending`, `vpLvwDescending` | 0, 1 |
 | RichTextBox: LoadFile / SaveFile file types | `vpRtfHTML`, `vpRtfText` | 0, 1 |
 | RichTextBox.Find options (added together) | `vpRtfWholeWord`, `vpRtfMatchCase`, `vpRtfNoHighlight` | 2, 4, 8 |
-| FlexGrid: ColEditor / CellEditor | `vpGridEditNone`, `vpGridEditText`, `vpGridEditList`, `vpGridEditCheck`, `vpGridEditColor`, `vpGridEditButton` | 0, 1, 2, 3, 4, 5 |
+| CodeBox: Find, FindAll and Replace options (added together) | `vpFindWholeWord`, `vpFindMatchCase`, `vpFindNoHighlight`, `vpFindRegex`, `vpFindBackward` | 2, 4, 8, 16, 32 |
+| FlexGrid: ColEditor / CellEditor | `vpGridEditNone`, `vpGridEditText`, `vpGridEditList`, `vpGridEditCheck`, `vpGridEditColor`, `vpGridEditButton`, `vpGridEditNumber`, `vpGridEditFont`, `vpGridEditPicture` | 0, 1, 2, 3, 4, 5, 6, 7, 8 |
 | FlexGrid.Sort | `vpGridSortGenericAscending`, `vpGridSortGenericDescending`, `vpGridSortNumericAscending`, `vpGridSortNumericDescending`, `vpGridSortStringNoCaseAscending`, `vpGridSortStringNoCaseDescending`, `vpGridSortStringAscending`, `vpGridSortStringDescending` | 1, 2, 3, 4, 5, 6, 7, 8 |
 | FlexGrid.SelectionMode | `vpGridSelectionFree`, `vpGridSelectionByRow`, `vpGridSelectionByColumn` | 0, 1, 2 |
 | PopupMenu flags (added together) | `vpPopupMenuLeftAlign`, `vpPopupMenuCenterAlign`, `vpPopupMenuRightAlign`, `vpPopupMenuLeftButton`, `vpPopupMenuRightButton` | 0, 4, 8, 0, 2 |
@@ -4528,6 +4892,7 @@ All constants are plain ints or strings.
 | MarkdownBox.Mode | `vpMarkdownSource`, `vpMarkdownVisual`, `vpMarkdownPreview` | 0, 1, 2 |
 | MarkdownBox.ApplyFormat | `vpMarkdownBold`, `vpMarkdownItalic`, `vpMarkdownStrikeThru`, `vpMarkdownCode`, `vpMarkdownParagraph`, `vpMarkdownHeading1`, `vpMarkdownHeading2`, `vpMarkdownHeading3`, `vpMarkdownBulletList`, `vpMarkdownNumberedList`, `vpMarkdownQuote` | 1, 2, 3, 4, 10, 11, 12, 13, 20, 21, 22 |
 | MDIForm.Arrange | `vpCascade`, `vpTileHorizontal`, `vpTileVertical`, `vpArrangeIcons` | 0, 1, 2, 3 |
+| MDIForm.ViewMode | `vpMDIWindows`, `vpMDITabs` | 0, 1 |
 | Printer.Orientation | `vpPRORPortrait`, `vpPRORLandscape` | 1, 2 |
 | Printer.PaperSize | `vpPRPSLetter`, `vpPRPSTabloid`, `vpPRPSLedger`, `vpPRPSLegal`, `vpPRPSExecutive`, `vpPRPSA3`, `vpPRPSA4`, `vpPRPSA5`, `vpPRPSB5`, `vpPRPSEnv10`, `vpPRPSEnvDL` | 1, 3, 4, 5, 7, 8, 9, 11, 13, 20, 27 |
 | Printer.ColorMode and Printer.Duplex | `vpPRCMMonochrome`, `vpPRCMColor`, `vpPRDPSimplex`, `vpPRDPHorizontal`, `vpPRDPVertical` | 1, 2, 1, 2, 3 |
@@ -4553,6 +4918,8 @@ All constants are plain ints or strings.
 | PdfViewer.ZoomMode and PdfViewer.PageMode | `vpZoomCustom`, `vpZoomFitWidth`, `vpZoomFitPage`, `vpPageSingle`, `vpPageMulti` | 0, 1, 2, 0, 1 |
 | QuickView.ResizeMode | `vpQmlViewToRoot`, `vpQmlRootToView` | 0, 1 |
 | WizardForm.WizardStyle | `vpWizardClassic`, `vpWizardModern`, `vpWizardMac`, `vpWizardAero` | 0, 1, 2, 3 |
+| Winsock.State | `vpSckClosed`, `vpSckOpen`, `vpSckListening`, `vpSckConnectionPending`, `vpSckResolvingHost`, `vpSckHostResolved`, `vpSckConnecting`, `vpSckConnected`, `vpSckClosing`, `vpSckError` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| Winsock: Error's Number | `vpSckAddressInUse`, `vpSckConnectionReset`, `vpSckTimedout`, `vpSckConnectionRefused`, `vpSckHostNotFound` | 10048, 10054, 10060, 10061, 11001 |
 | Colors (BGR) | `vpBlack`, `vpRed`, `vpGreen`, `vpYellow`, `vpBlue`, `vpMagenta`, `vpCyan`, `vpWhite` | `0x000000`, `0x0000FF`, `0x00FF00`, `0x00FFFF`, `0xFF0000`, `0xFF00FF`, `0xFFFF00`, `0xFFFFFF` |
 | Color schemes | `vpSchemeProjectDefault`, `vpSchemeSystem`, `vpSchemeLight`, `vpSchemeDark`, `vpSchemeIDE` | 0, 1, 2, 3, 4 |
 

@@ -7,7 +7,7 @@ from .appearance import (vpSchemeDark, vpSchemeIDE, vpSchemeLight, vpSchemeProje
                          vpSchemeSystem)
 from .app import (App, Beep, Clipboard, Command, Debug, DeleteSetting, DoEvents, End,
                   GetAllSettings, GetSetting, SaveSetting, Screen, SendKeys, ShowHelp)
-from .colors import (RGB, QBColor, vpBlack, vpBlue, vpCyan, vpGreen, vpMagenta, vpRed,
+from .colors import (RGB, RGBA, QBColor, vpBlack, vpBlue, vpCyan, vpGreen, vpMagenta, vpRed,
                      vpWhite, vpYellow)
 from .constants import *  # noqa: F403
 from .constants import __all__ as _constants_all
@@ -22,7 +22,9 @@ from .dialogs import InputBox, MsgBox, ProgressBox, ShowError
 from .form import Form, Forms, Load, Unload, run
 from .mdi import MDIForm
 from .wizard import WizardForm
-from .process import Process, Shell
+from .process import Process, Shell, ShellExecute
+from .winsock import Winsock
+from .filewatcher import FileWatcher
 from .terminal import Terminal
 from .markdown import MarkdownBox
 from .data import CreateDatabase, Data, Database, Field, OpenDatabase, Recordset
@@ -35,24 +37,29 @@ from .graphicsview import GraphicsView
 from .chart import Chart
 from .media import MediaPlayer, PdfViewer, SvgImage
 from .opengl import OpenGLView, QuickView
+from .designerview import DesignerView
+from .drawing import GraphicsPath, LinearGradient
+from .metadata import ControlCategories, ControlInfo, ControlTypes
 from .picture import LoadPicture, Picture, SavePicture
 from .printer import Printer, Printers
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.61"
+__version__ = "0.4.62"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Command", "Debug", "DeleteSetting", "DoEvents", "End",
     "GetAllSettings", "GetSetting", "SaveSetting", "Screen", "SendKeys", "ShowHelp",
     "LoadPicture", "Picture", "SavePicture", "Printer", "Printers", "MDIForm",
     "WizardForm",
-    "Process", "Shell", "Terminal", "MarkdownBox",
+    "Process", "Shell", "ShellExecute", "Winsock", "FileWatcher", "DesignerView",
+    "ControlTypes", "ControlInfo", "ControlCategories", "GraphicsPath", "LinearGradient",
+    "Terminal", "MarkdownBox",
     "Data", "Database", "Recordset", "Field", "OpenDatabase", "CreateDatabase",
     "SpinBox", "DTPicker", "MonthView", "Dial", "LCDNumber", "FontComboBox", "HotKey",
     "CommandLink", "ToolButton", "ButtonBox", "ToolBox", "PageFrame", "ScrollPanel",
     "ColumnView", "UndoView", "UndoStack", "DBGrid", "GraphicsView", "Chart",
     "SvgImage", "MediaPlayer", "PdfViewer", "OpenGLView", "QuickView",
-    "RGB", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
+    "RGB", "RGBA", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",
     "Button", "CheckBox", "CodeBox", "ColumnHeader", "CommonDialog", "DialogCancelled", "ComboBox",
     "CommandButton", "Control",

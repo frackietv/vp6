@@ -50,7 +50,8 @@ NAME_PREFIX = {
     "ScrollPanel": "ScrollPanel", "ColumnView": "ColumnView", "DBGrid": "DBGrid",
     "GraphicsView": "Graphics", "Chart": "Chart", "SvgImage": "Svg",
     "MediaPlayer": "MediaPlayer", "PdfViewer": "Pdf", "OpenGLView": "GLView",
-    "QuickView": "QuickView", "UndoView": "UndoView",
+    "QuickView": "QuickView", "UndoView": "UndoView", "Winsock": "Winsock",
+    "FileWatcher": "FileWatcher", "DesignerView": "Designer",
 }
 
 _clipboard: list[ControlDef] = []

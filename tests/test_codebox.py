@@ -1,6 +1,7 @@
 """The CodeBox: Python coloring and the Highlight event, the gutter (line numbers,
 LineMarker, GutterClick), the current line, hidden lines, protected lines, indenting
-and its editing API."""
+and its editing API; for a code window: completion, Find / FindAll / Replace, marks,
+ReplaceRange and comments."""
 
 import os
 
@@ -297,3 +298,103 @@ def test_toolbox_icon_and_events(qapp):
     assert not icon("CodeBox").isNull()
     assert EVENT_ARGS["Highlight"] == "Line, Text, State"
     assert EVENT_ARGS["GutterClick"] == EVENT_ARGS["ProtectedEdit"] == "Line"
+
+
+class Completing(Form):
+    def InitializeComponent(self):
+        self.code = CodeBox(self, Text="", Language=1, Width=400, Height=220)
+        self.requests, self.chosen = [], []
+
+    def code_CompletionRequest(self, Context, Prefix):
+        self.requests.append((Context, Prefix))
+        return ["print", "Printer", "property", "Shape"] if Context != "self." else ["Caption"]
+
+    def code_CompletionChosen(self, Text):
+        self.chosen.append(Text)
+
+
+def test_completion(qapp):
+    form = Completing()
+    form.Show()
+    code = form.code
+    code.SetFocus()
+    QTest.keyClicks(code._widget, "pr")
+    assert form.requests == [] and not code.CompletionVisible  # (fewer than three letters)
+    QTest.keyClicks(code._widget, "i")
+    assert form.requests[-1] == ("", "pri") and code.CompletionVisible
+    popup = code._completer.popup()
+    assert popup.model().rowCount() == 2  # print, Printer (any case)
+    QTest.keyClick(code._widget, Qt.Key_N)  # narrowed while typing
+    assert code.CompletionVisible and popup.model().rowCount() == 2
+    QTest.keyClick(code._widget, Qt.Key_Return)
+    assert code.Text == "print" and form.chosen == ["print"] and not code.CompletionVisible
+    code.Text = "self."
+    code.SelStart = 5
+    QTest.keyClick(code._widget, Qt.Key_Space, Qt.ControlModifier)  # asked for
+    assert form.requests[-1] == ("self.", "") and code.CompletionVisible
+    QTest.keyClick(code._widget, Qt.Key_Escape)
+    assert not code.CompletionVisible and code.Text == "self."
+    assert code.ShowCompletion(["Caption", "Cls"]) and code.CompletionVisible
+    code.HideCompletion()
+    code.Text = "abc"
+    code.SelStart = 3
+    assert not code.ShowCompletion(["zzz"])  # (none fits)
+    assert EVENT_ARGS["CompletionRequest"] == "Context, Prefix"
+    form.Unload()
+
+
+def test_find_replace_marks_and_comments(qapp):
+    from vp6 import vpFindBackward, vpFindMatchCase, vpFindNoHighlight, vpFindRegex, \
+        vpFindWholeWord
+
+    form = Form()
+    code = CodeBox(form, Text="cat = Cat()\ncatalog = [cat, 'Cat']\nprint(cat)\n")
+    assert code.FindAll("cat") == [(0, 3), (6, 3), (12, 3), (23, 3), (29, 3), (41, 3)]
+    assert code.FindAll("cat", vpFindMatchCase + vpFindWholeWord) == [(0, 3), (23, 3), (41, 3)]
+    assert code.FindAll(r"c\w+g", vpFindRegex) == [(12, 7)]
+    assert code.Find("cat", 1, Options=vpFindWholeWord) == 6  # (Cat: any case)
+    assert code.SelStart == 6 and code.SelLength == 3
+    assert code.Find("cat", Options=vpFindWholeWord) == 23  # (on from the selection)
+    assert code.Find("cat", Options=vpFindWholeWord + vpFindBackward) == 6
+    code.SelStart = 0
+    assert code.Find("print", Options=vpFindNoHighlight) == 35 and code.SelStart == 0
+    assert code.Find("nothing") == -1
+    with pytest.raises(ValueError, match="regular expression"):
+        code.FindAll("(", vpFindRegex)
+    assert code.Replace(r"\bcat\b", "dog", vpFindRegex + vpFindMatchCase) == 3
+    assert code.Text == "dog = Cat()\ncatalog = [dog, 'Cat']\nprint(dog)\n"
+    code.Undo()  # (one step)
+    assert code.Text.startswith("cat = Cat()")
+    assert code.Replace(r"(\w+)\(", r"call_\1(", vpFindRegex) == 2
+    assert "call_Cat()" in code.Text and "call_print(cat)" in code.Text
+    # ReplaceRange: one step, the caret kept (moved along)
+    code.Text = "one\ntwo\nthree\n"
+    code.SelStart = 9
+    code.ReplaceRange(0, 3, "ONE!")
+    assert code.Text == "ONE!\ntwo\nthree\n" and code.SelStart == 10
+    code.Undo()
+    assert code.Text == "one\ntwo\nthree\n"
+    # Marks: ranges, lines, groups
+    code.MarkRange(4, 3, vpRed, "found")
+    code.MarkRange(8, 5, vpRed, "errors", Underline=True)
+    code.MarkLine(0, RGB(255, 255, 0), "debugger")
+    assert code.MarkCount == 3 and len(code._widget.extraSelections()) == 3
+    code.ClearMarks("found")
+    assert code.MarkCount == 2
+    code.ClearMarks()
+    assert code.MarkCount == 0 and code._widget.extraSelections() == []
+    # Comments
+    code.Text = "def f():\n    x = 1\n\n    return x\n"
+    code.SelStart, code.SelLength = 9, 25
+    code.ToggleComment()
+    assert code.Text == "def f():\n    # x = 1\n\n    # return x\n"
+    code.ToggleComment()
+    assert code.Text == "def f():\n    x = 1\n\n    return x\n"
+    code.CommentLines()
+    code.Undo()
+    code.SelStart, code.SelLength = 0, 0
+    code.CommentLines()
+    assert code.Text.startswith("# def f():")
+    code.UncommentLines()
+    assert code.Text.startswith("def f():")
+    form._widget.close()

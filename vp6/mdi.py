@@ -8,7 +8,12 @@ workspace for its child forms, the forms with ``MDIChild = True``.
 * Controls aligned to the MDI form's edges (toolbars, status bars, docked
   PictureBoxes) stay around the workspace, which fills the rest.
 * ``ActiveForm`` is the active child; ``Arrange(vpCascade / vpTileHorizontal
-  / vpTileVertical / vpArrangeIcons)`` arranges the children. A child's
+  / vpTileVertical / vpArrangeIcons)`` arranges the children.
+* ``ViewMode``: vpMDIWindows (the children in windows of their own in the
+  workspace) or vpMDITabs (one at a time, filling it, with a tab for each:
+  a tab's close button closes that child, tabs can be dragged to another
+  order). Several instances of one form class can be children at once
+  (``Form2().Show()`` each time), e.g. a document window per file. A child's
   Activate and Deactivate fire as it becomes the active child or stops.
 * While the active child has menus, they replace the MDI form's on its menu
   bar (as in VB); a Menu whose ``WindowList`` is True lists the children
@@ -51,6 +56,9 @@ class MDIForm(Form):
           description="Loading a child form (Load) shows it too"),
         P("ScrollBars", "bool", True,
           description="Scroll bars when child forms reach beyond the workspace"),
+        P("ViewMode", "enum", 0, ((0, "0 - Windows"), (1, "1 - Tabs")),
+          description="The children in windows of their own, or one at a time with a tab "
+                      "for each (closable, movable)"),
     )
     # (what the left-out properties are on an MDI form)
     MDIChild = False
@@ -86,6 +94,7 @@ class MDIForm(Form):
             area.show()
             self._apply_workspace_look()
             self._apply_ScrollBars(self._values.get("ScrollBars", True))
+            self._apply_ViewMode(self._values.get("ViewMode", 0))
         return area
 
     def _layout_aligned(self) -> None:
@@ -126,6 +135,18 @@ class MDIForm(Form):
             policy = Qt.ScrollBarAsNeeded if v else Qt.ScrollBarAlwaysOff
             area.setHorizontalScrollBarPolicy(policy)
             area.setVerticalScrollBarPolicy(policy)
+
+    def _apply_ViewMode(self, v):
+        area = self.__dict__.get("_area")
+        if area is None:
+            return
+        if int(v) == 1:
+            area.setViewMode(QMdiArea.TabbedView)
+            area.setDocumentMode(True)
+            area.setTabsClosable(True)
+            area.setTabsMovable(True)
+        else:
+            area.setViewMode(QMdiArea.SubWindowView)
 
     def _apply_window_flags(self) -> None:  # (always a sizable window)
         if self._container is not None:

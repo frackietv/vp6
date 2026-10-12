@@ -1,7 +1,9 @@
-"""Kitchen Sink page: App (version, PrevInstance), Command(), settings (SaveSetting,
-GetSetting, GetAllSettings, DeleteSetting), Screen (Fonts), Forms, Clipboard, Debug,
-DoEvents, End."""
+"""Kitchen Sink page: App (version, PrevInstance, Active and the AppActivate /
+AppDeactivate events, RunOnMainThread from a worker thread), Command(), settings
+(SaveSetting, GetSetting, GetAllSettings, DeleteSetting), Screen (Fonts), Forms,
+Clipboard, Debug, DoEvents, End."""
 
+import threading
 import time
 
 from vp6 import *
@@ -44,6 +46,11 @@ class pgGlobals(Form):
                                     ToolTipText='End: stops at once, without Form_Unload')
         self.lblResult = Label(self, Caption='', Left=190, Top=278, Width=434, Height=25,
                                TabIndex=13)
+        self.cmdThread = CommandButton(self, Caption='Work in a &thread', Left=190, Top=312,
+                                       Width=180, Height=32, TabIndex=14,
+                                       ToolTipText='A threading.Thread shows its progress with App.RunOnMainThread')
+        self.lblActive = Label(self, Caption='', Left=190, Top=358, Width=434, Height=25,
+                               TabIndex=15)
     # endregion
 
     def Form_Load(self):
@@ -57,6 +64,8 @@ class pgGlobals(Form):
             f"Screen: {Screen.Width} x {Screen.Height}, {Screen.FontCount} fonts   "
             f"Forms loaded: {Forms.Count}\n"
             f"RGB(255, 0, 0) = {RGB(255, 0, 0)} = vpRed   QBColor(14) = {QBColor(14):#08x}")
+        self.activations = 0
+        self.show_active()
         # The text saved last time (the Save setting button), else "Copy me"
         self.txtClip.Text = GetSetting(App.Title, "Globals", "Text", "Copy me")
         self.show_settings()
@@ -102,6 +111,37 @@ class pgGlobals(Form):
     def cmdDebug_Click(self):
         Debug.Print("Hello from the Kitchen Sink:", App.Title)
         self.lblResult.Caption = "Written with Debug.Print (see the Immediate window)"
+
+    # --- the program as a whole: active or not, work in another thread ------------------------
+    def Form_AppActivate(self):
+        self.activations += 1  # (the user came back to the program: e.g. look for changes)
+        self.show_active()
+
+    def Form_AppDeactivate(self):
+        self.show_active()
+
+    def show_active(self):
+        self.lblActive.Caption = (f"App.Active: {App.Active} (AppActivate {self.activations} "
+                                  "times: switch to another program and back)")
+
+    def cmdThread_Click(self):
+        self.cmdThread.Enabled = False
+        threading.Thread(target=self.work, daemon=True).start()
+
+    def work(self):
+        # Another thread mustn't touch controls: it asks the main thread to
+        for step in range(1, 6):
+            time.sleep(0.2)
+            App.RunOnMainThread(self.progress, f"Working in a thread: step {step} of 5")
+        total = App.RunOnMainThread(lambda: sum(range(101)), Wait=True)  # (and a result)
+        App.RunOnMainThread(self.done, total)
+
+    def progress(self, text):
+        self.lblResult.Caption = text
+
+    def done(self, total):
+        self.lblResult.Caption = f"The thread is done (1 + ... + 100 = {total})"
+        self.cmdThread.Enabled = True
 
     def cmdEnd_Click(self):
         End()  # ends at once, without Form_Unload

@@ -16,8 +16,8 @@ import sys
 import time
 
 from PySide6.QtCore import (QByteArray, QDate, QEvent, QFileInfo, QItemSelectionModel, QLocale,
-                            QMimeData, QObject, QPoint, QPointF, QRect, QRectF, QSize, Qt, QTime,
-                            QTimer, QUrl, Signal)
+                            QMimeData, QObject, QPoint, QPointF, QRect, QRectF, QSize,
+                            QStringListModel, Qt, QTime, QTimer, QUrl, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QCursor, QDesktopServices,
                            QDrag, QFont, QFontDatabase, QIcon, QKeyEvent, QKeySequence, QPainter,
                            QPainterPath,
@@ -25,11 +25,12 @@ from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QCursor, QDesk
                            QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
                            QTextDocumentFragment, QTextFormat)
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QDialog,
+    QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QCompleter,
+    QDialog,
     QFileDialog, QFontDialog, QFrame, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QListView, QListWidget, QListWidgetItem, QMenu, QPlainTextEdit, QProgressBar, QPushButton,
     QRadioButton, QRubberBand, QScrollArea, QScrollBar, QSizeGrip, QSlider, QStackedLayout, QStyle,
-    QStyledItemDelegate, QStyleOptionTabWidgetFrame, QStyleOptionViewItem, QTableWidget,
+    QStyledItemDelegate, QStyleOptionTabWidgetFrame, QStyleOptionViewItem, QTabBar, QTableWidget,
     QTableWidgetItem, QTableWidgetSelectionRange, QTabWidget, QTextEdit, QToolBar, QToolButton,
     QTreeView, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -56,8 +57,10 @@ EVENT_ARGS = {
     "BeforeClick": "", "ButtonClick": "Button",
     "ItemClick": "Item", "ColumnClick": "ColumnHeader", "ItemCheck": "Item",
     "SelChange": "", "Highlight": "Line, Text, State", "GutterClick": "Line",
-    "ProtectedEdit": "Line",
+    "ProtectedEdit": "Line", "CompletionRequest": "Context, Prefix",
+    "CompletionChosen": "Text",
     "EnterCell": "", "LeaveCell": "", "RowColChange": "", "BeforeEdit": "Row, Col",
+    "AfterCollapse": "Row, Collapsed",
     "ValidateEdit": "Row, Col, Text", "AfterEdit": "Row, Col", "CellButtonClick": "Row, Col",
     "DockChange": "", "Close": "", "Validate": "",
     "DragDrop": "Source, X, Y", "DragOver": "Source, X, Y, State",
@@ -65,7 +68,7 @@ EVENT_ARGS = {
     "OLEDragOver": "Data, Effect, Button, Shift, X, Y, State",
     "DocumentComplete": "URL", "NavigateError": "URL, Description", "TitleChange": "Text",
     "ProgressChange": "Progress", "BeforeNavigate": "URL", "NewWindow": "URL",
-    "StatusTextChange": "Text",
+    "StatusTextChange": "Text", "AppActivate": "", "AppDeactivate": "",
 }
 
 MOUSE_EVENTS = ("MouseDown", "MouseMove", "MouseUp")
@@ -1876,6 +1879,7 @@ class _CodeEdit(QPlainTextEdit):
     def keyPressEvent(self, event):
         if not self.box._key_press(event):
             super().keyPressEvent(event)
+            self.box._completion_after_key(event)
 
     def insertFromMimeData(self, source):  # pasting and dropping
         if self.box._may_edit():
@@ -1930,17 +1934,31 @@ class _LineMarkers:
         self._box._update_gutter()
 
 
+def _utf16_length(text: str) -> int:
+    """How many positions ``text`` takes in a Qt document (UTF-16 units)."""
+    return len(text.encode("utf-16-le")) // 2
+
+
 class CodeBox(_EditorSelection, _TextEditing, Control):
     """A code editor: line numbers, the current line highlighted, syntax
     coloring (Language, and your own in the Highlight event), markers in the
     gutter (LineMarker, GutterClick), hidden (folded) lines and protected
     lines the user can't change (code can). Enter keeps the indentation, Tab
-    and Shift+Tab indent; it has the TextBox's editing API."""
+    and Shift+Tab indent; it has the TextBox's editing API.
+
+    For a code window: a completion list at the caret (CompletionRequest
+    asks for its items while typing or on Ctrl+Space, ShowCompletion shows
+    them, CompletionChosen tells which was taken), Find, FindAll and Replace
+    (match case, whole words, regular expressions), marks over the text
+    apart from its coloring (MarkRange, MarkLine: found text, the statement
+    the debugger stopped at, errors underlined), ReplaceRange (one undo step
+    keeping the caret and scrolling) and ToggleComment."""
 
     TypeName = "CodeBox"
     DefaultEvent = "Change"
     DefaultSize = (321, 201)
-    Events = ("Change", "SelChange", "Highlight", "GutterClick", "ProtectedEdit", "Click",
+    Events = ("Change", "SelChange", "Highlight", "GutterClick", "ProtectedEdit",
+              "CompletionRequest", "CompletionChosen", "Click",
               "DblClick", "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp",
               "MouseDown", "MouseMove", "MouseUp")
     _qss_type = "QPlainTextEdit"
@@ -1967,7 +1985,8 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
     )
 
     def _create_widget(self, parent):
-        self.__dict__.update(_protected=[], _markers=[], _highlighting=None, _highlighter=None)
+        self.__dict__.update(_protected=[], _markers=[], _highlighting=None, _highlighter=None,
+                             _completer=None, _marks=[])
         widget = _CodeEdit(self, parent)
         self._widget = widget
         self.__dict__["_highlighter"] = _CodeHighlighter(self)
@@ -2055,6 +2074,8 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
             # (a new text: no protected, hidden or marked lines from the old one)
             self._protected.clear()
             self._markers.clear()
+            self._marks.clear()
+            self._show_marks()
             self._update_gutter()
             self._update_extra()
 
@@ -2319,6 +2340,16 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
         if self._values.get("Locked"):
             return False
         key, modifiers = event.key(), event.modifiers()
+        if self.CompletionVisible and key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab,
+                                              Qt.Key_Escape, Qt.Key_Backtab):
+            popup = self._completer.popup()
+            if key != Qt.Key_Escape and popup.currentIndex().isValid():
+                self._insert_completion(popup.currentIndex().data())
+            popup.hide()
+            return True
+        if key == Qt.Key_Space and modifiers & (Qt.ControlModifier | Qt.MetaModifier):
+            self._request_completion(True)
+            return True
         cut_or_paste = event.matches(QKeySequence.Cut) or event.matches(QKeySequence.Paste)
         modifies = bool(event.text()) or cut_or_paste or key in (
             Qt.Key_Backspace, Qt.Key_Delete, Qt.Key_Backtab)
@@ -2337,6 +2368,299 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
             self._indent(False)
             return True
         return False
+
+    # -- completion ---------------------------------------------------------------------------
+    def _word_before_caret(self) -> tuple[str, str]:
+        """(context, prefix): the dotted name before the word being typed, and the word."""
+        cursor = self._widget.textCursor()
+        line = cursor.block().text()[:cursor.positionInBlock()]
+        match = re.search(r"([\w.]*?)(\w*)$", line)
+        return match.group(1), match.group(2)
+
+    def _request_completion(self, asked: bool) -> None:
+        """Typing a word (three letters, or after a dot), or Ctrl+Space: ask the
+        CompletionRequest event for the items; it returns them (a list) or
+        calls ShowCompletion."""
+        if self._handler("CompletionRequest") is None:
+            return
+        context, prefix = self._word_before_caret()
+        if not asked and not context.endswith(".") and len(prefix) < 3:
+            return
+        items = self._fire("CompletionRequest", context, prefix)
+        if isinstance(items, (list, tuple)):
+            self.ShowCompletion(items)
+
+    def _completion_after_key(self, event) -> None:
+        """A key went to the editor: the list follows the word being typed."""
+        if self._design_mode or self._values.get("Locked"):
+            return
+        text = event.text()
+        typed = bool(text) and (text.isalnum() or text in "._")
+        if self.CompletionVisible:
+            if typed or event.key() == Qt.Key_Backspace:
+                self._filter_completion()
+            elif event.key() not in (Qt.Key_Up, Qt.Key_Down, Qt.Key_PageUp, Qt.Key_PageDown,
+                                     Qt.Key_Shift, Qt.Key_Control, Qt.Key_Meta, Qt.Key_Alt):
+                self.HideCompletion()
+        elif typed and not event.modifiers() & (Qt.ControlModifier | Qt.MetaModifier):
+            self._request_completion(False)
+
+    def _filter_completion(self) -> bool:
+        completer = self._completer
+        prefix = self._word_before_caret()[1]
+        completer.setCompletionPrefix(prefix)
+        count = completer.completionCount()
+        if count == 0 or (count == 1 and completer.currentCompletion() == prefix):
+            completer.popup().hide()
+            return False
+        popup = completer.popup()
+        popup.setCurrentIndex(completer.completionModel().index(0, 0))
+        rect = self._widget.cursorRect()
+        rect.setWidth(popup.sizeHintForColumn(0) + popup.verticalScrollBar().sizeHint().width()
+                      + 24)
+        completer.complete(rect)
+        return True
+
+    def ShowCompletion(self, Items) -> bool:
+        """Show a list of choices at the caret (e.g. from CompletionRequest),
+        those starting with the word before the caret (any case), narrowed
+        while typing; Enter or Tab (or a click) puts the one chosen in place of
+        the word, then CompletionChosen fires; Esc closes it. False when none
+        fits."""
+        if self._design_mode:
+            return False
+        completer = self._completer
+        if completer is None:
+            completer = QCompleter(self._widget)
+            completer.setWidget(self._widget)
+            completer.setCompletionMode(QCompleter.PopupCompletion)
+            completer.setCaseSensitivity(Qt.CaseInsensitive)
+            completer.setModel(QStringListModel([], completer))
+            completer.activated.connect(self._insert_completion)
+            self.__dict__["_completer"] = completer
+        words = sorted({str(item) for item in Items}, key=str.lower)
+        completer.model().setStringList(words)
+        return self._filter_completion()
+
+    def HideCompletion(self) -> None:
+        """Close the completion list."""
+        if self._completer is not None:
+            self._completer.popup().hide()
+
+    @property
+    def CompletionVisible(self) -> bool:
+        """Whether the completion list is showing."""
+        return self._completer is not None and self._completer.popup().isVisible()
+
+    def _insert_completion(self, text: str) -> None:
+        cursor = self._widget.textCursor()
+        prefix = self._word_before_caret()[1]
+        cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, _utf16_length(prefix))
+        cursor.insertText(text)
+        self._widget.setTextCursor(cursor)
+        self._fire("CompletionChosen", text)
+
+    # -- finding and replacing ------------------------------------------------------------------
+    def _pattern(self, String, Options: int) -> re.Pattern:
+        Options = int(Options)
+        text = str(String)
+        if not text:
+            raise ValueError(f"CodeBox '{self.Name}': nothing to find")
+        pattern = text if Options & 16 else re.escape(text)
+        if Options & 2:  # whole words: not inside a longer word
+            pattern = rf"(?<!\w)(?:{pattern})(?!\w)"
+        try:
+            return re.compile(pattern, 0 if Options & 4 else re.IGNORECASE)
+        except re.error as exc:
+            raise ValueError(f"CodeBox '{self.Name}': not a regular expression: {exc}") \
+                from None
+
+    def _matches(self, String, Options: int) -> list[tuple[int, int, re.Match]]:
+        """(start, length, match) of each match, in document positions."""
+        text = self._widget.toPlainText()
+        found, position, done = [], 0, 0
+        for match in self._pattern(String, Options).finditer(text):
+            if match.end() == match.start():
+                continue  # (an empty match finds nothing)
+            position += _utf16_length(text[done:match.start()])
+            length = _utf16_length(match.group(0))
+            found.append((position, length, match))
+            position += length
+            done = match.end()
+        return found
+
+    def Find(self, String, Start: int | None = None, End: int | None = None,
+             Options: int = 0) -> int:
+        """Find text and select it; returns where it starts, or -1. It looks
+        from Start (else just after the selection, so calling it again finds
+        the next one; backward: before it) up to End. Options, added
+        together: vpFindWholeWord, vpFindMatchCase, vpFindNoHighlight (don't
+        select it), vpFindRegex (String is a regular expression),
+        vpFindBackward."""
+        backward = int(Options) & 32
+        if Start is None:
+            Start = self.SelStart if backward else self.SelStart + self.SelLength
+        matches = self._matches(String, Options)
+        if backward:
+            matches = [m for m in reversed(matches) if m[0] + m[1] <= int(Start)]
+        else:
+            matches = [m for m in matches if m[0] >= int(Start) and
+                       (End is None or m[0] + m[1] <= int(End))]
+        if not matches:
+            return -1
+        start, length, _ = matches[0]
+        if not int(Options) & 8:
+            cursor = self._widget.textCursor()
+            cursor.setPosition(start)
+            cursor.setPosition(start + length, QTextCursor.KeepAnchor)
+            self._widget.setTextCursor(cursor)
+        return start
+
+    def FindAll(self, String, Options: int = 0) -> list[tuple[int, int]]:
+        """Every place the text is: (Start, Length) pairs, in order (Options as
+        Find's), e.g. to mark them all or list them."""
+        return [(start, length) for start, length, _ in self._matches(String, Options)]
+
+    def Replace(self, String, ReplaceWith, Options: int = 0) -> int:
+        """Replace every match with ReplaceWith (with vpFindRegex, \\1 and
+        \\g<name> are the groups), as one step Undo takes back; returns how
+        many were replaced."""
+        matches = self._matches(String, Options)
+        if not matches:
+            return 0
+        cursor = QTextCursor(self._widget.document())
+        cursor.beginEditBlock()
+        for start, length, match in reversed(matches):
+            new = match.expand(str(ReplaceWith)) if int(Options) & 16 else str(ReplaceWith)
+            cursor.setPosition(start)
+            cursor.setPosition(start + length, QTextCursor.KeepAnchor)
+            cursor.insertText(new)
+        cursor.endEditBlock()
+        return len(matches)
+
+    def ReplaceRange(self, Start: int, Length: int, Text) -> None:
+        """Replace Length characters from Start with Text as one step Undo takes
+        back, keeping the caret (moved along when the text before it changes)
+        and the scrolling as they were: e.g. a file changed on disk."""
+        widget = self._widget
+        total = self._text_length()
+        start = max(0, min(int(Start), total))
+        end = max(start, min(start + int(Length), total))
+        bars = (widget.verticalScrollBar().value(), widget.horizontalScrollBar().value())
+        cursor = QTextCursor(widget.document())
+        cursor.beginEditBlock()
+        cursor.setPosition(start)
+        cursor.setPosition(end, QTextCursor.KeepAnchor)
+        cursor.insertText(str(Text))
+        cursor.endEditBlock()
+        widget.verticalScrollBar().setValue(bars[0])
+        widget.horizontalScrollBar().setValue(bars[1])
+
+    # -- marks ------------------------------------------------------------------------------------
+    def MarkRange(self, Start: int, Length: int, Color, Group: str = "",
+                  Underline: bool = False) -> None:
+        """Mark text apart from its coloring: Length characters from Start with
+        a Color behind them (Underline: a wavy line under them in Color
+        instead, as for errors). The mark moves with the text. Group names it
+        for ClearMarks."""
+        cursor = QTextCursor(self._widget.document())
+        cursor.setPosition(max(0, min(int(Start), self._text_length())))
+        cursor.setPosition(max(0, min(int(Start) + int(Length), self._text_length())),
+                           QTextCursor.KeepAnchor)
+        fmt = QTextCharFormat()
+        if Underline:
+            fmt.setUnderlineStyle(QTextCharFormat.WaveUnderline)
+            fmt.setUnderlineColor(colors.to_qcolor(Color))
+        else:
+            fmt.setBackground(colors.to_qcolor(Color))
+        self._marks.append((str(Group), cursor, fmt, False))
+        self._show_marks()
+
+    def MarkLine(self, Line: int, Color, Group: str = "") -> None:
+        """Mark a whole line (from 0) with a Color behind it, across the
+        editor: e.g. the statement the debugger stopped at. Group names it
+        for ClearMarks."""
+        cursor = QTextCursor(self._line_block(Line))
+        fmt = QTextCharFormat()
+        fmt.setBackground(colors.to_qcolor(Color))
+        fmt.setProperty(QTextFormat.FullWidthSelection, True)
+        self._marks.append((str(Group), cursor, fmt, True))
+        self._show_marks()
+
+    def ClearMarks(self, Group: str | None = None) -> None:
+        """Remove the marks of a Group, or (left out) every mark."""
+        self.__dict__["_marks"] = [mark for mark in self._marks
+                                   if Group is not None and mark[0] != str(Group)]
+        self._show_marks()
+
+    @property
+    def MarkCount(self) -> int:
+        """How many marks there are (MarkRange, MarkLine)."""
+        return len(self._marks)
+
+    def _show_marks(self) -> None:
+        selections = []
+        for _group, cursor, fmt, _line in self._marks:
+            selection = QTextEdit.ExtraSelection()
+            selection.cursor = cursor
+            selection.format = fmt
+            selections.append(selection)
+        self._widget.setExtraSelections(selections)
+
+    # -- comments ---------------------------------------------------------------------------------
+    def _selected_blocks(self) -> list:
+        cursor = self._widget.textCursor()
+        document = self._widget.document()
+        first = document.findBlock(cursor.selectionStart())
+        last = document.findBlock(cursor.selectionEnd())
+        if cursor.hasSelection() and last != first and cursor.selectionEnd() == last.position():
+            last = last.previous()  # (a selection ending at a line's start leaves it)
+        blocks, block = [], first
+        while block.isValid():
+            blocks.append(block)
+            if block == last:
+                break
+            block = block.next()
+        return blocks
+
+    def ToggleComment(self) -> None:
+        """Comment out the selected lines (the caret's line), with # at their
+        common indentation, or, when they all are, uncomment them: one step
+        Undo takes back."""
+        blocks = self._selected_blocks()
+        texts = [b.text() for b in blocks if b.text().strip()]
+        self._comment(blocks, not (texts and all(t.lstrip().startswith("#") for t in texts)))
+
+    def CommentLines(self) -> None:
+        """Comment out the selected lines (the caret's line)."""
+        self._comment(self._selected_blocks(), True)
+
+    def UncommentLines(self) -> None:
+        """Take the # off the selected lines (the caret's line)."""
+        self._comment(self._selected_blocks(), False)
+
+    def _comment(self, blocks: list, comment: bool) -> None:
+        if not self._may_edit():
+            self._reject_edit()
+            return
+        texts = [b.text() for b in blocks if b.text().strip()]
+        indent = min((len(t) - len(t.lstrip()) for t in texts), default=0)
+        edit = QTextCursor(self._widget.document())
+        edit.beginEditBlock()
+        for block in blocks:
+            text = block.text()
+            if not text.strip():
+                continue
+            if comment:
+                edit.setPosition(block.position() + _utf16_length(text[:indent]))
+                edit.insertText("# ")
+            elif text.lstrip().startswith("#"):
+                offset = text.index("#")
+                edit.setPosition(block.position() + _utf16_length(text[:offset]))
+                edit.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor,
+                                  2 if text[offset:offset + 2] == "# " else 1)
+                edit.removeSelectedText()
+        edit.endEditBlock()
 
     def _new_line(self) -> None:
         cursor = self._widget.textCursor()
@@ -4752,14 +5076,192 @@ class _FloatWindow(QWidget):
             self.panel.Visible = False
 
 
+class _DockTabs:
+    """DockPanels tabbed together in one place: the one shown (active) and a
+    tab for each visible one."""
+
+    def __init__(self, panels):
+        self.panels = list(panels)
+        self.active = self.panels[0]
+        self.bar = None  # a _DockTabBar while there are tabs to show
+
+    def visible(self) -> list:
+        return [p for p in self.panels if p._values.get("Visible", True)]
+
+    def shown(self):
+        """The panel it shows: the active one, else its first visible one."""
+        visible = self.visible()
+        return self.active if self.active in visible else (visible[0] if visible else None)
+
+
+class _DockSlot:
+    """DockPanels sharing one place at an edge of their form (TabWith,
+    SplitWith): its items side by side along the edge (top to bottom at the
+    left and right edges, left to right at the top and bottom ones), each
+    item one panel or panels tabbed together. The form lays it out where the
+    first of its panels comes in its controls."""
+
+    def __init__(self, panel):
+        self.items = [_DockTabs([panel])]
+        self.handles = []  # the _DockSplitHandles between the items
+
+    def panels(self) -> list:
+        return [p for item in self.items for p in item.panels]
+
+    def item_of(self, panel) -> _DockTabs:
+        return next(item for item in self.items if panel in item.panels)
+
+    def visible_items(self) -> list:
+        return [item for item in self.items if item.visible()]
+
+    def places(self, rect: QRect, align: int, area: QWidget) -> list:
+        """Where its panels, tab bars and split handles go in ``rect``."""
+        items = self.visible_items()
+        down = align in (3, 4)  # (items one above the other)
+        length = rect.height() if down else rect.width()
+        handles = len(items) - 1
+        room = max(length - _DOCK_SIZER * handles, 0)
+        size_name = "Height" if down else "Width"
+        weights = [max(int(item.shown()._values.get(size_name) or 1), 1) for item in items]
+        total = sum(weights) or 1
+        places, start = [], rect.top() if down else rect.left()
+        while len(self.handles) < handles:
+            self.handles.append(_DockSplitHandle(self, area))
+        for handle in self.handles[handles:]:
+            handle.hide()
+        for index, item in enumerate(items):
+            last = index == len(items) - 1
+            size = (rect.bottom() + 1 if down else rect.right() + 1) - start if last else                 round(room * weights[index] / total)
+            part = QRect(rect.left(), start, rect.width(), size) if down else                 QRect(start, rect.top(), size, rect.height())
+            places += self._item_places(item, part, area)
+            start += size
+            if not last:
+                handle = self.handles[index]
+                if handle.parent() is not area:
+                    handle.setParent(area)
+                handle.items = (item, items[index + 1])
+                handle.down = down
+                handle.setCursor(Qt.SizeVerCursor if down else Qt.SizeHorCursor)
+                places.append((handle, QRect(rect.left(), start, rect.width(), _DOCK_SIZER)
+                               if down else QRect(start, rect.top(), _DOCK_SIZER,
+                                                  rect.height())))
+                handle.show()
+                handle.raise_()
+                start += _DOCK_SIZER
+        return places
+
+    def _item_places(self, item: _DockTabs, rect: QRect, area: QWidget) -> list:
+        visible, shown = item.visible(), item.shown()
+        for panel in item.panels:
+            if panel._widget is not None:
+                panel._widget.setVisible(panel is shown)
+        if len(visible) < 2:
+            if item.bar is not None:
+                item.bar.hide()
+            return [(shown._widget, rect)] if shown is not None else []
+        bar = item.bar
+        if bar is None or bar.parent() is not area:
+            bar = item.bar = _DockTabBar(item, area)
+        bar.sync(visible, shown)
+        height = bar.sizeHint().height()
+        bar.show()
+        bar.raise_()
+        return [(shown._widget, QRect(rect.left(), rect.top(), rect.width(),
+                                      max(rect.height() - height, 0))),
+                (bar, QRect(rect.left(), rect.bottom() + 1 - height, rect.width(), height))]
+
+    def dispose(self) -> None:
+        for item in self.items:
+            if item.bar is not None:
+                item.bar.hide()
+                item.bar.deleteLater()
+                item.bar = None
+        for handle in self.handles:
+            handle.hide()
+            handle.deleteLater()
+        self.handles = []
+
+
+class _DockTabBar(QTabBar):
+    """The tabs under DockPanels tabbed together: a click shows that panel."""
+
+    def __init__(self, item: _DockTabs, parent):
+        super().__init__(parent)
+        self.item = item
+        self.panels = []
+        self.setShape(QTabBar.RoundedSouth)
+        self.setDocumentMode(True)
+        self.setExpanding(False)
+        self.setDrawBase(False)
+        self.setElideMode(Qt.ElideRight)
+        self.currentChanged.connect(self._chosen)
+
+    def sync(self, panels: list, shown) -> None:
+        self.blockSignals(True)
+        try:
+            captions = [p._values.get("Caption", "") for p in panels]
+            if [self.tabText(i) for i in range(self.count())] != captions or \
+                    self.panels != panels:
+                while self.count():
+                    self.removeTab(0)
+                for caption in captions:
+                    self.addTab(caption)
+            self.panels = list(panels)
+            self.setCurrentIndex(panels.index(shown))
+        finally:
+            self.blockSignals(False)
+
+    def _chosen(self, index: int) -> None:
+        if 0 <= index < len(self.panels):
+            self.panels[index].Activate()
+
+
+class _DockSplitHandle(QWidget):
+    """Between DockPanels side by side in one place: dragging it shares the
+    room between the two differently."""
+
+    def __init__(self, slot: _DockSlot, parent):
+        super().__init__(parent)
+        self.slot = slot
+        self.items = ()
+        self.down = True
+        self._start = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and len(self.items) == 2:
+            first, second = (item.shown() for item in self.items)
+            sizes = [w.height() if self.down else w.width()
+                     for w in (first._widget, second._widget)]
+            self._start = (event.globalPosition().toPoint(), sizes, (first, second))
+
+    def mouseMoveEvent(self, event):
+        if self._start is None:
+            return
+        point, (a, b), (first, second) = self._start
+        delta = event.globalPosition().toPoint() - point
+        change = delta.y() if self.down else delta.x()
+        least = _DOCK_CAPTION + 10
+        change = max(least - a, min(change, b - least))
+        name = "Height" if self.down else "Width"
+        for panel, size in ((first, a + change), (second, b - change)):
+            for member in self.slot.item_of(panel).panels:
+                member._values[name] = size
+        first._relayout()
+
+    def mouseReleaseEvent(self, event):
+        self._start = None
+
+
 class DockPanel(_Docked, Control):
     """A tool window docked to an edge of its form (Align), like the IDE's
     panels: its caption bar has a float and a close button; dragging it tears
     the panel off into a window of its own (Floating) and drops it on another
     edge (or the same), double-clicking it floats or docks it, and its inner
     edge resizes it. Closing hides it (Close can cancel); Visible = True
-    shows it again where it was. Put controls in it like in a Frame. The
-    form's DockLayout saves and restores where all its panels are."""
+    shows it again where it was. Put controls in it like in a Frame.
+    TabWith puts it in tabs with another panel, SplitWith beside another in
+    the same place. The form's DockLayout (and SaveLayout) saves and
+    restores where all its panels are."""
 
     TypeName = "DockPanel"
     DefaultEvent = "DockChange"
@@ -4785,7 +5287,7 @@ class DockPanel(_Docked, Control):
     def _create_widget(self, parent):
         self.__dict__.update(_floating=False, _float_window=None, _float_rect=None,
                              _drag_offset=None, _band=None, _closing=False, _watching=None,
-                             _was_visible=None)
+                             _was_visible=None, _slot=None, _syncing=False)
         return _DockFrame(self, parent)
 
     def _container_widget(self) -> QWidget:
@@ -4846,18 +5348,34 @@ class DockPanel(_Docked, Control):
         self._place_parts()
 
     def _apply_Align(self, v):
+        if self._slot is not None and not self._syncing and \
+                any(p._values.get("Align") != v for p in self._slot.panels() if p is not self):
+            self._leave_slot()  # (to another edge: on its own there)
         self._place_parts()
         if not self._floating:
             super()._apply_Align(v)
 
     # (floating: its size and place are the window's, not the form's)
     def _apply_Width(self, v):
+        self._sync_slot_size("Width", v)
         if not self._floating:
             super()._apply_Width(v)
 
     def _apply_Height(self, v):
+        self._sync_slot_size("Height", v)
         if not self._floating:
             super()._apply_Height(v)
+
+    def _sync_slot_size(self, name: str, value) -> None:
+        """In a slot with others: its thickness (Width at the left and right
+        edges, Height at the top and bottom) is theirs too; the other size is
+        its tabs'."""
+        slot = self._slot
+        if slot is None or self._syncing:
+            return
+        across = (name == "Width") == (self._values.get("Align", 3) in (3, 4))
+        for panel in slot.panels() if across else slot.item_of(self).panels:
+            panel._values[name] = value
 
     def _apply_Left(self, v):
         if not self._floating:
@@ -4868,6 +5386,8 @@ class DockPanel(_Docked, Control):
             super()._apply_Top(v)
 
     def _apply_Visible(self, v):
+        if v and self._slot is not None and not self._syncing:
+            self._slot.item_of(self).active = self  # (shown again: its tab comes to the front)
         self._watch_form()
         if self._floating:
             if not self._design_mode:
@@ -4897,6 +5417,7 @@ class DockPanel(_Docked, Control):
     def _float(self, rect: QRect | None = None) -> None:
         """Into a window of its own: ``rect`` (on the screen), else where it
         last floated, else beside where it is docked."""
+        self._leave_slot()  # (out of its tabs or the panels beside it)
         frame, form_widget = self._widget, self._form._widget
         if rect is None:
             rect = self._float_rect
@@ -4957,6 +5478,126 @@ class DockPanel(_Docked, Control):
         if self._values.get("Floatable", True):
             self.Floating = not self._floating
 
+    # -- tabbed together, side by side ------------------------------------------------------
+    def _other_panel(self, Panel, doing: str) -> "DockPanel":
+        if not isinstance(Panel, DockPanel) or Panel._form is not self._form or \
+                Panel.Parent is not self.Parent:
+            raise ValueError(f"DockPanel '{self.Name}' can only {doing} another DockPanel on "
+                             f"its form, not {Panel!r}")
+        if Panel is self:
+            raise ValueError(f"DockPanel '{self.Name}' can't {doing} itself")
+        if self._design_mode:
+            raise RuntimeError(f"DockPanel '{self.Name}': {doing} works at run time")
+        if Panel._floating:
+            Panel.Floating = False
+        if self._floating:
+            self.Floating = False
+        return Panel
+
+    def _join_slot(self, Panel) -> _DockSlot:
+        """Out of its own slot, into Panel's (its edge and thickness)."""
+        self._leave_slot()
+        slot = Panel._slot
+        if slot is None:
+            slot = Panel.__dict__["_slot"] = _DockSlot(Panel)
+        self.__dict__.update(_slot=slot, _syncing=True)
+        try:
+            align = Panel._values.get("Align", 3)
+            self._values["Align"] = align
+            thickness = "Width" if align in (3, 4) else "Height"
+            self._values[thickness] = Panel._values.get(thickness)
+            self._place_parts()
+        finally:
+            self.__dict__["_syncing"] = False
+        return slot
+
+    def TabWith(self, Panel) -> None:
+        """Put it in tabs with Panel (and the panels already tabbed with it),
+        in Panel's place: the tabs under them show one at a time; it comes to
+        the front (Activate brings another). Separate takes it out again."""
+        Panel = self._other_panel(Panel, "be tabbed with")
+        if self._slot is not None and self._slot is Panel._slot and \
+                self._slot.item_of(self) is self._slot.item_of(Panel):
+            self.Activate()
+            return
+        slot = self._join_slot(Panel)
+        item = slot.item_of(Panel)
+        item.panels.append(self)
+        item.active = self
+        self._values["Height" if self._values.get("Align", 3) in (3, 4) else "Width"] = \
+            Panel._values.get("Height" if self._values.get("Align", 3) in (3, 4) else "Width")
+        self._relayout()
+        self._fire("DockChange")
+
+    def SplitWith(self, Panel) -> None:
+        """Put it beside Panel, in Panel's place: below it at the left and right
+        edges, right of it at the top and bottom ones, sharing that place by
+        their Heights (or Widths); the edge between them can be dragged.
+        Separate takes it out again."""
+        Panel = self._other_panel(Panel, "be beside")
+        slot = self._join_slot(Panel)
+        slot.items.insert(slot.items.index(slot.item_of(Panel)) + 1, _DockTabs([self]))
+        self._relayout()
+        self._fire("DockChange")
+
+    def Separate(self) -> None:
+        """Out of its tabs (or from beside other panels): on its own at its edge."""
+        if self._slot is not None:
+            self._leave_slot()
+            self._relayout()
+            self._fire("DockChange")
+
+    def _leave_slot(self) -> None:
+        slot = self._slot
+        if slot is None:
+            return
+        item = slot.item_of(self)
+        item.panels.remove(self)
+        if item.active is self and item.panels:
+            item.active = item.visible()[0] if item.visible() else item.panels[0]
+        if not item.panels:
+            slot.items.remove(item)
+            if item.bar is not None:
+                item.bar.hide()
+                item.bar.deleteLater()
+        self.__dict__["_slot"] = None
+        if len(slot.panels()) < 2:  # (the one left is on its own again)
+            for panel in slot.panels():
+                panel.__dict__["_slot"] = None
+            slot.dispose()
+        if self._widget is not None and not self._floating and not self._design_mode:
+            self._widget.setVisible(bool(self._values.get("Visible", True)))
+
+    def Activate(self) -> None:
+        """Bring its tab to the front, among the panels tabbed with it."""
+        if self._slot is not None:
+            item = self._slot.item_of(self)
+            if item.active is not self:
+                item.active = self
+                self._relayout()
+
+    @property
+    def TabPanels(self) -> list:
+        """The panels tabbed with it, itself included, in their tabs' order
+        (just itself when it isn't tabbed)."""
+        return list(self._slot.item_of(self).panels) if self._slot is not None else [self]
+
+    @property
+    def SplitPanels(self) -> list:
+        """The panels sharing its place side by side (their tabs' active ones
+        first), itself included, in order along the edge."""
+        if self._slot is None:
+            return [self]
+        return [item.shown() or item.panels[0] for item in self._slot.items]
+
+    @property
+    def ActiveTab(self) -> "DockPanel":
+        """The panel shown of the ones tabbed with it (itself when alone)."""
+        if self._slot is None:
+            return self
+        item = self._slot.item_of(self)
+        return item.shown() or item.active
+
     def _caption_button(self, name: str) -> None:
         if name == "close":
             if self._ask_close():
@@ -4973,7 +5614,7 @@ class DockPanel(_Docked, Control):
         align = self._values.get("Align", 3)
         limit = (area.height() if align in (1, 2) else area.width()) - 40
         size = max(_DOCK_CAPTION + 20, min(int(size), max(limit, _DOCK_CAPTION + 20)))
-        if align in (1, 2):
+        if align in (1, 2):  # (in a slot with others: theirs too, _sync_slot_size)
             self.Height = size
         else:
             self.Width = size
@@ -7204,7 +7845,29 @@ class Shape(Control):
 _GRID_EDITOR_ROLE = Qt.UserRole + 10  # a cell's own editor (else its column's)
 _GRID_LIST_ROLE = Qt.UserRole + 11  # a cell's own list of choices
 _GRID_ROW_DATA_ROLE = Qt.UserRole + 12  # RowData, kept in the row's header item
-_EDIT_NONE, _EDIT_TEXT, _EDIT_LIST, _EDIT_CHECK, _EDIT_COLOR, _EDIT_BUTTON = range(6)
+# A row's outline level, whether it is collapsed, a heading, its description (its header item)
+_GRID_LEVEL_ROLE, _GRID_COLLAPSED_ROLE, _GRID_HEADING_ROLE, _GRID_DESCRIPTION_ROLE = (
+    Qt.UserRole + 13, Qt.UserRole + 14, Qt.UserRole + 15, Qt.UserRole + 16)
+_EDIT_NONE, _EDIT_TEXT, _EDIT_LIST, _EDIT_CHECK, _EDIT_COLOR, _EDIT_BUTTON, _EDIT_NUMBER, \
+    _EDIT_FONT, _EDIT_PICTURE = range(9)
+_OUTLINE_INDENT = 14  # pixels per outline level
+_GRID_PALETTE = (  # the Color editor's Palette tab: VB's palette, eight to a row
+    "#ffffff", "#ffc0c0", "#ffe0c0", "#ffffc0", "#c0ffc0", "#c0ffff", "#c0c0ff", "#ffc0ff",
+    "#e0e0e0", "#ff8080", "#ffc080", "#ffff80", "#80ff80", "#80ffff", "#8080ff", "#ff80ff",
+    "#c0c0c0", "#ff0000", "#ff8000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff",
+    "#808080", "#c00000", "#c04000", "#c0c000", "#00c000", "#00c0c0", "#0000c0", "#c000c0",
+    "#404040", "#800000", "#804000", "#808000", "#008000", "#008080", "#000080", "#800080",
+    "#000000", "#400000", "#804040", "#404000", "#004000", "#004040", "#000040", "#400040",
+)
+_GRID_SYSTEM_COLORS = (  # the Color editor's System tab: the theme's colors, by role
+    ("Window Background", QPalette.Window), ("Window Text", QPalette.WindowText),
+    ("Base (text boxes)", QPalette.Base), ("Text", QPalette.Text),
+    ("Button Face", QPalette.Button), ("Button Text", QPalette.ButtonText),
+    ("Highlight", QPalette.Highlight), ("Highlighted Text", QPalette.HighlightedText),
+    ("ToolTip Background", QPalette.ToolTipBase), ("ToolTip Text", QPalette.ToolTipText),
+    ("Alternate Rows", QPalette.AlternateBase), ("Shadow", QPalette.Shadow),
+    ("Link", QPalette.Link), ("Placeholder Text", QPalette.PlaceholderText),
+)
 _TRUE_TEXTS = ("true", "1", "-1", "yes", "checked")
 _BUTTON_WIDTH = 20  # the "..." button of a Button cell
 
@@ -7270,9 +7933,39 @@ class _GridDelegate(QStyledItemDelegate):
         return QRect(rect.right() - _BUTTON_WIDTH + 1, rect.top() + 1, _BUTTON_WIDTH - 1,
                      rect.height() - 2)
 
+    def _arrow_rect(self, rect: QRect, level: int) -> QRect:
+        return QRect(rect.left() + 2 + level * _OUTLINE_INDENT, rect.center().y() - 6, 12, 12)
+
     def paint(self, painter, option, index):
         grid = self.grid
-        kind = grid._editor_of(*self._cell(index))
+        row, col = self._cell(index)
+        indent = grid._outline_indent(row, col)
+        if indent is not None or grid._row_role(row, _GRID_HEADING_ROLE):
+            option = QStyleOptionViewItem(option)
+            self.initStyleOption(option, index)
+            if grid._row_role(row, _GRID_HEADING_ROLE):  # (a heading: bold, shaded)
+                painter.fillRect(option.rect, option.palette.color(QPalette.AlternateBase))
+                option.font.setBold(True)
+            if indent is not None:
+                level, heading, collapsed = indent
+                rect = QRect(option.rect)
+                if heading:  # (a row with rows under it: an arrow)
+                    arrow = self._arrow_rect(rect, level)
+                    painter.save()
+                    painter.setRenderHint(QPainter.Antialiasing)
+                    painter.setPen(Qt.NoPen)
+                    painter.setBrush(option.palette.color(QPalette.Text))
+                    c = QPointF(arrow.center())
+                    points = ([c + QPointF(-2.5, -4), c + QPointF(3, 0), c + QPointF(-2.5, 4)]
+                              if collapsed else
+                              [c + QPointF(-4, -2.5), c + QPointF(4, -2.5), c + QPointF(0, 3)])
+                    painter.drawPolygon(points)
+                    painter.restore()
+                rect.setLeft(rect.left() + 16 + level * _OUTLINE_INDENT)
+                option.rect = rect
+            QStyledItemDelegate.paint(self, painter, option, index)
+            return
+        kind = grid._editor_of(row, col)
         if kind == _EDIT_COLOR:
             option = QStyleOptionViewItem(option)
             self.initStyleOption(option, index)
@@ -7305,9 +7998,16 @@ class _GridDelegate(QStyledItemDelegate):
         grid = self.grid
         row, col = self._cell(index)
         kind = grid._editor_of(row, col)
+        etype = event.type()
+        indent = grid._outline_indent(row, col)
+        if indent is not None and indent[1] and not grid._design_mode and \
+                etype == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton and \
+                self._arrow_rect(option.rect, indent[0]).adjusted(-2, -4, 2, 4).contains(
+                    event.position().toPoint()):
+            grid.IsCollapsed[row] = not indent[2]  # (a click on the arrow)
+            return True
         if not grid._values.get("Editable") or grid._design_mode:
             return False
-        etype = event.type()
         if kind == _EDIT_CHECK:  # a click on the cell or Space toggles it
             if (etype == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton) or \
                     (etype == QEvent.KeyPress and event.key() == Qt.Key_Space):
@@ -7333,9 +8033,23 @@ class _GridDelegate(QStyledItemDelegate):
         if kind == _EDIT_BUTTON:  # (F2 or Enter on it: as clicking its button)
             grid._fire("CellButtonClick", row, col)
             return None
-        if kind == _EDIT_COLOR:  # a dialog, then no editor
-            QTimer.singleShot(0, grid._widget, lambda: grid._pick_color(row, col))
+        if kind == _EDIT_COLOR:  # its palette, then no editor
+            rect = grid._widget.visualRect(index)
+            QTimer.singleShot(0, grid._widget, lambda: grid._pick_color(row, col, rect))
             return None
+        if kind == _EDIT_FONT:  # a dialog, then no editor
+            QTimer.singleShot(0, grid._widget, lambda: grid._pick_font(row, col))
+            return None
+        if kind == _EDIT_PICTURE:
+            QTimer.singleShot(0, grid._widget, lambda: grid._pick_picture(row, col))
+            return None
+        if kind == _EDIT_NUMBER:
+            from PySide6.QtWidgets import QDoubleSpinBox
+
+            spin = QDoubleSpinBox(parent)
+            spin.setRange(-1e12, 1e12)
+            spin.setFrame(False)
+            return spin
         if kind == _EDIT_LIST:
             combo = QComboBox(parent)
             combo.addItems([str(v) for v in grid._list_of(row, col)])
@@ -7347,24 +8061,71 @@ class _GridDelegate(QStyledItemDelegate):
     def setEditorData(self, editor, index):
         if isinstance(editor, QComboBox):
             editor.setCurrentIndex(max(0, editor.findText(index.data() or "")))
+        elif hasattr(editor, "setDecimals"):  # (a number: as many decimals as it has)
+            number = _as_number(index.data() or "0")
+            number = number if isinstance(number, (int, float)) else 0
+            text = str(index.data() or "")
+            editor.setDecimals(len(text.split(".", 1)[1]) if "." in text else 0)
+            editor.setValue(number)
         else:
             super().setEditorData(editor, index)
 
     def setModelData(self, editor, model, index):
-        text = editor.currentText() if isinstance(editor, QComboBox) else editor.text()
+        if isinstance(editor, QComboBox):
+            text = editor.currentText()
+        elif hasattr(editor, "setDecimals"):
+            value = editor.value()
+            text = str(int(value)) if editor.decimals() == 0 else f"{value:.{editor.decimals()}f}"
+        else:
+            text = editor.text()
         self.grid._commit(*self._cell(index), text)
 
 
+class _GridDescription(QLabel):
+    """The FlexGrid's description pane, under its cells: the current row's
+    first cell (bold) and its RowDescription."""
+
+    def __init__(self, table):
+        super().__init__(table)
+        self.setWordWrap(True)
+        self.setTextFormat(Qt.RichText)
+        self.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.setMargin(4)
+        self.setAutoFillBackground(True)
+        self.setFrameShape(QFrame.StyledPanel)
+        self.hide()
+
+
 class _GridTable(QTableWidget):
-    """The FlexGrid's table, remembering the cell under the mouse."""
+    """The FlexGrid's table, remembering the cell under the mouse; with its
+    description pane under the cells (in a margin of its own)."""
 
     def __init__(self, grid: "FlexGrid", parent):
         super().__init__(parent)
         self.grid = grid
+        self.description = _GridDescription(self)
+        self.pane_height = 0
         for widget in (self.viewport(), self.horizontalHeader().viewport(),
                        self.verticalHeader().viewport()):
             widget.setMouseTracking(True)
             widget.installEventFilter(self)
+
+    def updateGeometries(self):
+        super().updateGeometries()
+        margins = self.viewportMargins()
+        if margins.bottom() != self.pane_height:
+            self.setViewportMargins(margins.left(), margins.top(), margins.right(),
+                                    self.pane_height)
+            super().updateGeometries()  # (the headers, for the viewport left)
+        if self.pane_height:
+            frame = self.frameWidth()
+            viewport = self.viewport().geometry()
+            self.description.setGeometry(frame, viewport.bottom() + 1,
+                                         viewport.right() + 1 - frame, self.pane_height)
+            self.description.show()
+            self.description.raise_()
+        else:
+            self.description.hide()
 
     def eventFilter(self, watched, event):
         if event.type() in (QEvent.MouseMove, QEvent.MouseButtonPress):
@@ -7404,14 +8165,19 @@ class FlexGrid(Control):
     TextMatrix(row, col), the current cell (Row, Col, Text and the Cell...
     properties), sorting, and, unlike MSFlexGrid, editing: with Editable,
     each column (ColEditor) or cell (CellEditor) has an editor: text, a
-    list, a check box, a color or a "..." button."""
+    list, a check box, a color (a palette, the theme's colors, or any), a
+    "..." button, a number, a font or a picture file. Like a property grid:
+    outline rows (RowOutlineLevel: rows under a row collapse into it,
+    IsCollapsed, AfterCollapse), heading rows across the grid (RowHeading)
+    and a description pane under the cells (DescriptionVisible,
+    RowDescription)."""
 
     TypeName = "FlexGrid"
     DefaultEvent = "Click"
     DefaultSize = (321, 161)
     Events = ("Click", "DblClick", "EnterCell", "LeaveCell", "RowColChange", "SelChange",
               "Scroll", "BeforeEdit", "ValidateEdit", "AfterEdit", "CellButtonClick",
-              "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp",
+              "AfterCollapse", "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp",
               "MouseDown", "MouseMove", "MouseUp")
     _qss_type = "QTableWidget"
     Properties = (
@@ -7432,6 +8198,10 @@ class FlexGrid(Control):
         P("AllowUserResizing", "enum", 1, enum_choices("None", "Columns", "Rows", "Both"),
           description="What the user can resize by dragging the headings' edges"),
         P("GridLines", "bool", True, description="Lines between the cells"),
+        P("DescriptionVisible", "bool", False,
+          description="A pane under the cells: the current row's first cell and its "
+                      "RowDescription"),
+        P("DescriptionHeight", "int", 60, description="The description pane's height"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -7464,6 +8234,7 @@ class FlexGrid(Control):
         table.horizontalScrollBar().valueChanged.connect(lambda *_: self._fire("Scroll"))
 
     def _on_current_changed(self, row, col, previous_row, previous_col):
+        self._show_description()
         if previous_row >= 0 and previous_col >= 0:
             self._fire("LeaveCell")
         if row >= 0 and col >= 0:
@@ -7799,7 +8570,7 @@ class FlexGrid(Control):
     def _editor_of(self, row: int, col: int) -> int:
         """A cell's editor: its own, else its column's (text by default); none
         for a fixed cell."""
-        if row < self._frows or col < self._fcols:
+        if row < self._frows or col < self._fcols or self._row_role(row, _GRID_HEADING_ROLE):
             return _EDIT_NONE
         item = self._item(row, col, create=False)
         own = item.data(_GRID_EDITOR_ROLE) if item is not None else None
@@ -7884,12 +8655,173 @@ class FlexGrid(Control):
         self._set_text(row, col, text)
         self._fire("AfterEdit", row, col)
 
-    def _pick_color(self, row: int, col: int) -> None:
+    def _pick_color(self, row: int, col: int, rect: QRect | None = None) -> None:
+        """The Color editor: a palette, the theme's colors and More... (any color),
+        under the cell."""
+        popup = _ColorPopup(self, row, col)
+        table = self._widget
+        where = table.viewport().mapToGlobal(rect.bottomLeft() if rect is not None else
+                                             QPoint(0, 0))
+        popup.move(where)
+        popup.show()
+        self.__dict__["_color_popup"] = popup
+
+    def _pick_more_color(self, row: int, col: int) -> None:
         current = QColor(self._get_text(row, col))
         color = QColorDialog.getColor(current if current.isValid() else QColor("white"),
                                       self._widget, "Color")
         if color.isValid():
             self._commit(row, col, color.name())
+
+    def _pick_font(self, row: int, col: int) -> None:
+        name, size, bold, italic = parse_font_text(self._get_text(row, col))
+        font = QFont(name or QApplication.font().family())
+        if size:
+            font.setPointSize(size)
+        font.setBold(bold)
+        font.setItalic(italic)
+        chosen, ok = QFontDialog.getFont(font, self._widget, "Font")
+        if ok:
+            self._commit(row, col, font_text(chosen.family(), max(chosen.pointSize(), 0),
+                                             chosen.bold(), chosen.italic()))
+
+    def _pick_picture(self, row: int, col: int) -> None:
+        start = self._get_text(row, col)
+        base = self._form._base_dir()
+        path, _ = QFileDialog.getOpenFileName(
+            self._widget, "Picture", resolve_path(self._form, start) if start else base,
+            "Pictures (*.png *.jpg *.jpeg *.bmp *.gif *.ico *.svg);;All Files (*)")
+        if path:
+            relative = os.path.relpath(path, base)
+            self._commit(row, col, relative if not relative.startswith("..") else path)
+
+    # -- outline rows, headings, descriptions ---------------------------------------------------
+    def _row_role(self, row: int, role: int):
+        if row < self._frows:
+            return None
+        header = self._widget.verticalHeaderItem(row - self._frows)
+        return header.data(role) if header is not None else None
+
+    def _set_row_role(self, row: int, role: int, value) -> None:
+        if row < self._frows:
+            raise IndexError(f"FlexGrid '{self.Name}': that is for the rows under the fixed "
+                             "one")
+        header = self._widget.verticalHeaderItem(row - self._frows)
+        if header is None:
+            header = QTableWidgetItem("")
+            self._widget.setVerticalHeaderItem(row - self._frows, header)
+        header.setData(role, value)
+
+    def _level(self, row: int) -> int:
+        return int(self._row_role(row, _GRID_LEVEL_ROLE) or 0)
+
+    def _has_outline(self) -> bool:
+        return any(self._level(row) for row in range(self._frows, self.Rows))
+
+    def _children_end(self, row: int) -> int:
+        """The row after the last one under ``row`` (deeper, right after it)."""
+        level, end = self._level(row), row + 1
+        while end < self.Rows and self._level(end) > level:
+            end += 1
+        return end
+
+    def _outline_indent(self, row: int, col: int):
+        """(level, heading, collapsed) for a row's first cell while there are
+        outline levels; None elsewhere."""
+        if col != self._fcols or row < self._frows or not self.__dict__.get("_outlined"):
+            return None
+        heading = self._children_end(row) > row + 1
+        return self._level(row), heading, bool(self._row_role(row, _GRID_COLLAPSED_ROLE))
+
+    def _apply_outline(self) -> None:
+        """Hide the rows under collapsed ones; show the others."""
+        table, row = self._widget, self._frows
+        self.__dict__["_outlined"] = self._has_outline()
+        while row < self.Rows:
+            table.setRowHidden(row - self._frows, False)
+            if self._row_role(row, _GRID_COLLAPSED_ROLE):
+                end = self._children_end(row)
+                for hidden in range(row + 1, end):
+                    table.setRowHidden(hidden - self._frows, True)
+                row = end
+            else:
+                row += 1
+        table.viewport().update()
+
+    @property
+    def RowOutlineLevel(self) -> _GridIndexed:
+        """Each row's outline level (0 by default): the rows right after a row,
+        at deeper levels, are under it; it shows an arrow that collapses them
+        into it (IsCollapsed). Its first cell is indented by its level."""
+        def write(row, value):
+            self._set_row_role(row, _GRID_LEVEL_ROLE, max(0, int(value)))
+            self._apply_outline()
+
+        return _GridIndexed(self, "RowOutlineLevel", lambda: self.Rows, self._level, write)
+
+    @property
+    def IsCollapsed(self) -> _GridIndexed:
+        """Whether a row's rows are collapsed into it (hidden): ``IsCollapsed[r] =
+        True`` collapses them, False shows them (and the ones under them that
+        aren't collapsed themselves). AfterCollapse(Row, Collapsed) fires."""
+        def write(row, value):
+            value = bool(value)
+            if bool(self._row_role(row, _GRID_COLLAPSED_ROLE)) == value:
+                return
+            self._set_row_role(row, _GRID_COLLAPSED_ROLE, value)
+            self._apply_outline()
+            self._fire("AfterCollapse", row, value)
+
+        return _GridIndexed(self, "IsCollapsed", lambda: self.Rows,
+                            lambda row: bool(self._row_role(row, _GRID_COLLAPSED_ROLE)), write)
+
+    @property
+    def RowHeading(self) -> _GridIndexed:
+        """Whether a row is a heading: its first cell across the whole row, in
+        bold on a shade, not edited (e.g. a category over the rows under it)."""
+        def write(row, value):
+            self._set_row_role(row, _GRID_HEADING_ROLE, bool(value))
+            span = max(1, self.Cols - self._fcols) if value else 1
+            table = self._widget
+            if table.columnSpan(row - self._frows, 0) != span:
+                table.setSpan(row - self._frows, 0, 1, span)
+            table.viewport().update()
+
+        return _GridIndexed(self, "RowHeading", lambda: self.Rows,
+                            lambda row: bool(self._row_role(row, _GRID_HEADING_ROLE)), write)
+
+    @property
+    def RowDescription(self) -> _GridIndexed:
+        """Each row's description, shown in the description pane while it is
+        the current row (DescriptionVisible)."""
+        def write(row, value):
+            self._set_row_role(row, _GRID_DESCRIPTION_ROLE, str(value))
+            self._show_description()
+
+        return _GridIndexed(self, "RowDescription", lambda: self.Rows,
+                            lambda row: self._row_role(row, _GRID_DESCRIPTION_ROLE) or "",
+                            write)
+
+    def _apply_DescriptionVisible(self, _=None):
+        table = self._widget
+        table.pane_height = max(20, int(self._values.get("DescriptionHeight", 60))) \
+            if self._values.get("DescriptionVisible") else 0
+        table.updateGeometries()
+        self._show_description()
+
+    _apply_DescriptionHeight = _apply_DescriptionVisible
+
+    def _show_description(self) -> None:
+        pane = self._widget.description
+        if not self._values.get("DescriptionVisible"):
+            return
+        row, col = self._current()
+        if row < self._frows:
+            pane.setText("")
+            return
+        title = self._get_text(row, 0)
+        text = self._row_role(row, _GRID_DESCRIPTION_ROLE) or ""
+        pane.setText(f"<b>{html.escape(title)}</b><br>{html.escape(text)}")
 
     def EditCell(self) -> None:
         """Start editing the current cell, as if the user pressed F2 (Editable)."""
@@ -8068,6 +9000,81 @@ class FlexGrid(Control):
     @property
     def MouseCol(self) -> int:
         return self._mouse_cell[1]
+
+
+def font_text(name: str, size: int = 0, bold: bool = False, italic: bool = False) -> str:
+    """A font as the Font editor writes it: "Name, Size[, Bold][, Italic]"."""
+    parts = [name] + ([str(size)] if size else [])
+    return ", ".join(parts + (["Bold"] if bold else []) + (["Italic"] if italic else []))
+
+
+def parse_font_text(text: str) -> tuple[str, int, bool, bool]:
+    """(name, size, bold, italic) from font_text's text."""
+    parts = [part.strip() for part in str(text or "").split(",") if part.strip()]
+    name = parts[0] if parts else ""
+    size = next((int(p) for p in parts[1:] if p.isdigit()), 0)
+    words = {p.lower() for p in parts[1:]}
+    return name, size, "bold" in words, "italic" in words
+
+
+class _ColorPopup(QFrame):
+    """The FlexGrid's Color editor: a Palette tab (VB's colors), a System tab
+    (the theme's colors, by what they are for), (Default) and More... (any
+    color), under the cell; choosing one sets the cell (AfterEdit)."""
+
+    def __init__(self, grid: "FlexGrid", row: int, col: int):
+        super().__init__(grid._widget, Qt.Popup)
+        self.grid, self.row, self.col = grid, row, col
+        self.setFrameShape(QFrame.StyledPanel)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        tabs = QTabWidget(self)
+        palette_page = QWidget()
+        swatches = []
+        for number, name in enumerate(_GRID_PALETTE):
+            button = QToolButton(palette_page)
+            button.setFixedSize(20, 20)
+            button.setStyleSheet(f"QToolButton {{ background: {name}; border: 1px solid "
+                                 f"#808080; }}")
+            button.setToolTip(name)
+            button.move(4 + (number % 8) * 22, 4 + (number // 8) * 22)
+            button.clicked.connect(lambda _=False, n=name: self.choose(n))
+            swatches.append(button)
+        palette_page.setMinimumSize(4 + 8 * 22, 4 + 6 * 22)
+        self.swatches = swatches
+        system = QListWidget()
+        widget_palette = grid._widget.palette()
+        for label, role in _GRID_SYSTEM_COLORS:
+            color = widget_palette.color(role)
+            pixmap = QPixmap(14, 14)
+            pixmap.fill(color)
+            item = QListWidgetItem(QIcon(pixmap), label)
+            item.setData(Qt.UserRole, color.name())
+            system.addItem(item)
+        system.itemClicked.connect(lambda item: self.choose(item.data(Qt.UserRole)))
+        self.system = system
+        tabs.addTab(palette_page, "Palette")
+        tabs.addTab(system, "System")
+        self.tabs = tabs
+        layout.addWidget(tabs)
+        buttons = QHBoxLayout()
+        default = QPushButton("(Default)")
+        default.clicked.connect(lambda: self.choose(""))
+        more = QPushButton("More…")
+        more.clicked.connect(self.more)
+        buttons.addWidget(default)
+        buttons.addWidget(more)
+        layout.addLayout(buttons)
+
+    def choose(self, value: str) -> None:
+        self.hide()
+        self.grid._commit(self.row, self.col, value)
+        self.deleteLater()
+
+    def more(self) -> None:
+        self.hide()
+        self.grid._pick_more_color(self.row, self.col)
+        self.deleteLater()
 
 
 def _as_number(text: str):
@@ -8591,6 +9598,12 @@ class Menu(Control):
     Click fires when an item is chosen, and for a menu with items, just
     before it opens (to update its items, like VB). On macOS the menu bar is
     the system's, at the top of the screen, while the form is active.
+
+    An item's Picture shows beside its caption: a file (its dark version,
+    ``name.dark.png``, while the form is dark), a Picture, or an ImageList's
+    ListImage, the same one a Toolbar button shows. Items of one menu with
+    the same Group are choices: choosing one checks it and unchecks the
+    others (Click fires after).
     """
 
     TypeName = "Menu"
@@ -8603,6 +9616,12 @@ class Menu(Control):
           description="The text shown; & marks the access key (&File), and '-' makes a "
                       "separator line"),
         P("Checked", "bool", False, description="Shows a check mark next to the item"),
+        P("Group", "str", "",
+          description="Items of one menu with the same Group are choices: choosing one checks "
+                      "it and unchecks the others"),
+        P("Picture", "file", "",
+          description="A picture beside the caption: a file (relative to the form's folder; "
+                      "its .dark version while the form is dark), a Picture or a ListImage"),
         P("WindowList", "bool", False,
           description="An MDI form's menu (or its children's): lists the open child forms, "
                       "the active one checked, to activate one"),
@@ -8668,6 +9687,9 @@ class Menu(Control):
 
     # -- events ------------------------------------------------------------------------------
     def _on_triggered(self, *_):
+        if self._values.get("Group"):  # (a choice: this one checked, the others not)
+            for item in self._group_items():
+                item.Checked = item is self
         # Qt toggles a checkable item by itself; in VB only code changes Checked
         self._action.setChecked(bool(self._values.get("Checked")))
         if "_popup_chosen" in self._form.__dict__:  # (PopupMenu is waiting: what was chosen)
@@ -8707,8 +9729,42 @@ class Menu(Control):
 
     def _apply_Checked(self, v):
         if self._action is not None:
-            self._action.setCheckable(bool(v))
+            self._action.setCheckable(bool(v) or bool(self._values.get("Group")))
             self._action.setChecked(bool(v))
+
+    def _group_items(self) -> list:
+        """The items of its menu with the same Group (itself included)."""
+        group = self._values.get("Group")
+        return [c for c in self._form._controls if isinstance(c, Menu) and
+                c.Parent is self.Parent and group and c._values.get("Group") == group]
+
+    def _apply_Group(self, v):
+        action = self._action
+        if action is None:
+            return
+        groups = self.Parent.__dict__.setdefault("_menu_groups", {})
+        old = action.actionGroup()
+        if old is not None:
+            old.removeAction(action)
+        if v:  # (Qt's group: drawn as choices, e.g. a dot on macOS)
+            group = groups.get(v)
+            if group is None:
+                group = groups[v] = QActionGroup(self._form._widget)
+                group.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
+            group.addAction(action)
+        action.setCheckable(bool(v) or bool(self._values.get("Checked")))
+        action.setChecked(bool(self._values.get("Checked")))
+
+    def _apply_Picture(self, v):
+        if self._action is not None:
+            pixmap = picture_pixmap(self._form, v, dark=self._form._is_dark()) if v else None
+            self._action.setIcon(QIcon(pixmap) if pixmap is not None and not pixmap.isNull()
+                                 else QIcon())
+
+    def _scheme_changed(self, dark: bool) -> None:
+        """Its form turned light or dark: its picture's version for that."""
+        if self._values.get("Picture"):
+            self._apply_Picture(self._values["Picture"])
 
     def _apply_Enabled(self, v):
         if self._action is not None:
@@ -9099,8 +10155,8 @@ def _commondialog_design_widget(parent: QWidget) -> QLabel:
 
 class CommonDialog(Control):
     """VB's CommonDialog: the system's Open, Save As, Color, Font and Print
-    dialogs (ShowOpen, ShowSave, ShowColor, ShowFont, ShowPrinter) and help
-    (ShowHelp). Invisible at run time. Set its properties first (Filter,
+    dialogs (ShowOpen, ShowSave, ShowColor, ShowFont, ShowPrinter), choosing
+    a folder (ShowFolder, VB's BrowseForFolder) and help (ShowHelp). Invisible at run time. Set its properties first (Filter,
     InitDir, Color...), show a dialog, then read what was chosen (FileName,
     Color, FontName...). Each Show... returns True, or False when cancelled;
     with CancelError, cancelling raises DialogCancelled (VB's error 32755)."""
@@ -9118,8 +10174,8 @@ class CommonDialog(Control):
         P("Flags", "int", 0,
           description="Options added together: vpOFN... (Open, Save), vpCC... (Color), "
                       "vpCF... (Font), vpPD... (Printer)"),
-        P("FileName", "str", "", description="The file chosen (a full path); also the "
-                                             "first one suggested"),
+        P("FileName", "str", "", description="The file (or ShowFolder's folder) chosen, a "
+                                             "full path; also the first one suggested"),
         P("Filter", "str", "",
           description="The file types offered: description|patterns pairs, "
                       "e.g. Text Files (*.txt)|*.txt|All Files (*.*)|*.*"),
@@ -9234,6 +10290,22 @@ class CommonDialog(Control):
         """The Save As dialog (vpOFNOverwritePrompt asks before replacing a
         file); FileName is the file chosen. False if cancelled."""
         return self._file_dialog(save=True)
+
+    def ShowFolder(self) -> bool:
+        """Choose a folder (VB's BrowseForFolder): the dialog starts in InitDir
+        (else FileName's folder, if it is one); FileName is the folder chosen,
+        a full path. False if cancelled."""
+        name = self._values.get("FileName", "")
+        start = self._values.get("InitDir") or name
+        folder = QFileDialog.getExistingDirectory(
+            self._parent_window(), self._values.get("DialogTitle") or "Choose a Folder",
+            resolve_path(self._form, start) if start else "")
+        if not folder:
+            return self._cancelled()
+        folder = os.path.normpath(folder)
+        self.__dict__["FileNames"] = [folder]
+        self._values["FileName"] = folder
+        return True
 
     # -- color, font, printer, help ---------------------------------------------------------------
     def ShowColor(self) -> bool:

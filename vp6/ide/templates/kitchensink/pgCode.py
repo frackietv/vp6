@@ -1,8 +1,10 @@
 """Kitchen Sink page: the CodeBox, a code editor: Python coloring (Language) plus the
 page's own (TODO and FIXME in the Highlight event), line numbers, the current line,
 breakpoint markers and a foldable region in the gutter (LineMarker, GutterClick,
-HideLines, ShowLines), and protected lines the user can't change (ProtectLines,
-ProtectedEdit)."""
+HideLines, ShowLines), protected lines the user can't change (ProtectLines,
+ProtectedEdit); for a code window: completion while typing (CompletionRequest,
+CompletionChosen), every match of a word marked (FindAll, MarkRange, ClearMarks), Replace,
+and comments (ToggleComment)."""
 
 import re
 
@@ -56,8 +58,19 @@ class pgCode(Form):
         self.cmdFold = CommandButton(self, Caption='&Fold region', Left=524, Top=324, Width=100,
                                      Height=29, TabIndex=6)
         self.lblEvent = Label(self,
-                              Caption='Click the gutter for a breakpoint, or by line 7 to fold the region.',
-                              Left=16, Top=362, Width=608, Height=40, WordWrap=True, TabIndex=7)
+                              Caption='Click the gutter for a breakpoint, or by line 7 to fold the region. Type a name: completion (Ctrl+Space too).',
+                              Left=16, Top=360, Width=608, Height=36, WordWrap=True, TabIndex=7)
+        self.txtFind = TextBox(self, Text='name', Left=16, Top=404, Width=180, Height=25,
+                               TabIndex=8, ToolTipText='A word to find (whole words, any case)')
+        self.cmdMark = CommandButton(self, Caption='&Mark all', Left=204, Top=402, Width=100,
+                                     Height=29, TabIndex=9,
+                                     ToolTipText='FindAll, and MarkRange each one (again: ClearMarks)')
+        self.cmdReplace = CommandButton(self, Caption='&Replace with NAME', Left=312, Top=402,
+                                        Width=160, Height=29, TabIndex=10,
+                                        ToolTipText='Replace (one undo step)')
+        self.cmdComment = CommandButton(self, Caption='C&omment lines', Left=480, Top=402,
+                                        Width=144, Height=29, TabIndex=11,
+                                        ToolTipText='ToggleComment: the selected lines')
     # endregion
 
     def Form_Load(self):
@@ -114,6 +127,38 @@ class pgCode(Form):
         Beep()
         self.lblEvent.Caption = (f"Line {Line + 1} is protected: the designer keeps it "
                                  "(ProtectLines)")
+
+    # --- for a code window: completion, finding, marks, comments -----------------------------
+    def codSample_CompletionRequest(self, Context, Prefix):
+        # The choices for the word being typed: VP6's names, or a form's members after "self."
+        if Context == "self.":
+            return ["Caption", "cmdHello", "Show", "Hide", "Unload", "Width", "Height"]
+        return [name for name in globals() if name[:1].isupper() or name.startswith("vp")]
+
+    def codSample_CompletionChosen(self, Text):
+        self.lblEvent.Caption = f"Completed: {Text} (CompletionChosen)"
+
+    def cmdMark_Click(self):
+        code = self.codSample
+        if code.MarkCount:
+            code.ClearMarks("found")
+            self.lblEvent.Caption = "Marks cleared (ClearMarks)"
+            return
+        found = code.FindAll(self.txtFind.Text, vpFindWholeWord)
+        for start, length in found:
+            code.MarkRange(start, length, RGB(140, 200, 255), "found")
+        if found:
+            code.MarkLine(code.GetLineFromChar(found[0][0]), RGB(255, 240, 160), "found")
+        self.lblEvent.Caption = f"{len(found)} found (FindAll), marked (MarkRange, MarkLine)"
+
+    def cmdReplace_Click(self):
+        count = self.codSample.Replace(self.txtFind.Text, self.txtFind.Text.upper(),
+                                       vpFindWholeWord + vpFindMatchCase)
+        self.lblEvent.Caption = f"{count} replaced (Replace: Undo takes them all back)"
+
+    def cmdComment_Click(self):
+        self.codSample.ToggleComment()
+        self.codSample.SetFocus()
 
     # --- options --------------------------------------------------------------------------------
     def chkNumbers_Click(self):

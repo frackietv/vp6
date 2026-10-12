@@ -3,7 +3,8 @@
 Like VB's, it edits the menus as one indented list: an item's level is how
 deep it is (0 = the menu bar, 1 = an item of a menu bar menu, ...). Each
 entry has a Caption ("-" for a separator), a Name, an optional Index (menu
-control arrays), a Shortcut and the Checked, Enabled, Visible and WindowList flags.
+control arrays), a Shortcut, a Group, a Picture, and the Checked, Enabled,
+Visible and WindowList flags.
 
 ``entries_from(form_def)`` reads a form's menus as ``MenuEntry``s,
 ``validate(entries, ...)`` checks them, and ``menu_defs(entries)`` turns them
@@ -150,6 +151,13 @@ class MenuEditorDialog(QDialog):
             self.negotiate.addItem(f"{value} - {label}", value)
         self.negotiate.setToolTip("Where a menu bar menu goes when the form is shown in "
                                   "another form (ShowIn); None: not shown there")
+        self.group = QLineEdit()  # Group: items with the same one are choices
+        self.group.setToolTip("Items of one menu with the same Group are choices: choosing "
+                              "one checks it and unchecks the others")
+        self.group.setMaximumWidth(110)
+        self.picture = QLineEdit()  # Picture: a file, relative to the form's folder
+        self.picture.setToolTip("A picture beside the caption: a file relative to the form's "
+                                "folder (its .dark version while the form is dark)")
         self.checked = QCheckBox("&Checked")
         self.enabled = QCheckBox("&Enabled")
         self.visible = QCheckBox("&Visible")
@@ -175,6 +183,13 @@ class MenuEditorDialog(QDialog):
         negotiate_label.setBuddy(self.negotiate)
         fields.addWidget(negotiate_label, 3, 2, Qt.AlignRight)
         fields.addWidget(self.negotiate, 3, 3)
+        group_label, picture_label = QLabel("Gro&up:"), QLabel("Pict&ure:")
+        group_label.setBuddy(self.group)
+        picture_label.setBuddy(self.picture)
+        fields.addWidget(group_label, 3, 0)
+        fields.addWidget(self.group, 3, 1)
+        fields.addWidget(picture_label, 4, 0)
+        fields.addWidget(self.picture, 4, 1, 1, 3)
         flags = QHBoxLayout()
         for box in (self.checked, self.enabled, self.visible, self.window_list):
             flags.addWidget(box)
@@ -217,6 +232,8 @@ class MenuEditorDialog(QDialog):
         self.index.textEdited.connect(self._store)
         self.shortcut.activated.connect(self._store)
         self.negotiate.activated.connect(self._store)
+        self.group.textEdited.connect(self._store)
+        self.picture.textEdited.connect(self._store)
         for box_ in (self.checked, self.enabled, self.visible, self.window_list):
             box_.toggled.connect(self._store)
         if not self.entries:
@@ -260,6 +277,9 @@ class MenuEditorDialog(QDialog):
         self.enabled.setChecked(entry.enabled)
         self.visible.setChecked(entry.visible)
         self.window_list.setChecked(bool(entry.props.get("WindowList")))
+        picture = entry.props.get("Picture", "")
+        self.group.setText(entry.props.get("Group", ""))
+        self.picture.setText(picture if isinstance(picture, str) else "")
         self._loading = False
         self._update_buttons()
         self.caption.setFocus()
@@ -295,6 +315,11 @@ class MenuEditorDialog(QDialog):
             entry.props["WindowList"] = True
         else:
             entry.props.pop("WindowList", None)  # the default
+        for name, field in (("Group", self.group), ("Picture", self.picture)):
+            if field.text().strip():
+                entry.props[name] = field.text().strip()
+            else:
+                entry.props.pop(name, None)  # the default
         self.list.item(self.row).setText(self._text(entry))
 
     def outdent(self) -> None:

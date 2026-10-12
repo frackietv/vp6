@@ -1,5 +1,6 @@
 """Drawing on forms and PictureBoxes: Line, Circle, PSet, Print, Cls, Point,
-TextWidth / TextHeight, the drawing properties, AutoRedraw and Paint."""
+TextWidth / TextHeight, the drawing properties, AutoRedraw and Paint; RGBA colors,
+RoundRect, GraphicsPath and DrawPath, LinearGradient fills (Pictures too)."""
 
 import math
 import os
@@ -384,3 +385,42 @@ def test_point_on_the_macos_style():
                          timeout=60)
     assert out.stdout.strip() == str(vpRed), out.stderr
     assert "graphics context" not in out.stderr, out.stderr
+
+
+def test_alpha_rounded_paths_and_gradients(form):
+    from vp6 import RGBA, GraphicsPath, LinearGradient, Picture, RGB
+
+    assert RGBA(255, 0, 0, 255) == RGB(255, 0, 0) == vpRed
+    half = RGBA(0, 0, 255, 128)
+    form.Line(10, 10, 60, 40, half, "BF")  # over white: a light blue
+    blended = QImage(form.Image._image).pixelColor(30, 20)
+    assert blended.blue() == 255 and 120 < blended.red() < 135
+    # A rounded box: the corner left out, the middle filled
+    form.RoundRect(100, 10, 160, 60, 12, vpBlue, vpYellow)
+    assert form.Point(101, 11) == vpWhite and form.Point(130, 35) == vpYellow
+    assert form.Point(130, 10) not in (vpWhite, vpYellow)  # (its outline)
+    assert (form.CurrentX, form.CurrentY) == (160, 60)
+    # A gradient from red to blue, left to right
+    form.RoundRect(10, 100, 110, 140, 0, RGBA(0, 0, 0, 0),
+                   LinearGradient(10, 0, 110, 0, vpRed, vpBlue))
+    left, right = form.Point(12, 120), form.Point(108, 120)
+    assert left & 0xFF > 200 and (right >> 16) & 0xFF > 200
+    middle = LinearGradient(0, 0, 10, 0).AddStop(0.5, vpGreen)
+    assert len(middle._stops) == 1
+    with pytest.raises(ValueError):
+        middle.AddStop(2, vpGreen)
+    # A path of lines and Bézier curves, filled
+    path = GraphicsPath()
+    path.MoveTo(200, 150).CurveTo(200, 100, 280, 100, 280, 150).LineTo(200, 150).Close()
+    path.AddEllipse(200, 160, 20, 20).AddRect(240, 160, 30, 20, 4)
+    path.AddPolygon([(285, 160), (295, 160), (290, 170)])
+    form.DrawPath(path, vpBlue, vpGreen)
+    assert form.Point(240, 140) == vpGreen and form.Point(210, 170) == vpGreen
+    assert form.Point(240, 105) == vpWhite  # (above the curve)
+    with pytest.raises(TypeError):
+        form.DrawPath([(1, 2)])
+    # The same on a Picture, in its ScaleMode
+    picture = Picture(40, 40, vpWhite)
+    picture.ScaleMode = 1  # twips: 15 a pixel
+    picture.DrawPath(GraphicsPath().AddRect(0, 0, 300, 300), RGBA(0, 0, 0, 0), vpRed)
+    assert picture.Point(75, 75) == vpRed and picture.Point(450, 450) == vpWhite  # (twips)

@@ -14,7 +14,7 @@ import threading
 import traceback
 
 from PySide6.QtCore import (QDir, QEvent, QEventLoop, QKeyCombination, QLockFile, QObject,
-                            QSettings, QSocketNotifier, Qt, QTimer)
+                            QSettings, QSocketNotifier, Qt, QThread, QTimer, Signal)
 from PySide6.QtGui import (QAction, QFontDatabase, QGuiApplication, QIcon, QKeyEvent,
                            QKeySequence, QShortcut)
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
@@ -37,7 +37,86 @@ def ensure_app() -> QApplication:
         _interrupt_handler = install_interrupt_handler(close_all_windows)
         app.setWindowIcon(vp6_icon())
         App._claim_instance()  # (App.PrevInstance: the next one started sees this one)
+    _main_thread_calls()  # (made here, on the main thread: RunOnMainThread)
     return app
+
+
+# --- the application becoming active, calls from other threads ----------------------------------
+
+class _AppStateWatcher(QObject):
+    """Fires AppActivate / AppDeactivate on every loaded form when the program
+    becomes the active application or stops being it."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.active = app.applicationState() == Qt.ApplicationActive
+        app.applicationStateChanged.connect(self.changed)
+
+    def changed(self, state) -> None:
+        active = state == Qt.ApplicationActive
+        if active == self.active:
+            return
+        self.active = active
+        from .form import _loaded_forms
+
+        for form in list(_loaded_forms):
+            if form._loaded:
+                form._fire("AppActivate" if active else "AppDeactivate")
+
+
+_state_watcher = None
+
+
+def app_state_watcher() -> _AppStateWatcher:
+    """The application's state watcher (made when a form is first loaded)."""
+    global _state_watcher
+    app = ensure_app()
+    if _state_watcher is None or _state_watcher.parent() is not app:
+        _state_watcher = _AppStateWatcher(app)
+    return _state_watcher
+
+
+class _MainThreadCalls(QObject):
+    """Runs what other threads ask for on the main (GUI) thread, in order:
+    a signal emitted from another thread to an object of the main thread is
+    queued there."""
+
+    call = Signal(object)
+
+    def __init__(self):
+        super().__init__()
+        self.call.connect(self.run, Qt.QueuedConnection)
+
+    def run(self, request) -> None:
+        procedure, args, done = request
+        try:
+            result = procedure(*args)
+        except BaseException as exc:  # noqa: BLE001 - the caller's, or a run-time error
+            if done is None:
+                report_runtime_error(exc)
+            else:
+                done.update(error=exc)
+        else:
+            if done is not None:
+                done.update(result=result)
+        if done is not None:
+            done["event"].set()
+
+
+_main_calls = None
+
+
+def _main_thread_calls() -> _MainThreadCalls | None:
+    global _main_calls
+    app = QApplication.instance()
+    if app is None:
+        return None
+    if _main_calls is None:
+        calls = _MainThreadCalls()
+        if calls.thread() is not app.thread():  # (first asked for from another thread)
+            calls.moveToThread(app.thread())
+        _main_calls = calls
+    return _main_calls
 
 
 # --- icons -----------------------------------------------------------------------------------
@@ -419,6 +498,102 @@ class _App:
 
     def _base_dir(self) -> str:  # (ShowSplash's picture: relative to the program's folder)
         return self.Path
+
+    # -- the program as a whole -----------------------------------------------------------------
+    @property
+    def Active(self) -> bool:
+        """Whether the program is the active application (its windows have the
+        focus); forms get AppActivate and AppDeactivate when this changes."""
+        ensure_app()
+        return QGuiApplication.applicationState() == Qt.ApplicationActive
+
+    def RunOnMainThread(self, Procedure, *Args, Wait: bool = False):
+        """Run Procedure(*Args) on the main thread, where forms and controls
+        live: the safe way for another thread (threading.Thread) to show what
+        it did. It runs when the main thread gets to it, in the order asked;
+        Wait=True waits for it and returns its result (raising its error).
+        On the main thread itself, Wait=True runs it at once."""
+        app = ensure_app()
+        on_main = QThread.currentThread() is app.thread()
+        if Wait and on_main:
+            return Procedure(*Args)
+        calls = _main_thread_calls()
+        if not Wait:
+            calls.call.emit((Procedure, Args, None))
+            return None
+        done = {"event": threading.Event()}
+        calls.call.emit((Procedure, Args, done))
+        done["event"].wait()
+        if "error" in done:
+            raise done["error"]
+        return done.get("result")
+
+    @property
+    def ColorScheme(self) -> int:
+        """The program's color scheme: vpSchemeSystem, vpSchemeLight,
+        vpSchemeDark or vpSchemeIDE, the project's to start with. Every form
+        whose ColorScheme is Project Default follows a change at once (and
+        gets ColorSchemeChanged if it turned light or dark);
+        vpSchemeProjectDefault goes back to the project's."""
+        from . import appearance
+
+        if appearance.app_scheme is not None:
+            return appearance.app_scheme
+        return appearance.project_scheme_for(self.Path)
+
+    @ColorScheme.setter
+    def ColorScheme(self, value):
+        from . import appearance
+
+        value = int(value)
+        if value not in (0, 1, 2, 3, 4):
+            raise ValueError(f"App.ColorScheme is vpSchemeProjectDefault, vpSchemeSystem, "
+                             f"vpSchemeLight, vpSchemeDark or vpSchemeIDE, not {value}")
+        ensure_app()
+        appearance.set_app_scheme(None if value == 0 else value)
+
+    @property
+    def Style(self) -> str:
+        """How the program's controls are drawn: "Native" (the system's look)
+        or the name of a Qt style, such as "Fusion" (the same everywhere);
+        Styles lists them. Forms with a forced light or dark scheme are drawn
+        with Fusion whatever it is."""
+        ensure_app()
+        return type(self)._style or "Native"
+
+    @Style.setter
+    def Style(self, value):
+        from PySide6.QtWidgets import QStyleFactory
+
+        app = ensure_app()
+        name = str(value or "Native")
+        cls = type(self)
+        if cls._native_style is None:
+            cls._native_style = app.style().name()
+        if name.lower() == "native":
+            target = cls._native_style
+        else:
+            target = next((key for key in QStyleFactory.keys() if key.lower() == name.lower()),
+                          None)
+            if target is None:
+                raise ValueError(f"App.Style: no style {value!r} here (App.Styles: "
+                                 f"{', '.join(self.Styles)})")
+        app.setStyle(target)
+        cls._style = "" if name.lower() == "native" else target
+        from . import appearance
+
+        appearance.watcher().changed.emit()  # (forms draw themselves again)
+
+    @property
+    def Styles(self) -> list[str]:
+        """The styles App.Style can be: "Native" and Qt's styles here."""
+        from PySide6.QtWidgets import QStyleFactory
+
+        ensure_app()
+        return ["Native", *QStyleFactory.keys()]
+
+    _style = ""  # App.Style: "" = the native style
+    _native_style = None  # (the platform's style's name, before Style changed it)
 
     def _first_form_shown(self, widget) -> None:
         """A form's window was shown: the splash screen closes once it is there."""

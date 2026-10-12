@@ -1,6 +1,6 @@
 """Form kinds: MDI forms (MDIForm and MDIChild forms: the workspace, showing
 and loading children, ActiveForm, Activate, Arrange, menus, WindowList,
-unloading) and popup forms (ShowPopup); MDI forms in the form file, the
+tabs (ViewMode), several instances of one child form, unloading) and popup forms (ShowPopup); MDI forms in the form file, the
 designer, the Menu Editor and the IDE (Project > Add MDI Form)."""
 
 import os
@@ -103,6 +103,33 @@ def test_children_in_the_workspace(shell):
     assert one._mdi_sub.isVisible() and not one._mdi_sub.isMaximized()
     with pytest.raises(RuntimeError, match="modally"):
         frmChild().Show(1)
+
+
+def test_tabbed_view(shell):
+    from vp6 import vpMDITabs, vpMDIWindows
+
+    one, two = child("One"), child("Two")  # (two instances of one form class)
+    main = frmShell._vp_default_instance()
+    area = main._area
+    assert main.ViewMode == vpMDIWindows and area.viewMode() == QMdiArea.SubWindowView
+    main.ViewMode = vpMDITabs
+    assert area.viewMode() == QMdiArea.TabbedView
+    assert area.tabsClosable() and area.tabsMovable()
+    from PySide6.QtWidgets import QTabBar
+
+    tabs = area.findChild(QTabBar)
+    assert [tabs.tabText(i) for i in range(tabs.count())] == ["One", "Two"]
+    assert main.ActiveForm is two
+    tabs.setCurrentIndex(0)  # (a click on a tab)
+    assert main.ActiveForm is one
+    three = child("Three")
+    assert tabs.count() == 3 and main.ActiveForm is three
+    tabs.tabCloseRequested.emit(1)  # its close button: that child unloads
+    QTest.qWait(10)
+    assert not two._loaded and tabs.count() == 2
+    assert ("QueryUnload", 0) in two.log
+    main.ViewMode = vpMDIWindows
+    assert area.viewMode() == QMdiArea.SubWindowView
 
 
 def test_a_child_shown_while_the_mdi_form_loads(shell, monkeypatch):

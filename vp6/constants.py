@@ -230,6 +230,13 @@ vpRtfWholeWord = 2
 vpRtfMatchCase = 4
 vpRtfNoHighlight = 8
 
+# --- CodeBox: Find, FindAll and Replace options (added together) ---------------------
+vpFindWholeWord = 2
+vpFindMatchCase = 4
+vpFindNoHighlight = 8
+vpFindRegex = 16
+vpFindBackward = 32
+
 # --- FlexGrid: ColEditor / CellEditor -------------------------------------------
 vpGridEditNone = 0
 vpGridEditText = 1
@@ -237,6 +244,9 @@ vpGridEditList = 2
 vpGridEditCheck = 3
 vpGridEditColor = 4
 vpGridEditButton = 5
+vpGridEditNumber = 6
+vpGridEditFont = 7
+vpGridEditPicture = 8
 
 # --- FlexGrid.Sort ----------------------------------------------------------------
 vpGridSortGenericAscending = 1
@@ -349,6 +359,10 @@ vpCascade = 0
 vpTileHorizontal = 1
 vpTileVertical = 2
 vpArrangeIcons = 3
+
+# --- MDIForm.ViewMode -------------------------------------------------------------------
+vpMDIWindows = 0
+vpMDITabs = 1
 
 # --- Printer.Orientation ---------------------------------------------------------------
 vpPRORPortrait = 1
@@ -542,6 +556,25 @@ vpWizardClassic = 0
 vpWizardModern = 1
 vpWizardMac = 2
 vpWizardAero = 3
+
+# --- Winsock.State -------------------------------------------------------------------------
+vpSckClosed = 0
+vpSckOpen = 1
+vpSckListening = 2
+vpSckConnectionPending = 3
+vpSckResolvingHost = 4
+vpSckHostResolved = 5
+vpSckConnecting = 6
+vpSckConnected = 7
+vpSckClosing = 8
+vpSckError = 9
+
+# --- Winsock: Error's Number ------------------------------------------------------------------
+vpSckAddressInUse = 10048
+vpSckConnectionReset = 10054
+vpSckTimedout = 10060
+vpSckConnectionRefused = 10061
+vpSckHostNotFound = 11001
 
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8

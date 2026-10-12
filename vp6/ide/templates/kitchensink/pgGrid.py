@@ -1,7 +1,10 @@
 """Kitchen Sink page: FlexGrid. A price list (FormatString headings and alignments, rows
 from AddItem with RowData, sorting by the clicked heading, the current cell in
-RowColChange) and an editable property sheet with an editor per cell (text, list, check
-box, color, a "..." button), checked in ValidateEdit and applied in AfterEdit."""
+RowColChange), an editable property sheet with an editor per cell (text, list, check
+box, color, a "..." button), checked in ValidateEdit and applied in AfterEdit, and a
+property grid like the IDE's: categories as heading rows with their properties under them
+(RowHeading, RowOutlineLevel, IsCollapsed, AfterCollapse), number, color (a palette),
+font and picture editors, and a description pane (DescriptionVisible, RowDescription)."""
 
 from vp6 import *
 
@@ -28,8 +31,12 @@ class pgGrid(Form):
                                  ToolTipText='Double-click, F2 or type to edit; click a check box or a ... button')
         self.lblSample = Label(self, Caption='A sample label', Left=332, Top=230, Width=292,
                                Height=40, BorderStyle=1, TabIndex=4)
-        self.lblEvent = Label(self, Caption='', Left=16, Top=290, Width=608, Height=40,
+        self.lblEvent = Label(self, Caption='', Left=16, Top=272, Width=608, Height=30,
                               WordWrap=True, TabIndex=5)
+        self.grdSheet = FlexGrid(self, Left=16, Top=306, Width=608, Height=130, Rows=8,
+                                 FixedCols=0, FormatString='<Property|<Value', Editable=True,
+                                 DescriptionVisible=True, DescriptionHeight=44, TabIndex=6,
+                                 ToolTipText="A category's arrow collapses its properties")
     # endregion
 
     def Form_Load(self):
@@ -60,6 +67,29 @@ class pgGrid(Form):
             props.Text = value
         props.Row, props.Col = 1, 1
         self.apply_all()
+        # --- a property grid: categories with their properties under them ---------------------
+        sheet = self.grdSheet
+        sheet.ColWidth[0] = 200
+        sheet.ColWidth[1] = 380
+        rows = (("Appearance", "", None, ""),
+                ("BackColor", "#c0ffc0", vpGridEditColor, "The background: a palette, the "
+                 "theme's colors (System) or any color"),
+                ("Font", "Courier New, 12, Bold", vpGridEditFont, "Its font: the font dialog"),
+                ("Picture", "images/star.png", vpGridEditPicture, "A picture file"),
+                ("Position", "", None, ""),
+                ("Left", "16", vpGridEditNumber, "Pixels from the left (a number box)"),
+                ("Opacity", "0.75", vpGridEditNumber, "From 0 to 1, two decimals"))
+        for row, (name, value, editor, description) in enumerate(rows, start=1):
+            sheet.TextMatrix[row, 0] = name
+            if editor is None:  # a category: a heading over the rows under it
+                sheet.RowHeading[row] = True
+                continue
+            sheet.RowOutlineLevel[row] = 1
+            sheet.RowDescription[row] = description
+            sheet.Row, sheet.Col = row, 1
+            sheet.CellEditor = editor
+            sheet.Text = value
+        sheet.Row, sheet.Col = 2, 1
 
     # --- the price list ----------------------------------------------------------------------
     def grdPrices_Click(self):
@@ -101,6 +131,15 @@ class pgGrid(Form):
         if name:
             self.grdProps.TextMatrix[Row, Col] = name
             self.apply_all()
+
+    def grdSheet_AfterCollapse(self, Row, Collapsed):
+        category = self.grdSheet.TextMatrix(Row, 0)
+        self.lblEvent.Caption = f"{category} {'collapsed' if Collapsed else 'expanded'} " \
+                                "(AfterCollapse)"
+
+    def grdSheet_AfterEdit(self, Row, Col):
+        sheet = self.grdSheet
+        self.lblEvent.Caption = f"{sheet.TextMatrix(Row, 0)} = {sheet.TextMatrix(Row, 1)}"
 
     def apply_all(self):
         props, label = self.grdProps, self.lblSample

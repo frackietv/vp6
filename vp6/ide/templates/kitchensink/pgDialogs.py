@@ -1,5 +1,5 @@
 """Kitchen Sink page: MsgBox, InputBox, a modal form (by its default instance), Beep, the
-system's dialogs through a CommonDialog (Open, Save As, Color, Font, Print), printing with
+system's dialogs through a CommonDialog (Open, Save As, a folder, Color, Font, Print), printing with
 the Printer object (Printers, NewPage, EndDoc; to a PDF file with OutputFile), help
 (ShowHelp: VP6's help window, at a keyword), a ProgressBox, ShowError, a WizardForm and a
 splash screen (App.ShowSplash)."""
@@ -71,6 +71,9 @@ class pgDialogs(Form):
                                 TabIndex=13)
         self.cboPrinter = ComboBox(self, Style=2, Left=270, Top=296, Width=350, Height=25,
                                    TabIndex=14, ToolTipText="Printers: the system's printers")
+        self.cmdFolder = CommandButton(self, Caption='A folder...', Left=210, Top=324, Width=180,
+                                       Height=28, TabIndex=20,
+                                       ToolTipText='CommonDialog.ShowFolder: choose a folder')
         self.cmdHelp = CommandButton(self, Caption='&Help...', Left=440, Top=356, Width=180,
                                      Height=32, TabIndex=15,
                                      ToolTipText="ShowHelp: VP6's help, at what its index has for MsgBox")
@@ -168,6 +171,16 @@ class pgDialogs(Form):
             with open(cdl.FileName, "w", encoding="utf-8") as f:
                 f.write(self.lblSample.Caption + "\n")
             self.lblResult.Caption = f"ShowSave: the sample saved as {cdl.FileTitle}"
+
+    def cmdFolder_Click(self):
+        cdl = self.cdlFiles
+        cdl.DialogTitle = "Choose a folder"
+        cdl.InitDir = os.path.dirname(LOGO)  # (the project's folder)
+        if cdl.ShowFolder():
+            count = len(os.listdir(cdl.FileName))
+            self.lblResult.Caption = f"ShowFolder: {cdl.FileName} ({count} files and folders)"
+        else:
+            self.lblResult.Caption = "ShowFolder: cancelled"
 
     def cmdColor_Click(self):
         cdl = self.cdlFiles

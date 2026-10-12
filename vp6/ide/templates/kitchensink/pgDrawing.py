@@ -3,7 +3,9 @@ PictureBox with AutoRedraw: Line from the mouse, Cls), shapes (Line boxes,
 Circle, arcs and pie slices, a Polygon, PSet, Print centered with TextWidth and
 TextHeight), DrawWidth, DrawStyle, FillStyle and FillColor, a clock drawn in
 a Paint event (AutoRedraw False) that a Timer refreshes, in a User scale
-(Scale: its center 0, 0, up is up), and the page's own Form_Paint."""
+(Scale: its center 0, 0, up is up), the page's own Form_Paint, and an icon
+drawn beyond VB's methods: RoundRect, a LinearGradient, RGBA colors you can see
+through, and a GraphicsPath of Bézier curves (DrawPath)."""
 
 import math
 import time
@@ -41,6 +43,9 @@ class pgDrawing(Form):
         self.lblStatus = Label(self, Caption='', Left=16, Top=404, Width=608, Height=25,
                                TabIndex=8)
         self.tmrClock = Timer(self, Interval=1000)
+        self.picIcon = PictureBox(self, Left=412, Top=296, Width=96, Height=96, BorderStyle=0,
+                                  AutoRedraw=True, TabIndex=9,
+                                  ToolTipText='RoundRect, LinearGradient, RGBA and DrawPath')
     # endregion
 
     def Form_Load(self):
@@ -49,6 +54,22 @@ class pgDrawing(Form):
         self.cboStyle.ListIndex = 0
         self.picSketch.DrawWidth = self.hsbWidth.Value
         self.cmdShapes_Click()
+        self.draw_icon()
+
+    # --- an icon: rounded, a gradient, see-through colors, curves ----------------------------
+    def draw_icon(self):
+        pic = self.picIcon
+        pic.Cls()
+        # A rounded square filled with a gradient, top to bottom
+        pic.RoundRect(4, 4, 92, 92, 18, RGB(30, 90, 200),
+                      LinearGradient(0, 4, 0, 92, RGB(120, 190, 255), RGB(30, 90, 200)))
+        # A speech bubble of Bézier curves, its shadow a see-through black
+        bubble = GraphicsPath()
+        bubble.MoveTo(20, 52).CurveTo(20, 22, 76, 22, 76, 46).CurveTo(76, 66, 50, 70, 40, 66)
+        bubble.LineTo(24, 78).LineTo(30, 62).QuadTo(20, 58, 20, 52).Close()
+        pic.DrawPath(bubble, RGBA(0, 0, 0, 0), RGBA(0, 0, 0, 70))  # (no outline: invisible)
+        pic.DrawPath(GraphicsPath().AddEllipse(30, 34, 6, 6).AddEllipse(45, 34, 6, 6)
+                     .AddEllipse(60, 34, 6, 6), RGBA(0, 0, 0, 0), vpWhite)
 
     # --- the page's own Paint (a form's AutoRedraw is False too) -----------------------------
     def Form_Paint(self):

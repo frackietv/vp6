@@ -1,7 +1,7 @@
 """Kitchen Sink: an MDI form (MDIForm), a window for the note forms (frmNote,
 MDIChild = True): a tool pane docked at its top, a Notes menu, a Window menu
-listing the notes (WindowList) and arranging them (Arrange), ActiveForm, and
-MDIForm_ event handlers."""
+listing the notes (WindowList) and arranging them (Arrange), the notes in tabs
+(ViewMode), ActiveForm, and MDIForm_ event handlers."""
 
 from vp6 import *
 from frmNote import frmNote
@@ -21,7 +21,10 @@ class frmMDI(MDIForm):
                                         Width=90, Height=30, TabIndex=3)
         self.cmdTile = CommandButton(self.picTools, Caption='&Tile', Left=208, Top=5, Width=80,
                                      Height=30, TabIndex=4)
-        self.lblActive = Label(self.picTools, Caption='', Left=300, Top=12, Width=330, Height=20,
+        self.chkTabs = CheckBox(self.picTools, Caption='Ta&bs', Left=296, Top=9, Width=70,
+                                Height=22, TabIndex=6,
+                                ToolTipText='ViewMode: the notes in tabs (closable, movable), or in windows')
+        self.lblActive = Label(self.picTools, Caption='', Left=372, Top=12, Width=260, Height=20,
                                TabIndex=5)
         self.mnuNotes = Menu(self, Caption='&Notes')
         self.mnuNotesNew = Menu(self.mnuNotes, Caption='&New Note')
@@ -58,6 +61,9 @@ class frmMDI(MDIForm):
     def mnuNotesClose_Click(self):
         if self.ActiveForm is not None:
             Unload(self.ActiveForm)
+
+    def chkTabs_Click(self):
+        self.ViewMode = vpMDITabs if self.chkTabs.Value == vpChecked else vpMDIWindows
 
     def cmdCascade_Click(self):
         self.Arrange(vpCascade)

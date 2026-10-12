@@ -27,7 +27,7 @@ from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 
 from . import appearance, colors
 from ._props import P, PropertyHost, enum_choices
-from .app import App, call_handler, ensure_app, run_event_loop
+from .app import App, app_state_watcher, call_handler, ensure_app, run_event_loop
 from .drawing import DRAWING_PROPERTIES, Drawing
 from .picture import picture_pixmap
 from .controls import (_FONT, POINTER_CHOICES, CommandButton, Control, ControlArray, TextBox,
@@ -261,7 +261,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
     Events = ("Load", "QueryUnload", "Unload", "Initialize", "Activate", "Deactivate", "Resize",
               "Click", "DblClick", "MouseDown", "MouseMove", "MouseUp",
               "KeyDown", "KeyPress", "KeyUp", "DragDrop", "DragOver", "OLEDragDrop",
-              "OLEDragOver", "Paint", "ColorSchemeChanged")
+              "OLEDragOver", "Paint", "ColorSchemeChanged", "AppActivate", "AppDeactivate")
     Properties = (
         P("Caption", "str", "", always=True,
           description="The window title; defaults to the form's class name"),
@@ -534,13 +534,21 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         left, top, right, bottom = 0, 0, area.width(), area.height()
         places = []  # (widget, rect): computed first, applied below
         fills = []  # Align = Fill: the space the others leave, after them
+        slots = []  # DockPanels sharing a place: laid out where the first of them comes
         for control in self._controls:
             align = control._values.get("Align", 0) if "Align" in control._specs else 0
             widget = control._widget
             if not align or widget is None or control.Parent is not self or \
                     control.__dict__.get("_floating"):  # (a DockPanel in its own window)
                 continue
-            if not self._design_mode and not control._values.get("Visible", True):
+            slot = control.__dict__.get("_slot")
+            if slot is not None:
+                if slot in slots:
+                    continue
+                slots.append(slot)
+                if not self._design_mode and not slot.visible_items():
+                    continue
+            elif not self._design_mode and not control._values.get("Visible", True):
                 continue
             if align == 5:  # Fill
                 fills.append(widget)
@@ -551,20 +559,26 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             thick_w = control._values.get("Width", widget.width())
             if align == 1:  # Top
                 size = min(thick_h, height)
-                places.append((widget, QRect(left, top, width, size)))
+                rect = QRect(left, top, width, size)
                 top += size
             elif align == 2:  # Bottom
                 size = min(thick_h, height)
-                places.append((widget, QRect(left, bottom - size, width, size)))
+                rect = QRect(left, bottom - size, width, size)
                 bottom -= size
             elif align == 3:  # Left
                 size = min(thick_w, width)
-                places.append((widget, QRect(left, top, size, height)))
+                rect = QRect(left, top, size, height)
                 left += size
             elif align == 4:  # Right
                 size = min(thick_w, width)
-                places.append((widget, QRect(right - size, top, size, height)))
+                rect = QRect(right - size, top, size, height)
                 right -= size
+            else:
+                continue
+            if slot is not None:  # (its panels, their tabs and the edges between them)
+                places += slot.places(rect, align, self._container_widget())
+            else:
+                places.append((widget, rect))
         rest = QRect(left, top, max(right - left, 0), max(bottom - top, 0))
         places += [(widget, rest) for widget in fills]
         self.__dict__["_free_area"] = (left, top, right, bottom)  # what the edge panes left
@@ -585,18 +599,26 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
     @property
     def DockLayout(self) -> str:
         """Where the form's DockPanels are: each one's edge, size, place among
-        the others, floating window and visibility, as text (JSON). Keep it
-        (e.g. in a file) and set it again to put them back."""
+        the others, tabs and panels beside it, floating window and visibility,
+        as text (JSON). Keep it (e.g. in a file) and set it again to put them
+        back."""
         panels = []
         for panel in self._dock_panels():
             rect = panel._float_geometry()
-            panels.append({
+            entry = {
                 "name": self._dock_key(panel), "align": panel._values.get("Align", 3),
                 "width": panel._values.get("Width"), "height": panel._values.get("Height"),
                 "floating": bool(panel._floating),
                 "float": [rect.x(), rect.y(), rect.width(), rect.height()] if rect else None,
                 "visible": bool(panel._values.get("Visible", True)),
-            })
+            }
+            slot = panel._slot
+            if slot is not None:  # (its group: named by the slot's first panel)
+                item = slot.item_of(panel)
+                entry.update(group=self._dock_key(slot.items[0].panels[0]),
+                             item=slot.items.index(item), tab=item.panels.index(panel),
+                             active=item.active is panel)
+            panels.append(entry)
         return json.dumps({"dock_panels": panels})
 
     @DockLayout.setter
@@ -606,6 +628,8 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         except (ValueError, KeyError, TypeError) as exc:
             raise ValueError(f"Form {type(self).__name__}: not a DockLayout ({exc})") from None
         panels = {self._dock_key(p): p for p in self._dock_panels()}
+        for panel in panels.values():  # (each on its own first; the groups come back last)
+            panel._leave_slot()
         ordered = [panels[e["name"]] for e in entries if e.get("name") in panels]
         # Their order (each edge's panels from the outside in): in the same slots
         slots = [i for i, c in enumerate(self._controls) if c in ordered]
@@ -623,7 +647,66 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
                 if entry.get(name):
                     setattr(panel, name.title(), int(entry[name]))
             panel.Visible = bool(entry.get("visible", True))
+        self._restore_dock_slots(entries, panels)
         self._layout_aligned()
+
+    def _restore_dock_slots(self, entries: list, panels: dict) -> None:
+        """DockLayout: the panels tabbed together and side by side, as saved."""
+        groups: dict[str, list] = {}
+        for entry in entries:
+            if entry.get("group") and entry.get("name") in panels and \
+                    not entry.get("floating"):
+                groups.setdefault(entry["group"], []).append(entry)
+        for group in groups.values():
+            group.sort(key=lambda e: (int(e.get("item", 0)), int(e.get("tab", 0))))
+            firsts = {}  # item -> its first panel
+            for entry in group:
+                panel, item = panels[entry["name"]], int(entry.get("item", 0))
+                sizes = {k: panel._values.get(k) for k in ("Width", "Height")}
+                if item in firsts:
+                    panel.TabWith(firsts[item])
+                elif firsts:
+                    panel.SplitWith(firsts[max(firsts)])
+                firsts.setdefault(item, panel)
+                for name, value in sizes.items():  # (its own share of the place)
+                    panel._values[name] = value
+            for entry in group:
+                if entry.get("active"):
+                    panels[entry["name"]].Activate()
+
+    def SaveLayout(self) -> str:
+        """The form's whole layout as text, to keep (e.g. with SaveSetting) and
+        give LoadLayout later: its window's place, size and state, and where
+        its DockPanels are (DockLayout)."""
+        layout = json.loads(self.DockLayout)
+        if self._container is None and self.__dict__.get("_mdi_parent") is None:
+            normal = self._widget.normalGeometry() if self._widget.isWindow() and \
+                self._widget.isVisible() else None
+            layout["window"] = {
+                "left": normal.x() if normal and normal.isValid() else self.Left,
+                "top": normal.y() if normal and normal.isValid() else self.Top,
+                "width": self.Width, "height": self.Height,
+                "state": int(self._values.get("WindowState", 0)) if not self._widget.isVisible()
+                else (2 if self._widget.isMaximized() else 1 if self._widget.isMinimized()
+                      else 0)}
+        return json.dumps(layout)
+
+    def LoadLayout(self, Layout) -> None:
+        """Put back a layout SaveLayout gave: the window's place, size and state,
+        and the DockPanels. An empty one changes nothing."""
+        if not Layout:
+            return
+        try:
+            layout = json.loads(Layout)
+            window = layout.get("window")
+        except (ValueError, AttributeError) as exc:
+            raise ValueError(f"Form {type(self).__name__}: not a layout ({exc})") from None
+        if window and self._container is None:
+            if window.get("state", 0) != 2:
+                self.Move(int(window["left"]), int(window["top"]), int(window["width"]),
+                          int(window["height"]))
+            self.WindowState = int(window.get("state", 0)) if window.get("state") != 1 else 0
+        self.DockLayout = json.dumps({"dock_panels": layout.get("dock_panels", [])})
 
     def _base_dir(self) -> str:
         module = sys.modules.get(type(self).__module__)
@@ -972,6 +1055,8 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         if not self._loaded:
             self.__dict__["_loaded"] = True
             _loaded_forms.append(self)
+            if not self._design_mode:
+                app_state_watcher()  # (AppActivate, AppDeactivate)
             self._fire("Load")
             for control in list(self._controls):  # (e.g. a Data control: opened now)
                 loaded = getattr(control, "_form_loaded", None)

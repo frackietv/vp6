@@ -236,3 +236,139 @@ def test_toolbox_icon_and_events(qapp):
     assert not icon("DockPanel").isNull()
     assert CONTROL_TYPES["DockPanel"].DefaultEvent == "DockChange"
     assert EVENT_ARGS["DockChange"] == EVENT_ARGS["Close"] == ""
+
+
+class Groups(Form):
+    def InitializeComponent(self):
+        self.Width, self.Height = 600, 400
+        self.dckProject = DockPanel(self, Caption="Project", Align=4, Width=160, Height=300)
+        self.dckProps = DockPanel(self, Caption="Properties", Align=4, Width=100, Height=100)
+        self.dckImmediate = DockPanel(self, Caption="Immediate", Align=2, Height=120)
+        self.dckOutput = DockPanel(self, Caption="Output", Align=2, Height=80)
+        self.dckTerminal = DockPanel(self, Caption="Terminal", Align=2, Height=80,
+                                     Visible=False)
+        self.picMiddle = PictureBox(self, Align=5, BorderStyle=0)
+
+
+@pytest.fixture
+def groups(qapp):
+    form = Groups()
+    form.Show()
+    QTest.qWait(10)
+    yield form
+    form.Unload()
+
+
+def test_tabbed_together(groups):
+    immediate, output, terminal = groups.dckImmediate, groups.dckOutput, groups.dckTerminal
+    output.TabWith(immediate)
+    assert output.TabPanels == [immediate, output] == immediate.TabPanels
+    assert output._values["Height"] == 120  # (the place's size: the tabs take some)
+    assert immediate.ActiveTab is output and output._widget.isVisible()
+    assert not immediate._widget.isVisible()
+    bar = groups.dckImmediate._slot.items[0].bar
+    assert bar.isVisible() and [bar.tabText(i) for i in range(bar.count())] == \
+        ["Immediate", "Output"]
+    panel, tabs = geometry(output), bar.geometry()
+    assert panel[1] + panel[3] == tabs.y() and tabs.bottom() == 399  # the tabs under it
+    assert panel[2] == 340 and geometry(groups.picMiddle)[3] == 280  # one place: 120 high
+    bar.setCurrentIndex(0)  # a click on a tab
+    assert immediate.ActiveTab is immediate and immediate._widget.isVisible()
+    # A hidden panel in the group has no tab; shown, it joins them in front
+    terminal.TabWith(immediate)
+    terminal.Visible = False
+    assert bar.count() == 2 and immediate.ActiveTab is immediate
+    terminal.Visible = True
+    assert bar.count() == 3 and immediate.ActiveTab is terminal
+    terminal.Visible = False
+    output.Visible = False
+    assert not bar.isVisible() and immediate._widget.isVisible()  # one left: no tabs
+    assert geometry(immediate)[3] == 120
+    output.Visible = True
+    output.Separate()
+    assert output.TabPanels == [output] and immediate.TabPanels == [immediate, terminal]
+    assert output._widget.isVisible() and geometry(groups.picMiddle)[3] == 160  # (120 each)
+    terminal.Separate()
+    assert immediate._slot is None and terminal._slot is None
+
+
+def test_side_by_side(groups):
+    project, props = groups.dckProject, groups.dckProps
+    props.SplitWith(project)
+    assert props._values["Width"] == 160 and project.SplitPanels == [project, props]
+    top, bottom = geometry(project), geometry(props)
+    assert top[0] == bottom[0] == 440 and top[2] == bottom[2] == 160
+    handle = project._slot.handles[0]
+    assert top[1] == 0 and handle.geometry().top() == top[3]
+    assert bottom[1] == handle.geometry().bottom() + 1 and bottom[1] + bottom[3] == 400
+    assert abs(top[3] - 3 * bottom[3]) < 4  # their Heights: 300 to 100
+    project.Width = 200  # the place's width: both
+    assert geometry(props)[2] == 200 and props._values["Width"] == 200
+    # Dragging the edge between them
+    start = handle.mapToGlobal(QPoint(5, 2))
+    QTest.mousePress(handle, Qt.LeftButton, Qt.NoModifier, QPoint(5, 2))
+    handle.mouseMoveEvent(_move_event(handle, start + QPoint(0, -50)))
+    QTest.mouseRelease(handle, Qt.LeftButton, Qt.NoModifier, QPoint(5, 2))
+    assert geometry(project)[3] == top[3] - 50
+    # Tabs inside a place shared side by side
+    groups.dckOutput.TabWith(props)
+    assert groups.dckOutput.Align == vpAlignRight and props.TabPanels == [props,
+                                                                           groups.dckOutput]
+    assert geometry(groups.dckOutput)[0] == 400 and not props._widget.isVisible()
+    # Moved to another edge: on its own there
+    props.Align = vpAlignLeft
+    assert props._slot is None and geometry(props)[0] == 0
+
+
+def _move_event(widget, global_point):
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    local = widget.mapFromGlobal(global_point)
+    return QMouseEvent(QEvent.MouseMove, QPointF(local), QPointF(global_point), Qt.LeftButton,
+                       Qt.LeftButton, Qt.NoModifier)
+
+
+def test_layout_saved_and_loaded(groups):
+    immediate, output, project, props = (groups.dckImmediate, groups.dckOutput,
+                                         groups.dckProject, groups.dckProps)
+    output.TabWith(immediate)
+    immediate.Activate()
+    props.SplitWith(project)
+    groups.Move(50, 60, 640, 420)
+    saved = groups.SaveLayout()
+    layout = json.loads(saved)
+    assert layout["window"]["width"] == 640 and layout["window"]["height"] == 420
+    entries = {e["name"]: e for e in layout["dock_panels"]}
+    assert entries["dckOutput"]["group"] == "dckImmediate" and entries["dckOutput"]["tab"] == 1
+    assert entries["dckProps"]["item"] == 1 and entries["dckImmediate"]["active"]
+    output.Separate()
+    props.Separate()
+    groups.Move(0, 0, 500, 300)
+    groups.LoadLayout(saved)
+    assert (groups.Width, groups.Height) == (640, 420)
+    assert immediate.TabPanels == [immediate, output] and immediate.ActiveTab is immediate
+    assert project.SplitPanels == [project, props]
+    groups.LoadLayout("")  # (nothing)
+    with pytest.raises(ValueError, match="not a layout"):
+        groups.LoadLayout("{nonsense")
+
+
+def test_dock_panels_on_an_mdi_form(qapp):
+    from vp6 import MDIForm
+
+    class Workspace(MDIForm):
+        def InitializeComponent(self):
+            self.Width, self.Height = 600, 400
+            self.dckTools = DockPanel(self, Caption="Tools", Align=3, Width=150)
+            self.dckOut = DockPanel(self, Caption="Out", Align=2, Height=100)
+
+    form = Workspace()
+    form.Show()
+    QTest.qWait(10)
+    area = form._workspace().geometry()
+    assert (area.x(), area.y(), area.width(), area.height()) == (150, 0, 450, 300)
+    form.dckOut.TabWith(form.dckTools)
+    area = form._workspace().geometry()
+    assert (area.x(), area.width(), area.height()) == (150, 450, 400)
+    form.Unload()

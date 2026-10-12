@@ -3,6 +3,10 @@
 Like VB6, colors are integers in &H00BBGGRR& order, so ``RGB(255, 0, 0)``
 equals ``vpRed`` equals ``0x0000FF``. Color properties also accept
 ``"#RRGGBB"`` strings and Qt color names for convenience.
+
+``RGBA(red, green, blue, alpha)`` is a color you can partly see through, for
+the graphics methods: its transparency (255 - alpha) is in the top byte, so
+0 there (every RGB color) is opaque. Color properties keep just the color.
 """
 
 from PySide6.QtGui import QColor
@@ -27,6 +31,12 @@ def RGB(red: int, green: int, blue: int) -> int:
     return (int(red) & 0xFF) | ((int(green) & 0xFF) << 8) | ((int(blue) & 0xFF) << 16)
 
 
+def RGBA(red: int, green: int, blue: int, alpha: int = 255) -> int:
+    """A color with an alpha, for the graphics methods: 255 opaque (as RGB),
+    0 invisible, between them partly see-through."""
+    return RGB(red, green, blue) | ((255 - (int(alpha) & 0xFF)) << 24)
+
+
 def QBColor(index: int) -> int:
     """Return one of the 16 classic QuickBasic colors (0-15)."""
     return _QB_COLORS[index]
@@ -44,7 +54,8 @@ def to_qcolor(value) -> QColor | None:
             raise ValueError(f"Invalid color: {value!r}")
         return color
     value = int(value)
-    return QColor(value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF)
+    return QColor(value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF,
+                  255 - ((value >> 24) & 0xFF))
 
 
 def from_qcolor(color: QColor) -> int:
@@ -58,5 +69,5 @@ def normalize(value) -> int | None:
     return from_qcolor(to_qcolor(value))
 
 
-__all__ = ["RGB", "QBColor", "vpBlack", "vpRed", "vpGreen", "vpYellow", "vpBlue",
+__all__ = ["RGB", "RGBA", "QBColor", "vpBlack", "vpRed", "vpGreen", "vpYellow", "vpBlue",
            "vpMagenta", "vpCyan", "vpWhite"]

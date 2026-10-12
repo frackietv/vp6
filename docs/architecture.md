@@ -45,6 +45,10 @@ vp6/                    runtime library - "from vp6 import *"
   media.py              SvgImage, MediaPlayer, PdfViewer
   opengl.py             OpenGLView, QuickView (QML)
   wizard.py             WizardForm: a form that is a wizard
+  winsock.py            Winsock: TCP connections and servers (QtNetwork)
+  filewatcher.py        FileWatcher: files and folders changing on disk
+  designerview.py       DesignerView: the IDE's form designer as a control
+  metadata.py           ControlTypes, ControlInfo: the controls' metadata for programs
   dialogs.py            MsgBox, InputBox, ProgressBox, ShowError
   form.py               Form, Forms, Load, Unload, run
   formfile.py           parse/generate the designer region of form files

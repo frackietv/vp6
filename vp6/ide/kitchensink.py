@@ -35,8 +35,8 @@ FORMS = (  # the window, its pages (in the index's order) and the modal dialog
     "pgTerminal.py", "pgCode.py", "pgEditing.py", "pgMarkdown.py", "pgRichText.py", "pgText.py",
     "pgTimer.py", "pgTree.py", "pgUndo.py", "pgWeb.py", "pgSchemes.py", "pgDialogs.py",
     "pgKeyboard.py", "pgMDI.py", "pgMouse.py", "pgLayout.py", "pgDocking.py", "pgEmbedded.py",
-    "pgPages.py", "pgScrolling.py", "pgGlobals.py", "pgArrays.py", "pgMenus.py",
-    "pgProcess.py", "pgUserControl.py",
+    "pgPages.py", "pgScrolling.py", "pgGlobals.py", "pgArrays.py", "pgDesigner.py",
+    "pgMenus.py", "pgNetwork.py", "pgProcess.py", "pgUserControl.py",
     "frmDialog.py", "frmMDI.py", "frmNote.py", "frmSuggest.py", "frmWizard.py",
 )
 MODULES = ("Module1.py",)
@@ -109,18 +109,20 @@ def write_tone(path: str, seconds: float = 1.0, frequency: float = 440.0) -> Non
 def draw_icons(folder: str) -> None:
     """The ImageLists' pictures (32 x 32, shown at 16 x 16 on high-DPI
     screens), drawn here so the template ships no binaries: images/<name>.png
-    for each name in ICONS."""
+    for each name in ICONS, and its version for a dark appearance,
+    images/<name>.dark.png (light outlines: the Menus page's pictures)."""
     ensure_app()
     os.makedirs(folder, exist_ok=True)
     for name in ICONS:
-        image = QImage(32, 32, QImage.Format_ARGB32)
-        image.fill(Qt.transparent)
-        painter = QPainter(image)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(QColor("#333333"), 1.5))
-        _ICON_DRAWERS[name](painter)
-        painter.end()
-        image.save(os.path.join(folder, name + ".png"))
+        for suffix, ink in (("", "#333333"), (".dark", "#e0e0e0")):
+            image = QImage(32, 32, QImage.Format_ARGB32)
+            image.fill(Qt.transparent)
+            painter = QPainter(image)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setPen(QPen(QColor(ink), 1.5))
+            _ICON_DRAWERS[name](painter)
+            painter.end()
+            image.save(os.path.join(folder, name + suffix + ".png"))
 
 
 def _folder(p):

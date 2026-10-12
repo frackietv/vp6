@@ -2,7 +2,10 @@
 ``PSet``, ``Print``, ``Cls``, ``Point``, ``TextWidth`` / ``TextHeight``, the
 drawing properties (``DrawWidth``, ``DrawStyle``, ``FillStyle``,
 ``FillColor``, ``CurrentX`` / ``CurrentY``), ``AutoRedraw`` and the ``Paint``
-event.
+event. Beyond VB's: ``RoundRect`` (a box with rounded corners) and
+``DrawPath`` (a ``GraphicsPath`` of lines and Bézier curves), filled with a
+color, an ``RGBA`` color you can see through or a ``LinearGradient``; the
+methods' Color can be an RGBA color too.
 
 What is drawn outside a Paint handler goes on an image of the form's or
 PictureBox's own (the "persistent graphics"), shown over its background and
@@ -23,8 +26,8 @@ import math
 from contextlib import contextmanager
 
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
-from PySide6.QtGui import (QFontMetricsF, QImage, QPainter, QPainterPath, QPalette, QPen,
-                           QPolygonF)
+from PySide6.QtGui import (QBrush, QFontMetricsF, QImage, QLinearGradient, QPainter,
+                           QPainterPath, QPalette, QPen, QPolygonF)
 
 from . import colors
 from ._props import P, enum_choices
@@ -63,6 +66,137 @@ DRAWING_PROPERTIES = (
                   "ScaleHeight and its mouse events' X, Y (User: set by ScaleLeft, ScaleTop, "
                   "ScaleWidth, ScaleHeight or Scale)"),
 )
+
+
+class GraphicsPath:
+    """A shape for DrawPath, made of lines and curves, in the drawing's units
+    (its ScaleMode, as the graphics methods)::
+
+        path = GraphicsPath()
+        path.MoveTo(10, 40)
+        path.CurveTo(10, 0, 70, 0, 70, 40)      # a Bézier curve: two control points, the end
+        path.LineTo(10, 40)
+        path.Close()
+        picIcon.DrawPath(path, vpBlack, LinearGradient(0, 0, 0, 40, vpYellow, vpRed))
+
+    MoveTo starts a new figure; LineTo, CurveTo (cubic) and QuadTo
+    (quadratic) go on from the last point; Close closes the figure.
+    AddRect (with rounded corners: Radius), AddEllipse and AddPolygon add
+    whole figures."""
+
+    def __init__(self):
+        self._steps = []  # (operation, numbers...) in the drawing's units
+
+    def __repr__(self):
+        return f"<GraphicsPath: {len(self._steps)} steps>"
+
+    def MoveTo(self, X, Y) -> "GraphicsPath":
+        self._steps.append(("move", float(X), float(Y)))
+        return self
+
+    def LineTo(self, X, Y) -> "GraphicsPath":
+        self._steps.append(("line", float(X), float(Y)))
+        return self
+
+    def CurveTo(self, X1, Y1, X2, Y2, X, Y) -> "GraphicsPath":
+        """A cubic Bézier curve to X, Y, pulled toward X1, Y1 and X2, Y2."""
+        self._steps.append(("cubic", float(X1), float(Y1), float(X2), float(Y2), float(X),
+                            float(Y)))
+        return self
+
+    def QuadTo(self, X1, Y1, X, Y) -> "GraphicsPath":
+        """A quadratic Bézier curve to X, Y, pulled toward X1, Y1."""
+        self._steps.append(("quad", float(X1), float(Y1), float(X), float(Y)))
+        return self
+
+    def Close(self) -> "GraphicsPath":
+        """Close the figure: a line back to where it started."""
+        self._steps.append(("close",))
+        return self
+
+    def AddRect(self, X, Y, Width, Height, Radius=0) -> "GraphicsPath":
+        """A rectangle (with corners rounded by Radius) as a figure of its own."""
+        self._steps.append(("rect", float(X), float(Y), float(Width), float(Height),
+                            float(Radius)))
+        return self
+
+    def AddEllipse(self, X, Y, Width, Height) -> "GraphicsPath":
+        """An ellipse filling the rectangle X, Y, Width, Height."""
+        self._steps.append(("ellipse", float(X), float(Y), float(Width), float(Height)))
+        return self
+
+    def AddPolygon(self, Points) -> "GraphicsPath":
+        """A closed polygon through Points (X, Y pairs)."""
+        points = [(float(x), float(y)) for x, y in Points]
+        if points:
+            self.MoveTo(*points[0])
+            for point in points[1:]:
+                self.LineTo(*point)
+            self.Close()
+        return self
+
+    def _qt(self, drawing) -> QPainterPath:
+        """The path in the drawing's pixels."""
+        path = QPainterPath()
+        point = drawing._to_px
+        for step in self._steps:
+            kind, numbers = step[0], step[1:]
+            if kind == "move":
+                path.moveTo(*point(*numbers))
+            elif kind == "line":
+                path.lineTo(*point(*numbers))
+            elif kind == "cubic":
+                path.cubicTo(QPointF(*point(*numbers[0:2])), QPointF(*point(*numbers[2:4])),
+                             QPointF(*point(*numbers[4:6])))
+            elif kind == "quad":
+                path.quadTo(QPointF(*point(*numbers[0:2])), QPointF(*point(*numbers[2:4])))
+            elif kind == "close":
+                path.closeSubpath()
+            else:
+                x, y = point(numbers[0], numbers[1])
+                width, height = drawing._to_px_size(numbers[2], numbers[3])
+                rect = QRectF(x, y, width, height).normalized()
+                if kind == "ellipse":
+                    path.addEllipse(rect)
+                else:
+                    radius = abs(drawing._to_px_size(numbers[4], 0)[0])
+                    path.addRoundedRect(rect, radius, radius)
+        return path
+
+
+class LinearGradient:
+    """A fill that blends colors along a line from X1, Y1 to X2, Y2 (in the
+    drawing's units): Color1 at the start, Color2 at the end, and any
+    AddStop(Position, Color) between (Position from 0 to 1). Colors can be
+    RGBA ones. The Fill of RoundRect and DrawPath."""
+
+    def __init__(self, X1, Y1, X2, Y2, Color1=None, Color2=None):
+        self.X1, self.Y1, self.X2, self.Y2 = float(X1), float(Y1), float(X2), float(Y2)
+        self._stops = []
+        if Color1 is not None:
+            self.AddStop(0, Color1)
+        if Color2 is not None:
+            self.AddStop(1, Color2)
+
+    def __repr__(self):
+        return f"<LinearGradient ({self.X1}, {self.Y1})-({self.X2}, {self.Y2})>"
+
+    def AddStop(self, Position, Color) -> "LinearGradient":
+        """A color at Position along the line (0: the start, 1: the end)."""
+        position = float(Position)
+        if not 0 <= position <= 1:
+            raise ValueError(f"A gradient stop's Position is from 0 to 1, not {Position}")
+        self._stops = [stop for stop in self._stops if stop[0] != position]
+        self._stops.append((position, colors.to_qcolor(Color)))
+        self._stops.sort(key=lambda stop: stop[0])
+        return self
+
+    def _qt(self, drawing) -> QBrush:
+        gradient = QLinearGradient(QPointF(*drawing._to_px(self.X1, self.Y1)),
+                                   QPointF(*drawing._to_px(self.X2, self.Y2)))
+        for position, color in self._stops:
+            gradient.setColorAt(position, color)
+        return QBrush(gradient)
 
 
 class Drawing:
@@ -565,6 +699,51 @@ class Drawing:
             painter.drawPath(path)
         state = self._draw_state()
         state["x"], state["y"] = points[0]
+
+    def _fill_with(self, painter: QPainter, path: QPainterPath, Fill) -> None:
+        """A shape's fill: Fill (a color or a LinearGradient), else as FillStyle says."""
+        if Fill is None:
+            self._draw_fill(painter, path)
+        elif isinstance(Fill, LinearGradient):
+            painter.fillPath(path, Fill._qt(self))
+        else:
+            painter.fillPath(path, colors.to_qcolor(Fill))
+
+    def _shape(self, path: QPainterPath, Color, Fill) -> None:
+        color = self._draw_color(Color)
+        with self._draw_painter(antialias=True) as painter:
+            self._fill_with(painter, path, Fill)
+            if color.alpha():  # (an invisible color, e.g. RGBA(0, 0, 0, 0): no outline)
+                painter.setPen(self._draw_pen(color))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawPath(path)
+
+    def RoundRect(self, X1, Y1, X2, Y2, Radius, Color=None, Fill=None) -> None:
+        """Draw a box from X1, Y1 to X2, Y2 with corners rounded by Radius, its
+        outline in Color (as the pen draws: DrawWidth, DrawStyle; an invisible
+        RGBA color: none), filled with Fill (a color, an RGBA one or a
+        LinearGradient; left out: as FillStyle says). The current point moves
+        to X2, Y2."""
+        x1, y1 = self._to_px(X1, Y1)
+        x2, y2 = self._to_px(X2, Y2)
+        radius = abs(self._to_px_size(Radius, 0)[0])
+        path = QPainterPath()
+        inset = self._draw_inset()
+        rect = QRectF(QPointF(x1, y1), QPointF(x2, y2)).normalized().adjusted(
+            inset, inset, -inset, -inset)
+        path.addRoundedRect(rect, radius, radius)
+        self._shape(path, Color, Fill)
+        state = self._draw_state()
+        state["x"], state["y"] = float(x2), float(y2)
+
+    def DrawPath(self, Path: GraphicsPath, Color=None, Fill=None) -> None:
+        """Draw a GraphicsPath (lines and curves): its outline in Color (as the
+        pen draws; an invisible RGBA color: none), its closed figures filled
+        with Fill (a color, an RGBA one or a LinearGradient; left out: as
+        FillStyle says)."""
+        if not isinstance(Path, GraphicsPath):
+            raise TypeError(f"DrawPath draws a GraphicsPath, not {Path!r}")
+        self._shape(Path._qt(self), Color, Fill)
 
     def Print(self, *values, sep: str = " ", end: str = "\n") -> None:
         """Write text at the current point, in the Font and ForeColor, like

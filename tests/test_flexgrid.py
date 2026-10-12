@@ -6,9 +6,9 @@ import os
 
 import pytest
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QComboBox, QLineEdit
+from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget
 
 from vp6 import (FlexGrid, Form, vpCenter, vpGridEditButton, vpGridEditCheck,
                  vpGridEditColor, vpGridEditList, vpGridEditNone, vpGridEditText,
@@ -58,6 +58,9 @@ class Sheet(Form):
 
     def grd_CellButtonClick(self, Row, Col):
         self.events.append(("CellButtonClick", Row, Col))
+
+    def grd_AfterCollapse(self, Row, Collapsed):
+        self.events.append(("AfterCollapse", Row, Collapsed))
 
 
 @pytest.fixture
@@ -358,9 +361,22 @@ def test_color_and_button_cells(form, monkeypatch):
     monkeypatch.setattr("vp6.controls.QColorDialog.getColor",
                         lambda initial, parent, title: QColor("#00ff00")
                         if initial == QColor("#ff0000") else QColor())
+    grid.EditCell()  # its palette under the cell: a Palette and a System tab
+    QTest.qWait(20)
+    popup = grid._color_popup
+    assert popup.isVisible() and [popup.tabs.tabText(i) for i in range(2)] == \
+        ["Palette", "System"]
+    assert len(popup.swatches) == 48 and popup.system.count() >= 10
+    popup.swatches[17].click()  # red
+    assert grid.Text == "#ff0000" and ("AfterEdit", 1, 2) in form.events
     grid.EditCell()
     QTest.qWait(20)
-    assert grid.Text == "#00ff00" and ("AfterEdit", 1, 2) in form.events
+    grid._color_popup.more()  # any color: the dialog
+    assert grid.Text == "#00ff00"
+    grid.EditCell()
+    QTest.qWait(20)
+    grid._color_popup.system.itemClicked.emit(grid._color_popup.system.item(0))
+    assert grid.Text == grid._widget.palette().color(QPalette.Window).name()
     grid.Row = 2
     grid.CellEditor = vpGridEditButton
     form.events.clear()
@@ -378,3 +394,85 @@ def test_toolbox_icon_and_events(qapp):
     assert not icon("FlexGrid").isNull()
     assert EVENT_ARGS["ValidateEdit"] == "Row, Col, Text"
     assert EVENT_ARGS["BeforeEdit"] == EVENT_ARGS["AfterEdit"] == "Row, Col"
+    assert EVENT_ARGS["AfterCollapse"] == "Row, Collapsed"
+
+
+def test_number_font_and_picture_cells(form, monkeypatch, tmp_path):
+    from vp6 import vpGridEditFont, vpGridEditNumber, vpGridEditPicture
+
+    grid = form.grd
+    fill(grid)
+    grid.Editable = True
+    grid.Row, grid.Col = 1, 2
+    grid.CellEditor = vpGridEditNumber
+    grid.Text = "2.50"
+    table = grid._widget
+    table.edit(table.currentIndex())
+    spin = next(w for w in table.viewport().findChildren(QWidget) if hasattr(w, "setDecimals"))
+    assert spin.decimals() == 2 and spin.value() == 2.5
+    spin.setValue(7.25)
+    table.itemDelegate().commitData.emit(spin)
+    assert grid.Text == "7.25"
+    grid.Row = 2
+    grid.CellEditor = vpGridEditFont
+    grid.Text = "Courier New, 12, Bold"
+    monkeypatch.setattr("vp6.controls.QFontDialog.getFont",
+                        lambda font, parent, title: (QFont("Menlo", 14), True)
+                        if font.bold() and font.pointSize() == 12 else (font, False))
+    grid.EditCell()
+    QTest.qWait(20)
+    assert grid.Text == "Menlo, 14"
+    grid.Row = 3
+    grid.CellEditor = vpGridEditPicture
+    picture = tmp_path / "x.png"
+    monkeypatch.setattr("vp6.controls.QFileDialog.getOpenFileName",
+                        lambda *args: (str(picture), ""))
+    grid.EditCell()
+    QTest.qWait(20)
+    assert grid.Text in (str(picture), os.path.relpath(picture, form._base_dir()))
+
+
+def test_outline_rows_and_headings(form):
+    grid = form.grd
+    grid.Rows, grid.Cols = 7, 3
+    for row, (level, text) in enumerate([(0, "Appearance"), (1, "BackColor"), (1, "Font"),
+                                         (2, "Size"), (0, "Behavior"), (1, "Enabled")], 1):
+        grid.TextMatrix[row, 1] = text
+        grid.RowOutlineLevel[row] = level
+    grid.RowHeading[1] = grid.RowHeading[5] = True
+    assert grid.RowOutlineLevel(3) == 1 and grid.RowHeading(1) and not grid.RowHeading(2)
+    assert grid._widget.columnSpan(0, 0) == 2  # (a heading across the row)
+    assert grid._editor_of(1, 1) == 0  # (headings aren't edited)
+    grid.IsCollapsed[1] = True
+    table = grid._widget
+    assert [table.isRowHidden(r) for r in range(6)] == [False, True, True, True, False, False]
+    assert ("AfterCollapse", 1, True) in form.events
+    grid.IsCollapsed[3] = True  # (collapsed under a collapsed row)
+    grid.IsCollapsed[1] = False
+    assert [table.isRowHidden(r) for r in range(6)] == [False, False, False, True, False, False]
+    # A click on a heading's arrow
+    rect = table.visualRect(table.model().index(4, 0))
+    QTest.mouseClick(table.viewport(), Qt.LeftButton, Qt.NoModifier,
+                     QPoint(rect.left() + 8, rect.center().y()))
+    assert grid.IsCollapsed(5) and table.isRowHidden(5)
+    assert form.events[-1] == ("AfterCollapse", 5, True)
+    grid._widget.grab()  # (paints the arrows, indents and headings)
+
+
+def test_description_pane(form):
+    grid = form.grd
+    fill(grid)
+    grid.FixedCols = 0
+    grid.RowDescription[2] = "The second <row>"
+    assert grid.RowDescription(2) == "The second <row>" and grid.RowDescription(1) == ""
+    pane = grid._widget.description
+    assert not pane.isVisible()
+    grid.DescriptionVisible = True
+    grid.DescriptionHeight = 50
+    QTest.qWait(10)
+    grid.Row = 2
+    viewport = grid._widget.viewport().geometry()
+    assert pane.isVisible() and pane.height() == 50 and pane.y() == viewport.bottom() + 1
+    assert "The second &lt;row&gt;" in pane.text() and grid.TextMatrix(2, 0) in pane.text()
+    grid.DescriptionVisible = False
+    assert not pane.isVisible() and grid._widget.viewportMargins().bottom() == 0

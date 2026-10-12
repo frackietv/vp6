@@ -1,5 +1,6 @@
 """Kitchen Sink page: light and dark color schemes; DarkMode (the page's and
-Screen's) and Form_ColorSchemeChanged redrawing a picture of its own."""
+Screen's) and Form_ColorSchemeChanged redrawing a picture of its own; the whole
+program's scheme (App.ColorScheme) and style (App.Style, App.Styles)."""
 
 from math import cos, sin
 
@@ -36,13 +37,39 @@ class pgSchemes(Form):
                              WordWrap=True, TabIndex=8)
         self.lblChanges = Label(self, Caption='Form_ColorSchemeChanged: not yet', Left=126,
                                 Top=230, Width=494, Height=25, TabIndex=9)
+        self.fraProgram = Frame(self, Caption='The whole program', Left=16, Top=290, Width=604,
+                                Height=110, TabIndex=10)
+        self.lblAppScheme = Label(self.fraProgram, Caption='App.ColorScheme:', Left=12, Top=30,
+                                  Width=130, Height=22, TabIndex=11)
+        self.cboAppScheme = ComboBox(self.fraProgram, Style=2, Left=146, Top=26, Width=180,
+                                     Height=26,
+                                     List=['Project Default', 'System', 'Light', 'Dark', 'IDE'],
+                                     TabIndex=12,
+                                     ToolTipText='Every form left on Project Default, at once')
+        self.lblStyle = Label(self.fraProgram, Caption='App.Style:', Left=12, Top=66, Width=130,
+                              Height=22, TabIndex=13)
+        self.cboStyle = ComboBox(self.fraProgram, Style=2, Left=146, Top=62, Width=180, Height=26,
+                                 TabIndex=14,
+                                 ToolTipText="How every control is drawn: the system's, or a Qt style")
     # endregion
 
     shell = None  # the Kitchen Sink window showing this page (None when run on its own)
 
     def Form_Load(self):
         self.changes = 0
+        self.cboAppScheme.ListIndex = 0
+        for style in App.Styles:  # Native, Fusion, ...
+            self.cboStyle.AddItem(style)
+        self.cboStyle.ListIndex = App.Styles.index(App.Style)
         self.show_mode()
+
+    def cboAppScheme_Click(self):
+        # vpSchemeProjectDefault (0) goes back to the project's
+        App.ColorScheme = self.cboAppScheme.ListIndex
+
+    def cboStyle_Click(self):
+        if self.cboStyle.Text and self.cboStyle.Text != App.Style:
+            App.Style = self.cboStyle.Text
 
     def Form_ColorSchemeChanged(self, Dark):
         # The page turned light or dark (its window's scheme, or the OS switching): what

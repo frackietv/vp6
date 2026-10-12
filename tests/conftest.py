@@ -148,3 +148,30 @@ def _no_real_codex(tmp_path_factory, monkeypatch):
     stand-in), and Codex's folder (its login, its sessions) is the test's own."""
     monkeypatch.setenv("VP6_CODEX", "/nonexistent/codex")
     monkeypatch.setenv("CODEX_HOME", str(tmp_path_factory.mktemp("codex")))
+
+
+@pytest.fixture(autouse=True)
+def _nothing_opened_outside(monkeypatch):
+    """ShellExecute never opens a browser, a document or Finder: what it would
+    open is recorded instead (``vp6.process._opened``)."""
+    from vp6 import process
+
+    opened = []
+    monkeypatch.setattr(process, "_open_url", lambda url: opened.append(url.toString()) or True)
+    monkeypatch.setattr(process, "_start_detached",
+                        lambda program, args: (opened.append(" ".join([program, *args])) or True,
+                                               0))
+    monkeypatch.setattr(process, "_opened", opened, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _program_appearance_back():
+    """App.ColorScheme and App.Style set by a test are undone after it."""
+    yield
+    from vp6 import appearance
+    from vp6.app import _App
+
+    appearance.app_scheme = None
+    if _App._native_style is not None and _App._style:
+        QApplication.setStyle(_App._native_style)
+    _App._style = ""

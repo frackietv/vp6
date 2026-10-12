@@ -1,7 +1,8 @@
 """Kitchen Sink page: DockPanels, tool windows docked to the page's edges, like the IDE's
 panels. Drag a caption bar to float a panel and drop it on an edge; double-click it, or
-use its buttons, to float, dock or close it. The page's DockLayout saves and restores
-where they all are."""
+use its buttons, to float, dock or close it. Notes is tabbed with Output (TabWith), Layers
+is below Properties in its place (SplitWith). The page's SaveLayout saves where they all
+are, LoadLayout puts them back."""
 
 from vp6 import *
 
@@ -27,6 +28,9 @@ class pgDocking(Form):
         self.chkKeep = CheckBox(self.dckTools, Caption='&Keep Output open', Left=8, Top=140,
                                 Width=136, Height=25, TabIndex=5,
                                 ToolTipText="Output's Close event cancels closing it")
+        self.cmdTabs = CommandButton(self.dckTools, Caption='Se&parate notes', Left=8, Top=172,
+                                     Width=128, Height=28, TabIndex=9,
+                                     ToolTipText='Notes in tabs with Output (TabWith), or on its own (Separate)')
         self.dckProps = DockPanel(self, Left=490, Top=0, Width=150, Height=440,
                                   Caption='Properties', Align=4)
         self.grdProps = FlexGrid(self.dckProps, Left=0, Top=0, Width=140, Height=200, Rows=4,
@@ -35,6 +39,15 @@ class pgDocking(Form):
                                    Align=2)
         self.rtbLog = RichTextBox(self.dckOutput, Text='', Left=0, Top=0, Width=300, Height=80,
                                   Locked=True, BorderStyle=0, TabIndex=7)
+        self.dckNotes = DockPanel(self, Left=0, Top=330, Width=640, Height=110, Caption='Notes',
+                                  Align=2)
+        self.txtNotes = TextBox(self.dckNotes, MultiLine=True,
+                                Text='Notes: a panel tabbed with the Output (TabWith); its tab is under them.',
+                                Left=0, Top=0, Width=300, Height=80, TabIndex=10)
+        self.dckLayers = DockPanel(self, Left=490, Top=300, Width=150, Height=140,
+                                   Caption='Layers', Align=4)
+        self.lstLayers = ListBox(self.dckLayers, Left=0, Top=0, Width=140, Height=80,
+                                 List=['Background', 'Shapes', 'Text'], TabIndex=11)
         self.picCenter = PictureBox(self, Left=150, Top=0, Width=340, Height=330, BorderStyle=0,
                                     Align=5)
         self.lblHelp = Label(self.picCenter,
@@ -44,6 +57,9 @@ class pgDocking(Form):
 
     def Form_Load(self):
         self.saved = None
+        self.dckNotes.TabWith(self.dckOutput)  # in tabs, in the Output's place
+        self.dckOutput.Activate()  # (the Output's tab in front)
+        self.dckLayers.SplitWith(self.dckProps)  # below Properties, sharing its place
         self.show_where()
 
     # --- the panels' contents follow their size ----------------------------------------------
@@ -56,6 +72,14 @@ class pgDocking(Form):
         self.grdProps.Move(0, 0, width, max(self.dckProps.Height - 30, 40))
         self.grdProps.ColWidth[0] = width // 2
         self.grdProps.ColWidth[1] = width - width // 2 - 4
+
+    def dckNotes_Resize(self):
+        self.txtNotes.Move(0, 0, max(self.dckNotes.Width - 12, 40),
+                           max(self.dckNotes.Height - 30, 20))
+
+    def dckLayers_Resize(self):
+        self.lstLayers.Move(0, 0, max(self.dckLayers.Width - 12, 40),
+                            max(self.dckLayers.Height - 30, 20))
 
     def picCenter_Resize(self):
         self.lblHelp.Width = max(self.picCenter.Width - 32, 60)
@@ -118,15 +142,25 @@ class pgDocking(Form):
         self.show_where()
 
     def cmdSave_Click(self):
-        self.saved = self.DockLayout
+        # The whole layout as text (the panels, their tabs and places): e.g. for SaveSetting
+        self.saved = self.SaveLayout()
         self.cmdRestore.Enabled = True
-        self.log("Layout saved (DockLayout)")
+        self.log("Layout saved (SaveLayout; DockLayout has just the panels)")
 
     def cmdRestore_Click(self):
         if self.saved:
-            self.DockLayout = self.saved
-            self.log("Layout restored")
+            self.LoadLayout(self.saved)
+            self.log("Layout restored (LoadLayout)")
             self.show_where()
+
+    def cmdTabs_Click(self):
+        if len(self.dckNotes.TabPanels) > 1:
+            self.dckNotes.Separate()  # on its own at the bottom
+            self.cmdTabs.Caption = "Ta&b notes"
+        else:
+            self.dckNotes.TabWith(self.dckOutput)
+            self.cmdTabs.Caption = "Se&parate notes"
+        self.log(f"Notes is tabbed with: {[p.Caption for p in self.dckNotes.TabPanels]}")
 
     def cmdFloat_Click(self):
         if self.dckOutput.Floating:

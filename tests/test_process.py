@@ -1,7 +1,8 @@
 """Running other programs: the Process control (Start, its Output, ErrorOutput,
 Exited and Error events, Write and WriteLine to its input, CloseInput, Kill,
-Terminate, WaitForExit, Running, ExitCode, ProcessID, WorkingDirectory, ended
-with its form) and VB's Shell; in the IDE (the Toolbox, the designer)."""
+Terminate, WaitForExit, Running, ExitCode, ProcessID, WorkingDirectory, its
+Environment and Arguments, ended with its form), VB's Shell and ShellExecute;
+in the IDE (the Toolbox, the designer)."""
 
 import os
 import sys
@@ -10,7 +11,7 @@ import pytest
 
 import vp6
 from conftest import wait_for
-from vp6 import Form, Process, Shell, formfile
+from vp6 import Form, Process, Shell, ShellExecute, formfile
 from vp6.controls import CONTROL_TYPES, EVENT_ARGS
 from vp6.process import split_command
 
@@ -151,3 +152,52 @@ def test_in_the_ide(qapp, tmp_path):
     assert "CommandLine='python3 -V'" in designer.document.text
     designer.close()
     assert os.path.exists(str(path))
+
+
+def test_environment_and_arguments(form, tmp_path):
+    prc = form.prc
+    env = prc.Environment
+    assert env("PATH") == os.environ.get("PATH", "") and "PATH" in env
+    assert len(env) == env.Count == len(os.environ)
+    env["VP6_GREETING"] = "hello there"
+    env.Add("VP6_OTHER", 42)
+    env.Remove("HOME")
+    del env["VP6_NOT_THERE"]  # (nothing to drop)
+    assert env.Item("VP6_OTHER") == "42" and "HOME" not in env and env["HOME"] == ""
+    with pytest.raises(ValueError):
+        env["A=B"] = "x"
+    script = tmp_path / "args.py"
+    script.write_text("import os, sys\n"
+                      "print(os.environ.get('VP6_GREETING'), os.environ.get('HOME'))\n"
+                      "print(sys.argv[1:])\n")
+    prc.CommandLine = f'"{sys.executable}" "{script}" first'
+    prc.Arguments = ['a "quoted" word', "path with spaces/x.txt", ""]
+    assert prc.Arguments == ['a "quoted" word', "path with spaces/x.txt", ""]
+    prc.Start()
+    prc.WaitForExit(10000)
+    wait_for(lambda: any(k == "exit" for k, _ in form.log))
+    lines = text(form).splitlines()
+    assert lines[0] == "hello there None"
+    assert lines[1] == str(["first", 'a "quoted" word', "path with spaces/x.txt", ""])
+    env.Reset()
+    assert env("HOME") == os.environ.get("HOME", "") and "VP6_GREETING" not in env
+    env.Clear()
+    assert env.Count == 0 and list(env) == []
+
+
+def test_shell_execute(tmp_path):
+    from vp6 import process
+
+    document = tmp_path / "notes.txt"
+    document.write_text("x")
+    assert ShellExecute("https://example.com/a b")
+    assert ShellExecute(str(document)) and ShellExecute(str(tmp_path))
+    assert process._opened == ["https://example.com/a b", document.as_uri(),
+                               tmp_path.as_uri()]
+    assert ShellExecute(str(document), "show")
+    assert document.name in process._opened[-1]  # (selected in its folder)
+    assert not ShellExecute(str(tmp_path / "missing.txt"))
+    with pytest.raises(ValueError):
+        ShellExecute("")
+    with pytest.raises(ValueError):
+        ShellExecute(str(document), "print")

@@ -1,5 +1,46 @@
 # VP6 features
 
+**Version:** 0.4.62
+**Date:** 2026-10-12
+
+## Controls
+
+- Winsock: TCP connections and servers, as VB's: Connect, Listen with ConnectionRequest and Accept (on a control array element), SendData, DataArrival with GetData and PeekData (text or bytes), SendComplete, Close at either end, Error with VB's numbers, State
+- FileWatcher: tells when files change (written, replaced by an editor, removed and made again: FileChanged) and when files come and go in folders (FolderChanged)
+- DesignerView: a form designer in a program: a form's file shown as the IDE's designer shows it (selecting, grab handles, rubber band, the grid, moving into containers and pages, arrow keys, drawing new controls with Tool, locked controls), its properties (GetProperty, SetProperty), AddControl, DeleteSelection, Undo, Redo, Save, and events for every change (SelChange, ControlAdded, ControlDeleted, ControlMoved, ControlResized, PropertyChanged, Change, GoToCode)
+- Process: an Environment collection (the system's variables to start with; add, change, remove before Start) and an Arguments list after the command line, each argument as it is
+- CommonDialog.ShowFolder: choose a folder (VB's BrowseForFolder)
+- CodeBox for a code window: a completion list at the caret (CompletionRequest while typing or on Ctrl+Space, ShowCompletion, CompletionChosen), Find, FindAll and Replace with match case, whole words and regular expressions, marks apart from the coloring (MarkRange, wavy underlines, MarkLine, ClearMarks), ReplaceRange as one undo step keeping the caret and scrolling, ToggleComment, CommentLines, UncommentLines
+- FlexGrid as a property grid: outline rows that collapse into the row above them (RowOutlineLevel, IsCollapsed, AfterCollapse), heading rows across the grid (RowHeading), a description pane (DescriptionVisible, RowDescription), and number, font and picture editors; the color editor is a palette with a System tab of the theme's colors, (Default) and More...
+- DockPanels tabbed together (TabWith: tabs under them; a hidden one's tab gone, back in front when shown), side by side in one place (SplitWith, the edge between them dragged), Separate, Activate, TabPanels, SplitPanels, ActiveTab; DockPanels around an MDIForm's workspace
+- Menu items with pictures (a file and its dark version, a Picture, or an ImageList's ListImage shared with a Toolbar button) and groups of choices (Group: choosing one checks it and unchecks the others); the Menu Editor has both
+
+## Forms
+
+- MDIForm.ViewMode: the children in tabs (closable, movable), several instances of one form class as children
+- SaveLayout and LoadLayout: the window's place, size and state and all its DockPanels (their tabs and panels side by side too), as text for SaveSetting
+- AppActivate and AppDeactivate on every loaded form when the program becomes the active application or stops being it
+
+## Graphics
+
+- RGBA colors you can see through, RoundRect, LinearGradient fills and GraphicsPath shapes of lines and Bézier curves (DrawPath), on forms, PictureBoxes and Pictures
+- LoadPicture(FileName, Dark=True): a picture's dark version beside it (name.dark.png)
+
+## The program
+
+- App.ColorScheme: the whole program's light or dark scheme, changeable while it runs (every Project Default form follows and gets ColorSchemeChanged); App.Style and App.Styles: native or Fusion
+- App.RunOnMainThread: the safe way for a worker thread to update forms (Wait for a result); App.Active
+- ShellExecute: a URL, document or folder opened with what the system uses for it, or a file shown in its folder
+- The control metadata: ControlTypes (the Toolbox's order), ControlCategories, ControlInfo (properties with their kinds, defaults, choices, categories and descriptions; events with their arguments; size; icon)
+
+## Kitchen Sink
+
+- New pages: Network and files (a Winsock server and client, a FileWatcher) and Designing forms (a DesignerView and the control metadata); the new features on the Docking, Menus, FlexGrid, CodeBox, Drawing, Dialogs, Color schemes, App and Running programs pages and in the Notes window
+
+## Backlog
+
+- The self-hosting gaps implemented, all but two: projects inside packages, and the steps to write the IDE in VP6
+
 **Version:** 0.4.61
 **Date:** 2026-10-12
 

@@ -1,17 +1,22 @@
 """Kitchen Sink page: running other programs. A Process control runs a small
-Python program that answers what you send it (WriteLine): its Output and
-ErrorOutput shown as they come, its exit code (Exited), a program that can't
-be started (Error), Kill; and VB's Shell opening the project's folder."""
+Python program that answers what you send it (WriteLine), with an environment
+variable of the page's (Environment) and arguments with spaces and quotes
+(Arguments): its Output and ErrorOutput shown as they come, its exit code
+(Exited), a program that can't be started (Error), Kill; VB's Shell opening the
+project's folder, and ShellExecute opening a web page or a file with what the
+system has for it."""
 
+import os
 import sys
 
 from vp6 import *
 
 # The program the page talks with: it upper-cases each line, complains about
 # "error" on its standard error, and ends with exit code 3 on "quit"
-ECHO = ("import sys\n"
+ECHO = ("import os, sys\n"
         "print('Ready: send me lines (error: to my standard error; quit: the end)', "
         "flush=True)\n"
+        "print(os.environ.get('KS_GREETING', ''), sys.argv[1:], flush=True)\n"
         "for line in sys.stdin:\n"
         "    line = line.strip()\n"
         "    if line == 'quit':\n"
@@ -45,9 +50,15 @@ class pgProcess(Form):
                                ToolTipText='A line for the program (Enter sends it)')
         self.cmdSend = CommandButton(self, Caption='Se&nd', Left=504, Top=356, Width=120,
                                      Height=30, Default=True, Enabled=False, TabIndex=7)
-        self.lblStatus = Label(self, Caption='Not running', Left=16, Top=396, Width=608, Height=25,
+        self.lblStatus = Label(self, Caption='Not running', Left=16, Top=396, Width=360, Height=25,
                                TabIndex=8)
-        self.prcEcho = Process(self, Left=588, Top=396)
+        self.cmdWeb = CommandButton(self, Caption='&Web page', Left=384, Top=392, Width=110,
+                                    Height=30, TabIndex=9,
+                                    ToolTipText="ShellExecute: VP6's page in the browser")
+        self.cmdShow = CommandButton(self, Caption='Show the &file', Left=500, Top=392, Width=124,
+                                     Height=30, TabIndex=10,
+                                     ToolTipText='ShellExecute "show": this page\'s file in its folder')
+        self.prcEcho = Process(self, Left=588, Top=356)
     # endregion
 
     def show(self, text):
@@ -61,6 +72,10 @@ class pgProcess(Form):
 
     def cmdStart_Click(self):
         self.txtOutput.Text = ""
+        # Its environment: the system's, and a variable of ours
+        self.prcEcho.Environment["KS_GREETING"] = "Hello from the Kitchen Sink"
+        # Arguments after the command line, each as it is (spaces, quotes: no quoting)
+        self.prcEcho.Arguments = ["a file name with spaces.txt", 'say "hi"']
         # A list: the program and its arguments as they are (no quoting needed)
         self.prcEcho.Start([sys.executable, "-u", "-c", ECHO])
         self.set_running(True)
@@ -83,6 +98,15 @@ class pgProcess(Form):
         opener = {"darwin": "open", "win32": "explorer"}.get(sys.platform, "xdg-open")
         pid = Shell([opener, App.Path], vpNormalFocus)
         self.lblStatus.Caption = f"Shell started {opener} (process {pid})"
+
+    def cmdWeb_Click(self):
+        # ShellExecute: a URL, a document or a folder, opened with the system's program for it
+        if ShellExecute("https://www.python.org"):
+            self.lblStatus.Caption = "ShellExecute opened the web page"
+
+    def cmdShow_Click(self):
+        ShellExecute(os.path.abspath(__file__), "show")  # selected in Finder or Explorer
+        self.lblStatus.Caption = "ShellExecute showed this page's file in its folder"
 
     # --- the program's events ----------------------------------------------------------------
     def prcEcho_Output(self, Text):

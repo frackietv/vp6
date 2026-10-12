@@ -162,13 +162,27 @@ class Picture(Drawing, PropertyHost):
         return -1 if color.alpha() == 0 else colors.from_qcolor(color)
 
 
-def LoadPicture(FileName: str = "") -> Picture:
+def dark_variant(path: str) -> str:
+    """A picture file's version for a dark appearance, beside it: ``open.png``'s
+    is ``open.dark.png`` (or ``open-dark.png``); the file itself without one."""
+    root, ext = os.path.splitext(path)
+    for candidate in (f"{root}.dark{ext}", f"{root}-dark{ext}"):
+        if os.path.isfile(candidate):
+            return candidate
+    return path
+
+
+def LoadPicture(FileName: str = "", Dark: bool = False) -> Picture:
     """A Picture from an image file (PNG, JPEG, BMP, GIF, ICO, SVG...);
     ``LoadPicture()`` is an empty one (setting a Picture property to it clears
-    it). A missing or unreadable file raises FileNotFoundError / ValueError."""
+    it). Dark=True takes the file's dark version where there is one beside it
+    (``open.dark.png`` for ``open.png``), e.g. ``Dark=Me.DarkMode``. A missing
+    or unreadable file raises FileNotFoundError / ValueError."""
     if not FileName:
         return Picture()
     path = str(FileName)
+    if Dark:
+        path = dark_variant(path)
     if not os.path.isfile(path):
         raise FileNotFoundError(f"File not found: {path}")
     image = QImage(path)
@@ -200,11 +214,13 @@ def to_picture(value) -> Picture:
     return LoadPicture(str(value or ""))
 
 
-def picture_pixmap(owner, value) -> QPixmap:
-    """A picture property's value as a QPixmap: a Picture's, or a file's
-    (relative to the owner's form folder); empty when there is none or the file
-    can't be read."""
-    if isinstance(value, Picture):
+def picture_pixmap(owner, value, dark: bool = False) -> QPixmap:
+    """A picture property's value as a QPixmap: a Picture's (or an ImageList's
+    ListImage's), or a file's (relative to the owner's form folder; ``dark``:
+    its dark version where there is one, dark_variant); empty when there is
+    none or the file can't be read."""
+    if isinstance(value, Picture) or (not isinstance(value, str) and
+                                      callable(getattr(value, "_pixmap", None))):
         return value._pixmap()
     if not value:
         return QPixmap()
@@ -212,6 +228,8 @@ def picture_pixmap(owner, value) -> QPixmap:
     if not os.path.isabs(path):
         base = owner._base_dir() if hasattr(owner, "_base_dir") else os.getcwd()
         path = os.path.join(base, path)
+    if dark:
+        path = dark_variant(path)
     if path.lower().endswith((".svg", ".svgz")):
         return _svg_pixmap(path)
     return QPixmap(path)

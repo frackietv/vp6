@@ -1,5 +1,6 @@
-"""The CommonDialog: VB's Filter syntax, the Open and Save As dialogs, Color, Font,
-Print and Help, cancelling (CancelError, DialogCancelled), the designer's icon."""
+"""The CommonDialog: VB's Filter syntax, the Open and Save As dialogs, choosing a
+folder, Color, Font, Print and Help, cancelling (CancelError, DialogCancelled), the
+designer's icon."""
 
 import os
 
@@ -94,6 +95,26 @@ def test_cancelling(cdl, monkeypatch):
     with pytest.raises(DialogCancelled) as error:
         cdl.ShowSave()
     assert error.value.Number == vpCdlCancel == 32755
+
+
+def test_folder(cdl, monkeypatch, tmp_path):
+    asked = []
+
+    def choose(parent, title, start):
+        asked.append((title, start))
+        return str(tmp_path / "chosen") + "/"
+
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", choose)
+    cdl.InitDir = str(tmp_path)
+    cdl.DialogTitle = "Location"
+    assert cdl.ShowFolder() is True
+    assert cdl.FileName == str(tmp_path / "chosen") and cdl.FileNames == [cdl.FileName]
+    assert asked == [("Location", str(tmp_path))]
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: "")
+    assert cdl.ShowFolder() is False and cdl.FileName == str(tmp_path / "chosen")
+    cdl.CancelError = True
+    with pytest.raises(DialogCancelled):
+        cdl.ShowFolder()
 
 
 def test_color(cdl, monkeypatch):

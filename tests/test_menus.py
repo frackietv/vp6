@@ -1,5 +1,5 @@
-"""Menus on forms: the runtime Menu control, the form file, the designer's
-menu bar and the Menu Editor."""
+"""Menus on forms: the runtime Menu control (pictures, groups of choices), the
+form file, the designer's menu bar and the Menu Editor."""
 
 import os
 
@@ -271,8 +271,8 @@ def test_designer_canvas_ignores_menus(designer):
     window = PropertiesWindow()
     window.set_designer(d)
     rows = [window.table.item(r, 0).text() for r in range(window.table.rowCount())]
-    assert rows == ["(Name)", "Index", "Caption", "Checked", "Enabled", "NegotiatePosition",
-                    "Shortcut", "Tag", "Visible", "WindowList"]
+    assert rows == ["(Name)", "Index", "Caption", "Checked", "Enabled", "Group",
+                    "NegotiatePosition", "Picture", "Shortcut", "Tag", "Visible", "WindowList"]
     assert d.set_property("Caption", "&Open File...") is None
     assert "Caption='&Open File...'" in d.document.text
     d.select(["mnuFile"])
@@ -424,3 +424,73 @@ def test_menu_editor_negotiate_position(qapp):
     assert dialog.result_entries()[0].props["NegotiatePosition"] == 1
     defs = menueditor.menu_defs(dialog.result_entries())
     assert defs[0].props["NegotiatePosition"] == 1
+
+
+# --- pictures and groups -----------------------------------------------------------------------
+
+def test_pictures_and_choices(qapp, tmp_path):
+    from PySide6.QtGui import QColor, QImage
+
+    from vp6 import ImageList, vpSchemeDark, vpSchemeLight
+
+    for name, color in (("sun.png", "#ffcc00"), ("sun.dark.png", "#3355ff")):
+        image = QImage(16, 16, QImage.Format_ARGB32)
+        image.fill(QColor(color))
+        image.save(str(tmp_path / name))
+
+    class Themed(Form):
+        def InitializeComponent(self):
+            self.ColorScheme = vpSchemeLight
+            self.imgIcons = ImageList(self)
+            self.imgIcons.ListImages.Add(1, "sun", str(tmp_path / "sun.png"))
+            self.mnuView = Menu(self, Caption="&View")
+            self.mnuViewLight = Menu(self.mnuView, Caption="&Light", Group="theme",
+                                     Checked=True, Picture=str(tmp_path / "sun.png"))
+            self.mnuViewDark = Menu(self.mnuView, Caption="&Dark", Group="theme")
+            self.mnuViewSystem = Menu(self.mnuView, Caption="&System", Group="theme")
+            self.mnuViewOther = Menu(self.mnuView, Caption="&Other")
+            self.chosen = []
+
+        def mnuViewDark_Click(self):
+            self.chosen.append(("dark", self.mnuViewDark.Checked))
+
+    form = Themed()
+    form.Show()
+
+    def color(menu):
+        return menu._action.icon().pixmap(16, 16).toImage().pixelColor(8, 8).name()
+
+    light, dark, system = form.mnuViewLight, form.mnuViewDark, form.mnuViewSystem
+    assert color(light) == "#ffcc00"
+    form.ColorScheme = vpSchemeDark  # (its dark version beside it)
+    assert color(light) == "#3355ff"
+    dark.Picture = form.imgIcons.ListImages("sun")  # (the ImageList's, as a Toolbar's)
+    assert color(dark) == "#ffcc00"
+    dark._action.trigger()  # chosen: checked, the others in its group not
+    assert dark.Checked and not light.Checked and not system.Checked
+    assert form.chosen == [("dark", True)]
+    assert light._action.actionGroup() is dark._action.actionGroup() is not None
+    assert form.mnuViewOther._action.actionGroup() is None
+    system.Checked = True  # (code: only that one)
+    assert system.Checked and dark.Checked
+    dark.Group = ""
+    assert dark._action.actionGroup() is None
+    dark.Picture = ""
+    assert dark._action.icon().isNull()
+    form.Unload()
+
+
+def test_menu_editor_group_and_picture(qapp):
+    dialog = MenuEditorDialog([MenuEntry(0, "&View", "mnuView"),
+                               MenuEntry(1, "&Light", "mnuLight",
+                                         props={"Group": "theme", "Picture": "sun.png"})],
+                              set())
+    dialog.list.setCurrentRow(1)
+    assert dialog.group.text() == "theme" and dialog.picture.text() == "sun.png"
+    dialog.group.setText("")
+    dialog.group.textEdited.emit("")
+    dialog.picture.setText("moon.png")
+    dialog.picture.textEdited.emit("moon.png")
+    entry = dialog.entries[1]
+    assert "Group" not in entry.props and entry.props["Picture"] == "moon.png"
+    dialog.deleteLater()

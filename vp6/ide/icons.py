@@ -293,6 +293,43 @@ def _process(p):  # a console window
     p.drawLine(QPointF(11, 15), QPointF(16, 15))
 
 
+def _winsock(p):  # two computers, connected
+    p.setBrush(QColor("#5b9bd5"))
+    p.drawRect(QRectF(2.5, 3.5, 9, 7))
+    p.drawRect(QRectF(12.5, 13.5, 9, 7))
+    p.setPen(QPen(QColor("#2e9d4a"), 1.6))
+    p.setBrush(Qt.NoBrush)
+    p.drawPolyline([QPointF(7, 11), QPointF(7, 17), QPointF(12, 17)])
+
+
+def _filewatcher(p):  # a page with an eye on it
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(4.5, 2.5, 13, 18))
+    p.setPen(QPen(C.ink, 0.8))
+    for y in (6.5, 9.5, 12.5):
+        p.drawLine(QPointF(7, y), QPointF(15, y))
+    p.setPen(QPen(C.ink, 1))
+    p.setBrush(QColor("#5b9bd5"))
+    p.drawEllipse(QRectF(10.5, 14.5, 11, 7))
+    p.setBrush(QColor("#1e1e1e"))
+    p.drawEllipse(QRectF(14.5, 16.5, 3, 3))
+
+
+def _designerview(p):  # a form with a selected control: grab handles
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2.5, 3.5, 19, 17))
+    p.setBrush(QColor("#5b9bd5"))
+    p.drawRect(QRectF(2.5, 3.5, 19, 3))
+    p.setBrush(Qt.NoBrush)
+    p.setPen(QPen(C.ink, 0.8, Qt.DashLine))
+    p.drawRect(QRectF(6.5, 9.5, 11, 7))
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor("#1f6fd1"))
+    for x, y in ((5.5, 8.5), (16.5, 8.5), (5.5, 15.5), (16.5, 15.5)):
+        p.drawRect(QRectF(x, y, 2.5, 2.5))
+    p.setPen(QPen(C.ink, 1))
+
+
 def _terminal(p):  # a terminal window with a prompt
     p.setBrush(QColor("#1e1e1e"))
     p.drawRect(QRectF(2.5, 4, 19, 16))
@@ -884,7 +921,8 @@ _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
     "OptionButton": _optionbutton, "ComboBox": _combobox, "ListBox": _listbox,
-    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Process": _process, "Terminal": _terminal, "Data": _data, "Shape": _shape,
+    "HScrollBar": _hscroll, "VScrollBar": _vscroll, "Timer": _timer, "Process": _process, "Terminal": _terminal,
+    "Winsock": _winsock, "FileWatcher": _filewatcher, "DesignerView": _designerview, "Data": _data, "Shape": _shape,
     "Line": _line, "Image": _image,
     "DriveListBox": _drivelistbox, "DirListBox": _dirlistbox, "FileListBox": _filelistbox,
     "TreeView": _treeview, "Splitter": _splitter,

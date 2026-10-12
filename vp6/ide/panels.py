@@ -18,32 +18,12 @@ from PySide6.QtWidgets import (
 )
 
 from ..controls import CONTROL_TYPES
+# The Toolbox's categories when grouped: a control type that none of them names goes in
+# Other, the project's user controls in User Controls (the Pointer above them all)
+from ..metadata import TOOLBOX_CATEGORIES
 from ..project import SUB_MAIN, Project
 from . import icons
 from .theme import theme_manager
-
-
-# The Toolbox's categories when grouped, in order, each with its tools in order; a
-# control type that none of them names goes in Other, the project's user controls
-# in User Controls (the Pointer stays at the top, above them all)
-TOOLBOX_CATEGORIES = (
-    ("Common", ("Label", "TextBox", "CommandButton", "CheckBox", "OptionButton", "ComboBox",
-                "ListBox", "Slider", "UpDown", "ProgressBar", "HScrollBar", "VScrollBar")),
-    ("Input", ("SpinBox", "DTPicker", "MonthView", "Dial", "FontComboBox", "HotKey",
-               "LCDNumber")),
-    ("Buttons", ("CommandLink", "ToolButton", "ButtonBox")),
-    ("Containers", ("Frame", "TabStrip", "ToolBox", "PageFrame", "ScrollPanel", "Splitter",
-                    "DockPanel", "Toolbar", "StatusBar")),
-    ("Graphics", ("PictureBox", "Image", "SvgImage", "Shape", "Line", "ImageList",
-                  "GraphicsView", "Chart", "OpenGLView")),
-    ("Lists", ("TreeView", "ListView", "ColumnView", "FlexGrid", "UndoView")),
-    ("Text", ("RichTextBox", "CodeBox", "MarkdownBox")),
-    ("Files", ("DriveListBox", "DirListBox", "FileListBox", "CommonDialog")),
-    ("Media", ("MediaPlayer", "PdfViewer", "QuickView")),
-    ("System", ("Timer", "Process", "Terminal")),
-    ("Web", ("WebView", "WebBrowser")),
-    ("Data", ("Data", "DBGrid")),
-)
 
 
 class _ToolButton(QToolButton):
