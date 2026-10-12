@@ -214,7 +214,9 @@ Example: a `ProgressBar`.
 3. **Designer name prefix:** add it to `NAME_PREFIX` in `vp6/ide/designer.py`
    (`"ProgressBar": "Progress"` → `Progress1`, `Progress2`, …).
 4. **Toolbox icon:** add a drawer to `vp6/ide/icons.py` and register it in
-   `_DRAWERS` under the exact `TypeName` (see §5.8).
+   `_DRAWERS` under the exact `TypeName` (see §5.8), and give it a category in
+   `TOOLBOX_CATEGORIES` (`vp6/ide/panels.py`, for the Toolbox grouped by
+   category; `test_ide.py` fails until you do).
 5. **Kitchen Sink:** demonstrate it on a Kitchen Sink page (a new page for
    a new kind of control) and handle its default event (§5.11). `test_kitchen_sink.py` fails until you do.
    **API reference:** add its section to `docs/api.md` and run

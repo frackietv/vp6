@@ -1196,7 +1196,7 @@ def test_toolbox_scroll_bar_counts_when_it_takes_room(qapp, monkeypatch):
     toolbox = Toolbox()
     if toolbox.style().styleHint(QStyle.SH_ScrollBar_Transient, None, toolbox.scroll):
         pytest.skip("the style's scroll bars float over the buttons")
-    bar = toolbox.style().pixelMetric(QStyle.PM_ScrollBarExtent, None, toolbox.scroll)
+    bar = toolbox.scroll.verticalScrollBar().sizeHint().width()
     pitch = Toolbox.BUTTON + Toolbox.SPACING
     two = 2 * pitch - Toolbox.SPACING + 2 * Toolbox.MARGIN
     assert toolbox.fitted_width(two, 100) == two + bar  # (short: they scroll)
@@ -1271,3 +1271,104 @@ def test_toolbox_places_user_controls_in_its_columns(qapp):
     toolbox.set_user_controls([])
     assert len(toolbox.buttons) == count
     toolbox.deleteLater()
+
+
+# --- the Toolbox's views: icons or a list, all together or by category -----------------------
+
+def _grid_cells(grid, buttons):
+    return [grid.getItemPosition(grid.indexOf(b))[:2] for b in buttons]
+
+
+def test_toolbox_list_view_shows_names_top_to_bottom(qapp):
+    from vp6.ide.panels import Toolbox
+
+    toolbox = Toolbox()
+    toolbox.resize(toolbox.fitted_width(200, 5000), 5000)
+    toolbox._arrange()
+    assert toolbox.columns > 1
+    toolbox.set_view(True, False)
+    assert toolbox.list_button.isChecked() and not toolbox.groups_button.isChecked()
+    assert toolbox.columns == 1
+    buttons = list(toolbox.buttons.values())
+    assert _grid_cells(toolbox.grid, buttons) == [(row, 0) for row in range(len(buttons))]
+    assert all(b.listed and b.height() == Toolbox.LIST_ROW or not b.isVisible() for b in buttons)
+    assert all(b.maximumWidth() > Toolbox.BUTTON for b in buttons)  # (as wide as the panel)
+    assert toolbox.buttons["CommandButton"].text() == "CommandButton"
+    assert toolbox.buttons[None].text() == "Pointer"
+    # Any width will do (the names are cut short): no snapping
+    assert toolbox.fitted_width(117, 5000) == 117
+    # list_width holds the longest name in full
+    toolbox.resize(toolbox.list_width(5000), 5000)
+    toolbox.show()
+    qapp.processEvents()
+    button = toolbox.buttons["CommandButton"]
+    room = button.width() - 2 * Toolbox.LIST_PADDING - Toolbox.LIST_ICON - Toolbox.LIST_GAP
+    assert all(b.fontMetrics().horizontalAdvance(b.text()) <= room for b in buttons)
+    toolbox.set_view(False, False)  # back to the icons
+    assert toolbox.columns > 1 and not button.listed and button.width() == Toolbox.BUTTON
+    toolbox.close()
+    toolbox.deleteLater()
+
+
+def test_toolbox_grouped_by_category(qapp):
+    from vp6.controls import CONTROL_TYPES
+    from vp6.ide.panels import TOOLBOX_CATEGORIES, Toolbox
+
+    toolbox = Toolbox()
+    toolbox.resize(3 * (Toolbox.BUTTON + Toolbox.SPACING) + 2 * Toolbox.MARGIN, 5000)
+    toolbox.set_user_controls(["Rating"])
+    toolbox.set_view(False, True)
+    titles = [heading.text() if heading else None for heading, _grid, _tools in toolbox.sections]
+    categories = [title for title, _names in TOOLBOX_CATEGORIES]
+    # The Pointer above them all, every category in order, the user controls last; every
+    # built-in tool has a category (none in Other)
+    assert titles == [None, *categories, "User Controls"]
+    assert toolbox.sections[0][2] == [None] and toolbox.sections[-1][2] == ["Rating"]
+    tools = [name for _heading, _grid, names in toolbox.sections for name in names]
+    assert sorted(tools, key=str) == sorted(toolbox.buttons, key=str)  # (each once)
+    built_in = {name for name, cls in CONTROL_TYPES.items() if cls.InToolbox}
+    assert built_in <= {name for _title, names in TOOLBOX_CATEGORIES for name in names}
+    # Each category's tools in its order, in rows of the panel's columns
+    common = dict(zip(titles, toolbox.sections))["Common"]
+    assert common[2] == list(TOOLBOX_CATEGORIES[0][1])
+    assert _grid_cells(common[1], [toolbox.buttons[n] for n in common[2][:4]]) == \
+        [(0, 0), (0, 1), (0, 2), (1, 0)]
+    # and lined up from one category to the next (a short one doesn't spread out)
+    data = dict(zip(titles, toolbox.sections))["Data"][1]
+    assert [data.columnMinimumWidth(c) for c in range(3)] == [Toolbox.BUTTON] * 3
+    assert data.columnStretch(3) == 1
+    # The headings count when the scroll bar is needed
+    assert toolbox._content_height(3) > (len(toolbox.buttons) + 2) // 3 * Toolbox.BUTTON
+    # Grouped in the list view too; then all together again
+    toolbox.set_view(True, True)
+    assert len(toolbox.sections) == len(titles) and toolbox.columns == 1
+    toolbox.set_view(False, False)
+    assert len(toolbox.sections) == 1 and toolbox.sections[0][0] is None
+    toolbox.deleteLater()
+
+
+def test_toolbox_view_remembered_and_its_width_kept(window):
+    from vp6.ide.theme import ide_settings
+
+    _settle(window)
+    toolbox = window.toolbox
+    icons_width = toolbox.width()
+    toolbox.list_button.click()  # the list view: wide enough for the names
+    _settle(window)
+    assert toolbox.list_view and toolbox.width() >= toolbox.list_width()
+    assert ide_settings().value("toolbox/list", type=bool) is True
+    toolbox.groups_button.click()
+    _settle(window)
+    assert toolbox.grouped and ide_settings().value("toolbox/grouped", type=bool) is True
+    toolbox.list_button.click()  # back to the icons, as wide as before
+    _settle(window)
+    assert not toolbox.list_view and toolbox.width() == icons_width
+    toolbox.list_button.click()
+    _settle(window)
+    other = type(window)()  # a new IDE window: the same view
+    try:
+        assert other.toolbox.list_view and other.toolbox.grouped
+        assert other.toolbox.list_button.isChecked() and other.toolbox.groups_button.isChecked()
+    finally:
+        other.close()
+    window.toolbox.set_view(False, False)

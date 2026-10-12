@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[IDE - Toolbox]** - Add toggle to toolbox allowing swtiching between icon view (current) and a list view (icon on the left, label/name on right, listed top to bottom).  Add another toggle to show all controls same as now, or to group them by category.
 - **[Controls]** SpinBox (`QSpinBox`/`QDoubleSpinBox`): a number box with arrows in one control: `Value`, `Min`, `Max`, `Increment`, `DecimalPlaces`, `Prefix`/`Suffix`, `Wrap`, `Change` event; data-bound like TextBox (UpDown stays the separate buddy control).
 - **[Controls]** DTPicker (`QDateEdit`/`QTimeEdit`/`QDateTimeEdit`): VB's date and time picker: `Value` (a `datetime`), `Format` (vpShortDate, vpLongDate, vpTime, vpCustom with `CustomFormat`), `MinDate`/`MaxDate`, `CalendarDropDown`, `UpDown`, `Change` and `CloseUp` events; data-bound.
 - **[Controls]** MonthView (`QCalendarWidget`): VB's month calendar: `Value`, `MinDate`/`MaxDate`, `StartOfWeek`, `ShowWeekNumbers`, `ShowToday`, `DayBold(date)`, `DateClick`/`DateDblClick`/`SelChange` events.

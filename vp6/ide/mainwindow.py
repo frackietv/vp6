@@ -141,6 +141,10 @@ class MainWindow(QMainWindow):
         # Opening/closing the Project panel changes what Properties follows
         self.explorer_dock.visibilityChanged.connect(self._on_explorer_changed)
 
+        # Its view (icons or a list, by category or not) is remembered
+        self.toolbox.set_view(self.settings.value("toolbox/list", False, type=bool),
+                              self.settings.value("toolbox/grouped", False, type=bool))
+        self.toolbox.viewChanged.connect(self._toolbox_view_changed)
         self.toolbox.toolSelected.connect(self._on_tool_selected)
         self.toolbox.toolActivated.connect(self._on_tool_activated)
         self.explorer.openObject.connect(self.view_object)
@@ -598,7 +602,9 @@ class MainWindow(QMainWindow):
         self.outline_dock.hide()
         self.properties_dock.raise_()
         self.resizeDocks([self.immediate_dock], [150], Qt.Vertical)
-        self.resizeDocks([self.toolbox_dock], [84], Qt.Horizontal)  # (two columns)
+        self.resizeDocks([self.toolbox_dock],  # (two columns, or the names in full)
+                         [self.toolbox.list_width() if self.toolbox.list_view else 84],
+                         Qt.Horizontal)
         self.resizeDocks([self.explorer_dock, self.properties_dock], [180, 420], Qt.Vertical)
         self.resizeDocks([self.properties_dock], [290], Qt.Horizontal)
 
@@ -641,7 +647,23 @@ class MainWindow(QMainWindow):
         if dock.isHidden() or (not dock.isFloating() and self.dockWidgetArea(dock) not in (
                 Qt.LeftDockWidgetArea, Qt.RightDockWidgetArea)):
             return  # (at the top or bottom edge: as wide as the window)
-        change = toolbox.fitted_width(toolbox.width()) - toolbox.width()
+        self._resize_toolbox(toolbox.fitted_width(toolbox.width()))
+
+    def _toolbox_view_changed(self, list_view: bool, grouped: bool):
+        """Remember the Toolbox's view; give the panel the width it had in it
+        last (the list view: at first wide enough for the names)."""
+        self.settings.setValue("toolbox/list", list_view)
+        self.settings.setValue("toolbox/grouped", grouped)
+        dock = self.toolbox_dock
+        if dock.isHidden() or (not dock.isFloating() and self.dockWidgetArea(dock) not in (
+                Qt.LeftDockWidgetArea, Qt.RightDockWidgetArea)):
+            return
+        self._resize_toolbox(self.toolbox.wanted_width())
+
+    def _resize_toolbox(self, width: int):
+        """Make the Toolbox ``width`` wide (its panel as much wider)."""
+        dock = self.toolbox_dock
+        change = width - self.toolbox.width()
         if not change:
             return
         if dock.isFloating():

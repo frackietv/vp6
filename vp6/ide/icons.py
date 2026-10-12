@@ -563,6 +563,21 @@ def _perspective(p):
         p.drawPolygon([QPointF(x, y) for x, y in corners])
 
 
+def _toolbox_list(p):  # the Toolbox's list view: rows of an icon and a name
+    for y in (4, 10.5, 17):
+        p.setBrush(C.blue)
+        p.drawRect(QRectF(3, y, 4.5, 4.5))
+        p.fillRect(QRectF(10, y + 1.5, 11, 1.6), C.ink)
+
+
+def _toolbox_groups(p):  # the Toolbox by category: two headings, each over its tools
+    for y in (3, 13):
+        p.fillRect(QRectF(2, y, 20, 2.2), C.ink)
+        p.setBrush(C.paper)
+        for x in (4, 10, 16):
+            p.drawRect(QRectF(x, y + 4, 4, 4))
+
+
 def _badge(p, color: str, letter: str, size: int = 13):
     """Outline item icon: a colored rounded square with a white letter."""
     p.setPen(Qt.NoPen)
@@ -607,7 +622,8 @@ _DRAWERS = {
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop, "Pause": _pause,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink, "Isometric": _isometric,
-    "Perspective": _perspective,
+    "Perspective": _perspective, "ToolboxList": _toolbox_list,
+    "ToolboxGroups": _toolbox_groups,
     **{name: (lambda p, c=color, l=letter: _badge(p, c, l, 10 if l == "\u25b6" else 13))
        for name, (color, letter) in _OUTLINE_BADGES.items()},
 }

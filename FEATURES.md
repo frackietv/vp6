@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.4.54
+**Date:** 2026-10-11
+
+## IDE
+
+- The Toolbox's view buttons along its top:
+  - List view: each tool's icon with its name beside it, one tool per row, top to bottom (names cut short with an ellipsis when the panel is narrow; the panel widens to show them in full the first time); back to the icon view, the panel goes back to the width it had there
+  - Group by category: the tools under the headings Common, Containers, Graphics, Lists, Text, Files, System, Web and Data, then the project's User Controls (the Pointer above them all); in the icon view the columns line up from one category to the next; in the list view too
+  - Both remembered between sessions
+
 **Version:** 0.4.52
 **Date:** 2026-10-11
 

@@ -6,13 +6,15 @@ import os
 import re
 
 from PySide6.QtCore import (
-    QFileInfo, QFileSystemWatcher, QItemSelectionModel, QProcess, QSize, Qt, QTimer, Signal,
+    QFileInfo, QFileSystemWatcher, QItemSelectionModel, QProcess, QRect, QSize, Qt, QTimer,
+    Signal,
 )
-from PySide6.QtGui import QColor, QPalette, QTextCharFormat, QTextCursor, QTextFormat
+from PySide6.QtGui import QColor, QIcon, QPalette, QTextCharFormat, QTextCursor, QTextFormat
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QFileIconProvider, QFrame, QGridLayout, QHBoxLayout,
-    QLineEdit, QMenu, QPlainTextEdit, QScrollArea, QStyle, QToolButton, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QMenu, QPlainTextEdit, QScrollArea, QSizePolicy, QStyle,
+    QStyleOptionToolButton, QStylePainter, QToolButton, QTreeWidget, QTreeWidgetItem,
+    QVBoxLayout, QWidget,
 )
 
 from ..controls import CONTROL_TYPES
@@ -21,19 +23,73 @@ from . import icons
 from .theme import theme_manager
 
 
+# The Toolbox's categories when grouped, in order, each with its tools in order; a
+# control type that none of them names goes in Other, the project's user controls
+# in User Controls (the Pointer stays at the top, above them all)
+TOOLBOX_CATEGORIES = (
+    ("Common", ("Label", "TextBox", "CommandButton", "CheckBox", "OptionButton", "ComboBox",
+                "ListBox", "Slider", "UpDown", "ProgressBar", "HScrollBar", "VScrollBar")),
+    ("Containers", ("Frame", "TabStrip", "Splitter", "DockPanel", "Toolbar", "StatusBar")),
+    ("Graphics", ("PictureBox", "Image", "Shape", "Line", "ImageList")),
+    ("Lists", ("TreeView", "ListView", "FlexGrid")),
+    ("Text", ("RichTextBox", "CodeBox", "MarkdownBox")),
+    ("Files", ("DriveListBox", "DirListBox", "FileListBox", "CommonDialog")),
+    ("System", ("Timer", "Process", "Terminal")),
+    ("Web", ("WebView", "WebBrowser")),
+    ("Data", ("Data",)),
+)
+
+
+class _ToolButton(QToolButton):
+    """A Toolbox button: its icon, or in the list view its icon with the
+    tool's name beside it, both at the left (QToolButton would centre them)."""
+
+    listed = False
+
+    def paintEvent(self, event):
+        if not self.listed:
+            super().paintEvent(event)
+            return
+        option = QStyleOptionToolButton()
+        self.initStyleOption(option)
+        option.text = ""
+        option.icon = QIcon()
+        painter = QStylePainter(self)
+        painter.drawComplexControl(QStyle.CC_ToolButton, option)  # (hovered, checked)
+        size = self.iconSize()
+        left = Toolbox.LIST_PADDING
+        self.icon().paint(painter, QRect(left, (self.height() - size.height()) // 2,
+                                         size.width(), size.height()),
+                          Qt.AlignCenter, QIcon.Normal if self.isEnabled() else QIcon.Disabled)
+        text = self.rect().adjusted(left + size.width() + Toolbox.LIST_GAP, 0,
+                                    -Toolbox.LIST_PADDING, 0)
+        painter.setPen(option.palette.color(QPalette.ButtonText))
+        painter.drawText(text, Qt.AlignVCenter | Qt.AlignLeft,
+                         self.fontMetrics().elidedText(self.text(), Qt.ElideRight, text.width()))
+
+
 class Toolbox(QWidget):
     """The General tab of the VB toolbox: as many columns of buttons as its
     width holds (``fitted_width`` gives the width of a whole number of them,
     which the main window snaps the panel to), scrolling when they don't all
-    fit its height."""
+    fit its height. The buttons along its top switch to the list view (a
+    column of icons with their names) and group the tools by category
+    (``TOOLBOX_CATEGORIES``), each under a heading."""
 
     toolSelected = Signal(object)  # control type name or None for the pointer
     toolActivated = Signal(str)  # double-click: add the control to the form
     resized = Signal()
+    viewChanged = Signal(bool, bool)  # the user chose: the list view, grouped by category
 
     BUTTON = 34  # a button's side
     SPACING = 2  # between buttons
     MARGIN = 4  # around them
+    TOGGLES = 24  # the height of the row of view buttons along the top
+    HEADING = 18  # a category's heading
+    LIST_ROW = 26  # a row of the list view
+    LIST_ICON = 20  # its icon's side
+    LIST_PADDING = 4  # left of the icon, right of the name
+    LIST_GAP = 6  # between them
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -42,56 +98,184 @@ class Toolbox(QWidget):
         self.buttons: dict[str | None, QToolButton] = {}
         self.user_buttons: list[str] = []  # the project's user controls, after the others
         self.columns = 0
-        self.grid = QGridLayout()
-        self.grid.setSpacing(self.SPACING)
-        self.grid.setContentsMargins(*(self.MARGIN,) * 4)
-        inside = QWidget()
-        column = QVBoxLayout(inside)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.addLayout(self.grid)
-        column.addStretch(1)
+        self.list_view = False  # a column of icons with their names
+        self.grouped = False  # under the categories' headings
+        self._widths: dict[bool, int] = {}  # the width it had last in each view
+        # (heading or None, grid, tools): one section, or one per category
+        self.sections: list[tuple[QLabel | None, QGridLayout, list]] = []
+        self.inside = QWidget()
+        self.column = QVBoxLayout(self.inside)
+        self.column.setContentsMargins(0, 0, 0, 0)
+        self.column.setSpacing(0)
         self.scroll = QScrollArea()
-        self.scroll.setWidget(inside)
+        self.scroll.setWidget(self.inside)
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.NoFrame)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list_button = self._toggle("ToolboxList", "List view: each tool's name beside "
+                                        "its icon, top to bottom")
+        self.groups_button = self._toggle("ToolboxGroups", "Group the tools by category")
+        self.list_button.clicked.connect(lambda on: self._choose_view(on, self.grouped))
+        self.groups_button.clicked.connect(lambda on: self._choose_view(self.list_view, on))
+        toggles = QWidget()
+        toggles.setFixedHeight(self.TOGGLES)
+        row = QHBoxLayout(toggles)
+        row.setContentsMargins(self.MARGIN, 2, self.MARGIN, 0)
+        row.setSpacing(self.SPACING)
+        row.addWidget(self.list_button)
+        row.addWidget(self.groups_button)
+        row.addStretch(1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(toggles)
         layout.addWidget(self.scroll)
         for type_name in (None, *(name for name, cls in CONTROL_TYPES.items()
                                   if cls.InToolbox)):
             self._add_button(type_name, type_name or "Pointer", type_name or "Pointer")
         self.buttons[None].setChecked(True)
+        self._build()
         self.setMinimumWidth(self.fitted_width(0))  # (one column)
-        self._arrange()
 
-    def _add_button(self, type_name, icon_name: str, tip: str) -> None:
+    def _toggle(self, icon_name: str, tip: str) -> QToolButton:
         button = QToolButton()
         button.setIcon(icons.icon(icon_name))
-        button.setIconSize(QSize(24, 24))
+        button.setIconSize(QSize(16, 16))
+        button.setFixedSize(20, 20)
         button.setCheckable(True)
         button.setAutoRaise(True)
         button.setToolTip(tip)
-        button.setFixedSize(self.BUTTON, self.BUTTON)
+        return button
+
+    def _add_button(self, type_name, icon_name: str, tip: str) -> None:
+        button = _ToolButton()
+        button.setIcon(icons.icon(icon_name))
+        button.setText(type_name or "Pointer")  # (shown in the list view)
+        button.setCheckable(True)
+        button.setAutoRaise(True)
+        button.setToolTip(tip)
+        self._shape_button(button)
         button.clicked.connect(lambda _=False, t=type_name: self.toolSelected.emit(t))
         if type_name:
             button.mouseDoubleClickEvent = lambda event, t=type_name: self.toolActivated.emit(t)
         self.group.addButton(button)
         self.buttons[type_name] = button
 
+    def _shape_button(self, button: _ToolButton) -> None:
+        button.listed = self.list_view
+        if self.list_view:  # as wide as the panel
+            button.setIconSize(QSize(self.LIST_ICON, self.LIST_ICON))
+            button.setMinimumSize(0, self.LIST_ROW)
+            button.setMaximumSize(16777215, self.LIST_ROW)  # (QWIDGETSIZE_MAX)
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        else:
+            button.setIconSize(QSize(24, 24))
+            button.setFixedSize(self.BUTTON, self.BUTTON)
+        button.update()
+
+    # -- views ---------------------------------------------------------------------------------
+    def set_view(self, list_view: bool, grouped: bool) -> None:
+        """Show the tools as icons (False) or as a list of icons and names
+        (True), all together (False) or by category (True)."""
+        self.list_view, self.grouped = bool(list_view), bool(grouped)
+        self.list_button.setChecked(self.list_view)
+        self.groups_button.setChecked(self.grouped)
+        for button in self.buttons.values():
+            self._shape_button(button)
+        self._build()
+        self.resized.emit()  # (the panel's width may be fitted again)
+
+    def _choose_view(self, list_view: bool, grouped: bool) -> None:
+        if bool(list_view) != self.list_view:
+            self._widths[self.list_view] = self.width()
+        self.set_view(list_view, grouped)
+        self.viewChanged.emit(self.list_view, self.grouped)
+
+    def wanted_width(self) -> int:
+        """The width for the panel in the view it shows: the one it had last
+        in it; else for the list view the longest name's, for the icons whole
+        columns."""
+        width = self._widths.get(self.list_view)
+        if self.list_view:
+            return width or max(self.width(), self.list_width())
+        return self.fitted_width(width or self.width())
+
+    def list_width(self, height: int | None = None) -> int:
+        """The list view's width with every name in full."""
+        height = self.height() if height is None else height
+        self.buttons[None].ensurePolished()  # (the style may give it a font of its own)
+        metrics = self.buttons[None].fontMetrics()
+        widest = max(metrics.horizontalAdvance(button.text()) for button in self.buttons.values())
+        return widest + 2 * self.LIST_PADDING + self.LIST_ICON + self.LIST_GAP + 2 * self.MARGIN + \
+            self._bar_width(1, height)
+
+    def _section_tools(self) -> list[tuple[str | None, list]]:
+        if not self.grouped:
+            return [(None, list(self.buttons))]
+        built_in = [name for name in self.buttons if name and name not in self.user_buttons]
+        sections, placed = [(None, [None])], set()
+        for title, names in TOOLBOX_CATEGORIES:
+            tools = [name for name in names if name in built_in]
+            placed.update(tools)
+            if tools:
+                sections.append((title, tools))
+        others = [name for name in built_in if name not in placed]
+        for title, tools in (("Other", others), ("User Controls", self.user_buttons)):
+            if tools:
+                sections.append((title, list(tools)))
+        return sections
+
+    def _build(self) -> None:
+        """Lay out the sections again: their headings, their grids of buttons."""
+        while self.column.count():
+            item = self.column.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()  # (a heading)
+            elif item.layout() is not None:
+                grid = item.layout()
+                while grid.count():
+                    grid.takeAt(0)  # (the buttons stay, in self.inside)
+                grid.deleteLater()
+        self.sections = []
+        for title, tools in self._section_tools():
+            heading = None
+            if title:
+                heading = QLabel(title)
+                heading.setFixedHeight(self.HEADING)
+                heading.setContentsMargins(self.MARGIN + 2, 0, 0, 0)
+                heading.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+                font = heading.font()
+                font.setBold(True)
+                font.setPointSizeF(font.pointSizeF() * 0.85)
+                heading.setFont(font)
+                heading.setForegroundRole(QPalette.PlaceholderText)
+                self.column.addWidget(heading)
+            grid = QGridLayout()
+            grid.setSpacing(self.SPACING)
+            grid.setContentsMargins(*(self.MARGIN,) * 4)
+            self.column.addLayout(grid)
+            self.sections.append((heading, grid, tools))
+        self.column.addStretch(1)
+        self.grid = self.sections[0][1]  # (all of them, when not grouped)
+        self.columns = 0  # (placed again)
+        self._arrange()
+
     # -- columns -------------------------------------------------------------------------------
-    def _rows(self, columns: int) -> int:
-        return -(-len(self.buttons) // columns)
+    def _content_height(self, columns: int) -> int:
+        row = self.LIST_ROW if self.list_view else self.BUTTON
+        return sum(-(-len(tools) // columns) * (row + self.SPACING) - self.SPACING +
+                   2 * self.MARGIN + (self.HEADING if heading is not None else 0)
+                   for heading, _grid, tools in self.sections)
 
     def _bar_width(self, columns: int, height: int) -> int:
         """The scroll bar's width when the buttons in ``columns`` columns are
         taller than ``height`` (0: they fit, or the bar floats over them)."""
-        rows = self._rows(columns)
-        if rows * (self.BUTTON + self.SPACING) - self.SPACING + 2 * self.MARGIN <= height:
+        if self._content_height(columns) <= height - self.TOGGLES:
             return 0
         if self.style().styleHint(QStyle.SH_ScrollBar_Transient, None, self.scroll):
             return 0
-        return self.style().pixelMetric(QStyle.PM_ScrollBarExtent, None, self.scroll)
+        return self.scroll.verticalScrollBar().sizeHint().width()  # (may be more than
+        # PM_ScrollBarExtent: what the scroll area gives it)
 
     def columns_for(self, width: int, height: int | None = None) -> int:
         """How many columns of buttons ``width`` holds (one at least)."""
@@ -104,23 +288,33 @@ class Toolbox(QWidget):
 
     def fitted_width(self, width: int, height: int | None = None) -> int:
         """The width nearest ``width`` that holds a whole number of columns
-        (and the scroll bar, when they need one)."""
+        (and the scroll bar, when they need one); in the list view any width
+        (the names are cut short)."""
         height = self.height() if height is None else height
         pitch = self.BUTTON + self.SPACING
         columns = max(1, min(len(self.buttons),
                              round((width - 2 * self.MARGIN + self.SPACING) / pitch)))
-        return columns * pitch - self.SPACING + 2 * self.MARGIN + \
+        fitted = columns * pitch - self.SPACING + 2 * self.MARGIN + \
             self._bar_width(columns, height)
+        return width if self.list_view and width > 0 else fitted
 
     def _arrange(self) -> None:
-        columns = self.columns_for(self.width())
+        columns = 1 if self.list_view else self.columns_for(self.width())
         if columns == self.columns:
             return
         self.columns = columns
-        for button in self.buttons.values():
-            self.grid.removeWidget(button)
-        for index, button in enumerate(self.buttons.values()):
-            self.grid.addWidget(button, index // columns, index % columns)
+        for _heading, grid, tools in self.sections:
+            for name in tools:
+                grid.removeWidget(self.buttons[name])
+            for column in range(grid.columnCount()):
+                grid.setColumnStretch(column, 0)
+                grid.setColumnMinimumWidth(column, 0)
+            for index, name in enumerate(tools):
+                grid.addWidget(self.buttons[name], index // columns, index % columns)
+            if not self.list_view:  # (the columns lined up from one section to the next)
+                for column in range(columns):
+                    grid.setColumnMinimumWidth(column, self.BUTTON)
+                grid.setColumnStretch(columns, 1)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -134,14 +328,12 @@ class Toolbox(QWidget):
             if button.isChecked():
                 self.reset()
             self.group.removeButton(button)
-            self.grid.removeWidget(button)
             button.deleteLater()
         self.user_buttons = []
         for name in names:
             self._add_button(name, "UserControl", f"{name} (a user control of the project)")
             self.user_buttons.append(name)
-        self.columns = 0  # (placed again)
-        self._arrange()
+        self._build()
         self.resized.emit()  # (a scroll bar may come or go)
 
     def refresh_icons(self) -> None:
@@ -149,6 +341,8 @@ class Toolbox(QWidget):
         for type_name, button in self.buttons.items():
             button.setIcon(icons.icon("UserControl" if type_name in self.user_buttons
                                       else type_name or "Pointer"))
+        self.list_button.setIcon(icons.icon("ToolboxList"))
+        self.groups_button.setIcon(icons.icon("ToolboxGroups"))
 
     def reset(self) -> None:
         self.buttons[None].setChecked(True)
