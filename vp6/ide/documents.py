@@ -37,6 +37,9 @@ class Document(QObject):
         # Where the program is paused: a cursor too (edited in break mode, it follows)
         self._execution: QTextCursor | None = None
         self.execution_error = False  # (paused there by an error)
+        # The file as last read or saved, (mtime, size): another program changing it
+        # (Claude, an editor, git) changes this
+        self._disk_stamp = self._stamp()
 
     @property
     def filename(self) -> str:
@@ -152,6 +155,74 @@ class Document(QObject):
         with open(self.path, "w", encoding="utf-8") as f:
             f.write(text)
         self.text_document.setModified(False)
+        self._disk_stamp = self._stamp()
+
+    # -- the file on disk -----------------------------------------------------------------------
+    def _stamp(self) -> tuple[int, int] | None:
+        try:
+            stat = os.stat(self.path)
+        except OSError:
+            return None
+        return stat.st_mtime_ns, stat.st_size
+
+    def changed_on_disk(self) -> bool:
+        """Whether the file changed since it was last read or saved (it is
+        there, and its time or size isn't what it was)."""
+        stamp = self._stamp()
+        return stamp is not None and stamp != self._disk_stamp
+
+    def disk_text(self) -> str | None:
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                return f.read()
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    def same_text(self, text: str) -> bool:
+        """Whether ``text`` (the file's) is the document's (saving adds a last
+        line break)."""
+        return text in (self.text, self.text + "\n")
+
+    def mark_read(self) -> None:
+        """Take the file as it is now as read (its change is dealt with)."""
+        self._disk_stamp = self._stamp()
+
+    def reload(self, text: str | None = None) -> bool:
+        """Take the file's text (``text``, else read again): only the part that
+        changed is replaced, as one edit that can be undone, so the code
+        window's cursor, its scrolling and the breakpoints outside it stay
+        where they are. The document isn't modified then. False if the text
+        was the same."""
+        if text is None:
+            text = self.disk_text()
+            if text is None:
+                return False
+        self.mark_read()
+        if self.same_text(text):
+            return False
+        old = self.text
+        if text.endswith("\n") and not old.endswith("\n"):
+            text = text[:-1]  # (as it was read when opened: setPlainText keeps it)
+        start = 0
+        limit = min(len(old), len(text))
+        while start < limit and old[start] == text[start]:
+            start += 1
+        end = 0
+        while end < limit - start and old[-1 - end] == text[-1 - end]:
+            end += 1
+        cursor = QTextCursor(self.text_document)  # (positions count UTF-16 units)
+        cursor.setPosition(_units(old[:start]))
+        cursor.setPosition(_units(old[:len(old) - end]), QTextCursor.KeepAnchor)
+        cursor.beginEditBlock()
+        cursor.insertText(text[start:len(text) - end])
+        cursor.endEditBlock()
+        self.text_document.setModified(False)
+        return True
+
+
+def _units(text: str) -> int:
+    """How long ``text`` is in a QTextDocument (UTF-16 code units)."""
+    return len(text.encode("utf-16-le")) // 2
 
 
 class _Breakpoint:

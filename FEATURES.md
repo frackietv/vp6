@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.4.57
+**Date:** 2026-10-12
+
+## IDE
+
+- Files Claude changes are shown at once in the form designer and the code window (the open forms and modules are read again after each tool Claude uses); so are files any other program changes (watched, and checked when the IDE becomes active)
+- Only what changed is replaced, as one edit that Undo takes back: the code window's cursor, its scrolling and the breakpoints stay where they were
+- The files changed in the IDE are saved before each message to Claude, so it works on them as they are; a file changed both in the IDE and on disk is read again only if the user says so
+
 **Version:** 0.4.56
 **Date:** 2026-10-12
 

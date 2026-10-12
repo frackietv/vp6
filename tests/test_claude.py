@@ -81,6 +81,19 @@ for line in sys.stdin:
                 {"type": "tool_result", "tool_use_id": "t1", "is_error": True,
                  "content": "Permission denied by the user"}]}})
             say("not allowed")
+    elif text.startswith("edit "):  # edit FILE|OLD|NEW: as Claude's Edit tool does
+        name, old, new = text[5:].split("|")
+        with open(name) as file:
+            content = file.read()
+        tool = {"file_path": os.path.abspath(name), "old_string": old, "new_string": new}
+        out({"type": "assistant", "session_id": session, "message": {"content": [
+            {"type": "tool_use", "id": "t2", "name": "Edit", "input": tool}]}})
+        with open(name + ".tmp", "w") as file:  # (written anew, then moved over it)
+            file.write(content.replace(old, new))
+        os.replace(name + ".tmp", name)
+        out({"type": "user", "session_id": session, "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t2", "content": "edited"}]}})
+        say("edited " + name)
     elif text == "slow":
         request = json.loads(sys.stdin.readline())
         say("interrupted" if request["request"]["subtype"] == "interrupt" else "?")
@@ -455,3 +468,90 @@ def test_screenshot(window, fake, tmp_path):
     chat.answer(True)
     wait_for(lambda: not chat.chat.busy)
 
+
+
+# -- files Claude changes -----------------------------------------------------------------------
+
+BUTTON = ("        self.Command1 = CommandButton(self, Caption='Go', Left=16, Top=16, Width=90, "
+          "Height=30)\n")
+
+
+def test_sessions_files_changed_by_claude_shown_at_once(window, fake, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    path = window.project.abspath("Form1.py")
+    designer = window.view_object(path)
+    code = window.view_code(path)
+    doc = window.documents[path]
+    code.editor.textCursor().insertText("")  # (the code window open, its cursor at the top)
+    doc.replace_text(doc.text.replace("pass", "self.Caption = 'Mine'"))  # (not saved)
+    assert doc.modified
+    chat = window.open_claude_session()
+    chat.send("edit Form1.py|self.Height = 360|self.Height = 360\n" + BUTTON.rstrip())
+    assert not doc.modified  # (saved before Claude got the message)
+    wait_for(lambda: not chat.chat.busy)
+    wait_for(lambda: "Command1" in designer.controls)  # the designer...
+    assert designer.controls["Command1"].Caption == "Go"
+    assert "CommandButton(self, Caption='Go'" in code.editor.toPlainText()  # ...the code
+    assert "self.Caption = 'Mine'" in doc.text and not doc.modified
+    doc.text_document.undo()  # (Claude's change can be undone)
+    wait_for(lambda: "Command1" not in designer.controls)
+    doc.text_document.setModified(False)  # (closing the project would ask to save it)
+
+
+def test_files_changed_by_another_program(window, tmp_path):
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    path = window.project.abspath("Form1.py")
+    designer = window.view_object(path)
+    doc = window.documents[path]
+    assert window.check_disk_changes() == []
+    doc.save()  # (its own save isn't a change)
+    assert window.check_disk_changes() == []
+    with open(path, "w") as file:
+        file.write(doc.text.replace("self.Height = 360\n", "self.Height = 360\n" + BUTTON))
+    wait_for(lambda: "Command1" in designer.controls)  # (the watcher: no call needed)
+    assert not doc.modified
+
+
+def test_a_file_changed_here_and_on_disk(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    window.open_project(create_project(str(tmp_path), "Demo", "exe"))
+    path = window.project.abspath("Module1.py")
+    doc = window.documents[path]
+    window._disk_check.timeout.disconnect(window.check_disk_changes)  # (called here only)
+    doc.replace_text(doc.text + "\n# mine\n")
+    answers = []
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *a, **k: answers.pop(0) if answers else QMessageBox.No)
+    with open(path, "a") as file:
+        file.write("# theirs\n")
+    os.utime(path, (1, 1))
+    assert window.check_disk_changes() == []  # No: kept
+    assert "# mine" in doc.text and doc.modified
+    with open(path, "a") as file:
+        file.write("# again\n")
+    answers.append(QMessageBox.Yes)
+    assert window.check_disk_changes() == [path]  # Yes: read again
+    assert "# mine" not in doc.text and "# again" in doc.text and not doc.modified
+
+
+def test_reloading_replaces_only_what_changed(qapp, tmp_path):
+    from PySide6.QtGui import QTextCursor
+
+    from vp6.ide.documents import Document
+
+    path = tmp_path / "m.py"
+    path.write_text("# 🙂 smile\na = 1\nb = 2\nc = 3\n")
+    doc = Document(str(path))
+    doc.set_breakpoint(4, True)
+    cursor = QTextCursor(doc.text_document)
+    cursor.setPosition(doc.text_document.findBlockByNumber(3).position() + 2)  # (in "c = 3")
+    path.write_text("# 🙂 smile\na = 1\nb = 22\nb2 = 0\nc = 3\n")
+    assert doc.changed_on_disk()
+    assert doc.reload()
+    assert doc.text == "# 🙂 smile\na = 1\nb = 22\nb2 = 0\nc = 3\n" and not doc.modified
+    assert cursor.block().text() == "c = 3" and cursor.positionInBlock() == 2  # (kept)
+    assert doc.breakpoint_lines() == [5]  # (it followed its line)
+    assert not doc.changed_on_disk() and not doc.reload()  # (nothing more)
+    doc.text_document.undo()
+    assert doc.text == "# 🙂 smile\na = 1\nb = 2\nc = 3\n"

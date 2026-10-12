@@ -311,6 +311,7 @@ class ClaudeChatWindow(QWidget):
     sessionChanged = Signal(str)  # its session's id (a new one: once Claude Code gives it)
     replied = Signal()  # a reply finished (the session list may have changed)
     loginRequested = Signal()
+    sending = Signal()  # a message is about to go to Claude (the IDE saves its files)
 
     def __init__(self, folder: str, session: SessionInfo | None = None, parent=None):
         super().__init__(parent)
@@ -402,6 +403,7 @@ class ClaudeChatWindow(QWidget):
             return False
         if self.title == "New Claude Session":
             self.set_title(" ".join(text.split())[:60])
+        self.sending.emit()
         self.show_message({"type": "user", "message": {"role": "user", "content": text}})
         return self.chat.send(text)
 

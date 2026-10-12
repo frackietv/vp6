@@ -134,6 +134,13 @@ what it may do without asking: *Ask Before Using Tools*, *Accept Edits*,
 *Plan Only* or *Bypass Permissions* (new sessions start in the last one
 chosen).
 
+Files Claude changes show at once: the form designer and the code window of
+an open form or module read the file again (and so they do when any other
+program changes it). Only what changed is replaced, as one edit that Undo
+takes back, and the cursor stays where it was. Before each message the IDE
+saves the files changed in it, so Claude works on them as they are; a file
+changed both in the IDE and on disk is read again only if you say so.
+
 ## Files
 
 A project is a folder with a `Name.vp6p` project file listing forms, modules,

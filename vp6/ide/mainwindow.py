@@ -9,7 +9,7 @@ import shlex
 import shutil
 import sys
 
-from PySide6.QtCore import (QEvent, QFile, QProcess, QProcessEnvironment, QSize, Qt, QTimer,
+from PySide6.QtCore import (QEvent, QFile, QFileSystemWatcher, QProcess, QProcessEnvironment, QSize, Qt, QTimer,
                             QUrl)
 from PySide6.QtGui import QAction, QActionGroup, QColor, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
@@ -83,6 +83,16 @@ class MainWindow(QMainWindow):
         self._user_control_timer.timeout.connect(self._load_user_controls)
         self._user_control_paths: list[str] = []  # folders added to sys.path for them
         self._icon_actions: list[tuple[QAction, str]] = []
+        # Open files changed by another program (Claude, an editor, git) are read again:
+        # watched, checked when the IDE becomes active and after Claude used a tool
+        self._disk_watcher = QFileSystemWatcher(self)
+        self._disk_check = QTimer(self)
+        self._disk_check.setSingleShot(True)
+        self._disk_check.setInterval(150)  # (once for a burst of changes)
+        self._disk_check.timeout.connect(self.check_disk_changes)
+        self._disk_watcher.fileChanged.connect(self._disk_check.start)
+        self._disk_watcher.directoryChanged.connect(self._disk_check.start)
+        QApplication.instance().applicationStateChanged.connect(self._on_application_state)
 
         # The whole IDE follows the light/dark choice of the editor theme
         manager = theme_manager()
@@ -734,8 +744,21 @@ class MainWindow(QMainWindow):
         window.replied.connect(self._claude_replied)
         window.sessionChanged.connect(self._claude_replied)
         window.loginRequested.connect(self.claude_login)
+        window.sending.connect(self._before_claude)
+        window.chat.message.connect(self._on_claude_message)
         self._activate(sub)
         return window
+
+    def _before_claude(self):
+        """Before a message goes to Claude: save the files changed here, so it
+        works on them as they are (and its changes don't meet unsaved ones)."""
+        if self.project is not None and any(d.modified for d in self.documents.values()):
+            self.save_all()
+
+    def _on_claude_message(self, data: dict):
+        # A tool's result (a file written?) or the end of an answer: look at the files
+        if data.get("type") in ("user", "result"):
+            self._disk_check.start()
 
     def _claude_replied(self, *_):
         panel = self.claude_panel
@@ -982,6 +1005,53 @@ class MainWindow(QMainWindow):
             # A user control's file changed: load it again (soon, once for many edits)
             doc.text_document.contentsChanged.connect(
                 lambda d=doc: d.kind == "usercontrol" and self._user_control_timer.start())
+        self._sync_disk_watcher()
+
+    # -- files changed on disk -------------------------------------------------------------------
+    def _sync_disk_watcher(self) -> None:
+        """Watch the open files and their folders (a file replaced by a new one,
+        as many programs save, leaves the watcher: its folder still tells)."""
+        watcher = self._disk_watcher
+        wanted = set(self.documents) | {os.path.dirname(p) for p in self.documents}
+        wanted = {p for p in wanted if os.path.exists(p)}
+        current = set(watcher.files()) | set(watcher.directories())
+        if current - wanted:
+            watcher.removePaths(list(current - wanted))
+        if wanted - current:
+            watcher.addPaths(sorted(wanted - current))
+
+    def _on_application_state(self, state) -> None:
+        if state == Qt.ApplicationActive:
+            self._disk_check.start()
+
+    def check_disk_changes(self) -> list[str]:
+        """Read again the open files another program changed: their code
+        windows and form designers show them at once. A file with unsaved
+        changes here is read again only if the user says so. Returns the
+        paths read again."""
+        reloaded = []
+        for doc in list(self.documents.values()):
+            if not doc.changed_on_disk():
+                continue
+            text = doc.disk_text()
+            if text is None or doc.same_text(text):
+                doc.mark_read()
+                continue
+            if doc.modified and QMessageBox.question(
+                    self, "File Changed", f"{doc.filename} was changed by another program, "
+                    "and it has changes here that aren't saved.\n\nRead it again, losing "
+                    "the changes made here?") != QMessageBox.Yes:
+                doc.mark_read()  # (kept: saving it overwrites the other change)
+                continue
+            if doc.reload(text):
+                reloaded.append(doc.path)
+        if reloaded:
+            names = ", ".join(os.path.basename(p) for p in reloaded)
+            self.statusBar().showMessage(f"Changed on disk, read again: {names}", 5000)
+            self._update_window_titles()
+            self._update_properties_target()
+        self._sync_disk_watcher()
+        return reloaded
 
     def _confirm_save(self) -> bool:
         """Ask to save modified files. Returns False if the user cancelled."""
@@ -1014,6 +1084,7 @@ class MainWindow(QMainWindow):
         self.designer_windows.clear()
         self.code_windows.clear()
         self.documents.clear()
+        self._sync_disk_watcher()
         self._refresh_breakpoint_list()
         self._file_targets.clear()
         self.project = None
@@ -1506,6 +1577,7 @@ class MainWindow(QMainWindow):
         return error
 
     def _after_relocating(self, paths: list):
+        self._sync_disk_watcher()
         self.project.save()
         self._refresh_explorer()
         self.explorer.select_paths([os.path.abspath(p) for p in paths])
