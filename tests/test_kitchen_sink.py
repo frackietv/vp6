@@ -13,10 +13,10 @@ import sys
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QTimer, QUrl
+from PySide6.QtCore import QDate, QMimeData, QPoint, QPointF, Qt, QTimer, QUrl
 from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QPixmap
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLineEdit, QWidget
+from PySide6.QtWidgets import QApplication, QLineEdit, QWidget, QWizard
 
 import vp6
 import vp6.printer
@@ -1348,3 +1348,175 @@ def test_closing_unloads_the_pages(sink):
     pages = [_page(sink, key) for key in ("text", "timer")]
     assert sink.Unload() is True
     assert not any(page._loaded for page in pages)
+
+
+# --- the pages added with v0.4.55 ---------------------------------------------------------------
+
+def test_inputs_page(sink):
+    page = _page(sink, "inputs")
+    page.spnQty.Value = 20
+    assert page.lcdTotal.Value == 90 and "= 90.00" in page.lblTotal.Caption
+    page.dtpWhen.Value = "2026-02-03 04:05"
+    assert page.lblDates.Caption.startswith("DTPicker: Tuesday 03 February 2026")
+    import datetime
+
+    page.mvwDays._widget.calendar.clicked.emit(QDate(2026, 7, 4))
+    assert page.dtpDay.Value.date() == datetime.date(2026, 7, 4)
+    assert page.mvwDays.DayBold(datetime.date.today())
+    page.dialSpeed.Value = 255
+    assert page.lcdSpeed.Text == "ff" and "255" in page.lblSpeed.Caption
+    family = page.fcbFont.List[0]
+    page.fcbFont.FontName = family
+    assert page.lblSample.FontName == family
+    page.hkyShortcut.Keys = "Ctrl+J"
+    assert "KeyCode 74" in page.lblKeys.Caption
+    page.lcdTotal.Digits = 3
+    page.spnQty.Value = 1000  # (4500: more than 3 digits)
+    assert "Overflow" in page.lblTotal.Caption
+
+
+def test_more_buttons_page(sink):
+    page = _page(sink, "morebuttons")
+    page.lnkCustom._widget.click()
+    assert page.lblLink.Caption.startswith("Custom install: Choose the parts")
+    page.tbnBold._widget.click()
+    assert page.lblSample.FontBold
+    page.tbnColor._widget.setDown(True)
+    page.mnuColor[2]._action.trigger()
+    page.tbnColor._widget.setDown(False)
+    assert page.lblSample.ForeColor == vp6.vpBlue
+    page.tbnBigger._widget.click()
+    assert page.lblSample.FontSize == 16
+    page.bbxDialog._buttons[4][0].click()
+    assert page.lblBox.Caption.startswith("ButtonClick: button 4 (Reset)")
+    page.bbxDialog._buttons[0][0].click()
+    assert page.lblBox.Caption.endswith("- Accepted")
+
+
+def test_pages_page(sink):
+    page = _page(sink, "pages")
+    page.tbxTools.CurrentPage = 2
+    assert "Note" in page.lblToolBox.Caption and page.txtNote._widget.isVisible()
+    page.txtName.Text, page.txtTown.Text = "Ada", "London"
+    page.lstSteps.ListIndex = 2
+    assert page.pgfSteps.CurrentPage == 2 and page.lblDone.Caption == "All done, Ada from London!"
+    page.cmdShowFar._widget.click()
+    assert page.scpBig.ScrollTop > 0 and page.lblScroll.Caption.startswith("Scroll:")
+    page.cmdFar._widget.click()
+    assert page.scpBig.ScrollTop == 0
+
+
+def test_columns_page(sink):
+    page = _page(sink, "columns")
+    view = page.cvwNature
+    view._widget.setCurrentIndex(view.Nodes("lion")._item.index())
+    assert page.lblNode.Caption == "NodeClick: Animals\\Cats\\Lion"
+    assert "savanna" in page.lblPreview.Caption
+    assert view._widget.previewWidget() is page.lblPreview._widget
+
+
+def test_dbgrid_page(sink):
+    page = _page(sink, "dbgrid")
+    grid = page.grdPets
+    assert grid._model.rowCount() == 6  # (five pets and the new row)
+    grid.Row = 2
+    assert page.txtName.Text == grid.Text and "RowColChange: row 2" in page.lblGrid.Caption
+    page.chkLocked.Value = vp6.vpChecked
+    assert not grid._model.setData(grid._model.index(2, 2), "9")
+    assert page.lblGrid.Caption == "BeforeUpdate: the change was refused"
+    page.chkLocked.Value = vp6.vpUnchecked
+    assert grid._model.setData(grid._model.index(2, 2), "9")
+    assert page.lblGrid.Caption == "AfterUpdate: saved (5 pets)"
+
+
+def test_graphicsview_page(sink):
+    page = _page(sink, "graphicsview")
+    items = page.gvwPlan.Items
+    page.cmdAdd._widget.click()
+    assert items("chair2").Kind == "Group" and page.lblItem.Caption.startswith("Chair 2 added")
+    page.cmdTurn._widget.click()
+    assert items("table").Rotation == 15
+    page.cmdZoomIn._widget.click()
+    assert page.gvwPlan.Zoom == 1.25
+    page.gvwPlan_ItemClick(items("bed"))
+    assert page.lblItem.Caption == "ItemClick: a Rect 'bed' at 250, 240"
+    page.cmdSave._widget.click()
+    assert os.path.isfile(page.lblItem.Caption[len("Saved as "):])
+
+
+def test_chart_page(sink):
+    page = _page(sink, "chart")
+    page.cboType.ListIndex = vp6.vpChartPie
+    assert page.chtSales.ChartType == vp6.vpChartPie
+    page.cmdData._widget.click()
+    assert page.chtSales.ColumnCount == 3 and page.lblPoint.Caption.startswith("New data")
+    page.cboType.ListIndex = vp6.vpChartBar
+    page.chtSales._chart.series()[0].barSets()[0].clicked.emit(1)
+    assert page.lblPoint.Caption.startswith("PointSelected: Sales in Q2 = ")
+
+
+def test_media_page(sink):
+    page = _page(sink, "media")
+    assert page.svgLogo.PictureWidth == 120
+    page.svgLogo_Click()
+    assert not page.svgLogo.KeepAspect
+    page.cmdPrintPdf._widget.click()
+    assert page.pdfDoc.PageCount == 2
+    page.cmdFind._widget.click()
+    assert page.lblPdf.Caption == "Found 'kangaroo' on page 2"
+
+
+def test_gl_page(sink):
+    from conftest import wait_for
+
+    page = _page(sink, "glqml")
+    assert page.qmlHello.Context["name"]
+    wait_for(lambda: page.qmlHello.Root is not None, 3000)
+    page.qmlHello.Root.tapped.emit(3, 4)
+    assert page.lblQml.Caption == "QmlEvent: tapped(3, 4)"
+    page.chkAnimate.Value = vp6.vpUnchecked
+    assert not page.glvSpin.Animate
+
+
+def test_undo_page(sink):
+    page = _page(sink, "undo")
+    for item in ("Apples", "Bread"):
+        page.txtItem.Text = item
+        page.cmdAdd._widget.click()
+    assert page.lstItems.List == ["Apples", "Bread"] and page.cmdUndo.Enabled
+    page.lstItems.ListIndex = 0
+    page.cmdRemove._widget.click()
+    assert page.lstItems.List == ["Bread"]
+    page.cmdUndo._widget.click()
+    assert page.lstItems.List == ["Apples", "Bread"] and page.cmdRedo.Enabled
+    page.stack.Index = 0
+    assert page.lstItems.List == [] and "Undo would undo 'nothing'" in page.lblStatus.Caption
+    QTest.keyClicks(page.txtNotes._widget, "hi")
+    assert page.undNotes.Stack.Count >= 1 and "changes" in page.lblNotes.Caption
+
+
+def test_dialogs_page_new_buttons(sink, monkeypatch):
+    page = _page(sink, "dialogs")
+    monkeypatch.setattr(sys.modules["pgDialogs"].time, "sleep", lambda seconds: None)
+    page.cmdProgress._widget.click()
+    assert page.lblResult.Caption == "ProgressBox: done: 50 of 50"
+    page.cmdError._widget.click()
+    from vp6.dialogs import _error_box
+
+    assert _error_box[0].isVisible()
+    _error_box[0].done(0)
+
+    def finish():
+        wizard = next(f for f in vp6.Forms if type(f).__name__ == "frmWizard")
+        wizard.txtName.Text = "Zed"
+        wizard.Next()
+        wizard.Next()  # (Zed: straight to the last page)
+        wizard._wizard.button(QWizard.FinishButton).click()
+
+    QTimer.singleShot(50, finish)
+    page.cmdWizard._widget.click()
+    assert page.lblResult.Caption == "The wizard finished: Zed likes red"
+    page.cmdSplash._widget.click()
+    assert vp6.App.SplashVisible
+    page.tmrSplash_Timer()
+    assert not vp6.App.SplashVisible and "HideSplash" in page.lblResult.Caption

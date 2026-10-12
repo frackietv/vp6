@@ -18,25 +18,40 @@ from .controls import (Button, CheckBox, CodeBox, ColumnHeader, ComboBox, Comman
                        OptionButton, Panel, PictureBox, ProgressBar, RichTextBox, Shape, Slider,
                        Splitter, StatusBar, Tab, TabStrip, TextBox, Timer, Toolbar, TreeView,
                        UpDown, VScrollBar, WebBrowser, WebView)
-from .dialogs import InputBox, MsgBox
+from .dialogs import InputBox, MsgBox, ProgressBox, ShowError
 from .form import Form, Forms, Load, Unload, run
 from .mdi import MDIForm
+from .wizard import WizardForm
 from .process import Process, Shell
 from .terminal import Terminal
 from .markdown import MarkdownBox
 from .data import CreateDatabase, Data, Database, Field, OpenDatabase, Recordset
+from .inputs import DTPicker, Dial, FontComboBox, HotKey, LCDNumber, MonthView, SpinBox
+from .buttons import ButtonBox, CommandLink, ToolButton
+from .containers import PageFrame, ScrollPanel, ToolBox
+from .views import ColumnView, UndoStack, UndoView
+from .dbgrid import DBGrid
+from .graphicsview import GraphicsView
+from .chart import Chart
+from .media import MediaPlayer, PdfViewer, SvgImage
+from .opengl import OpenGLView, QuickView
 from .picture import LoadPicture, Picture, SavePicture
 from .printer import Printer, Printers
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.54"
+__version__ = "0.4.55"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Command", "Debug", "DeleteSetting", "DoEvents", "End",
     "GetAllSettings", "GetSetting", "SaveSetting", "Screen", "SendKeys", "ShowHelp",
     "LoadPicture", "Picture", "SavePicture", "Printer", "Printers", "MDIForm",
+    "WizardForm",
     "Process", "Shell", "Terminal", "MarkdownBox",
     "Data", "Database", "Recordset", "Field", "OpenDatabase", "CreateDatabase",
+    "SpinBox", "DTPicker", "MonthView", "Dial", "LCDNumber", "FontComboBox", "HotKey",
+    "CommandLink", "ToolButton", "ButtonBox", "ToolBox", "PageFrame", "ScrollPanel",
+    "ColumnView", "UndoView", "UndoStack", "DBGrid", "GraphicsView", "Chart",
+    "SvgImage", "MediaPlayer", "PdfViewer", "OpenGLView", "QuickView",
     "RGB", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",
     "Button", "CheckBox", "CodeBox", "ColumnHeader", "CommonDialog", "DialogCancelled", "ComboBox",
@@ -50,7 +65,7 @@ __all__ = [
     "TabStrip", "TextBox",
     "Timer", "Toolbar", "TreeView", "UpDown", "UserControl", "Property", "VScrollBar",
     "WebBrowser", "WebView",
-    "InputBox", "MsgBox",
+    "InputBox", "MsgBox", "ProgressBox", "ShowError",
     "Form", "Forms", "Load", "Unload", "run",
     "vpSchemeProjectDefault", "vpSchemeSystem", "vpSchemeLight", "vpSchemeDark", "vpSchemeIDE",
     *_constants_all,

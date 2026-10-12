@@ -128,7 +128,8 @@ Example: a `Label.BackStyle` (0 - Transparent, 1 - Opaque).
 5. **Test it** in `tests/test_runtime.py`: set it, check the widget. If
    generation matters, add a `tests/test_formfile.py` round trip.
 
-Kinds and their editors: `str`, `int` (line edit), `text` (line edit + …
+Kinds and their editors: `str`, `int`, `number` (an int or a float; line
+edit), `text` (line edit + …
 dialog), `bool` / `enum` (combo box), `color` (swatch + menu), `list`
 (dialog), `font` (family combo), `file` (line edit + browse).
 
@@ -204,6 +205,24 @@ Example: a `ProgressBar`.
      sub-widget.
    * If the widget is a scroll area, return its viewport too from
      `_event_targets()` so mouse events arrive.
+   * A container **with pages** defines `_pages()`, `_page_widget(n)`,
+     `_page_index_of(widget)`, `_current()` and `_show_page(n)` (see `_Paged`
+     in `vp6/containers.py`): its controls then take `Page=`, and the
+     designer edits the page it shows.
+   * Hooks a control may define: `_form_loaded` / `_form_unloaded` (after
+     Form_Load, when the form unloads), `_default_cancel(wanted)` (Enter or
+     Esc on the form: True when it clicked itself), `_scheme_changed(dark)`
+     (the form turned light or dark), `_design_values` (properties the
+     Properties window reads from `_values` because the run-time property
+     is something else, e.g. a collection), `_design_wheel(delta)` (the
+     designer's mouse wheel over it).
+   * A control in a module of its own registers itself:
+     `CONTROL_TYPES[...] = cls`, then `CONTROL_TYPES["Menu"] =
+     CONTROL_TYPES.pop("Menu")` (Menu stays last), and calls
+     `_add_validation` and `_add_mouse_members`; import the module in
+     `vp6/__init__.py`. Import optional Qt modules (QtCharts, QtMultimedia,
+     QtPdf, QtQuick, QtOpenGLWidgets) when the control is made, and show a
+     placeholder where they are missing.
    * Keep the widget as `self._widget`. Use `_rebuild_widget()` if a property
      requires a different widget class.
 

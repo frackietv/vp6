@@ -29,14 +29,20 @@ from .theme import theme_manager
 TOOLBOX_CATEGORIES = (
     ("Common", ("Label", "TextBox", "CommandButton", "CheckBox", "OptionButton", "ComboBox",
                 "ListBox", "Slider", "UpDown", "ProgressBar", "HScrollBar", "VScrollBar")),
-    ("Containers", ("Frame", "TabStrip", "Splitter", "DockPanel", "Toolbar", "StatusBar")),
-    ("Graphics", ("PictureBox", "Image", "Shape", "Line", "ImageList")),
-    ("Lists", ("TreeView", "ListView", "FlexGrid")),
+    ("Input", ("SpinBox", "DTPicker", "MonthView", "Dial", "FontComboBox", "HotKey",
+               "LCDNumber")),
+    ("Buttons", ("CommandLink", "ToolButton", "ButtonBox")),
+    ("Containers", ("Frame", "TabStrip", "ToolBox", "PageFrame", "ScrollPanel", "Splitter",
+                    "DockPanel", "Toolbar", "StatusBar")),
+    ("Graphics", ("PictureBox", "Image", "SvgImage", "Shape", "Line", "ImageList",
+                  "GraphicsView", "Chart", "OpenGLView")),
+    ("Lists", ("TreeView", "ListView", "ColumnView", "FlexGrid", "UndoView")),
     ("Text", ("RichTextBox", "CodeBox", "MarkdownBox")),
     ("Files", ("DriveListBox", "DirListBox", "FileListBox", "CommonDialog")),
+    ("Media", ("MediaPlayer", "PdfViewer", "QuickView")),
     ("System", ("Timer", "Process", "Terminal")),
     ("Web", ("WebView", "WebBrowser")),
-    ("Data", ("Data",)),
+    ("Data", ("Data", "DBGrid")),
 )
 
 

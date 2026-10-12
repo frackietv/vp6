@@ -276,6 +276,10 @@ class MainWindow(QMainWindow):
         self.act_add_form = a("Add &Form", lambda: self.add_form(), None, "Form")
         self.act_add_module = a("Add &Module", self.add_module, None, "Module")
         self.act_add_mdi_form = a("Add MDI F&orm", self.add_mdi_form, None, "Form")
+        self.act_add_wizard = a("Add &Wizard Form", lambda: self.add_form("WizardForm"), None,
+                                "WizardForm")
+        self.act_add_splash = a("Add S&plash Screen", lambda: self.add_form("Splash"), None,
+                                "Form")
         self.act_add_user_control = a("Add &User Control", self.add_user_control, None,
                                       "UserControl")
         self.act_add_file = a("Add F&ile…", self.add_file, "Ctrl+D")
@@ -406,7 +410,8 @@ class MainWindow(QMainWindow):
         self.view_menu = view
 
         project = bar.addMenu("&Project")
-        for act in (self.act_add_form, self.act_add_mdi_form, self.act_add_module,
+        for act in (self.act_add_form, self.act_add_mdi_form, self.act_add_wizard,
+                    self.act_add_splash, self.act_add_module,
                     self.act_add_user_control, self.act_add_file, self.act_add_folder, None,
                     self.act_wheel, None,
                     self.act_project_props):
@@ -711,7 +716,8 @@ class MainWindow(QMainWindow):
     def _update_actions(self):
         has_project = self.project is not None
         for act in (self.act_save, self.act_save_as, self.act_close, self.act_add_form,
-                    self.act_add_mdi_form, self.act_add_module,
+                    self.act_add_mdi_form, self.act_add_wizard, self.act_add_splash,
+                    self.act_add_module,
                     self.act_add_user_control, self.act_add_file, self.act_add_folder,
                     self.act_project_props):
             act.setEnabled(has_project)
@@ -1185,12 +1191,15 @@ class MainWindow(QMainWindow):
                 for path in self.documents if path != ignore}
 
     def add_form(self, base: str = "Form"):
+        """Project > Add Form (and the other kinds: MDIForm, WizardForm, and
+        "Splash", a splash screen form)."""
         if self.project is None:
             return
-        name, filename = self._unique_file(base)
+        name, filename = self._unique_file("frmSplash" if base == "Splash" else base)
         path = self.project.abspath(filename)
         with open(path, "w", encoding="utf-8") as f:
-            f.write(formfile.new_form_source(name, base=base))
+            f.write(formfile.new_splash_source(name) if base == "Splash"
+                    else formfile.new_form_source(name, base=base))
         self.project.forms.append(filename)
         self.project.place_file(filename, self.explorer.selected_group("form"))
         self.project.save()

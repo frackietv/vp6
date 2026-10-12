@@ -394,7 +394,7 @@ def test_toolbox_designer_and_properties_window(qapp, tmp_path, db_path):
     from vp6.ide.properties import PropertiesWindow
 
     assert "Data" in Toolbox().buttons and CONTROL_TYPES["Data"] is Data
-    assert list(CONTROL_TYPES)[-2:] == ["Data", "Menu"] and not icons.icon("Data").isNull()
+    assert list(CONTROL_TYPES)[-1] == "Menu" and not icons.icon("Data").isNull()
     assert Data.EventArgs["Validate"] == "Action, Save" and Data.DefaultEvent == "Validate"
     for name in ("TextBox", "Label", "CheckBox", "ComboBox", "ListBox", "Image"):
         assert {"DataSource", "DataField"} <= set(CONTROL_TYPES[name]._specs)

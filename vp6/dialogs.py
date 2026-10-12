@@ -1,8 +1,11 @@
-"""MsgBox and InputBox."""
+"""MsgBox and InputBox; ProgressBox (a progress dialog) and ShowError (an
+error message with "Show this message again")."""
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QApplication, QInputDialog, QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QApplication, QErrorMessage, QInputDialog, QMessageBox,
+                               QProgressDialog)
 
 from . import constants as c
 from .app import App, ensure_app
@@ -69,4 +72,112 @@ def InputBox(prompt, title: str | None = None, default: str = "") -> str:
     return dialog.textValue() if dialog.exec() else ""
 
 
-__all__ = ["MsgBox", "InputBox"]
+class _ProgressBox:
+    """What ProgressBox returns: set its Value as the work goes on."""
+
+    def __init__(self, dialog: QProgressDialog):
+        self._dialog = dialog
+
+    def __repr__(self):
+        return f"<ProgressBox {self.Value}/{self.Max}>"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.Close()
+
+    @property
+    def Value(self) -> int:
+        """How far the work is, from 0 to Max; reaching Max closes it."""
+        return max(self._dialog.value(), 0)
+
+    @Value.setter
+    def Value(self, value):
+        self._dialog.setValue(int(value))
+        QApplication.processEvents()  # (it is drawn, and its Cancel button works)
+
+    @property
+    def Max(self) -> int:
+        return self._dialog.maximum()
+
+    @Max.setter
+    def Max(self, value):
+        self._dialog.setMaximum(int(value))
+
+    @property
+    def Text(self) -> str:
+        """The text above the bar (e.g. what is being done now)."""
+        return self._dialog.labelText()
+
+    @Text.setter
+    def Text(self, value):
+        self._dialog.setLabelText(str(value))
+        QApplication.processEvents()
+
+    @property
+    def Cancelled(self) -> bool:
+        """Whether the user clicked Cancel (stop the work then)."""
+        return self._dialog.wasCanceled()
+
+    @property
+    def Visible(self) -> bool:
+        return self._dialog.isVisible()
+
+    def Close(self) -> None:
+        """Close it (the work is done, or was stopped)."""
+        self._dialog.reset()
+        self._dialog.close()
+        self._dialog.deleteLater()
+
+
+def ProgressBox(Prompt, Max: int = 100, Title: str | None = None, Modal: bool = True,
+                Delay: int = 500, CancelText: str = "Cancel") -> _ProgressBox:
+    """A progress dialog for long work, shown once it has taken Delay ms (and
+    looks like it will go on): set the returned object's ``Value`` (0 to Max)
+    and ``Text`` as the work goes on, and stop when ``Cancelled``. Modal: the
+    program's windows don't respond meanwhile. CancelText "" has no Cancel
+    button. It closes when Value reaches Max (or with Close())::
+
+        progress = ProgressBox("Copying files...", len(files))
+        for number, name in enumerate(files, 1):
+            copy(name)
+            progress.Value = number
+            if progress.Cancelled:
+                break
+    """
+    ensure_app()
+    parent = QApplication.activeWindow()
+    dialog = QProgressDialog(str(Prompt), str(CancelText) if CancelText else None, 0,
+                             int(Max), parent)
+    dialog.setWindowTitle(Title if Title is not None else (App.EXEName or "VP6"))
+    dialog.setWindowModality(Qt.ApplicationModal if Modal else Qt.NonModal)
+    dialog.setMinimumDuration(max(0, int(Delay)))
+    dialog.setAutoClose(True)
+    dialog.setAutoReset(False)
+    match_dialog(dialog, parent)
+    dialog.setValue(0)
+    return _ProgressBox(dialog)
+
+
+_error_box: list = []  # (the one ShowError uses: it remembers what not to show again)
+
+
+def ShowError(Message, Kind: str = "") -> None:
+    """Show an error message that the user can choose not to see again (the
+    "Show this message again" check box): of this Kind (any text), or this
+    Message when there is no Kind. It doesn't wait; more messages queue up."""
+    ensure_app()
+    if not _error_box:
+        box = QErrorMessage()
+        box.setWindowTitle(App.EXEName or "VP6")
+        _error_box.append(box)
+    box = _error_box[0]
+    match_dialog(box, QApplication.activeWindow())
+    if Kind:
+        box.showMessage(str(Message), str(Kind))
+    else:
+        box.showMessage(str(Message))
+
+
+__all__ = ["MsgBox", "InputBox", "ProgressBox", "ShowError"]

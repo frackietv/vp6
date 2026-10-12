@@ -1,5 +1,53 @@
 # VP6 features
 
+**Version:** 0.4.55
+**Date:** 2026-10-12
+
+## Controls
+
+- SpinBox: a number box with arrows in one control: Value between Min and Max in steps of Increment, DecimalPlaces (the Value a float), Prefix and Suffix, Wrap, Locked, StepUp/StepDown, Change; data-bound
+- DTPicker: VB's date and time picker: Value (a datetime), Format (short date, long date, time, CustomFormat), MinDate/MaxDate, a CalendarDropDown or UpDown arrows, Year...Second, Change, DropDown and CloseUp; data-bound (ISO text saved)
+- MonthView: VB's month calendar: Value, MinDate/MaxDate, StartOfWeek, ShowWeekNumbers, a "Today:" link (ShowToday), DayBold[date], DateClick, DateDblClick, SelChange(StartDate, EndDate)
+- Dial: a knob like the Slider (Min, Max, SmallChange/LargeChange, Wrapping, NotchesVisible; Scroll while dragged, Change once changed)
+- LCDNumber: a seven-segment display: Value or Text, Digits, Mode (decimal, hex, octal, binary), SegmentStyle, SmallDecimalPoint, colors, Overflow
+- FontComboBox: the fonts, each drawn in its own font: FontName, FontFilters (all, scalable, non-scalable, monospaced, proportional), List, Click
+- HotKey: records a shortcut: Keys ("Ctrl+Shift+S"), KeyCode and Shift, MaxKeys, ClearButton, Clear, Change
+- CommandLink: the Vista-style link button (Caption, Description, Picture, Default and Cancel, Click)
+- ToolButton: a flat button: Picture, ButtonStyle, AutoRaise, Checkable/Value, ArrowType, a drop-down PopupMenu (one of the form's menus) with PopupMode, Click and ButtonMenuClick(ButtonMenu)
+- ButtonBox: the platform's dialog buttons in its order (OK, Cancel, Yes, No, Apply, Help...), buttons of your own with a role (Caption|role), ButtonClick(Index), Accepted, Rejected; its accept button the form's Default, its reject button its Cancel; AddButton, RemoveButton, ButtonCaption, ButtonEnabled
+- ToolBox: the Outlook-style accordion container: Pages (Caption, Key, ToolTipText, Picture from an ImageList, Enabled), CurrentPage, SelectedItem, PageChange; controls on each page
+- PageFrame: pages without tabs, one shown at a time: PageCount, CurrentPage, AddPage, RemovePage, PageChange
+- Controls' Page: the page a control is on in a ToolBox, a PageFrame or a WizardForm (written by the designer after its container, `Page=1`; set at run time to move it)
+- ScrollPanel: a container whose controls scroll: ScrollBars, ScrollLeft/ScrollTop, ScrollWidth/ScrollHeight (or as far as its controls reach), EnsureVisible(control), Scroll
+- ColumnView: a Finder-style column browser over Nodes like a TreeView's (Items in the designer, NodeClick, Expand), a PreviewWidget for leaf nodes, FileSystem browsing folders (SelectedPath)
+- DBGrid: a grid bound to a Data control: columns from its fields or Columns (Caption, DataField, Width, NumberFormat, hidden), rows following the Data control both ways, editing written back (AllowUpdate, BeforeUpdate/AfterUpdate), AllowAddNew (a new row), AllowDelete (BeforeDelete), Row, Col, Bookmark, RowColChange; rows read as shown, so large tables stay fast
+- GraphicsView: a canvas of shapes as objects: Items (rectangles, ellipses, lines, polygons, SVG paths, text, pictures, groups) with Left/Top, Rotation, Scale, ZOrder, colors, Movable, Selectable; Zoom, ZoomToFit, ScrollTo, MouseMode (items, pan, rubber band); ItemClick, ItemMoved, SelectionChanged; Picture (SavePicture) and PrintOut
+- Chart (Qt Charts): VB's MSChart: ChartType (line, spline, area, bar, stacked bar, percent bar, horizontal bar, pie, scatter), ChartData from a table, rows of numbers or a Recordset, RowLabel/ColumnLabel, Data/SetData, axes' titles and range, LogScale, Legend, Title, Animations, the light or dark theme following the form, PointSelected, EditCopy, Picture
+- SvgImage: an Image for SVG files that stays sharp at any size (Stretch, KeepAspect); LoadPicture, PictureBox and Image read SVG files sharp too
+- MediaPlayer: sound and video: FileName or URL, Play, Pause, Stop, Position/Duration, Volume, Mute, Loop, PlaybackRate, AutoPlay, ShowControls (a bar of controls), State, StateChange, PositionChange, Done, Error
+- PdfViewer: FileName, Page/PageCount, Zoom and ZoomMode (fit width, fit page), PageMode (single, multi-page), Find (highlighted), SelectedText, PageText, PrintOut, PageChange
+- OpenGLView: drawn with OpenGL in its Paint, Resize and InitializeGL events (GL: Qt's OpenGL functions; or PyOpenGL), Update, Animate at a FrameRate, FrameCount, ElapsedTime, PixelRatio
+- QuickView: a QML user interface (Source or QmlText): a Context of values for QML, `vp6.raiseEvent` and the root's signals firing QmlEvent(Name, Args), `vp6.get`/`vp6.set` reaching the form's controls, ResizeMode, Root, SetProperty/GetProperty, Errors
+- UndoView and UndoStack: an undo history list over an UndoStack (Push(Text, DoCode, UndoCode), Undo, Redo, CanUndo, CanRedo, Index, SetClean, CleanIndex), or over a text control's own undo history (Editor)
+
+## Forms and functions
+
+- WizardForm: a form that is a wizard: Pages (title and subtitle) edited in the designer, Back/Next/Finish/Cancel, WizardStyle (classic, modern, macOS, Aero), Form_ValidatePage, Form_NextPage, Form_PageChange, Form_Finish, Form_Cancel, Next(), Back(), Accepted
+- ProgressBox(Prompt, Max): a progress dialog shown after a delay, modal or not, with Value, Text and Cancelled
+- ShowError(Message, Kind): an error message with "Show this message again"
+- App.ShowSplash(Picture, Message), App.SplashMessage, App.HideSplash: a splash screen that closes when the first form shows
+
+## IDE
+
+- The Toolbox's new tools, and its categories Input, Buttons and Media
+- Designing pages: click a ToolBox's page header, or Previous Page / Next Page in the designer's context menu, to edit a ToolBox's, PageFrame's or WizardForm's page; selecting a control shows its page; the mouse wheel scrolls a ScrollPanel
+- Project > Add Wizard Form and Add Splash Screen (a form with the project's title, version and company that closes itself)
+- The Properties window edits numbers (int or float) for SpinBox's and the others' number properties
+
+## Kitchen Sink
+
+- New pages: Calendars, numbers and keys; ColumnView; DBGrid; Link, tool and dialog buttons; Charts; GraphicsView; OpenGL and QML; Media, SVG and PDF; Undo history; Pages and scrolling panels; the Dialogs page's ProgressBox, ShowError, a wizard (frmWizard) and a splash screen
+
 **Version:** 0.4.54
 **Date:** 2026-10-11
 

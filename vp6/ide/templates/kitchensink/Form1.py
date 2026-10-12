@@ -9,25 +9,34 @@ demonstrate it on a page (tests/test_kitchen_sink.py checks this).
 from vp6 import *
 from pgArrays import pgArrays
 from pgButtons import pgButtons
+from pgChart import pgChart
 from pgCode import pgCode
+from pgColumns import pgColumns
 from pgData import pgData
+from pgDBGrid import pgDBGrid
 from pgDialogs import pgDialogs
 from pgDocking import pgDocking
 from pgDrawing import pgDrawing
 from pgEditing import pgEditing
 from pgEmbedded import pgEmbedded
 from pgFiles import pgFiles
+from pgGL import pgGL
 from pgGlobals import pgGlobals
+from pgGraphicsView import pgGraphicsView
 from pgGrid import pgGrid
+from pgInputs import pgInputs
 from pgIntro import pgIntro
 from pgKeyboard import pgKeyboard
 from pgLayout import pgLayout
 from pgListView import pgListView
 from pgMarkdown import pgMarkdown
 from pgMDI import pgMDI
+from pgMedia import pgMedia
 from pgLists import pgLists
 from pgMenus import pgMenus
+from pgMoreButtons import pgMoreButtons
 from pgMouse import pgMouse
+from pgPages import pgPages
 from pgRichText import pgRichText
 from pgPictures import pgPictures
 from pgProcess import pgProcess
@@ -39,6 +48,7 @@ from pgTerminal import pgTerminal
 from pgText import pgText
 from pgTimer import pgTimer
 from pgTree import pgTree
+from pgUndo import pgUndo
 from pgUserControl import pgUserControl
 from pgValues import pgValues
 from pgWeb import pgWeb
@@ -46,15 +56,18 @@ from pgZOrder import pgZOrder
 
 # The page shown for each key of the index (the TreeView's nodes)
 PAGES = {  # (in the index's order)
-    "intro": pgIntro, "buttons": pgButtons, "data": pgData, "files": pgFiles, "grid": pgGrid,
-    "lists": pgLists, "listview": pgListView, "zorder": pgZOrder, "drawing": pgDrawing,
-    "pictures": pgPictures, "scrollbars": pgScrollBars, "values": pgValues, "tabs": pgTabs,
-    "terminal": pgTerminal, "code": pgCode, "editing": pgEditing, "markdown": pgMarkdown,
-    "richtext": pgRichText, "text": pgText, "timer": pgTimer, "tree": pgTree, "web": pgWeb,
-    "schemes": pgSchemes, "dialogs": pgDialogs, "keyboard": pgKeyboard, "mdi": pgMDI,
-    "mouse": pgMouse, "layout": pgLayout, "docking": pgDocking, "embedded": pgEmbedded,
-    "scrolling": pgScrolling, "globals": pgGlobals, "arrays": pgArrays, "menus": pgMenus,
-    "process": pgProcess, "usercontrol": pgUserControl,
+    "intro": pgIntro, "buttons": pgButtons, "inputs": pgInputs, "columns": pgColumns,
+    "data": pgData, "dbgrid": pgDBGrid, "files": pgFiles, "grid": pgGrid,
+    "morebuttons": pgMoreButtons, "lists": pgLists, "listview": pgListView, "chart": pgChart,
+    "zorder": pgZOrder, "drawing": pgDrawing, "graphicsview": pgGraphicsView, "glqml": pgGL,
+    "pictures": pgPictures, "media": pgMedia, "scrollbars": pgScrollBars, "values": pgValues,
+    "tabs": pgTabs, "terminal": pgTerminal, "code": pgCode, "editing": pgEditing,
+    "markdown": pgMarkdown, "richtext": pgRichText, "text": pgText, "timer": pgTimer,
+    "tree": pgTree, "undo": pgUndo, "web": pgWeb, "schemes": pgSchemes, "dialogs": pgDialogs,
+    "keyboard": pgKeyboard, "mdi": pgMDI, "mouse": pgMouse, "layout": pgLayout,
+    "docking": pgDocking, "embedded": pgEmbedded, "pages": pgPages, "scrolling": pgScrolling,
+    "globals": pgGlobals, "arrays": pgArrays, "menus": pgMenus, "process": pgProcess,
+    "usercontrol": pgUserControl,
 }
 
 HELP = """Kitchen Sink keys:
@@ -80,7 +93,7 @@ class Form1(Form):
         self.picNav = PictureBox(self, Left=0, Top=0, Width=220, Height=572, BorderStyle=0,
                                  Align=3, TabIndex=3)
         self.tvwIndex = TreeView(self.picNav, Left=0, Top=0, Width=220, Height=572,
-                                 Items=['Introduction|intro', 'Controls|controls', '    Buttons and options|buttons', '    Data control|data', '    Drives, folders and files|files', '    FlexGrid|grid', '    Lists|lists', '    ListView|listview', '    Graphics Controls|graphics_controls', '        Lines, shapes and z-order|zorder', '        Drawing|drawing', '        Pictures|pictures', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    TabStrip|tabs', '    Terminal|terminal', '    Text Input Controls|text_input_controls', '        CodeBox|code', '        Editing text|editing', '        Markdown|markdown', '        RichTextBox|richtext', '        Text and labels|text', '    Timer|timer', '    TreeView|tree', '    Web pages|web', 'Forms and dialogs|forms_section', '    Color schemes|schemes', '    Dialogs|dialogs', '    Keyboard|keyboard', '    MDI and popup forms|mdi', '    Mouse|mouse', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Docking panels|docking', '    Forms inside forms|embedded', '    Scrolling|scrolling', 'Programming|programming', '    App, Screen, settings...|globals', '    Control arrays|arrays', '    Menus|menus', '    Running programs|process', '    Your own controls|usercontrol'],
+                                 Items=['Introduction|intro', 'Controls|controls', '    Buttons and options|buttons', '    Calendars, numbers and keys|inputs', '    ColumnView|columns', '    Data control|data', '    DBGrid|dbgrid', '    Drives, folders and files|files', '    FlexGrid|grid', '    Link, tool and dialog buttons|morebuttons', '    Lists|lists', '    ListView|listview', '    Graphics Controls|graphics_controls', '        Charts|chart', '        Lines, shapes and z-order|zorder', '        Drawing|drawing', '        GraphicsView|graphicsview', '        OpenGL and QML|glqml', '        Pictures|pictures', '    Media, SVG and PDF|media', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    TabStrip|tabs', '    Terminal|terminal', '    Text Input Controls|text_input_controls', '        CodeBox|code', '        Editing text|editing', '        Markdown|markdown', '        RichTextBox|richtext', '        Text and labels|text', '    Timer|timer', '    TreeView|tree', '    Undo history|undo', '    Web pages|web', 'Forms and dialogs|forms_section', '    Color schemes|schemes', '    Dialogs|dialogs', '    Keyboard|keyboard', '    MDI and popup forms|mdi', '    Mouse|mouse', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Docking panels|docking', '    Forms inside forms|embedded', '    Pages and scrolling panels|pages', '    Scrolling|scrolling', 'Programming|programming', '    App, Screen, settings...|globals', '    Control arrays|arrays', '    Menus|menus', '    Running programs|process', '    Your own controls|usercontrol'],
                                  TabIndex=4,
                                  ToolTipText='The topics: its nodes were typed in the designer (Items)')
         self.splNav = Splitter(self, Left=220, Top=0, Width=6, Height=572, MinSize=150,

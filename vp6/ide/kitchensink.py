@@ -16,6 +16,7 @@ from __future__ import annotations
 import math
 import os
 import shutil
+import wave
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, Qt
@@ -27,18 +28,22 @@ from ..project import SUB_MAIN, Project
 
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "kitchensink"
 FORMS = (  # the window, its pages (in the index's order) and the modal dialog
-    "Form1.py", "pgIntro.py", "pgButtons.py", "pgData.py", "pgFiles.py", "pgGrid.py",
-    "pgLists.py", "pgListView.py", "pgZOrder.py", "pgDrawing.py", "pgPictures.py",
-    "pgScrollBars.py", "pgValues.py", "pgTabs.py", "pgTerminal.py", "pgCode.py", "pgEditing.py",
-    "pgMarkdown.py", "pgRichText.py", "pgText.py", "pgTimer.py", "pgTree.py", "pgWeb.py",
-    "pgSchemes.py", "pgDialogs.py", "pgKeyboard.py", "pgMDI.py", "pgMouse.py", "pgLayout.py",
-    "pgDocking.py", "pgEmbedded.py", "pgScrolling.py", "pgGlobals.py", "pgArrays.py",
-    "pgMenus.py", "pgProcess.py", "pgUserControl.py",
-    "frmDialog.py", "frmMDI.py", "frmNote.py", "frmSuggest.py",
+    "Form1.py", "pgIntro.py", "pgButtons.py", "pgInputs.py", "pgColumns.py", "pgData.py",
+    "pgDBGrid.py", "pgFiles.py", "pgGrid.py", "pgMoreButtons.py", "pgLists.py",
+    "pgListView.py", "pgChart.py", "pgZOrder.py", "pgDrawing.py", "pgGraphicsView.py",
+    "pgGL.py", "pgPictures.py", "pgMedia.py", "pgScrollBars.py", "pgValues.py", "pgTabs.py",
+    "pgTerminal.py", "pgCode.py", "pgEditing.py", "pgMarkdown.py", "pgRichText.py", "pgText.py",
+    "pgTimer.py", "pgTree.py", "pgUndo.py", "pgWeb.py", "pgSchemes.py", "pgDialogs.py",
+    "pgKeyboard.py", "pgMDI.py", "pgMouse.py", "pgLayout.py", "pgDocking.py", "pgEmbedded.py",
+    "pgPages.py", "pgScrolling.py", "pgGlobals.py", "pgArrays.py", "pgMenus.py",
+    "pgProcess.py", "pgUserControl.py",
+    "frmDialog.py", "frmMDI.py", "frmNote.py", "frmSuggest.py", "frmWizard.py",
 )
 MODULES = ("Module1.py",)
 USER_CONTROLS = ("ctlRating.py",)  # a control of its own (pgUserControl.py uses it)
 PICTURE = "vp6.png"  # shown on the Pictures page
+SVG = "vp6.svg"  # the Media page's SvgImage
+SOUND = "tone.wav"  # what the Media page's MediaPlayer plays
 IMAGES = "images"  # small pictures for the ImageLists (TreeView and TabStrip pages)
 ICONS = ("folder", "paw", "leaf", "star", "gear", "palette", "info",  # TreeView, TabStrip
          "back", "forward", "sidebar", "system", "sun", "moon")  # the window's Toolbar
@@ -50,6 +55,8 @@ def create(directory: str, name: str) -> Project:
     for filename in FORMS + MODULES + USER_CONTROLS:
         shutil.copyfile(TEMPLATE_DIR / filename, os.path.join(directory, filename))
     draw_picture(os.path.join(directory, PICTURE))
+    write_svg(os.path.join(directory, SVG))
+    write_tone(os.path.join(directory, SOUND))
     draw_icons(os.path.join(directory, IMAGES))
     pages = [name for name in FORMS if name.startswith("pg")]
     groups = [  # the Project panel: the pages in a group of their own
@@ -65,6 +72,38 @@ def create(directory: str, name: str) -> Project:
                    arguments="--page intro",  # (Form1 shows the page named by --page)
                    arguments_help="--page NAME    start on the page NAME, e.g. globals "
                                   "(the keys of PAGES in Form1.py)")
+
+
+def write_svg(path: str) -> None:
+    """The SVG the Media page shows: VP6 on a rounded square, and a sun."""
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" '
+            'viewBox="0 0 120 80">\n'
+            '  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+            '<stop offset="0" stop-color="#2f80ed"/><stop offset="1" stop-color="#1f3f8f"/>'
+            '</linearGradient></defs>\n'
+            '  <rect x="2" y="2" width="116" height="76" rx="14" fill="url(#g)"/>\n'
+            '  <circle cx="98" cy="20" r="9" fill="#ffcc33"/>\n'
+            '  <text x="56" y="54" text-anchor="middle" font-family="Helvetica, Arial, '
+            'sans-serif" font-size="34" font-weight="bold" fill="#ffffff">VP6</text>\n'
+            '</svg>\n')
+
+
+def write_tone(path: str, seconds: float = 1.0, frequency: float = 440.0) -> None:
+    """A short tone (A, fading out) as a WAV file, for the Media page's MediaPlayer."""
+    rate = 22050
+    count = int(rate * seconds)
+    frames = bytearray()
+    for i in range(count):
+        fade = 1 - i / count
+        sample = int(12000 * fade * math.sin(2 * math.pi * frequency * i / rate))
+        frames += sample.to_bytes(2, "little", signed=True)
+    with wave.open(path, "wb") as file:
+        file.setnchannels(1)
+        file.setsampwidth(2)
+        file.setframerate(rate)
+        file.writeframes(bytes(frames))
 
 
 def draw_icons(folder: str) -> None:

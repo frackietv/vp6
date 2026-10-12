@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QPoint, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QImage, QPixmap
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from . import colors
@@ -212,4 +212,28 @@ def picture_pixmap(owner, value) -> QPixmap:
     if not os.path.isabs(path):
         base = owner._base_dir() if hasattr(owner, "_base_dir") else os.getcwd()
         path = os.path.join(base, path)
+    if path.lower().endswith((".svg", ".svgz")):
+        return _svg_pixmap(path)
     return QPixmap(path)
+
+
+def _svg_pixmap(path: str) -> QPixmap:
+    """An SVG file drawn at its own size, sharp on the screen (at its pixel ratio)."""
+    try:
+        from PySide6.QtSvg import QSvgRenderer
+    except ImportError:
+        return QPixmap(path)
+    renderer = QSvgRenderer(path)
+    size = renderer.defaultSize()
+    if not renderer.isValid() or size.isEmpty():
+        return QPixmap()
+    app = QApplication.instance()
+    ratio = max(1.0, app.devicePixelRatio() if app is not None else 1.0)
+    pixmap = QPixmap(size * ratio)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    renderer.render(painter)
+    painter.end()
+    pixmap.setDevicePixelRatio(ratio)
+    return pixmap

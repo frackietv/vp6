@@ -23,6 +23,7 @@ from .._props import normalize
 from ..controls import CONTROL_TYPES, Control
 from ..form import Form
 from ..mdi import MDIForm
+from ..wizard import WizardForm
 from ..formfile import ControlDef, FormDef, control_key, set_index_parameter
 from . import chrome, menueditor
 from .documents import FormDocument
@@ -42,7 +43,14 @@ NAME_PREFIX = {
     "DirListBox": "Dir", "FileListBox": "File", "CodeBox": "Code", "FlexGrid": "Grid",
     "DockPanel": "Dock", "Shape": "Shape", "CommonDialog": "CommonDialog", "Process": "Process",
     "Terminal": "Terminal", "Data": "Data", "WebView": "Web", "MarkdownBox": "Markdown",
-    "WebBrowser": "WebBrowser",
+    "WebBrowser": "WebBrowser", "SpinBox": "Spin", "DTPicker": "DTPicker",
+    "MonthView": "MonthView", "Dial": "Dial", "LCDNumber": "LCD", "FontComboBox": "FontCombo",
+    "HotKey": "HotKey", "CommandLink": "Link", "ToolButton": "ToolButton",
+    "ButtonBox": "ButtonBox", "ToolBox": "ToolBox", "PageFrame": "PageFrame",
+    "ScrollPanel": "ScrollPanel", "ColumnView": "ColumnView", "DBGrid": "DBGrid",
+    "GraphicsView": "Graphics", "Chart": "Chart", "SvgImage": "Svg",
+    "MediaPlayer": "MediaPlayer", "PdfViewer": "Pdf", "OpenGLView": "GLView",
+    "QuickView": "QuickView", "UndoView": "UndoView",
 }
 
 _clipboard: list[ControlDef] = []
@@ -126,6 +134,12 @@ class _Designed:
 
 class DesignForm(_Designed, Form):
     """The form being designed."""
+
+    _vp_no_default = True
+
+
+class DesignWizardForm(_Designed, WizardForm):
+    """A wizard form being designed: the page CurrentPage says is edited."""
 
     _vp_no_default = True
 
@@ -333,6 +347,8 @@ class _Overlay(QWidget):
 
         additive = bool(event.modifiers() & (Qt.ShiftModifier | Qt.ControlModifier))
         name = d.control_at(pos)
+        if name is not None and not additive and d.page_header_click(name, pos):
+            return  # (a ToolBox's page header: that page is the one edited now)
         if name is not None and event.modifiers() & Qt.ControlModifier \
                 and d.controls[name].IsContainer:
             # Ctrl+drag inside a container: rubber band over its children
@@ -456,6 +472,18 @@ class _Overlay(QWidget):
         elif d.form_canvas_rect().contains(pos):
             d.viewCodeRequested.emit("Form", Form.DefaultEvent)
 
+    def wheelEvent(self, event):
+        # Over a ScrollPanel (or a control in one): it scrolls, as it would at run time
+        d = self.d
+        name = d.control_at(event.position().toPoint())
+        while name is not None:
+            scroll = getattr(d.controls[name], "_design_wheel", None)
+            if scroll is not None and scroll(event.angleDelta()):
+                self.update()
+                return
+            name = d.form_def.control(name).parent
+        event.ignore()
+
     # -- keyboard ----------------------------------------------------------------------
     def keyPressEvent(self, event):
         d = self.d
@@ -564,8 +592,9 @@ class FormDesigner(QWidget):
             old.setParent(None)
             old.deleteLater()
         self.controls = {}
-        mdi = formfile.find_form_base(self.document.text) == "MDIForm"
-        self.form = DesignMDIForm(self) if mdi else DesignForm(self)
+        base = formfile.find_form_base(self.document.text)
+        self.form = {"MDIForm": DesignMDIForm, "WizardForm": DesignWizardForm}.get(
+            base, DesignForm)(self)
         if self.form_def.kind == "usercontrol":  # its surface: only its own properties
             self.form.__dict__["_specs"] = formfile.surface_specs()
         for prop, value in self.form_def.props.items():
@@ -585,7 +614,7 @@ class FormDesigner(QWidget):
     def _instantiate(self, control_def: ControlDef) -> Control:
         cls = CONTROL_TYPES[control_def.type]
         parent = self.form if control_def.parent is None else self.controls[control_def.parent]
-        valid = {k: v for k, v in control_def.props.items() if k in cls._specs}
+        valid = {k: v for k, v in control_def.props.items() if k in cls._specs or k == "Page"}
         try:
             control = cls(parent, Name=control_def.name, **valid)
         except Exception as exc:  # noqa: BLE001 - keep the designer usable
@@ -673,6 +702,8 @@ class FormDesigner(QWidget):
         if control is None or control._widget is None:
             return None
         widget = control._widget
+        if not widget.isVisibleTo(self.form_widget()):  # (on a page not shown)
+            return None
         return QRect(widget.mapTo(self.canvas, QPoint(0, 0)), widget.size())
 
     def parent_rect(self, name: str) -> QRect:
@@ -703,7 +734,12 @@ class FormDesigner(QWidget):
         return name
 
     def _container_widget(self, container: str | None) -> QWidget:
-        return self.form_widget() if container is None else self.controls[container]._widget
+        """Where a container's controls are: its inner widget (a DockPanel's
+        content, a ScrollPanel's scrolled area, the page a ToolBox shows)."""
+        if container is None:
+            return self.form._page_widget(self.form._current()) \
+                if hasattr(self.form, "_page_widget") else self.form_widget()
+        return self.controls[container]._container_widget()
 
     # -- selection -----------------------------------------------------------------------------------
     def select(self, names: list[str]) -> None:
@@ -713,6 +749,8 @@ class FormDesigner(QWidget):
                 seen.append(name)
         if len(seen) > 1:  # a menu (chosen in the Properties window) is selected alone
             seen = [n for n in seen if not self.is_menu(n)] or seen[-1:]
+        for name in seen[-1:]:  # (on a page not shown: show that page)
+            self._show_pages_of(self.controls[name])
         self.selection = seen
         self.overlay.update()
         self.selectionChanged.emit()
@@ -771,8 +809,19 @@ class FormDesigner(QWidget):
             control_def.props.update(place)
             control._values.update(place)
 
+    def _sync_pages(self) -> None:
+        """Controls in containers with pages: the page each is on now (pages
+        may have been added, removed or moved)."""
+        for key, control in self.controls.items():
+            if control._page is None:
+                continue
+            control_def = self.form_def.control(key)
+            if control_def is not None and control_def.props.get("Page") != control.Page:
+                control_def.props["Page"] = control.Page
+
     def _commit(self, before: FormDef) -> None:
         self._sync_aligned()
+        self._sync_pages()
         if before == self.form_def:
             return
         self._undo.append(before)
@@ -873,6 +922,9 @@ class FormDesigner(QWidget):
         for text_prop in ("Caption", "Text"):
             if text_prop in cls._specs and cls._specs[text_prop].always:
                 props[text_prop] = name
+        parent = self.form if container is None else self.controls[container]
+        if hasattr(parent, "_page_widget"):  # (on the page shown)
+            props = {"Page": parent._current(), **props}
         before = self._snapshot()
         control_def = ControlDef(type_name, name, container, props)
         self.form_def.controls.append(control_def)
@@ -953,6 +1005,10 @@ class FormDesigner(QWidget):
             is_root = control_def.parent is None or control_def.parent not in clipboard_keys
             if is_root:
                 control_def.parent = target
+                parent = self.form if target is None else self.controls[target]
+                control_def.props.pop("Page", None)
+                if hasattr(parent, "_page_widget"):  # (on the page shown)
+                    control_def.props = {"Page": parent._current(), **control_def.props}
                 pasted_roots.append(control_def.key)
                 if control_def.key != original.key:
                     moved = ("X1", "Y1", "X2", "Y2") if control_def.type == "Line" else \
@@ -1300,9 +1356,53 @@ class FormDesigner(QWidget):
         add("Send to Back", lambda: self.z_order(False), bool(self.selection))
         menu.addSeparator()
         add("Align to Grid", lambda: self._align_to_grid(), bool(self.selection))
+        if self.paged_object() is not None:
+            menu.addSeparator()
+            add("Previous Page", lambda: self.step_page(-1))
+            add("Next Page", lambda: self.step_page(1))
         menu.addSeparator()
         add("Menu Editor…", self.show_menu_editor)
         menu.exec(global_pos)
+
+    # -- pages (ToolBox, PageFrame, WizardForm) ----------------------------------------------------------
+    def _show_pages_of(self, control: Control) -> None:
+        """Show the page a control is on, and the pages its containers are on."""
+        while isinstance(control, Control):
+            parent = control.Parent
+            if control._page is not None and hasattr(parent, "_show_page_for"):
+                parent._show_page_for(control)
+            control = parent
+
+    def paged_object(self):
+        """The container with pages being edited: the selected control's (or
+        the control itself), or a WizardForm; None if there is none."""
+        obj = self.controls[self.selection[-1]] if self.selection else self.form
+        while isinstance(obj, Control) and not hasattr(obj, "_page_widget"):
+            obj = obj.Parent
+        return obj if hasattr(obj, "_page_widget") and "CurrentPage" in obj._specs else None
+
+    def step_page(self, step: int) -> None:
+        """Edit the previous (-1) or next (1) page of the container with pages."""
+        obj = self.paged_object()
+        if obj is None:
+            return
+        count = len(obj._pages())
+        if count:
+            self.select([] if obj is self.form else [self.key_of(obj)])
+            self.set_property("CurrentPage", (obj._current() + step) % count)
+
+    def page_header_click(self, key: str, canvas_pos: QPoint) -> bool:
+        """A click on a ToolBox's page header: that page is edited. True: it was one."""
+        control = self.controls[key]
+        page_at = getattr(control, "_page_at", None)
+        if page_at is None:
+            return False
+        page = page_at(control._widget.mapFrom(self.canvas, canvas_pos))
+        if page is None or page == control._current():
+            return False
+        self.select([key])
+        self.set_property("CurrentPage", page)
+        return True
 
     # -- lines -------------------------------------------------------------------------------------------------
     def snap_anchor(self, key: str) -> QPoint:

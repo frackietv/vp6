@@ -440,6 +440,109 @@ vpEditNone = 0
 vpEditInProgress = 1
 vpEditAdd = 2
 
+# --- DTPicker.Format ---------------------------------------------------------------------
+vpDtpShortDate = 0
+vpDtpLongDate = 1
+vpDtpTime = 2
+vpDtpCustom = 3
+
+# --- MonthView.StartOfWeek (the days, as ISO numbers them) ---------------------------------
+vpUseSystem = 0
+vpMonday = 1
+vpTuesday = 2
+vpWednesday = 3
+vpThursday = 4
+vpFriday = 5
+vpSaturday = 6
+vpSunday = 7
+
+# --- LCDNumber.Mode -----------------------------------------------------------------------
+vpLcdDecimal = 0
+vpLcdHex = 1
+vpLcdOctal = 2
+vpLcdBinary = 3
+
+# --- LCDNumber.SegmentStyle ---------------------------------------------------------------
+vpLcdOutline = 0
+vpLcdFilled = 1
+vpLcdFlat = 2
+
+# --- FontComboBox.FontFilters -------------------------------------------------------------
+vpFontsAll = 0
+vpFontsScalable = 1
+vpFontsNonScalable = 2
+vpFontsMonospaced = 3
+vpFontsProportional = 4
+
+# --- ToolButton.ButtonStyle ---------------------------------------------------------------
+vpToolIconOnly = 0
+vpToolTextOnly = 1
+vpToolTextBesideIcon = 2
+vpToolTextUnderIcon = 3
+
+# --- ToolButton.PopupMode -----------------------------------------------------------------
+vpPopupDelayed = 0
+vpPopupMenuButton = 1
+vpPopupInstant = 2
+
+# --- ToolButton.ArrowType -----------------------------------------------------------------
+vpArrowNone = 0
+vpArrowUp = 1
+vpArrowDown = 2
+vpArrowLeft = 3
+vpArrowRight = 4
+
+# --- ButtonBox: a custom button's ButtonRole ----------------------------------------------
+vpRoleAccept = 0
+vpRoleReject = 1
+vpRoleDestructive = 2
+vpRoleAction = 3
+vpRoleHelp = 4
+vpRoleYes = 5
+vpRoleNo = 6
+vpRoleReset = 7
+vpRoleApply = 8
+
+# --- Chart.ChartType ----------------------------------------------------------------------
+vpChartLine = 0
+vpChartSpline = 1
+vpChartArea = 2
+vpChartBar = 3
+vpChartStackedBar = 4
+vpChartPercentBar = 5
+vpChartHorizontalBar = 6
+vpChartPie = 7
+vpChartScatter = 8
+
+# --- Chart.Legend -------------------------------------------------------------------------
+vpLegendNone = 0
+vpLegendTop = 1
+vpLegendBottom = 2
+vpLegendLeft = 3
+vpLegendRight = 4
+
+# --- MediaPlayer.State --------------------------------------------------------------------
+vpMediaStopped = 0
+vpMediaPlaying = 1
+vpMediaPaused = 2
+
+# --- PdfViewer.ZoomMode and PdfViewer.PageMode --------------------------------------------
+vpZoomCustom = 0
+vpZoomFitWidth = 1
+vpZoomFitPage = 2
+vpPageSingle = 0
+vpPageMulti = 1
+
+# --- QuickView.ResizeMode -----------------------------------------------------------------
+vpQmlViewToRoot = 0
+vpQmlRootToView = 1
+
+# --- WizardForm.WizardStyle ---------------------------------------------------------------
+vpWizardClassic = 0
+vpWizardModern = 1
+vpWizardMac = 2
+vpWizardAero = 3
+
 # --- Key codes (KeyDown / KeyUp) -------------------------------------------
 vpKeyBack = 8
 vpKeyTab = 9

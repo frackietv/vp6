@@ -256,6 +256,11 @@ class Control(PropertyHost):
         self.__dict__["_index"] = None  # set when it becomes an element of a ControlArray
         self.__dict__["_loaded_at_runtime"] = False  # created by ControlArray.Load
         self.__dict__["Parent"] = parent
+        # The page it is on in a container with pages (ToolBox, PageFrame, a WizardForm);
+        # None elsewhere
+        page = props.pop("Page", None)
+        self.__dict__["_page"] = (int(page or 0) if hasattr(parent, "_page_widget")
+                                  else None)
         self._form = parent._owner_form()
         self._design_mode = getattr(self._form, "_design_mode", False)
         self._key_resend = False
@@ -283,6 +288,39 @@ class Control(PropertyHost):
                              "designer (or by assigning to an element of a ControlArray)")
 
     @property
+    def Page(self) -> int | None:
+        """The page it is on (from 0) when its container has pages (a ToolBox,
+        a PageFrame, a WizardForm); None elsewhere. Setting it moves it to
+        another page, keeping its Left and Top."""
+        if self._page is not None and self._widget is not None:  # (pages may have moved)
+            index = self.Parent._page_index_of(self._widget.parentWidget())
+            if index is not None:
+                self.__dict__["_page"] = index
+        return self._page
+
+    @Page.setter
+    def Page(self, value):
+        if self._page is None:
+            raise AttributeError(f"{self.TypeName} '{self.Name}' isn't in a container with "
+                                 "pages")
+        self.__dict__["_page"] = max(0, int(value))
+        self._move_to_parent_widget()
+
+    def _move_to_parent_widget(self) -> None:
+        """Its widget into its container's (page's) widget, at the same Left and Top."""
+        widget = self._widget
+        if widget is None:
+            return
+        shown = not widget.isHidden()
+        geometry = widget.geometry()
+        widget.setParent(self._parent_widget())
+        widget.setGeometry(geometry)
+        if shown:
+            widget.show()
+        if self._stackable():
+            self._restack()
+
+    @property
     def Container(self):
         """The form or container control (Frame, PictureBox, DockPanel) it is
         on. Setting it moves the control there at run time, as VB's ``Set
@@ -308,16 +346,9 @@ class Control(PropertyHost):
             inside = inside.Parent
         if value is self.Parent:
             return
-        widget = self._widget
-        shown = not widget.isHidden()
-        geometry = widget.geometry()
         self.__dict__["Parent"] = value
-        widget.setParent(self._parent_widget())
-        widget.setGeometry(geometry)  # (the same Left and Top, in the new container)
-        if shown:
-            widget.show()
-        if self._stackable():
-            self._restack()  # its place among the new container's controls
+        self.__dict__["_page"] = 0 if hasattr(value, "_page_widget") else None
+        self._move_to_parent_widget()  # (the same Left and Top, in the new container)
         if "Align" in self._specs and self._values.get("Align"):
             form._layout_aligned()  # (it was docked to the form, or is now)
         form._apply_tab_order()
@@ -353,6 +384,8 @@ class Control(PropertyHost):
         return self._form._base_dir()
 
     def _parent_widget(self) -> QWidget:
+        if self._page is not None:  # (a container with pages: its page's widget)
+            return self.Parent._page_widget(self._page)
         return self.Parent._container_widget()
 
     def _create_widget(self, parent: QWidget) -> QWidget | None:
@@ -736,7 +769,8 @@ class Control(PropertyHost):
 
     def _siblings(self) -> list["Control"]:
         """Stackable controls in the same container, in creation order."""
-        return [c for c in self._form._controls if c.Parent is self.Parent and c._stackable()]
+        return [c for c in self._form._controls if c.Parent is self.Parent and
+                c._page == self._page and c._stackable()]
 
     def _restack(self) -> None:
         """Order the container's children: higher ZIndex on top, equal values
@@ -2504,6 +2538,13 @@ class CommandButton(_Graphical, Control):
     def _apply_Default(self, v):
         if isinstance(self._widget, QPushButton):  # (a Graphical one looks the same)
             self._widget.setDefault(v)
+
+    def _default_cancel(self, wanted: str) -> bool:
+        """Enter (wanted "Default") or Esc ("Cancel") on the form: clicked if it is that."""
+        if not self._values.get(wanted):
+            return False
+        self._widget.click()
+        return True
 
     @property
     def Value(self) -> bool:
@@ -9589,6 +9630,8 @@ class ControlArray:
                                          if "TabIndex" in c._specs), default=-1)
         if "Visible" in template._specs:
             props["Visible"] = False
+        if template._page is not None:
+            props["Page"] = template._page
         control = type(template)(template.Parent, **props)
         control.__dict__["_loaded_at_runtime"] = True
         control._place_after(self._items[self.UBound])  # menus: after the last element

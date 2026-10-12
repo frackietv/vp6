@@ -24,7 +24,8 @@ from . import colors
 @dataclass(frozen=True)
 class PropSpec:
     name: str
-    # str, text, int, bool, enum, color, font, file, shortcut; list and outline (lines
+    # str, text, int, number (an int or a float), bool, enum, color, font, file, shortcut;
+    # list and outline (lines
     # of text); panels, tabs, images, buttons, columns and listitems (lines of
     # text that are a collection at run time: StatusBar.Panels, TabStrip.Tabs, ...)
     kind: str = "str"
@@ -86,6 +87,9 @@ def normalize(kind: str, value):
         return str(value)
     if kind in ("int", "enum"):
         return int(value)
+    if kind == "number":  # (a whole number stays an int: Max=100, not 100.0)
+        number = float(value)
+        return int(number) if number.is_integer() and abs(number) < 2 ** 53 else number
     if kind == "bool":
         return bool(value)
     if kind == "color":

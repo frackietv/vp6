@@ -24,7 +24,9 @@ def _ink_lightness(name: str, dark: bool) -> tuple[int, int]:
     return min(values), max(values)
 
 
-@pytest.mark.parametrize("name", ["Label", "Pointer", "Frame", "New", "Module"])
+@pytest.mark.parametrize("name", ["Label", "Pointer", "Frame", "New", "Module", "SpinBox",
+                                  "MonthView", "ToolBox", "ScrollPanel", "ColumnView",
+                                  "UndoView", "HotKey", "Chart", "GraphicsView"])
 def test_dark_icons_have_light_ink(qapp, name):
     assert _ink_lightness(name, dark=False)[0] < 80  # dark outlines on light
     assert _ink_lightness(name, dark=True)[1] > 200  # light outlines on dark

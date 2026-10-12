@@ -597,6 +597,252 @@ _OUTLINE_BADGES = {
 }
 
 
+# --- the newer controls -------------------------------------------------------------------
+
+def _spinbox(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 6, 20, 12))  # a number box...
+    _text(p, QRectF(3, 6, 12, 12), "42", 8, align=Qt.AlignVCenter | Qt.AlignLeft)
+    p.setBrush(C.face)
+    p.drawRect(QRectF(15, 6, 7, 6))  # ...with its arrows in it
+    p.drawRect(QRectF(15, 12, 7, 6))
+    p.setBrush(C.ink)
+    p.drawPolygon([QPointF(18.5, 7.5), QPointF(16.8, 10.5), QPointF(20.2, 10.5)])
+    p.drawPolygon([QPointF(18.5, 16.5), QPointF(16.8, 13.5), QPointF(20.2, 13.5)])
+
+
+def _dtpicker(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 3, 20, 18))  # a calendar page
+    p.fillRect(QRectF(2.5, 3.5, 19, 4.5), QColor("#d03030"))
+    for x in (6, 11, 16):
+        p.drawLine(QPointF(x, 1.5), QPointF(x, 5))  # its rings
+    _text(p, QRectF(2, 8, 20, 13), "31", 9, True)
+
+
+def _monthview(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 3, 20, 18))
+    p.fillRect(QRectF(2.5, 3.5, 19, 4), C.blue)  # the month's header, and a grid of days
+    for row in range(3):
+        for col in range(5):
+            p.fillRect(QRectF(4 + col * 3.6, 10 + row * 3.6, 2, 2),
+                       QColor("#d03030") if (row, col) == (1, 2) else C.ink)
+
+
+def _dial(p):
+    p.setBrush(C.face)
+    p.drawEllipse(QRectF(4, 4, 16, 16))  # a knob, its notches around it
+    for angle in range(-120, 121, 40):
+        rad = math.radians(angle - 90)
+        p.drawLine(QPointF(12 + 9.5 * math.cos(rad), 12 + 9.5 * math.sin(rad)),
+                   QPointF(12 + 11.5 * math.cos(rad), 12 + 11.5 * math.sin(rad)))
+    p.setBrush(C.blue)
+    p.drawEllipse(QRectF(13, 6.5, 3.5, 3.5))  # its mark
+
+
+def _lcdnumber(p):
+    p.setBrush(QColor("#1e1e1e"))
+    p.drawRect(QRectF(2, 5, 20, 14))
+    p.setPen(QPen(QColor("#ff4040"), 1.6))  # a seven-segment 8 and a 1
+    for x in (5, 13):
+        p.drawLine(QPointF(x + 1, 8), QPointF(x + 4, 8))
+        p.drawLine(QPointF(x + 1, 12), QPointF(x + 4, 12))
+        p.drawLine(QPointF(x + 1, 16), QPointF(x + 4, 16))
+        p.drawLine(QPointF(x, 9), QPointF(x, 11))
+        p.drawLine(QPointF(x + 5, 9), QPointF(x + 5, 11))
+        p.drawLine(QPointF(x, 13), QPointF(x, 15))
+        p.drawLine(QPointF(x + 5, 13), QPointF(x + 5, 15))
+    p.setPen(QPen(C.ink, 1))
+
+
+def _fontcombobox(p):
+    _combobox(p)
+    _text(p, QRectF(3, 7, 12, 10), "Aa", 8, False, None, Qt.AlignVCenter | Qt.AlignLeft)
+
+
+def _hotkey(p):
+    p.setBrush(C.paper)
+    p.drawRoundedRect(QRectF(2, 6, 10, 12), 2, 2)  # two keys
+    p.drawRoundedRect(QRectF(13, 6, 9, 12), 2, 2)
+    _text(p, QRectF(2, 6, 10, 12), "^", 9, True)
+    _text(p, QRectF(13, 6, 9, 12), "S", 8, True)
+
+
+def _commandlink(p):
+    p.setBrush(C.paper)
+    p.drawRoundedRect(QRectF(2, 5, 20, 14), 2, 2)
+    p.setBrush(QColor("#2e9e40"))
+    p.setPen(Qt.NoPen)
+    p.drawPolygon([QPointF(4.5, 8), QPointF(9, 11), QPointF(4.5, 14)])  # the arrow
+    p.setPen(QPen(C.ink, 1))
+    p.fillRect(QRectF(10.5, 8.5, 9, 2), C.blue)  # its caption
+    p.fillRect(QRectF(10.5, 13, 7, 1.2), C.ink)  # and description
+
+
+def _toolbutton(p):
+    p.setBrush(C.face)
+    p.drawRoundedRect(QRectF(3, 4, 15, 16), 2, 2)
+    p.setBrush(QColor("#f5c542"))
+    p.drawEllipse(QRectF(6, 7, 9, 9))  # a picture
+    p.setBrush(C.ink)
+    p.drawPolygon([QPointF(18.5, 13), QPointF(22, 13), QPointF(20.25, 15.5)])  # its menu
+
+
+def _buttonbox(p):
+    for x, accept in ((2, False), (12.5, True)):
+        p.setBrush(C.blue if accept else C.button_top)
+        p.drawRoundedRect(QRectF(x, 8, 9.5, 8), 2, 2)
+    _text(p, QRectF(12.5, 8, 9.5, 8), "OK", 6, True, QColor("#ffffff"))
+
+
+def _toolbox_control(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(3, 2, 18, 20))
+    for y in (2, 6, 17):  # the pages' headers, one of them open
+        p.fillRect(QRectF(3.5, y + 0.5, 17, 3.5), C.face)
+        p.drawLine(QPointF(3, y + 4), QPointF(21, y + 4))
+    p.fillRect(QRectF(6, 12, 9, 2), C.blue)
+
+
+def _pageframe(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(7, 2, 14, 14))  # pages, one behind another
+    p.drawRect(QRectF(5, 4, 14, 14))
+    p.drawRect(QRectF(3, 6, 14, 14))
+    p.fillRect(QRectF(5, 9, 9, 2), C.blue)
+    p.fillRect(QRectF(5, 13, 6, 2), C.blue)
+
+
+def _scrollpanel(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 3, 20, 18))
+    p.setBrush(C.face)
+    p.drawRect(QRectF(17, 3, 5, 18))  # its scroll bar
+    p.setBrush(C.blue)
+    p.drawRect(QRectF(18, 6, 3, 6))
+    p.setBrush(C.button_top)
+    p.drawRect(QRectF(5, 7, 9, 5))  # a control in it, cut at the edge
+    p.drawRect(QRectF(5, 15, 11, 6))
+
+
+def _columnview(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 4, 20, 16))
+    p.drawLine(QPointF(8.5, 4), QPointF(8.5, 20))
+    p.drawLine(QPointF(15, 4), QPointF(15, 20))
+    p.fillRect(QRectF(3, 7, 5, 2.5), C.blue)  # chosen in each column
+    p.fillRect(QRectF(9.5, 11, 5, 2.5), C.blue)
+    p.setBrush(C.face)
+    p.drawRect(QRectF(16.5, 7, 4, 6))  # the preview
+
+
+def _dbgrid(p):
+    _flexgrid(p)
+    p.setBrush(QColor("#f2d17b") if C is _LIGHT else QColor("#8a7230"))
+    p.drawRect(QRectF(14, 15, 8, 5))  # a database
+    p.drawEllipse(QRectF(14, 13.5, 8, 3))
+
+
+def _graphicsview(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 3, 20, 18))
+    p.setBrush(QColor("#f5c542"))
+    p.save()
+    p.translate(8, 10)
+    p.rotate(-15)
+    p.drawRect(QRectF(-4, -3, 8, 6))  # shapes, turned
+    p.restore()
+    p.setBrush(C.blue)
+    p.drawEllipse(QRectF(12, 12, 7, 7))
+    p.drawLine(QPointF(4, 18), QPointF(11, 14))
+
+
+def _chart(p):
+    p.drawLine(QPointF(3, 3), QPointF(3, 21))  # the axes
+    p.drawLine(QPointF(3, 21), QPointF(21, 21))
+    for x, h, color in ((5, 8, "#1f8fe0"), (10, 14, "#7fc36b"), (15, 11, "#f2a12b")):
+        p.setBrush(QColor(color))
+        p.drawRect(QRectF(x, 21 - h, 4, h))
+
+
+def _svgimage(p):
+    p.setPen(QPen(C.ink, 1, Qt.DashLine))
+    p.setBrush(Qt.NoBrush)
+    p.drawRect(QRectF(2, 3, 20, 18))
+    p.setPen(QPen(C.blue, 1.4))
+    path = QPainterPath()  # a curve and its control points: vectors
+    path.moveTo(5, 17)
+    path.cubicTo(8, 5, 16, 19, 19, 7)
+    p.drawPath(path)
+    p.setPen(QPen(C.ink, 1))
+    p.setBrush(C.paper)
+    for x, y in ((5, 17), (19, 7)):
+        p.drawRect(QRectF(x - 1.5, y - 1.5, 3, 3))
+
+
+def _mediaplayer(p):
+    p.setBrush(QColor("#1e1e1e"))
+    p.drawRect(QRectF(2, 4, 20, 13))  # the video...
+    p.setBrush(QColor("#ffffff"))
+    p.setPen(Qt.NoPen)
+    p.drawPolygon([QPointF(10, 7), QPointF(15, 10.5), QPointF(10, 14)])
+    p.setPen(QPen(C.ink, 1))
+    p.drawLine(QPointF(2, 20), QPointF(22, 20))  # ...and its position
+    p.setBrush(C.blue)
+    p.drawEllipse(QRectF(9, 18.5, 3, 3))
+
+
+def _pdfviewer(p):
+    p.setBrush(C.paper)
+    p.drawPolygon([QPointF(5, 2), QPointF(15, 2), QPointF(19, 6), QPointF(19, 22),
+                   QPointF(5, 22)])  # a page with a folded corner
+    p.fillRect(QRectF(3, 11, 15, 6), QColor("#d03030"))
+    _text(p, QRectF(3, 11, 15, 6), "PDF", 5, True, QColor("#ffffff"))
+
+
+def _openglview(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 3, 20, 18))
+    p.setBrush(QColor("#1f8fe0"))  # a cube in 3D
+    p.drawPolygon([QPointF(12, 6), QPointF(18, 9), QPointF(12, 12), QPointF(6, 9)])
+    p.setBrush(QColor("#7fc36b"))
+    p.drawPolygon([QPointF(6, 9), QPointF(12, 12), QPointF(12, 19), QPointF(6, 16)])
+    p.setBrush(QColor("#f2a12b"))
+    p.drawPolygon([QPointF(12, 12), QPointF(18, 9), QPointF(18, 16), QPointF(12, 19)])
+
+
+def _quickview(p):
+    p.setBrush(QColor("#41cd52"))  # Qt's green, and QML
+    p.drawRoundedRect(QRectF(2, 5, 20, 14), 3, 3)
+    _text(p, QRectF(2, 5, 20, 14), "QML", 7, True, QColor("#ffffff"))
+
+
+def _undoview(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(3, 3, 18, 18))
+    for y in (7, 11, 15):  # a history...
+        p.drawLine(QPointF(10, y), QPointF(18, y))
+    p.fillRect(QRectF(9, 9.5, 10, 3), C.blue)
+    p.setPen(QPen(C.ink, 1.4))  # ...and the undo arrow
+    path = QPainterPath()
+    path.moveTo(8, 17)
+    path.arcTo(QRectF(4, 7, 6, 8), 270, 180)
+    p.setBrush(Qt.NoBrush)
+    p.drawPath(path)
+    p.setPen(QPen(C.ink, 1))
+    p.setBrush(C.ink)
+    p.drawPolygon([QPointF(5, 7), QPointF(8.5, 5), QPointF(8.5, 9.5)])
+
+
+def _wizardform(p):
+    _form(p)
+    p.setBrush(C.blue)  # Back and Next along the bottom
+    p.drawRoundedRect(QRectF(13, 16, 7, 3), 1, 1)
+    p.setBrush(C.paper)
+    p.drawRoundedRect(QRectF(5, 16, 7, 3), 1, 1)
+
+
 def _console(p):
     p.setBrush(QColor("#1e1e1e"))
     p.setPen(QPen(C.ink, 1))
@@ -622,6 +868,14 @@ _DRAWERS = {
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop, "Pause": _pause,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink, "Isometric": _isometric,
+    "SpinBox": _spinbox, "DTPicker": _dtpicker, "MonthView": _monthview, "Dial": _dial,
+    "LCDNumber": _lcdnumber, "FontComboBox": _fontcombobox, "HotKey": _hotkey,
+    "CommandLink": _commandlink, "ToolButton": _toolbutton, "ButtonBox": _buttonbox,
+    "ToolBox": _toolbox_control, "PageFrame": _pageframe, "ScrollPanel": _scrollpanel,
+    "ColumnView": _columnview, "DBGrid": _dbgrid, "GraphicsView": _graphicsview,
+    "Chart": _chart, "SvgImage": _svgimage, "MediaPlayer": _mediaplayer,
+    "PdfViewer": _pdfviewer, "OpenGLView": _openglview, "QuickView": _quickview,
+    "UndoView": _undoview, "WizardForm": _wizardform,
     "Perspective": _perspective, "ToolboxList": _toolbox_list,
     "ToolboxGroups": _toolbox_groups,
     **{name: (lambda p, c=color, l=letter: _badge(p, c, l, 10 if l == "\u25b6" else 13))

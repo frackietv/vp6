@@ -35,7 +35,17 @@ vp6/                    runtime library - "from vp6 import *"
   constants.py          vp* constants (MsgBox, keys, ...)
   controls.py           Control base class + 12 intrinsic controls
   data.py               the Data control, Recordset and Database (SQLite); bound controls
-  dialogs.py            MsgBox, InputBox
+  inputs.py             SpinBox, DTPicker, MonthView, Dial, LCDNumber, FontComboBox, HotKey
+  buttons.py            CommandLink, ToolButton, ButtonBox
+  containers.py         containers with pages (ToolBox, PageFrame) and ScrollPanel
+  views.py              ColumnView, UndoView and UndoStack
+  dbgrid.py             DBGrid: a grid bound to a Data control
+  graphicsview.py       GraphicsView: a canvas of shapes as objects
+  chart.py              Chart (Qt Charts)
+  media.py              SvgImage, MediaPlayer, PdfViewer
+  opengl.py             OpenGLView, QuickView (QML)
+  wizard.py             WizardForm: a form that is a wizard
+  dialogs.py            MsgBox, InputBox, ProgressBox, ShowError
   form.py               Form, Forms, Load, Unload, run
   formfile.py           parse/generate the designer region of form files
   project.py            .vp6p project files (executable launcher scripts)
@@ -166,7 +176,8 @@ The same metadata feeds the IDE:
   default (or have `always=True`),
 * **completion** in the code editor lists the spec names.
 
-Property kinds: `str`, `text` (multi-line string), `int`, `bool`, `enum`
+Property kinds: `str`, `text` (multi-line string), `int`, `number` (an int,
+or a float when it has a fraction), `bool`, `enum`
 (with `choices`), `color` (VB BGR int or `None` for the default), `list`
 (list of strings), `font` (family name or `None`), `file` (path).
 
@@ -184,6 +195,13 @@ A form can also be **shown inside a container** of another form
 (`Form.ShowIn`): its `_FormWidget` becomes a child widget of the
 container's widget instead of a window, an event filter on the container
 keeps it at the container's size, and the host form unloads it with itself.
+
+A **container with pages** (ToolBox, PageFrame, a WizardForm) has a widget
+for each page: a control on it is on one of them. `Control.__init__` takes a
+`Page` argument when its parent has `_page_widget` (the designer writes it
+first, `Label(self.tbxTools, Page=1, ...)`), `_parent_widget` puts the
+widget on that page, and the container's `_container_widget()` is the page
+it shows, where the designer puts new controls.
 
 A **`Menu`** has no widget: it is a `QAction` on the form's `QMenuBar` or in
 its parent menu's `QMenu`. Where Qt draws the menu bar inside the window

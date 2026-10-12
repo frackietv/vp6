@@ -27,7 +27,7 @@ from PySide6.QtWidgets import QApplication, QMenuBar, QWidget
 
 from . import appearance, colors
 from ._props import P, PropertyHost, enum_choices
-from .app import call_handler, ensure_app, run_event_loop
+from .app import App, call_handler, ensure_app, run_event_loop
 from .drawing import DRAWING_PROPERTIES, Drawing
 from .picture import picture_pixmap
 from .controls import (_FONT, POINTER_CHOICES, CommandButton, Control, ControlArray, TextBox,
@@ -695,6 +695,11 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         dark = self._is_dark()
         before = self.__dict__.get("_was_dark")
         self.__dict__["_was_dark"] = dark
+        if before != dark:  # (controls that draw in light or dark themselves: a Chart)
+            for control in list(self._controls):
+                changed = getattr(control, "_scheme_changed", None)
+                if changed is not None:
+                    changed(dark)
         if before is not None and before != dark and self._loaded:
             self._fire("ColorSchemeChanged", dark)
         for form in self.__dict__.get("_embedded", ()):  # (forms shown in it look like it)
@@ -743,10 +748,10 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             wanted = "Cancel"
         else:
             return False
-        for c in self._controls:
-            if (isinstance(c, CommandButton) and c._values.get(wanted)
-                    and c._widget.isEnabled() and c._widget.isVisible()):
-                c._widget.click()
+        for c in self._controls:  # (a CommandButton, a CommandLink, a ButtonBox)
+            press = getattr(c, "_default_cancel", None)
+            if press is not None and c._widget is not None and c._widget.isEnabled() and \
+                    c._widget.isVisible() and press(wanted):
                 return True
         return False
 
@@ -1019,6 +1024,8 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             widget.show()
         widget.raise_()
         widget.activateWindow()
+        if not self._design_mode:
+            App._first_form_shown(widget)  # (a splash screen closes)
         if Modal:
             loop = QEventLoop()
             self.__dict__["_modal_loop"] = loop

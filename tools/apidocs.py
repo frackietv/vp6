@@ -43,7 +43,8 @@ API_MD = ROOT / "docs" / "api.md"
 BLOCK_RE = re.compile(r"(<!-- BEGIN GENERATED: (?P<key>[^>]+?) -->\n)(?P<body>.*?)"
                       r"(<!-- END GENERATED -->)", re.S)
 
-KIND = {"str": "str", "text": "str (multi-line)", "int": "int", "bool": "bool", "enum": "enum",
+KIND = {"str": "str", "text": "str (multi-line)", "int": "int", "number": "number (int or float)",
+        "bool": "bool", "enum": "enum",
         "color": "color", "list": "list[str]", "font": "font name", "file": "file path",
         "shortcut": "shortcut key", "outline": "list[str] (an indented outline)"}
 

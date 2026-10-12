@@ -1,12 +1,15 @@
 """Kitchen Sink page: MsgBox, InputBox, a modal form (by its default instance), Beep, the
 system's dialogs through a CommonDialog (Open, Save As, Color, Font, Print), printing with
-the Printer object (Printers, NewPage, EndDoc; to a PDF file with OutputFile), and help
-(ShowHelp: VP6's help window, at a keyword)."""
+the Printer object (Printers, NewPage, EndDoc; to a PDF file with OutputFile), help
+(ShowHelp: VP6's help window, at a keyword), a ProgressBox, ShowError, a WizardForm and a
+splash screen (App.ShowSplash)."""
 
 import os
+import time
 
 from vp6 import *
 from frmDialog import frmDialog
+from frmWizard import frmWizard
 
 PRINT_PAGES = 3  # the pages of the document the Print buttons print
 # (the Printer has no form folder: a file for it is a full path)
@@ -28,8 +31,21 @@ class pgDialogs(Form):
                                       ToolTipText='frmDialog.Show(vpModal), its default instance: it has its own Dark scheme and icon')
         self.cmdBeep = CommandButton(self, Caption='&Beep', Left=16, Top=136, Width=180, Height=32,
                                      TabIndex=4)
-        self.lblResult = Label(self, Caption='', Left=210, Top=22, Width=410, Height=140,
+        self.lblResult = Label(self, Caption='', Left=210, Top=22, Width=410, Height=118,
                                WordWrap=True, TabIndex=5)
+        self.cmdProgress = CommandButton(self, Caption='P&rogress...', Left=210, Top=148, Width=98,
+                                         Height=32, TabIndex=16,
+                                         ToolTipText='ProgressBox: a progress dialog with a Cancel button')
+        self.cmdError = CommandButton(self, Caption='&Error...', Left=314, Top=148, Width=98,
+                                      Height=32, TabIndex=17,
+                                      ToolTipText='ShowError: a message the user can choose not to see again')
+        self.cmdWizard = CommandButton(self, Caption='&Wizard...', Left=418, Top=148, Width=98,
+                                       Height=32, TabIndex=18,
+                                       ToolTipText='frmWizard: a WizardForm, shown modally')
+        self.cmdSplash = CommandButton(self, Caption='Spla&sh', Left=522, Top=148, Width=98,
+                                       Height=32, TabIndex=19,
+                                       ToolTipText='App.ShowSplash: a splash screen for two seconds')
+        self.tmrSplash = Timer(self, Left=588, Top=360, Interval=2000, Enabled=False)
         self.cmdOpen = CommandButton(self, Caption='&Open file...', Left=16, Top=196, Width=180,
                                      Height=32, TabIndex=6,
                                      ToolTipText='CommonDialog.ShowOpen with a Filter, several files at once')
@@ -81,6 +97,42 @@ class pgDialogs(Form):
     def cmdInputBox_Click(self):
         text = InputBox("Type something:", "InputBox", "Hello")
         self.lblResult.Caption = f"InputBox returned {text!r}"
+
+    # --- ProgressBox, ShowError, a WizardForm, a splash screen -------------------------------
+    def cmdProgress_Click(self):
+        progress = ProgressBox("Counting to 50...", 50, "ProgressBox", Delay=0)
+        for number in range(1, 51):
+            time.sleep(0.02)  # (the work)
+            progress.Value = number
+            progress.Text = f"Counting: {number} of 50"
+            if progress.Cancelled:
+                break
+        cancelled = progress.Cancelled
+        progress.Close()
+        self.lblResult.Caption = f"ProgressBox: {'cancelled at' if cancelled else 'done:'} " \
+                                 f"{number} of 50"
+
+    def cmdError_Click(self):
+        ShowError("The disk is full (not really: this is ShowError)", "disk")
+        self.lblResult.Caption = "ShowError: untick its box, and this kind of message stays away"
+
+    def cmdWizard_Click(self):
+        wizard = frmWizard()
+        wizard.Show(vpModal, self.shell or self)  # (waits until it is finished or cancelled)
+        if wizard.Accepted:
+            name, color = wizard.answers
+            self.lblResult.Caption = f"The wizard finished: {name} likes {color.lower()}"
+        else:
+            self.lblResult.Caption = "The wizard was cancelled"
+
+    def cmdSplash_Click(self):
+        App.ShowSplash(LOGO, "Loading the Kitchen Sink...", vpCenter, vpBlue)
+        self.tmrSplash.Enabled = True
+
+    def tmrSplash_Timer(self):
+        self.tmrSplash.Enabled = False
+        App.HideSplash()
+        self.lblResult.Caption = "App.HideSplash: the splash screen is gone"
 
     def cmdModal_Click(self):
         # VB style: the form's class name is its default instance, made when first used.

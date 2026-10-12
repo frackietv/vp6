@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import os
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QIntValidator, QPalette, QPixmap, QIcon
+from PySide6.QtCore import QLocale, Qt, Signal
+from PySide6.QtGui import (QColor, QDoubleValidator, QFont, QFontDatabase, QIcon, QIntValidator,
+                           QPalette, QPixmap)
 from PySide6.QtWidgets import (
     QColorDialog, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QHeaderView,
     QLabel, QLineEdit, QMenu, QPlainTextEdit, QPushButton, QSplitter, QTabBar, QTableWidget,
@@ -20,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import colors
-from .._props import PropSpec, category_of
+from .._props import PropSpec, category_of, normalize
 from ..formfile import format_value
 
 _MIXED = object()
@@ -264,7 +265,9 @@ class PropertiesWindow(QWidget):
         if spec.name == "Name":  # a control array's elements share their (Name)
             name_value = getattr(self.designer, "name_value", self.designer.object_name)
             return name_value(objects[0])
-        if spec.kind in COLLECTION_KINDS:  # (at run time these are the collections)
+        if spec.kind in COLLECTION_KINDS or \
+                spec.name in getattr(objects[0], "_design_values", ()):
+            # (at run time these are collections, or other objects: DBGrid.Columns...)
             values = [obj._values.get(spec.name, spec.default) for obj in objects]
         else:
             values = [getattr(obj, spec.name) for obj in objects]
@@ -364,6 +367,10 @@ class PropertiesWindow(QWidget):
             edit.setValidator(QIntValidator(-1_000_000, 1_000_000))
             if value is None and not mixed:
                 edit.setPlaceholderText("(Default)")
+        elif kind == "number":
+            validator = QDoubleValidator(edit)
+            validator.setLocale(QLocale.c())  # (a point, as in code: 2.5)
+            edit.setValidator(validator)
         elif kind == "index":
             edit.setValidator(QIntValidator(0, 32767))
 
@@ -374,6 +381,12 @@ class PropertiesWindow(QWidget):
                     new = None if original is None else original
                 else:
                     new = int(text)
+            elif k == "number":
+                try:  # (empty: unset, for one whose default is None)
+                    new = normalize("number", text) if text else \
+                        (None if spec.default is None else original)
+                except ValueError:
+                    new = original
             elif k == "index":
                 new = int(text) if text else None  # empty: not in a control array
             elif k == "text":

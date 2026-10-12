@@ -39,7 +39,7 @@ ALL_LIBRARIES = "<All Libraries>"
 # What a property's kind is called in a declaration
 _KIND_TYPES = {"str": "String", "text": "String", "font": "String (font name)",
                "file": "String (picture file) or Picture", "shortcut": "String (shortcut)",
-               "int": "Integer", "bool": "Boolean", "enum": "Integer", "color": "Color",
+               "int": "Integer", "number": "Double", "bool": "Boolean", "enum": "Integer", "color": "Color",
                "list": "list of String", "outline": "list of String (an outline)",
                "panels": "Panels", "tabs": "Tabs", "images": "ListImages",
                "buttons": "Buttons", "columns": "ColumnHeaders", "listitems": "ListItems"}

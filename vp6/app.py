@@ -312,6 +312,7 @@ class _App:
     CompanyName = ""
     FileDescription = ""
     HelpFile = ""  # the program's help file (.vp6help): what ShowHelp shows
+    _splash = None  # the splash screen shown (ShowSplash)
     _lock = None  # the QLockFile this instance holds (PrevInstance)
     _prev_instance = None
 
@@ -367,6 +368,65 @@ class _App:
     def EXEName(self) -> str:
         return type(self)._title or \
             os.path.splitext(os.path.basename(sys.argv[0] or "app"))[0]
+
+    # -- the splash screen ------------------------------------------------------------------
+    def ShowSplash(self, Picture, Message: str = "", Alignment: int = 2, Color=None) -> None:
+        """Show a splash screen: a picture (a file, relative to the program's
+        folder, or a Picture) in a window of its own, while the program starts.
+        It closes when the first form is shown (or with HideSplash)."""
+        from PySide6.QtWidgets import QSplashScreen
+
+        from .picture import picture_pixmap
+
+        ensure_app()
+        self.HideSplash()
+        pixmap = picture_pixmap(self, Picture)
+        if pixmap.isNull():
+            raise ValueError(f"ShowSplash: no picture in {Picture!r}")
+        splash = QSplashScreen(pixmap)
+        type(self)._splash = splash
+        splash.show()
+        if Message:
+            self.SplashMessage(Message, Alignment, Color)
+        QApplication.processEvents()
+
+    def SplashMessage(self, Text: str, Alignment: int = 2, Color=None) -> None:
+        """Write a message at the bottom of the splash screen (e.g. what is
+        being loaded): Alignment vpLeftJustify, vpRightJustify or vpCenter;
+        Color a VB color (unset: black)."""
+        splash = type(self)._splash
+        if splash is None:
+            return
+        from . import colors
+
+        align = {0: Qt.AlignLeft, 1: Qt.AlignRight}.get(int(Alignment), Qt.AlignHCenter)
+        splash.showMessage(str(Text), align | Qt.AlignBottom,
+                           colors.to_qcolor(Color) if Color is not None else Qt.black)
+        QApplication.processEvents()
+
+    def HideSplash(self) -> None:
+        """Close the splash screen now."""
+        splash = type(self)._splash
+        type(self)._splash = None
+        if splash is not None:
+            splash.close()
+            splash.deleteLater()
+
+    @property
+    def SplashVisible(self) -> bool:
+        """Whether a splash screen is shown."""
+        return type(self)._splash is not None
+
+    def _base_dir(self) -> str:  # (ShowSplash's picture: relative to the program's folder)
+        return self.Path
+
+    def _first_form_shown(self, widget) -> None:
+        """A form's window was shown: the splash screen closes once it is there."""
+        splash = type(self)._splash
+        if splash is not None:
+            type(self)._splash = None
+            splash.finish(widget)
+            splash.deleteLater()
 
 
 class _Screen:

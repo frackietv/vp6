@@ -536,6 +536,10 @@ visibility asks the form to place its docked controls again
   cancelled.
 * Both default their title to `App.EXEName` and match the color scheme of the
   active form (`appearance.match_dialog`).
+* `ProgressBox(...)` makes a `QProgressDialog` (minimum duration Delay, auto
+  close, no auto reset) and returns a `_ProgressBox` (Value and Text process
+  events, Cancelled, Close; a context manager). `ShowError(Message, Kind)`
+  shows one shared `QErrorMessage` (`_error_box`), by Kind or by message.
 
 ### `vp6/process.py` (≈230 lines)
 
@@ -556,6 +560,181 @@ Running other programs.
   `Form._finish_unload`) kills it.
 * `Shell(PathName, WindowStyle)`: `QProcess.startDetached`; its process ID,
   or FileNotFoundError.
+
+### `vp6/inputs.py` (≈720 lines)
+
+Controls for entering values, registered in `CONTROL_TYPES` here (before
+Menu), each with `_add_validation` and `_add_mouse_members`.
+
+* `as_datetime` / `as_date`: a datetime, date, QDateTime, QDate or ISO text
+  (a time alone: today) as Python's; `_qdatetime` / `_from_qdatetime` and
+  the date versions convert to and from Qt's.
+* `_InnerEdits`: a control whose widget has an editor in it (a spin box's
+  line edit, a key sequence edit's): the editor is an event target for the
+  mouse, its keys and focus aren't reported twice.
+* `SpinBox`: a `QDoubleSpinBox` (`setDecimals`; `_number` gives an int while
+  DecimalPlaces is 0); keyboard tracking off (Change once a typed number is
+  done). Its Min, Max, Value and Increment are `number` properties.
+* `DTPicker`: a `QDateTimeEdit`; Value is a property of its own (a datetime,
+  not designed); Format picks the locale's short/long date or time format,
+  or CustomFormat; MinDate/MaxDate (ISO text; a MaxDate without a time is
+  that whole day); `_apply_buttons` (CalendarDropDown, UpDown: the calendar
+  popup or the arrows, or neither); `_PopupWatcher` on the calendar popup's
+  window fires DropDown and CloseUp.
+* `MonthView`: `_MonthWidget`, a `QCalendarWidget` and a "Today:" link;
+  `_DayBold` (call / index / assign) keeps the bold days and sets their
+  `QTextCharFormat`; its table view and viewport are event targets;
+  `EventArgs` (DateClick, DateDblClick, SelChange) are its own.
+* `Dial`: a `QDial`, Scroll while dragged and Change on release, as the
+  Slider.
+* `LCDNumber`: a `QLCDNumber`; Value (a number) or Text (`_text` remembers
+  text shown, `_redisplay` after Digits, Mode or the decimal point change);
+  ForeColor sets the segments' palette roles, BackColor the window's.
+* `FontComboBox`: a `QFontComboBox`; FontName is the chosen font (its own
+  `_apply_FontName`/`_read_FontName`, not the control's font); `_quiet`
+  while it is built or filtered.
+* `HotKey`: a `QKeySequenceEdit` (MaxKeys and ClearButton where Qt has them,
+  6.5 and 6.4); Keys in `PortableText`; KeyCode and Shift from the first key
+  combination.
+* Data binding: `BINDINGS` entries for SpinBox (its Value) and DTPicker (a
+  datetime shown; ISO text saved, a date alone for the date formats), and
+  `_add_binding` gives both DataSource and DataField.
+
+### `vp6/buttons.py` (≈330 lines)
+
+* `CommandLink`: a `QCommandLinkButton` (the platform's arrow kept for an
+  empty Picture), Default and Cancel (`_default_cancel`, which
+  `Form._handle_default_cancel` asks of every control that has it).
+* `ToolButton`: a `QToolButton`; ButtonStyle (text only when there is
+  nothing else to show), Checkable/Value, ArrowType; PopupMenu names a form's
+  Menu: its `_submenu` becomes the button's menu (resolved again in
+  `_form_loaded`, as the menus come after it in the region), PopupMode
+  (no arrow part without a menu); `_on_menu_triggered` fires
+  ButtonMenuClick(the Menu) only while the button is down (not from the
+  menu bar).
+* `ButtonBox`: a `QDialogButtonBox`; `parse_box_button` reads a line
+  (a standard button's name, or `Caption|role`); `_buttons` keeps (button,
+  caption, role) in the list's order, so ButtonClick's Index is the line's;
+  its buttons are event targets for the focus and keys; `_default_cancel`
+  clicks its accept or reject button; `ButtonCaption`, `ButtonEnabled`,
+  `ButtonRole` are `_PerItem`s; AddButton and RemoveButton rewrite Buttons.
+
+### `vp6/containers.py` (≈560 lines)
+
+* `_Paged`: a container with pages. `Control.__init__` takes `Page` (the
+  designer writes it right after the container) when the parent has
+  `_page_widget`, and `Control._parent_widget` puts the control's widget on
+  that page; `Control.Page` reads `_page_index_of` its widget's parent (pages
+  can move). `_container_widget` is the page shown (where the designer puts
+  new controls), `_show_page_for` shows a selected control's page in the
+  designer, `_drop_pages` moves the controls of pages removed in the
+  designer to the last page kept.
+* `ToolBox`: a `QToolBox`; `ToolBoxPage` (a `_KeyedItem`) and
+  `_ToolBoxPages`; Pages lines parsed by `parse_tab`; a page keeps its widget
+  (and controls) when the lines change; `_page_at` (the designer: which
+  header was clicked).
+* `PageFrame`: `_StackedFrame`, a `QStackedWidget` that shows a "Page n of
+  m" badge and a dashed outline in the designer; PageCount, CurrentPage,
+  AddPage, RemovePage.
+* `ScrollPanel`: a `QScrollArea` around a content widget (its
+  `_container_widget`), kept as large as its controls need (or ScrollWidth /
+  ScrollHeight) by `_ContentWatcher`; ScrollLeft/ScrollTop, EnsureVisible;
+  `_design_wheel` (the designer's wheel over it).
+
+### `vp6/views.py` (≈620 lines)
+
+* `ColumnView`: a `QColumnView` over a `QStandardItemModel` whose items hold
+  their `ColumnNode` (`_NODE_ROLE`); `_ColumnNodes` mirrors a TreeView's
+  Nodes (Add by Relative and Relationship, by Key or Index); Items parsed by
+  `parse_outline`; PreviewWidget (a control's widget, resolved again in
+  `_form_loaded`); FileSystem swaps in a `QFileSystemModel` (its nodes are
+  made for their paths, `_file_node`), reconnecting the selection model.
+* `UndoStack`: a `QUndoStack` of `_Command`s running DoCode/UndoCode (a
+  function through `call_handler`, or text exec'd in the form's module with
+  `self`).
+* `UndoView`: a `QUndoView` of its own UndoStack, or with Editor a
+  `_DocumentHistory`: a text control's `QTextDocument` (`_editor_document`)
+  whose `undoCommandAdded` pushes a `_DocumentStep` (undo/redo call the
+  document's; `_sync` follows the editor's own Ctrl+Z).
+
+### `vp6/dbgrid.py` (≈470 lines)
+
+* `DBGrid`: a `QTableView` over `_RecordModel`, a table model reading the
+  bound Data control's Recordset (`_records`, `_columns`) as rows are shown.
+  `data.py`'s `_fill_grid` and `_sync_grid` call its `_data_fill` (the
+  columns again; a model reset unless only values changed) and `_data_sync`
+  (the current record's row); choosing a row calls the Data control's
+  `_grid_moved`. `parse_db_column`, `DBColumn`, `_Columns`.
+* Editing: `setData` → `_save_cell` (BeforeUpdate, the record gone to, the
+  value in the original's type by `_typed`, `Update`, AfterUpdate; AddNew for
+  the last row); Delete → `_delete_selected` (BeforeDelete).
+* `_design_values = ("Columns",)`: the Properties window shows its lines,
+  not the run-time collection (also Chart's ChartData).
+
+### `vp6/graphicsview.py` (≈560 lines)
+
+* `GraphicsView`: a `QGraphicsView` and its `QGraphicsScene`; `_Items` makes
+  `GraphicsItem`s around Qt's items (each item's data 0 is its
+  GraphicsItem); `svg_path` reads SVG path data (M, L, H, V, C, Q, Z).
+  `_grow` keeps the scene from 0, 0 to the items (or SceneWidth/Height).
+* Its viewport's mouse: the press remembers the item under it and every
+  item's place; on release, the moved items fire ItemMoved, else the pressed
+  one ItemClick. `HitTest` gives a group for its members.
+* `_render` draws the scene (no selection outlines) for `Picture` and
+  `PrintOut`.
+
+### `vp6/chart.py` (≈400 lines)
+
+* `Chart`: a `QChartView` (QtCharts, imported by `_charts()`; without it a
+  label says so). `parse_chart_data` reads the designer's lines; ChartData
+  is a property of its own (a table, rows of numbers, or a Recordset:
+  `_table_of`); `_rebuild` makes the series and axes (`_build_bars`,
+  `_build_lines`, `_build_pie`, `_y_axis`, `_x_axis`) once all properties
+  are set (`_building`, `_init_values`). Clicks on bar sets, series and
+  slices fire PointSelected.
+* `_scheme_changed(dark)`: called by `Form._dark_changed` for the controls
+  that have it; the light or dark chart theme.
+
+### `vp6/media.py` (≈520 lines)
+
+* `SvgImage`: `_SvgWidget` paints a `QSvgRenderer` into its rectangle
+  (KeepAspect: centred, its shape kept); without Stretch it takes the SVG's
+  default size. (`picture.py`'s `_svg_pixmap` draws SVG files for the other
+  picture properties.)
+* `MediaPlayer`: `_PlayerWidget`, a `QVideoWidget` and a bar (play/pause, a
+  position slider, the time) for a `QMediaPlayer` with a `QAudioOutput`; a
+  placeholder in the designer (no player). Stopped when its form unloads.
+* `PdfViewer`: a `QPdfView` of a `QPdfDocument`; Find searches the pages'
+  text itself (`getAllText`) from the last match on, jumps there, and lets a
+  `QPdfSearchModel` highlight; PrintOut renders each page at 144 dpi onto
+  the Printer.
+
+### `vp6/opengl.py` (≈380 lines)
+
+* `OpenGLView`: `_GLWidget` (a `QOpenGLWidget` made by `_gl_widget_class`)
+  fires InitializeGL, Resize and Paint (counting frames); GL is its
+  context's `functions()`; Animate runs a QTimer at FrameRate. A placeholder
+  in the designer and on platforms without OpenGL (offscreen, minimal).
+* `QuickView`: a `QQuickWidget` (the software renderer on the offscreen
+  platform) with two context properties: `context`, a `QQmlPropertyMap`
+  (`Context`, `_Context`), and `vp6`, the `_Bridge` (raiseEvent, get, set);
+  QmlText is written to a temporary file (removed when the form unloads);
+  `_on_status` connects the root item's own signals (not its properties'
+  notify signals) to QmlEvent; `_python` turns QJSValues into lists and
+  dicts.
+
+### `vp6/wizard.py` (≈250 lines)
+
+* `WizardForm(Form)`: its window holds `_Wizard`, a `QWizard` made a plain
+  child widget (`Qt.Widget`), filling the client area (`_layout_aligned`).
+  Its pages are `_Page`s (validatePage → ValidatePage, nextId → NextPage);
+  it is a container with pages like a ToolBox (`_pages`, `_page_widget`,
+  `_page_index_of`, `_show_page`: setStartId and restart, quietly);
+  `_set_pages` keeps the pages in place (the designer moves the controls of
+  removed ones). `_Wizard.done` → `_done`: Finish (Accepted) or Cancel
+  (True keeps it), then Unload.
+* `formfile.generate_region` writes a form's properties in WizardForm's spec
+  order (a Form's, then Pages, CurrentPage, WizardStyle).
 
 ### `vp6/data.py` (≈1200 lines)
 
@@ -2626,6 +2805,32 @@ explorer-style.
   color scheme and window Icon, used through its default instance with a
   `Result` attribute; `Form_Load` resets it each time, `Form_QueryUnload`
   records why it closed (`ClosedBy`).
+* **`frmWizard.py`** is a WizardForm (four Pages: a name checked in
+  `Form_ValidatePage`, `Form_NextPage` skipping the color page for Zed, a
+  summary in `Form_PageChange`, `answers` set in `Form_Finish`, Cancel
+  asking first), shown modally from the Dialogs page.
+* The pages added with v0.4.55: **`pgInputs.py`** (SpinBoxes multiplied into
+  an LCDNumber, DTPickers with a custom format and UpDown, a MonthView with
+  today in bold, a Dial shown in hex on an LCDNumber, a FontComboBox and a
+  HotKey), **`pgMoreButtons.py`** (CommandLinks, ToolButtons: two toggles,
+  arrows, a PopupMenu of colors with ButtonMenuClick; a ButtonBox),
+  **`pgPages.py`** (a ToolBox with controls on three pages, a PageFrame
+  switched from a ListBox, a ScrollPanel with EnsureVisible),
+  **`pgColumns.py`** (a ColumnView of animals and plants with a Label as its
+  PreviewWidget, and one browsing the project's folder), **`pgDBGrid.py`**
+  (the Data page's pets in a DBGrid with a bound TextBox; BeforeUpdate
+  refusing changes, BeforeDelete asking), **`pgGraphicsView.py`** (a floor
+  plan: rooms, text, a door path, a movable table and bed, chairs as
+  groups; turn, zoom, fit, SavePicture, PrintOut), **`pgChart.py`** (a Chart
+  whose ChartType comes from a ComboBox, a legend, a log scale, new data,
+  EditCopy, PointSelected), **`pgMedia.py`** (an SvgImage of `vp6.svg`, a
+  MediaPlayer playing `tone.wav`, a PdfViewer showing a PDF the Printer
+  makes, Find), **`pgGL.py`** (an OpenGLView animating with glScissor and
+  glClear, a QuickView of QML that raises QmlEvent and sets a label with
+  vp6.set) and **`pgUndo.py`** (a shopping list whose additions and removals
+  are UndoStack steps, shown by an UndoView, and a TextBox's history in a
+  second one). `kitchensink.create` writes `SVG` (`write_svg`) and `SOUND`
+  (`write_tone`, a WAV made with `wave`).
 * **`Module1.py`** is `Main()` with `run(Form1)`.
 * The files are package data (`pyproject.toml`). `tests/test_kitchen_sink.py`
   keeps them covering every control and API name (development guide §5.11).
@@ -2900,6 +3105,14 @@ All tests run headless. `conftest.py`:
 
 | File | Covers |
 |---|---|
+| `test_chart.py` | Chart: `parse_chart_data`; ChartData as rows with labels, numbers alone and a Recordset; Data, SetData, RowLabel, ColumnLabel; every ChartType's series; PointSelected from a bar and a slice; Legend, the Y axis's range, LogScale, SeriesColors; the dark and light chart themes following the form; EditCopy and Picture. |
+| `test_containers.py` | Containers with pages and the ScrollPanel: a ToolBox's Pages (Keys, SelectedItem, PageChange, a control's Page read and set, pages added before it, Enabled, Remove); a PageFrame (CurrentPage, AddPage, RemovePage, a control array element loaded on its template's page, PageCount); a ScrollPanel's content size, ScrollTop and Scroll, EnsureVisible, ScrollWidth/ScrollHeight; `Page=` in the form file, right after the container; the designer: a ToolBox's header clicked to edit a page, controls drawn on the page shown, a selected control's page shown, Previous/Next Page, pasting onto the page shown, a page removed moving its controls (and Undo); a PageFrame's badge, the wheel scrolling a ScrollPanel. |
+| `test_dbgrid.py` | DBGrid: `parse_db_column`; the records and columns (Columns lines, NumberFormat, hidden, the new row), rows following the Data control both ways (the bound TextBox, Bookmark), editing a cell (BeforeUpdate cancelling, AfterUpdate), adding a record in the last row, deleting the selected rows (BeforeDelete), the Properties window showing its Columns lines. |
+| `test_graphicsview.py` | GraphicsView: `svg_path` (and its errors); every kind of item, Keys and Index, Rotation, Scale, ZOrder, Move, Text, colors, Remove, Clear; HitTest, ItemClick and ItemMoved with the mouse, SelectedItems; Zoom, ZoomToFit, SceneWidth, MouseMode, Picture; PrintOut making a PDF. |
+| `test_inputs.py` | SpinBox, DTPicker, MonthView, Dial, LCDNumber, FontComboBox and HotKey: their registration (Validate, the mouse members, data binding), `as_datetime`/`as_date`, the `number` kind; each control's values and events (DropDown and CloseUp, DateClick, DayBold, the Today link, Scroll then Change, Overflow and Hex, Click on a font, KeyCode and Shift); SpinBox and DTPicker bound to a Data control; the designer creating each (its name prefix, its Toolbox category). |
+| `test_media.py` | SvgImage (its picture's size, KeepAspect, without Stretch), SVG files as pictures (LoadPicture, Image, sharp pixmaps), MediaPlayer (loading a WAV: Duration, Mute, Volume, Loop, PlaybackRate, ShowControls), PdfViewer (a PDF the Printer made: PageCount, PageText, Find and SelectedText, Page, PageChange, zoom and page mode, PrintOut, a missing file). |
+| `test_more_buttons.py` | CommandLink (Click, Description, the default button), ToolButton (Checkable and Value, a PopupMenu and ButtonMenuClick only from the button, ArrowType, a picture), `parse_box_button`, ButtonBox (ButtonClick's Index, Accepted, Rejected, Enter and Esc on the form, ButtonCaption, ButtonEnabled, ButtonRole, AddButton, RemoveButton, Orientation), the designer writing them. |
+| `test_opengl.py` | OpenGLView without OpenGL (the note, Animate's timer at FrameRate), QuickView (Context, QmlText, SetProperty/GetProperty, QmlEvent from vp6.raiseEvent and from the root's own signal, not from property changes, vp6.get and vp6.set, Errors, the temporary file removed on unload), the designer's placeholders. |
 | `test_runtime.py` | Events (click, Default/Cancel keys, KeyPress transform/cancel), Value properties, lists, Timer, Unload cancel, the typo guard, TextBox MultiLine rebuild, colors, handler arity and error reporting, MsgBox results, `End()` ending a program (in a process of its own) without Form_Unload. |
 | `test_focus_keys.py` | Validate keeping the focus (no LostFocus or GotFocus), passing, only for the control left; CausesValidation = False; a button clicked while invalid not clicked; which controls have Validate; Form.ActiveControl and Screen.ActiveControl (a user control's inside: the user control); SendKeys parsing (modifiers, groups, specials, repeats, escaped characters, errors) and sending (at once, later, Tab moving the focus, Enter on the Default button, Shift seen by KeyDown, a menu Shortcut, a Label's access key, editing keys). |
 | `test_form_instances.py` | Default form instances (made on first use; methods, controls, properties and variables through the class; an instance of its own apart; class constants and classmethods the class's; Form itself untouched; Unload and Show again: the same instance), run() showing the default instance; Form_QueryUnload's UnloadMode from code, the close button, Ctrl+C and a closing owner form, cancelling before Form_Unload; a form's Icon (relative, absolute, unreadable, none). |
@@ -2949,6 +3162,7 @@ All tests run headless. `conftest.py`:
 | `test_theme.py` | Built-in theme contrast (WCAG ratios), editor and System-mode following, persistence and reset of customizations, Immediate recoloring, the Options dialog. |
 | `test_ide_theme.py` | Dark icon variants, disabled icons, the whole IDE following the theme, System forms in a forced IDE, frame styles and metrics, the grid toggle; rounded bottom corners (the radius per style, none without a frame; `corner_path` holding the corners only), the designer painting them over the form (macOS and Windows 11: the workspace in the corner; GNOME and classic square; BorderStyle 0 square); the designer's title bar following the form where the OS allows, else the OS's. |
 | `test_help.py` | VP6's help: made once from the source into the tests' folder (named by the sources' hash), the installed one first, none without either; the documents and the Python reference in the contents (FEATURES flat); every control (its section of the API reference first) and every public name in the index; what the wheel build runs; ShowHelp (VP6's help at a keyword, a help file of the program's, searches with Regex and MatchCase, a Page, App.HelpFile relative to the program, a missing file); a CommonDialog showing a .vp6help file by HelpCommand (contents, a key, a partial key, a search); the IDE's Help menu (Contents, Index, Search, closed with the IDE) and F1 on a word in the code (a control's name: its type), the designer's control, a property (its control's topic), a Toolbox tool and the Object Browser; vp6-make putting the help and the viewer into executables. |
+| `test_views.py` | ColumnView (Nodes like a TreeView's, SelectedItem, NodeClick and Expand, Remove, the PreviewWidget, PathSeparator; FileSystem: SelectedPath, file nodes, back to the Items), UndoStack (code and functions, Undo, Redo, Index, SetClean, Clear; one of its own), an UndoView of an editor's history (typed steps, going back and forth, the editor's own Undo followed). |
 | `test_vp6help.py` | The help system: Markdown to HTML (blocks, tight and loose and nested lists, task items, tables with alignment and escaped pipes, inline markup, links, pictures, autolinks); making a help file (pages, titles, links between documents rewritten, pictures included, missing links warned about, anchors on every heading, the contents to a depth or flat, index keywords from headings, lone code names, comments and meta tags (not linked code), sections' text without scripts; the same documents making the same bytes; the home page; errors; the command line with an @file); Python packages read without importing (classes, signatures, properties, attributes, constants in groups, private names, re-exports, bases linked and inherited members), following imported packages (not the standard library; excluded ones), compiled modules inspected, a package in a help file; the file (lookups, filters, regular expressions, case, search counts and order, not a help file); the viewer (home, contents, links, pictures, back and forward, web links, missing pages, Locate, the index's filter and options, keywords with several topics and a context, search highlighting with options, requests and one window per file, colors from the palette, the command line's `--list`); vp6help's pyproject. |
 | `test_samples.py` | The New Project dialog's categories (Standard EXE and Console Application at the top level then the Sample Projects folder; Kitchen Sink and the Graphics folder in it; Projection and Perspectives in that; folders opened by double-click and Open, no template while one is chosen, its contents described; `select_template`); Projection: a project of a single startup form; the isometric projection (the view along the diagonal, the axes 120° apart and equally long, Z up, the angles shown); the eight projections (their axes, angles and lengths; each drawn solid); solid faces covering the middle and the axes behind the model, the wireframe showing them through and its corners; the model turning at the rate sliders' speeds (a rate of 0, Rotate off, past 180°), its angle sliders setting it; what the mouse takes (the space, the model, an axis's end and label; the pointer); dragging an axis (just that one, the angles no longer 120°, a general parallel projection), then the space (the skew kept), double-click and Reset view going back; dragging the space turning the axes (still orthographic, the elevation stopping at 90°); dragging the model turning it around the camera's axes, the axes staying; resizing; the models' toggles (one at a time, each hit by the mouse; the torus's hole; the house's wireframe and edges); the models' faces (flat, unit normals, outward for convex parts and away from the torus's tube; within the axes); the separations (every pair of boxes, a street on the ground, none for overlapping boxes); the parts drawn back to front (the boxes turned round, the park before its trees, a part facing away left out); `hull` and `overlap`. Perspectives: a project of a single startup form, 3-point first; the six perspectives (each N-point, its vanishing points' places, drawn solid); linear (2-point: X and Y on the horizon, lines along an axis heading for its vanishing point, upright lines upright, nearer bigger; 1-point: Y's up and right of the model's center); curvilinear (fisheye: +Y in the middle, four on the rim, edges bending; cylindrical: four on the horizon a quarter turn apart, Z's at infinity; spherical: −Y in the middle of the half behind, rim points in both halves); dragging a vanishing point (just that one; double-click going back; one at infinity at the edge, dragged to a point; a fisheye's, the other way going behind); vanishing points at infinity (parallel lines that way; none left: a parallel projection, still solid; back to a point inside the picture; on the fisheye's rim); dragging the space (sideways: along the horizon, Z still at infinity; down: 3-point) and the model; the Distance (the vanishing points staying, the model smaller; inside the cube: every face, ahead and behind); the perspective lines (each axis's and the horizon, none when off) and the fisheye's rim; what the mouse takes; every model in every perspective, solid and wireframe, the boxes back to front; resizing (the sphere's halves side by side); `clip`, `crosses_seam`, `slerp`, `inside`, `look`. |
 | `test_ide_terminal.py` | The IDE's Terminal window: hidden by default and tabbed with the Immediate window (Reset Window Layout hiding it again), View > Terminal Window and its key; the shell started in the project's folder (home without a project or for a missing folder), typing into it; its end announced and Enter starting a new one; New Shell replacing the one running without a word, End Shell at once; the menu (Copy, Paste, Clear, New Shell, End Shell, enabled as they apply); the editor theme's colors and font, light and dark; closing the IDE ending the shell; drawn. |
@@ -2963,7 +3177,7 @@ All tests run headless. `conftest.py`:
 | `test_packaging.py` | The package as published: `pyproject.toml`'s version is `vp6.__version__`, the MIT license and its file, the author without an email, the dependencies and the `make` extra; every data file in `vp6/` (not a module of a package) matched by the package data, so the wheel has it; the `vp6`, `vp6-run` and `vp6-make` commands; the source distribution's docs and tests; the release workflow's version check and trusted publishing. |
 | `test_output.py` | Output capture: copy to the original descriptor, replay of output captured before attaching, split UTF-8 characters, restoring on `stop()`; real Python, C-level and Qt output in a separate process; the Output window's Select All / Copy / Clear menu; the real IDE `main()` showing its own output in the Output window. |
 | `test_interrupt.py` | Ctrl+C (a real SIGINT) in VP6 programs run as separate processes: a project's forms close and `Form_Unload` runs; a form run on its own; `Form_Unload` cancelling the first Ctrl+C; an open `MsgBox` closed first; a console program at `input()` exiting quietly with code 130; programs that don't create the application (the IDE, the tests) keep their own Ctrl+C. |
-| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the Markdown page's three boxes kept in step and its format buttons, the Docking panels page (Float and Dock, Close cancelled, a closed panel shown again, the layout saved and restored, the grid following its panel), the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Terminal page (the shell started, the demo's colors, line drawing, title and pictures (Kitty's, iTerm2's and sixel, side by side), the true color gradient and COLORTERM, the Ligatures check box, the Font box (the fixed-width fonts, the grid following the font, back to the system's), Restart, a vt220 chosen restarting the shell as one (no COLORTERM), Clear, the shell's end); the Running programs page (a program answering, its error output, exit code, Kill, a missing one, Shell stubbed); the MDI and popup forms page (the Notes window and its notes, their menus, tiling, closing; suggestions in a popup taken with the keys); the Web pages page (a stand-in WebView: navigating, an error, Back and Forward, RunScript, Refresh; the WebBrowser chosen instead, its BeforeNavigate, NewWindow and StatusTextChange), the Dialogs page's CommonDialog (Open, Save As writing the sample, Color and its cancelling, Font, Print), the Mouse page's pointers, fruit dragged into the basket and out, and drops from other programs, the Buttons page's cmdHop moving into the Basket frame and out (Container), the Keyboard page's Validate (the focus kept, Help regardless), ActiveControl and SendKeys (typed, upper-cased, Enter on the Default button), the Dialogs page's default instance (Result, closed by code or by its close button, the same instance loaded again, its icon), the Your own controls page (ctlRating's stars, a click's Change, Hover, Value from code, Locked, Max and Value kept in range), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order, lines and shapes, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, the popup menu (right-click, the bold default, under a button), globals); closing unloads the pages. |
+| `test_kitchen_sink.py` | The Kitchen Sink covers every control type, default event, public API name, color scheme and use of control arrays; its regions are canonical; the project is created with all its forms; the designer opens every form; the explorer window (the docked panes, following the window, the Splitter, hiding the navigation pane), the introduction's links and the index (a section shows its first page), every page opening once and replacing the one before; each page's demo (text and the Text page's access keys, the Markdown page's three boxes kept in step and its format buttons, the Docking panels page (Float and Dock, Close cancelled, a closed panel shown again, the layout saved and restored, the grid following its panel), the FlexGrid page (sorting by a clicked heading both ways, RowColChange with RowData, editing the property sheet with each kind of editor, ValidateEdit refusing a Width), the CodeBox page (TODO marked by Highlight, breakpoints and folding from the gutter, typing refused in the protected region, which moves down with an edit above it, the options), the Terminal page (the shell started, the demo's colors, line drawing, title and pictures (Kitty's, iTerm2's and sixel, side by side), the true color gradient and COLORTERM, the Ligatures check box, the Font box (the fixed-width fonts, the grid following the font, back to the system's), Restart, a vt220 chosen restarting the shell as one (no COLORTERM), Clear, the shell's end); the Running programs page (a program answering, its error output, exit code, Kill, a missing one, Shell stubbed); the MDI and popup forms page (the Notes window and its notes, their menus, tiling, closing; suggestions in a popup taken with the keys); the Web pages page (a stand-in WebView: navigating, an error, Back and Forward, RunScript, Refresh; the WebBrowser chosen instead, its BeforeNavigate, NewWindow and StatusTextChange), the Dialogs page's CommonDialog (Open, Save As writing the sample, Color and its cancelling, Font, Print), the Mouse page's pointers, fruit dragged into the basket and out, and drops from other programs, the Buttons page's cmdHop moving into the Basket frame and out (Container), the Keyboard page's Validate (the focus kept, Help regardless), ActiveControl and SendKeys (typed, upper-cased, Enter on the Default button), the Dialogs page's default instance (Result, closed by code or by its close button, the same instance loaded again, its icon), the pages added with v0.4.55 (Calendars, numbers and keys; Link, tool and dialog buttons; Pages and scrolling panels; ColumnView; DBGrid; GraphicsView; Charts; Media, SVG and PDF; OpenGL and QML; Undo history; the Dialogs page's ProgressBox, ShowError, wizard and splash screen), the Your own controls page (ctlRating's stars, a click's Change, Hover, Value from code, Locked, Max and Value kept in range), the Editing text page (line and column, Undo/Redo, Indent, Go to line, Tab, completions under the caret taken by Enter or a click and closed by Esc, the word under the mouse), the RichTextBox page (formatting buttons following the selection, Find with its options, saving and loading HTML, the word count, the colored log), buttons, lists, scroll bars, sliders, progress bars and spinners, the Lists page's ItemData, pictures and fonts, Checkbox ListBox, Simple Combo and DropDown, the Buttons page's Graphical buttons (a picture button, a toggle CheckBox, toggle OptionButtons), the ListView page (sorting by a column, views, check boxes, adding and removing), the TabStrip page, the files page (the three file system controls linked, the pattern, the chosen picture, hidden files), the window's Toolbar (pages, the navigation pane and the color schemes, in step with the View menu), pictures (with opaque and transparent labels on one), z-order, lines and shapes, the TreeView, the Timer running only while visible, the layout, scrolling, popping out and back, dialogs with the modal form, color schemes with the View menu, keys, the mouse, control arrays, menus and bookmarks, the popup menu (right-click, the bold default, under a button), globals); closing unloads the pages. |
 | `test_mouse.py` | MousePointer (a control's own pointer given back, a custom MouseIcon, a form's), Screen.MousePointer; which controls have the mouse members and events; VB drag and drop: DragOver's enter, over and leave, DragDrop, refusing in DragOver, dropping on a user control, Drag starting (its data and picture, its DragIcon), ending where it is and cancelling, DragMode Automatic (no MouseDown or Click); drops from other programs (OLEDragOver, OLEDragDrop, refusing, a TextBox's own drop with OLEDropMode None, a form's), the DataObject. |
 | `test_popupmenu.py` | Form.PopupMenu: the chosen item returned after its Click (and the menu's own Click first), the bold DefaultMenu only for that time, None when closed without a choice, nothing recorded outside PopupMenu; left, right and center alignment at X, Y, the mouse's place for what is left out; not a Menu, a menu without items, a visible menu-bar menu; at design time. |
 | `test_picture.py` | Picture objects: one in memory (the graphics methods on it, transparent and filled, Cls, Image a copy, no unknown properties), LoadPicture (empty, a missing file, not a picture), SavePicture (by extension, BMP without one, a file's picture, an empty one failing); Pictures as a PictureBox's, Image's, button's Picture, the Icon, a MouseIcon, an ImageList's picture, clearing with LoadPicture(); a PictureBox's Image and PaintPicture (at its size, scaled part, a file, an empty one), a form's Image; a form's background Picture (a file relative to its folder, under the drawing, a Picture, cleared; the form file); the clipboard (pictures, files' pictures, text, RTF, files); a dropped picture in a DataObject; the exports. |
@@ -2972,3 +3186,4 @@ All tests run headless. `conftest.py`:
 | `test_data.py` | Data-bound controls: Database (CreateDatabase, OpenDatabase, Execute with parameters and several statements, Pictures as PNGs), the Recordset (moving, BOF and EOF, Fields and their values, AddNew, Edit, Update, CancelUpdate, Delete then MoveNext, Find with NoMatch, Bookmark, AbsolutePosition, Requery, read-only queries and views); the Data control: opened after Form_Load, bound controls of each kind, DataChanged, saving on moving, Validate (cancelling, Save), Reposition, EOFAction and BOFAction, Error, ReadOnly, UpdateRecord and UpdateControls, a bound FlexGrid both ways, DataSource set at run time, saved on unload; the Toolbox, icon, designer and the Properties window's lists. |
 | `test_process.py` | The Process control: running a program and talking with it (WorkingDirectory, UTF-8 both ways, standard output and error, Write and WriteLine, its exit code, not started twice, no writing when not running), CloseInput, Kill (-1), Terminate, WaitForExit, a command line with quotes, a program that can't be started (Error), no CommandLine, `split_command`; ended with its form; Shell (a program run on its own, a missing one, none); the Toolbox (before Menu), its icon, events and designer placement. |
 | `test_project.py` | The project script: hash-bang, validity, executable bit, round trip, keeping user code, never executing on load, invalid files, running via hash-bang / python / without VP6, modules in subfolders importing each other by name; groups: the default Forms and Modules (also for older files without groups), nesting groups holding anything, the top level, rename, delete (contents move up), refused moves and names, new files placed by kind or chosen group, remove and rename of files, repairing an inconsistent tree, saving and loading; the icon (none by default, nothing copied; its own files, saved and loaded, one file as a string, none in older projects) and a program showing its project's icon, or the VP6 icon without one. |
+| `test_wizard.py` | WizardForm (pages and their controls, Next with ValidatePage keeping a page, NextPage skipping one, Back, VisitedPages, Finish unloading it, Cancel kept or not, WizardStyle, CurrentPage, fewer Pages), its new form source, the designer (DesignWizardForm, controls on pages, Pages before CurrentPage) and the code window's events; the Splash Screen form; App.ShowSplash, SplashMessage, HideSplash and closing on the first form shown; ProgressBox; ShowError's "don't show again"; Project > Add Wizard Form and Add Splash Screen. |

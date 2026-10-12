@@ -641,7 +641,7 @@ def test_project_panel_sorts_by_name(window, tmp_path):
     window.open_project(create_project(str(tmp_path), "Sink", "kitchensink"))
     window.add_module()  # Module2: with a form selected, into the modules' group
     explorer = window.explorer
-    forms = ["Form1", "frmDialog", "frmMDI", "frmNote", "frmSuggest"]
+    forms = ["Form1", "frmDialog", "frmMDI", "frmNote", "frmSuggest", "frmWizard"]
     assert _listed(window, "Forms") == ["Pages"] + forms  # groups first
     pages = _listed(window, "Forms", "Pages")
     assert pages == sorted(pages, key=str.lower)  # A to Z by default, not the project's order
@@ -1263,9 +1263,9 @@ def test_toolbox_places_user_controls_in_its_columns(qapp):
     toolbox = Toolbox()
     toolbox.resize(2 * (Toolbox.BUTTON + Toolbox.SPACING) + 2 * Toolbox.MARGIN, 5000)
     count = len(toolbox.buttons)
-    toolbox.set_user_controls(["Rating", "Gauge", "Dial"])
+    toolbox.set_user_controls(["Rating", "Gauge", "Knob"])
     assert len(toolbox.buttons) == count + 3 and _columns_in_grid(toolbox) == {0, 1}
-    last = toolbox.buttons["Dial"]
+    last = toolbox.buttons["Knob"]
     assert toolbox.grid.getItemPosition(toolbox.grid.indexOf(last))[:2] == \
         ((count + 2) // 2, (count + 2) % 2)
     toolbox.set_user_controls([])

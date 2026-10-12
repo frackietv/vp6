@@ -18,6 +18,7 @@ import vp6
 from .. import formfile
 from ..controls import CONTROL_TYPES, EVENT_ARGS, ControlArray
 from ..form import Form
+from ..wizard import WizardForm
 from ..usercontrol import OWN_EVENT_ARGS, OWN_EVENTS
 from .documents import Document, FormDocument
 from .theme import Theme, TextStyle, theme_manager
@@ -722,6 +723,8 @@ class CodeWindow(QWidget):
         if isinstance(self.doc, FormDocument):
             if self.doc.kind == "usercontrol":  # its own events: UserControl_Resize...
                 result.append(("UserControl", OWN_EVENTS))
+            elif formfile.find_form_base(self.doc.text) == "WizardForm":
+                result.append(("Form", WizardForm.Events))  # (ValidatePage, Finish...)
             else:
                 result.append(("Form", Form.Events))
             controls = {c.name: c for c in self.doc.form_def.controls}  # arrays: once

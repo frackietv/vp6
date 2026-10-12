@@ -16,7 +16,8 @@ it; its arrow buttons go to the first, previous, next and last record::
   RichTextBox, CodeBox and MarkdownBox show the field's value; Image and PictureBox a
   picture kept in it (a BLOB, e.g. a PNG); a FlexGrid bound to a Data
   control (DataSource only) shows all its records, and choosing a row there
-  goes to that record. ``DataChanged`` tells whether the user changed the
+  goes to that record (a DBGrid too, and it edits them). ``DataChanged``
+  tells whether the user changed the
   value shown.
 * Moving to another record first saves what was changed: the ``Validate
   (Action, Save)`` event comes before (Action: vpDataActionMoveNext...; Save:
@@ -720,7 +721,7 @@ BINDINGS = {
     "PictureBox": (lambda c: c.Picture, lambda c, v: setattr(c, "Picture", _picture_of(v)),
                    lambda c, shown, original: _picture_value(c, shown)),
 }
-BOUND_GRIDS = ("FlexGrid",)  # a whole Recordset: DataSource only
+BOUND_GRIDS = ("FlexGrid", "DBGrid")  # a whole Recordset: DataSource only
 
 _DATA_SOURCE = P("DataSource", "str", "",
                  description="The Data control (its Name) whose current record it shows")
@@ -1102,6 +1103,10 @@ class Data(Control):
             self._fill_grid(grid)
 
     def _fill_grid(self, grid) -> None:
+        fill = getattr(grid, "_data_fill", None)  # (a DBGrid shows the records itself)
+        if fill is not None:
+            fill(self)
+            return
         rs = self._recordset
         columns = rs._columns if rs is not None else []
         records = rs._records if rs is not None else []
@@ -1129,6 +1134,10 @@ class Data(Control):
             self._sync_grid(grid)
 
     def _sync_grid(self, grid) -> None:
+        sync = getattr(grid, "_data_sync", None)
+        if sync is not None:
+            sync(self)
+            return
         rs = self._recordset
         if rs is None or not rs._has_current():
             return
@@ -1191,8 +1200,7 @@ class Data(Control):
 for _name in ("TextBox", "Label", "CheckBox", "ComboBox", "ListBox", "RichTextBox", "CodeBox",
               "MarkdownBox", "Image", "PictureBox"):
     _add_binding(CONTROL_TYPES[_name], grid=False)
-for _name in BOUND_GRIDS:
-    _add_binding(CONTROL_TYPES[_name], grid=True)
+_add_binding(CONTROL_TYPES["FlexGrid"], grid=True)  # (a DBGrid binds itself: vp6/dbgrid.py)
 
 # The Toolbox: after the other controls (Menu stays last)
 CONTROL_TYPES["Data"] = Data
