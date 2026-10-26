@@ -1,5 +1,12 @@
 # VP6 features
 
+**Version:** 0.4.65
+**Date:** 2026-10-25
+
+## IDE
+
+- The Toolbox's buttons without a frame on macOS (its style framed every one): only the chosen tool, a pressed button and the one under the mouse show it, in both views and on the view buttons along the top
+
 **Version:** 0.4.64
 **Date:** 2026-10-25
 

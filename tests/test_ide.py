@@ -1316,6 +1316,43 @@ def test_toolbox_list_view_shows_names_top_to_bottom(qapp):
     toolbox.deleteLater()
 
 
+def test_toolbox_buttons_framed_only_when_checked(qapp):
+    """The macOS style frames every tool button, auto-raised or not: the
+    Toolbox's ask the style for their frame only while checked, pressed or
+    hovered (counted by a proxy style: the macOS style draws nothing offscreen)."""
+    from PySide6.QtWidgets import QProxyStyle, QStyle
+
+    from vp6.ide.panels import Toolbox
+
+    class Frames(QProxyStyle):
+        count = 0
+
+        def drawComplexControl(self, control, option, painter, widget=None):
+            if control == QStyle.CC_ToolButton:
+                Frames.count += 1
+            super().drawComplexControl(control, option, painter, widget)
+
+    style = Frames("Fusion")
+
+    def framed(button):
+        Frames.count = 0
+        button.grab()
+        return Frames.count > 0
+
+    toolbox = Toolbox()
+    for button in (*toolbox.buttons.values(), toolbox.list_button):
+        button.setStyle(style)
+    assert toolbox.buttons[None].isChecked() and framed(toolbox.buttons[None])
+    assert not framed(toolbox.buttons["TextBox"])
+    assert not framed(toolbox.list_button)
+    toolbox.buttons["TextBox"].setDown(True)  # pressed
+    assert framed(toolbox.buttons["TextBox"])
+    toolbox.buttons["TextBox"].setDown(False)
+    toolbox.set_view(True, False)
+    assert not framed(toolbox.buttons["TextBox"])
+    assert framed(toolbox.list_button)  # (checked now)
+    toolbox.deleteLater()
+
 def test_toolbox_grouped_by_category(qapp):
     from vp6.controls import CONTROL_TYPES
     from vp6.ide.panels import TOOLBOX_CATEGORIES, Toolbox

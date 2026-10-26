@@ -28,30 +28,32 @@ from .theme import theme_manager
 
 class _ToolButton(QToolButton):
     """A Toolbox button: its icon, or in the list view its icon with the
-    tool's name beside it, both at the left (QToolButton would centre them)."""
+    tool's name beside it, both at the left (QToolButton would centre them).
+    Its frame shows only while it is checked, pressed or hovered: the macOS
+    style frames every tool button, auto-raised or not."""
 
     listed = False
 
     def paintEvent(self, event):
-        if not self.listed:
-            super().paintEvent(event)
-            return
         option = QStyleOptionToolButton()
         self.initStyleOption(option)
         option.text = ""
         option.icon = QIcon()
         painter = QStylePainter(self)
-        painter.drawComplexControl(QStyle.CC_ToolButton, option)  # (hovered, checked)
+        if option.state & (QStyle.State_On | QStyle.State_Sunken | QStyle.State_MouseOver):
+            painter.drawComplexControl(QStyle.CC_ToolButton, option)
         size = self.iconSize()
-        left = Toolbox.LIST_PADDING
+        left = Toolbox.LIST_PADDING if self.listed else (self.width() - size.width()) // 2
         self.icon().paint(painter, QRect(left, (self.height() - size.height()) // 2,
                                          size.width(), size.height()),
                           Qt.AlignCenter, QIcon.Normal if self.isEnabled() else QIcon.Disabled)
-        text = self.rect().adjusted(left + size.width() + Toolbox.LIST_GAP, 0,
-                                    -Toolbox.LIST_PADDING, 0)
-        painter.setPen(option.palette.color(QPalette.ButtonText))
-        painter.drawText(text, Qt.AlignVCenter | Qt.AlignLeft,
-                         self.fontMetrics().elidedText(self.text(), Qt.ElideRight, text.width()))
+        if self.listed:
+            text = self.rect().adjusted(left + size.width() + Toolbox.LIST_GAP, 0,
+                                        -Toolbox.LIST_PADDING, 0)
+            painter.setPen(option.palette.color(QPalette.ButtonText))
+            painter.drawText(text, Qt.AlignVCenter | Qt.AlignLeft,
+                             self.fontMetrics().elidedText(self.text(), Qt.ElideRight,
+                                                           text.width()))
 
 
 class Toolbox(QWidget):
@@ -140,7 +142,7 @@ class Toolbox(QWidget):
         self.setMinimumWidth(self.fitted_width(0))  # (one column)
 
     def _toggle(self, icon_name: str, tip: str) -> QToolButton:
-        button = QToolButton()
+        button = _ToolButton()
         button.setIcon(icons.icon(icon_name))
         button.setIconSize(QSize(16, 16))
         button.setFixedSize(20, 20)
