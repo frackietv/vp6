@@ -1,5 +1,12 @@
 # VP6 features
 
+**Version:** 0.4.66
+**Date:** 2026-10-25
+
+## Backlog
+
+- Education, planned as backlog items: a curriculum package (vp6edu) with subjects, learning paths and lessons following OpenStax's mathematics books (Prealgebra 2e to Calculus Volume 3, with Introductory Statistics 2e as a branch), mathematics in Markdown, checking typed answers, a Graph control and a 3D one, lesson projects with a Lesson window (lesson, exercises, lab), the New Project dialog's Education tab, statistics tools, and the books' chapters as lessons, exercises and labs
+
 **Version:** 0.4.65
 **Date:** 2026-10-25
 
