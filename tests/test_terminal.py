@@ -970,3 +970,31 @@ def test_sixel_pictures_drawn(qapp):
     assert picture.pixelColor(round(2 + width), round(2 + 1.5 * height)) == QColor("red")
     assert picture.pixelColor(round(2 + width), round(2 + 0.5 * height)) != QColor("red")
     form.Unload()
+
+
+def test_mouse_events_while_no_program_runs(qapp, monkeypatch):
+    from vp6 import vpLeftButton
+
+    class Mouse(Form):
+        def InitializeComponent(self):
+            self.events = []
+            self.term = Terminal(self, AutoStart=False)
+
+        def term_MouseDown(self, Button, Shift, X, Y):
+            self.events.append(("down", Button, Shift, X, Y))
+
+        def term_MouseUp(self, Button, Shift, X, Y):
+            self.events.append(("up", Button, Shift, X, Y))
+
+    form = Mouse()
+    form.Show()
+    try:
+        QTest.mouseClick(form.term._widget, Qt.LeftButton, Qt.NoModifier, QPoint(20, 30))
+        assert form.events == [("down", vpLeftButton, 0, 20, 30), ("up", vpLeftButton, 0, 20, 30)]
+        form.events.clear()
+        monkeypatch.setattr(Terminal, "Running", property(lambda self: True))  # (its mouse)
+        QTest.mouseClick(form.term._widget, Qt.LeftButton, Qt.NoModifier, QPoint(20, 30))
+        assert form.events == []
+        monkeypatch.undo()
+    finally:
+        form.Unload()

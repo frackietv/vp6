@@ -24,7 +24,8 @@ from PySide6.QtWidgets import (
 
 from . import claude
 from .claude import (PERMISSION_MODES, AuthStatus, ClaudeChat, SessionInfo, describe_time,
-                     find_claude, list_sessions, load_transcript, message_text)
+                     find_claude, list_sessions)
+from .logic.chats import ClaudeMessages, login_hint, tool_summary  # noqa: F401
 from .theme import ide_settings, theme_manager
 
 INSTALL_URL = "https://docs.anthropic.com/en/docs/claude-code/setup"
@@ -316,24 +317,6 @@ class ClaudePanel(QWidget):
 
 # -- a chat ------------------------------------------------------------------------------------
 
-def tool_summary(name: str, tool_input: dict) -> str:
-    """One line about a tool's use: its command, file, pattern or address."""
-    for key in ("command", "file_path", "notebook_path", "pattern", "url", "query",
-                "description", "prompt"):
-        value = tool_input.get(key)
-        if isinstance(value, str) and value.strip():
-            line = " ".join(value.split())
-            return line if len(line) <= 160 else line[:157] + "…"
-    return ""
-
-
-def _result_text(block: dict) -> str:
-    content = block.get("content")
-    if isinstance(content, list):
-        content = "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
-    return content if isinstance(content, str) else ""
-
-
 class ChatWindow(QWidget):
     """A session with an assistant, in the MDI area: the conversation, a
     question about using a tool when it asks one, and the message box. A
@@ -363,7 +346,6 @@ class ChatWindow(QWidget):
         self.new_title = f"New {self.NAME} Session"
         self.title = session.title if session else self.new_title
         self._speaker: str | None = None  # who wrote the last block shown
-        self._tools: dict[str, str] = {}  # tool use id: its name
         self._questions: list[tuple[str, str, dict]] = []  # waiting to be answered
 
         self.view = QTextBrowser()
@@ -479,9 +461,28 @@ class ChatWindow(QWidget):
         else:
             self.replied.emit()
 
-    # -- showing messages -------------------------------------------------------------------------
+    # -- showing messages (the view ``logic.chats`` shows them in) --------------------------------
     def show_message(self, data: dict) -> None:
         """Show one of the chat's messages (live, or from what was said before)."""
+        self.messages.show_message(data)
+
+    def show_text(self, who: str, text: str) -> None:
+        self._show_text(who, text)
+
+    def show_tool(self, name: str, summary: str) -> None:
+        self._show_tool(name, summary)
+
+    def show_tool_error(self, text: str) -> None:
+        self._show_tool_error(text)
+
+    def show_error(self, text: str) -> None:
+        self._show_error(text)
+
+    def set_state(self, text: str) -> None:
+        self.state.setText(text)
+
+    def state_text(self) -> str:
+        return self.state.text()
 
     def _show_text(self, who: str, text: str) -> None:
         if who == "user":
@@ -503,9 +504,7 @@ class ChatWindow(QWidget):
     def _show_error(self, text: str) -> None:
         body = html.escape(text).replace("\n", "<br>")
         hint = ""
-        lowered = text.lower()
-        if "login" in lowered or "log in" in lowered or "api key" in lowered or \
-                "authenticat" in lowered:
+        if login_hint(text):
             hint = f" <a href='vp6:login'>Log in to {html.escape(self.PRODUCT)}</a>"
         self._append("error", f"<p style='color:{self._error}'>{body}{hint}</p>")
 
@@ -597,56 +596,9 @@ class ClaudeChatWindow(ChatWindow):
     MODE_KEY = claude.MODE_KEY
 
     def _make_chat(self, folder: str, session: SessionInfo | None):
+        self.messages = ClaudeMessages(self)
         return ClaudeChat(folder, session.id if session else None, mode=claude.default_mode(),
                           parent=self)
 
     def _show_session(self, session: SessionInfo) -> None:
-        for message in load_transcript(session.path):
-            self.show_message(message)
-        self.state.setText("Resumed: your next message goes on with this session")
-
-    # -- showing messages -------------------------------------------------------------------------
-    def show_message(self, data: dict) -> None:
-        """Show one of Claude Code's messages (live, or from a transcript)."""
-        kind = data.get("type")
-        if kind == "system" and data.get("subtype") == "init":
-            self.state.setText(f"Model: {data.get('model', '?')}")
-            return
-        if kind == "result":
-            self._show_result(data)
-            return
-        if kind not in ("user", "assistant"):
-            return
-        content = data.get("message", {}).get("content")
-        if isinstance(content, str):
-            content = [{"type": "text", "text": content}]
-        if not isinstance(content, list):
-            return
-        for block in content:
-            if not isinstance(block, dict):
-                continue
-            block_type = block.get("type")
-            if block_type == "text":
-                text = message_text({"message": {"content": [block]}})
-                if text:
-                    self._show_text(kind, text)
-            elif block_type == "tool_use":
-                name = block.get("name", "?")
-                self._tools[block.get("id", "")] = name
-                self._show_tool(name, tool_summary(name, block.get("input") or {}))
-            elif block_type == "tool_result" and block.get("is_error"):
-                self._show_tool_error(_result_text(block))
-
-    def _show_result(self, data: dict) -> None:
-        parts = []
-        cost = data.get("total_cost_usd")
-        if isinstance(cost, (int, float)):
-            parts.append(f"${cost:.4f}")
-        duration = data.get("duration_ms")
-        if isinstance(duration, (int, float)):
-            parts.append(f"{duration / 1000:.1f} s")
-        self.state.setText("Done" + (f" ({', '.join(parts)})" if parts else ""))
-        if data.get("is_error") or data.get("subtype", "success") != "success":
-            text = data.get("result") or data.get("subtype") or "error"
-            self._show_error(str(text))
-
+        self.messages.show_transcript(session.path)

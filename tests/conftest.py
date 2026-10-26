@@ -172,6 +172,8 @@ def _program_appearance_back():
     from vp6.app import _App
 
     appearance.app_scheme = None
+    appearance.force_app_look(None)
     if _App._native_style is not None and _App._style:
         QApplication.setStyle(_App._native_style)
     _App._style = ""
+

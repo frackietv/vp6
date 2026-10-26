@@ -1,7 +1,8 @@
 """Kitchen Sink page: three MarkdownBoxes showing the same text: its source with the
 syntax colored (Mode = vpMarkdownSource), a visual editor (vpMarkdownVisual) and a
 rendered preview (vpMarkdownPreview). Editing either editor updates the other two (their
-Change events); the buttons format the selection in the editor used last (ApplyFormat)."""
+Change events); the buttons format the selection in the editor used last (ApplyFormat);
+Append adds a line at the end (AppendText) and shows it (ScrollToEnd)."""
 
 from vp6 import *
 
@@ -9,6 +10,7 @@ SAMPLE = """# Markdown
 
 Type in the **source** or in the *visual* editor: the other two follow.
 Ctrl+B and Ctrl+I format, ~~strike~~ and `code` too.
+Colors: <span style="color:#c0392b">red, **bold** too</span> and <font color="#2e86c1">blue</font>.
 
 ## Lists
 
@@ -98,8 +100,11 @@ class pgMarkdown(Form):
         self.mdPreview = MarkdownBox(self, Mode=2, Text='', Left=428, Top=72, Width=196,
                                      Height=330, TabIndex=17,
                                      ToolTipText='Mode = vpMarkdownPreview: rendered, read-only')
-        self.lblStatus = Label(self, Caption='', Left=16, Top=410, Width=608, Height=22,
+        self.lblStatus = Label(self, Caption='', Left=16, Top=410, Width=500, Height=22,
                                TabIndex=18)
+        self.cmdAppend = CommandButton(self, Caption='&Append', Left=530, Top=406, Width=94,
+                                       Height=28, TabIndex=19,
+                                       ToolTipText='AppendText: a colored line at the end, then ScrollToEnd')
     # endregion
 
     def Form_Load(self):
@@ -141,6 +146,14 @@ class pgMarkdown(Form):
     def cmdFormat_Click(self, Index):
         self.editor.ApplyFormat(FORMATS[Index])  # (the same again undoes it)
         self.editor.SetFocus()
+
+    # --- a log ------------------------------------------------------------------------------------
+    def cmdAppend_Click(self):
+        import time
+        self.mdSource.AppendText(f"\n\n<font color=\"#27ae60\">Appended</font> at "
+                                 f"**{time.strftime('%H:%M:%S')}**\n")  # (the others follow)
+        for box in (self.mdSource, self.mdVisual, self.mdPreview):
+            box.ScrollToEnd()
 
     # --- links ------------------------------------------------------------------------------------
     def mdPreview_LinkClick(self, URL):

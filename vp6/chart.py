@@ -235,7 +235,7 @@ class Chart(Control):
             self._chart.legend().setFont(self._widget.font())
 
     _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
-        _apply_FontUnderline = _apply_font
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
 
     def _scheme_changed(self, dark: bool) -> None:
         if self._chart is not None:

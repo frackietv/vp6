@@ -424,3 +424,87 @@ def test_alpha_rounded_paths_and_gradients(form):
     picture.ScaleMode = 1  # twips: 15 a pixel
     picture.DrawPath(GraphicsPath().AddRect(0, 0, 300, 300), RGBA(0, 0, 0, 0), vpRed)
     assert picture.Point(75, 75) == vpRed and picture.Point(450, 450) == vpWhite  # (twips)
+
+
+# --- as a QPainter draws: DrawText, transformed paths, rectangles ----------------------------
+
+def _painted(draw) -> QImage:
+    """A 48 x 48 transparent image QPainter drew on (antialiased, scaled by 2)."""
+    from PySide6.QtGui import QPainter
+
+    image = QImage(48, 48, QImage.Format_ARGB32_Premultiplied)
+    image.fill(0)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.scale(2, 2)
+    draw(painter)
+    painter.end()
+    return image
+
+
+def _same(a: QImage, b: QImage) -> bool:
+    a = a.convertToFormat(QImage.Format_ARGB32_Premultiplied)
+    b = b.convertToFormat(QImage.Format_ARGB32_Premultiplied)
+    return a.size() == b.size() and all(a.pixel(x, y) == b.pixel(x, y)
+                                        for y in range(a.height()) for x in range(a.width()))
+
+
+def test_rectangles_and_transformed_paths_as_qpainter_draws_them(qapp):
+    from PySide6.QtCore import QRectF, Qt
+    from PySide6.QtGui import QColor, QPen
+
+    from vp6 import GraphicsPath, Picture, vpCapSquare, vpJoinBevel
+
+    picture = Picture(24, 24, PixelRatio=2)
+    picture.DrawCap, picture.DrawJoin = vpCapSquare, vpJoinBevel  # (QPen's own)
+    picture.DrawPath(GraphicsPath().AddRect(3, 11.5, 18, 2.2), 0x2B2B2B, 0x2B2B2B)
+    # (a rectangle: filled as drawRect / fillRect fill it, not as a path)
+    expected = _painted(lambda p: (p.setPen(QPen(QColor("#2b2b2b"), 1)),
+                                   p.setBrush(QColor("#2b2b2b")),
+                                   p.drawRect(QRectF(3, 11.5, 18, 2.2))))
+    assert _same(picture._image, expected)
+    # Drawn at half size, moved: as a painter's transformation draws it, the pen too
+    picture = Picture(24, 24, PixelRatio=2)
+    picture.DrawWidth, picture.DrawJoin = 1, vpJoinBevel
+    path = GraphicsPath().AddEllipse(4, 4, 16, 16).Transform(0.5, 0, 0, 0.5, 12, 0)
+    picture.DrawPath(path, 0x2B2B2B, 0xFFFFFF)
+    half = _painted(lambda p: (p.translate(12, 0), p.scale(0.5, 0.5),
+                               p.setPen(QPen(QColor("#2b2b2b"), 1, Qt.SolidLine, Qt.FlatCap)),
+                               p.setBrush(QColor("#ffffff")),
+                               p.drawEllipse(QRectF(4, 4, 16, 16))))
+    assert _same(picture._image, half)
+    assert GraphicsPath().Transform()._transform is None  # (none: the identity)
+    combined = GraphicsPath().AddRect(0, 0, 4, 4).Transform(2, 0, 0, 2, 0, 0) \
+        .Unite(GraphicsPath().AddRect(10, 10, 2, 2))
+    assert combined._qt_transformed(picture).boundingRect().width() == 12
+
+
+def test_draw_text_in_a_box(qapp):
+    from PySide6.QtCore import QRectF, Qt
+    from PySide6.QtGui import QColor, QFont
+
+    from vp6 import Picture, vpCenter, vpLeftJustify, vpVAlignTop
+
+    picture = Picture(24, 24, PixelRatio=2)
+    picture.FontSize, picture.FontWeight, picture.ForeColor = 4.5, 700, 0xFFFFFF
+    picture.CurrentX, picture.CurrentY = 3, 4
+    picture.DrawText("OK", 12.5, 8, 22, 16, vpCenter)  # (wider than its box: cut off)
+    font = QFont()
+    font.setPixelSize(6)
+    font.setBold(True)
+    expected = _painted(lambda p: (p.setFont(font), p.setPen(QColor("#ffffff")),
+                                   p.drawText(QRectF(12.5, 8, 9.5, 8), Qt.AlignCenter, "OK")))
+    assert _same(picture._image, expected)
+    assert (picture.CurrentX, picture.CurrentY) == (3, 4)  # (the current point stays)
+    picture = Picture(60, 20)
+    picture.ForeColor = 0
+    picture.DrawText("A rather long caption", 0, 0, 60, 20, vpLeftJustify, vpVAlignTop,
+                     EndEllipsis=True)
+    drawn = [x for x in range(60) for y in range(20) if picture.Point(x, y) != -1]
+    assert drawn and max(drawn) < 59  # (shortened with "…" to fit)
+    weights = []
+    for weight in (0, 400, 600):
+        picture = Picture(10, 10)
+        picture.FontWeight = weight
+        weights.append(picture._surface.font().weight())
+    assert weights[1] == QFont.Normal and weights[2] == QFont.DemiBold

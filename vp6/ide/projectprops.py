@@ -18,18 +18,10 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, Signal
 
-from .._props import P, PropSpec
-from ..project import SUB_MAIN, Project
-
-# Shared with the Project Properties dialog: (value, label)
-TYPE_CHOICES = (("exe", "Standard EXE"), ("console", "Console Application"))
-COLOR_SCHEME_CHOICES = (
-    ("system", "System (follow the OS appearance)"),
-    ("light", "Light"),
-    ("dark", "Dark"),
-    ("ide", "Follow the IDE (its light/dark setting)"),
-)
-
+from .._props import PropSpec
+from ..project import Project
+from .logic.projects import (COLOR_SCHEME_CHOICES, TYPE_CHOICES,  # noqa: F401
+                             project_specs, set_project_property)
 
 class _ProjectObject:
     """What the Properties window sees as the selected object: the project's
@@ -116,44 +108,7 @@ class ProjectTarget(QObject):
         return self.project.directory
 
     def specs(self) -> list[PropSpec]:
-        startup = [(name, name) for name in self._get_form_names()] + [(SUB_MAIN, SUB_MAIN)]
-        return [
-            P("Arguments", "str", "",
-              description="The command line the program gets when the IDE runs it "
-                          "(Command(), sys.argv[1:]), e.g. --verbose \"a file.txt\"."),
-            P("ColorScheme", "enum", "system", COLOR_SCHEME_CHOICES,
-              description="Light or dark appearance of every form whose ColorScheme is "
-                          "'0 - Project Default'."),
-            P("ArgumentsHelp", "text", "",
-              description="The program's own command line arguments, one per line, as "
-                          "--help lists them, e.g. --open FILE    open FILE at the start."),
-            P("Command", "str", "",
-              description="The command its wheel installs (vp6-make), e.g. myapp-gui; "
-                          "empty: the project's name."),
-            P("CompanyName", "str", "", description="App.CompanyName."),
-            P("Description", "str", "", description="App.FileDescription: what the "
-                                                    "program is."),
-            P("Icon", "file", "",
-              description="The program's icon (its windows, and the Dock or taskbar): an "
-                          "image file in the project's folder, square, e.g. 256 x 256 "
-                          "pixels. Empty (as in new projects): the VP6 icon, from the VP6 "
-                          "installation."),
-            P("Package", "str", "",
-              description="The Python package the project's folder is, e.g. myapp.gui "
-                          "(folders myapp/gui with an __init__.py each): its forms and "
-                          "modules are imported by package name (myapp.gui.Form1), and it "
-                          "is started from the package (vp6.runner.run_package). Empty: "
-                          "a project of its own."),
-            P("ProductName", "str", "",
-              description="App.ProductName; empty: the project's name."),
-            P("StartupObject", "enum", "Form1", startup,
-              description="The form shown when the program starts, or Sub Main to call "
-                          "Main() in a module."),
-            P("Type", "enum", "exe", TYPE_CHOICES,
-              description="Standard EXE (windowed) or Console Application."),
-            P("Version", "str", "1.0.0",
-              description="Major.Minor.Revision: App.Major, App.Minor and App.Revision."),
-        ]
+        return project_specs(self._get_form_names())
 
     # -- the Properties window's interface --------------------------------------------
     def selected_objects(self) -> list:
@@ -170,46 +125,9 @@ class ProjectTarget(QObject):
 
     def set_property(self, prop: str, value) -> str | None:
         """Change a project property. Returns an error message or None."""
-        project = self.project
-        if prop == "Name":
-            name = str(value).strip()
-            if not name.isidentifier():
-                return f"'{name}' is not a valid project name"
-            project.name = name
-        elif prop == "Type":
-            project.type = value
-        elif prop == "StartupObject":
-            project.startup = value
-        elif prop == "ColorScheme":
-            project.color_scheme = value
-        elif prop == "Version":
-            parts = str(value).strip().split(".")
-            if not (1 <= len(parts) <= 3 and all(part.isdigit() for part in parts)):
-                return f"'{value}' is not a version: Major.Minor.Revision, e.g. 1.2.0"
-            project.version = ".".join(str(int(part)) for part in parts + ["0"] * (3 - len(parts)))
-        elif prop in ("ProductName", "CompanyName", "Description", "Arguments"):
-            setattr(project, {"ProductName": "product_name", "CompanyName": "company_name",
-                              "Description": "description", "Arguments": "arguments"}[prop],
-                    str(value).strip())
-        elif prop == "Package":
-            package = str(value or "").strip()
-            old, project.package = project.package, package
-            problem = project.package_problem()
-            if problem:
-                project.package = old
-                return problem
-        elif prop == "Command":
-            command = str(value or "").strip()
-            if command and not all(c.isalnum() or c in "-_." for c in command):
-                return f"'{command}' is not a command name (letters, digits, - _ .)"
-            project.command = command
-        elif prop == "ArgumentsHelp":
-            project.arguments_help = str(value or "").strip("\n")
-        elif prop == "Icon":  # one file now, whatever sizes it had
-            value = str(value or "").strip().replace(os.sep, "/")
-            project.icon = [value] if value else []
-        else:
-            return f"Unknown project property '{prop}'"
+        error = set_project_property(self.project, prop, value)
+        if error is not None:
+            return error
         self._on_changed()
         self.designChanged.emit()
         return None

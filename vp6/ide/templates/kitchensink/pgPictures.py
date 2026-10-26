@@ -1,6 +1,6 @@
 """Kitchen Sink page: PictureBox (a container) and Image (lightweight), and
 Picture objects: a picture made in memory (Picture, the graphics methods,
-PaintPicture) used as a Picture and a MouseIcon, SavePicture and LoadPicture,
+PaintPicture; PixelRatio 2: twice the pixels, sharp on a Retina display) used as a Picture and a MouseIcon, SavePicture and LoadPicture,
 a PictureBox's Image, pictures on the clipboard (SetData, GetFormat, GetData)
 and the form's own background Picture."""
 
@@ -71,7 +71,7 @@ class pgPictures(Form):
     # --- Picture objects ---------------------------------------------------------------------
     def cmdMake_Click(self):
         # A new picture in memory, drawn on like a PictureBox with AutoRedraw
-        badge = Picture(120, 120, BackColor=0xF0E0C0)
+        badge = Picture(120, 120, BackColor=0xF0E0C0, PixelRatio=2)  # (240 x 240 pixels)
         badge.PaintPicture(LOGO, 10, 10, 100, 75)  # a picture file, scaled
         badge.FillStyle, badge.FillColor = vpFSSolid, vpYellow
         badge.Circle(95, 95, 18, vpRed)
@@ -84,7 +84,8 @@ class pgPictures(Form):
         pointer.Circle(8, 8, 6, vpRed)
         self.picMade.MouseIcon = pointer  # ...and as a mouse pointer
         self.picMade.MousePointer = vpCustom
-        self.lblInfo.Caption = f"Made {badge.Width} x {badge.Height} in memory (Type {badge.Type})"
+        self.lblInfo.Caption = (f"Made {badge.Width} x {badge.Height} in memory (Type "
+                                f"{badge.Type}, PixelRatio {badge.PixelRatio})")
 
     def cmdSave_Click(self):
         SavePicture(self.picMade.Image, SAVED)  # what the PictureBox shows

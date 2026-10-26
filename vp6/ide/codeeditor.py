@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import keyword
 import re
 
@@ -13,25 +12,20 @@ from PySide6.QtGui import (QColor, QFont, QKeySequence, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (QApplication, QComboBox, QCompleter, QHBoxLayout, QPlainTextEdit,
                                QTextEdit, QVBoxLayout, QWidget)
 
-import vp6
-
 from .. import formfile
-from ..controls import CONTROL_TYPES, EVENT_ARGS, ControlArray
-from ..form import Form
-from ..wizard import WizardForm
-from ..usercontrol import OWN_EVENT_ARGS, OWN_EVENTS
 from .documents import Document, FormDocument
+from .logic import codewindow
 from .theme import Theme, TextStyle, theme_manager
 
 INDENT = "    "
 MARKERS = 14  # the gutter's column of breakpoints and the execution point, at its left
 BREAKPOINT_DOT = "#e51400"
 EXECUTION_ARROW = "#ffcc00"
-GENERAL = "(General)"
-DECLARATIONS = "(Declarations)"
+GENERAL = codewindow.GENERAL
+DECLARATIONS = codewindow.DECLARATIONS
 
-_VP6_NAMES = set(vp6.__all__)
-_BUILTINS = {n for n in dir(builtins) if not n.startswith("_")} - set(keyword.kwlist)
+_VP6_NAMES = codewindow.vp6_names()
+_BUILTINS = codewindow.builtin_names()
 
 
 def code_font() -> QFont:
@@ -305,7 +299,7 @@ class CodeEditor(QPlainTextEdit):
                                QPointF(box.left() + size * 0.5, box.bottom()),
                                QPointF(box.left() + size * 0.5, box.top() + size * 0.7),
                                QPointF(box.left(), box.top() + size * 0.7)])
-            painter.setPen(QPen(QColor("#7a6000"), 0.8))
+            painter.setPen(QPen(QColor(EXECUTION_ARROW).darker(210), 0.8))  # (as CodeBox's)
             painter.setBrush(QColor(EXECUTION_ARROW))
             painter.drawPolygon(arrow)
         painter.restore()
@@ -645,41 +639,13 @@ class CodeEditor(QPlainTextEdit):
 
 # --- completion data --------------------------------------------------------------------------
 
-def _members(cls) -> list[str]:
-    names = set(getattr(cls, "_specs", {}))
-    for klass in cls.__mro__:
-        for name in vars(klass):
-            if name[:1].isupper() and not name.startswith("_"):
-                names.add(name)
-    return sorted(names)
+_members = codewindow.members_of
 
 
 def complete(context: str, document: Document) -> list[str]:
-    """Completion candidates for the text before the cursor.
-
-    ``self.``          -> the form's controls and members
-    ``self.Command1.`` -> the members of a CommandButton
-    anything else      -> vp6 names, keywords, builtins and words in the file
-    """
-    form_def = document.form_def if isinstance(document, FormDocument) else None
-    if context == "self.":
-        names = _members(Form)
-        if form_def:
-            names += list(dict.fromkeys(c.name for c in form_def.controls))
-        return names
-    # self.Command1. or, for a control array, self.cmdDigit. / self.cmdDigit[i]. / (i).
-    match = re.fullmatch(r"self\.(\w+)(\[[^\]]*\]|\([^)]*\))?\.", context)
-    if match and form_def:
-        elements = form_def.elements(match.group(1))
-        if not elements:
-            return []
-        if form_def.is_array(match.group(1)) and not match.group(2):
-            return _members(ControlArray)
-        return _members(CONTROL_TYPES[elements[0].type])
-    if context.endswith("."):
-        return []
-    words = set(re.findall(r"\b[A-Za-z_]\w{2,}\b", document.text))
-    return sorted(_VP6_NAMES | set(keyword.kwlist) | _BUILTINS | words)
+    """Completion candidates for the text before the cursor (see
+    ``logic.codewindow.complete``)."""
+    return codewindow.complete(context, document)
 
 
 class CodeWindow(QWidget):
@@ -704,6 +670,7 @@ class CodeWindow(QWidget):
         layout.setSpacing(0)
         layout.addLayout(top)
         layout.addWidget(self.editor)
+        self.setFocusProxy(self.editor)  # (the window focused: typing goes to the code)
 
         self._syncing = False
         self.object_combo.activated.connect(self._on_object_chosen)
@@ -719,28 +686,13 @@ class CodeWindow(QWidget):
     # -- objects and procedures ------------------------------------------------------------------
     def _objects(self) -> list[tuple[str, tuple[str, ...]]]:
         """(object name, events) - 'Form' for the form itself."""
-        result = []
-        if isinstance(self.doc, FormDocument):
-            if self.doc.kind == "usercontrol":  # its own events: UserControl_Resize...
-                result.append(("UserControl", OWN_EVENTS))
-            elif formfile.find_form_base(self.doc.text) == "WizardForm":
-                result.append(("Form", WizardForm.Events))  # (ValidatePage, Finish...)
-            else:
-                result.append(("Form", Form.Events))
-            controls = {c.name: c for c in self.doc.form_def.controls}  # arrays: once
-            for name in sorted(controls, key=str.lower):
-                cls = CONTROL_TYPES.get(controls[name].type)
-                result.append((name, cls.Events if cls is not None else ()))
-        return result
+        return codewindow.objects(self.doc)
 
     def _events_of(self, obj: str) -> tuple[str, ...]:
-        return next((events for name, events in self._objects() if name == obj), ())
+        return codewindow.events_of(self.doc, obj)
 
     def _general_procs(self) -> list[str]:
-        handlers = {f"{obj}_{event}" for obj, events in self._objects() for event in events}
-        return [m for m in dict.fromkeys(formfile.defined_methods(self.doc.text) +
-                                         re.findall(r"^def\s+(\w+)", self.doc.text, re.M))
-                if m not in handlers and m != "InitializeComponent"]
+        return codewindow.general_procedures(self.doc)
 
     def refresh_combos(self) -> None:
         self._syncing = True
@@ -782,19 +734,8 @@ class CodeWindow(QWidget):
         if obj == GENERAL:
             return
         # Like VB: choosing an object jumps to (or creates) its default event
-        existing = [e for e in self._events_of(obj)
-                    if f"{obj}_{e}" in formfile.defined_methods(self.doc.text)]
-        if existing:
-            self.goto_event(obj, existing[0])
-        else:
-            if obj == "Form":
-                default = Form.DefaultEvent
-            elif obj == "UserControl":
-                default = "Initialize"
-            else:
-                cls = CONTROL_TYPES.get(self.doc.form_def.elements(obj)[0].type)
-                default = cls.DefaultEvent if cls is not None else ""
-            self.goto_event(obj, default)
+        existing = codewindow.handlers_written(self.doc, obj)
+        self.goto_event(obj, existing[0] if existing else codewindow.default_event(self.doc, obj))
 
     def _on_proc_chosen(self, _index) -> None:
         obj, proc = self.object_combo.currentText(), self.proc_combo.currentText()
@@ -807,10 +748,10 @@ class CodeWindow(QWidget):
             self.goto_event(obj, proc)
 
     def _goto_def(self, name: str) -> bool:
-        match = re.search(rf"^[ \t]*def\s+{re.escape(name)}\s*\(", self.doc.text, re.M)
-        if not match:
+        line = codewindow.def_line(self.doc.text, name)
+        if line is None:
             return False
-        line = self.doc.text.count("\n", 0, match.start()) + 1
+        line += 1
         block = self.editor.document().findBlockByNumber(line)  # first body line
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor,
@@ -822,12 +763,7 @@ class CodeWindow(QWidget):
 
     def _event_args(self, obj: str, event: str) -> str:
         """A handler's parameters: a user control's own, or its declared ones."""
-        if obj == "UserControl":
-            return OWN_EVENT_ARGS.get(event, EVENT_ARGS.get(event, ""))
-        elements = self.doc.form_def.elements(obj)
-        cls = CONTROL_TYPES.get(elements[0].type) if elements else None
-        declared = getattr(cls, "EventArgs", None) or {}
-        return declared.get(event, EVENT_ARGS.get(event, ""))
+        return codewindow.event_args(self.doc, obj, event)
 
     def goto_event(self, obj: str, event: str) -> None:
         """Jump to ``obj_event`` - creating the handler stub if needed."""
@@ -836,17 +772,16 @@ class CodeWindow(QWidget):
         handler = f"{obj}_{event}"
         if self._goto_def(handler):
             return
-        if not isinstance(self.doc, FormDocument):
+        stub = codewindow.handler_stub(self.doc, obj, event)
+        if stub is None:
             return
-        stub = formfile.event_stub(obj, event, self._event_args(obj, event),
-                                   index=self.doc.form_def.is_array(obj))
-        line = self._class_end_line()
+        line, text = stub
         document = self.editor.document()
         block = document.findBlockByNumber(line)
         cursor = QTextCursor(block)
         cursor.movePosition(QTextCursor.EndOfBlock)
         cursor.beginEditBlock()
-        cursor.insertText("\n\n" + stub.rstrip("\n"))
+        cursor.insertText(text)
         cursor.endEditBlock()
         # Select 'pass' so typing replaces it
         cursor.movePosition(QTextCursor.StartOfBlock)
@@ -859,41 +794,12 @@ class CodeWindow(QWidget):
 
     def _class_end_line(self) -> int:
         """Index of the last non-blank line of the form class body."""
-        lines = self.doc.text.split("\n")
-        class_name = self.doc.name
-        start = next((i for i, l in enumerate(lines)
-                      if re.match(rf"class\s+{re.escape(class_name)}\b", l)), 0)
-        last = start
-        for i in range(start + 1, len(lines)):
-            line = lines[i]
-            if line.strip() and not line[0].isspace() and not line.startswith("#"):
-                break
-            if line.strip():
-                last = i
-        return last
+        return codewindow.class_end_line(self.doc.text, self.doc.name)
 
     def _sync_combos_to_cursor(self) -> None:
         if self._syncing:
             return
-        block = self.editor.textCursor().block()
-        name = None
-        while block.isValid():
-            match = re.match(r"^\s*def\s+(\w+)\s*\(", block.text())
-            if match:
-                name = match.group(1)
-                break
-            if block.text().strip() and not block.text()[0].isspace() and \
-                    not block.text().startswith(("#", "@")):
-                break  # reached module level code
-            block = block.previous()
-        obj, proc = GENERAL, DECLARATIONS
-        if name:
-            obj, proc = GENERAL, name
-            for candidate, events in self._objects():
-                prefix = candidate + "_"
-                if name.startswith(prefix) and name[len(prefix):] in events:
-                    obj, proc = candidate, name[len(prefix):]
-                    break
+        obj, proc = codewindow.procedure_at(self.doc, self.editor.textCursor().blockNumber())
         self._syncing = True
         if self.object_combo.currentText() != obj:
             self.object_combo.setCurrentIndex(max(self.object_combo.findText(obj), 0))

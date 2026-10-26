@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QPoint, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from . import colors
@@ -37,13 +37,13 @@ class _PictureSurface:
         self._picture = picture
 
     def width(self) -> int:
-        return self._picture._image.width()
+        return self._picture.Width
 
     def height(self) -> int:
-        return self._picture._image.height()
+        return self._picture.Height
 
     def devicePixelRatioF(self) -> float:
-        return 1.0
+        return self._picture._image.devicePixelRatio()
 
     def palette(self):
         app = QApplication.instance()
@@ -54,9 +54,15 @@ class _PictureSurface:
         font = QFont()
         if values.get("FontName"):
             font.setFamily(values["FontName"])
-        if values.get("FontSize"):
-            font.setPointSizeF(float(values["FontSize"]))
+        # Points as VP6 counts them (a pixel is 1/96 inch): a picture's text is as
+        # large on every system (on macOS a screen's point is one pixel)
+        size = float(values["FontSize"]) if values.get("FontSize") else font.pointSizeF()
+        if size > 0:
+            font.setPixelSize(max(1, round(size * 96 / 72)))
         font.setBold(bool(values.get("FontBold")))
+        weight = int(values.get("FontWeight") or 0)
+        if weight > 0:
+            font.setWeight(QFont.Weight(max(100, min(900, weight))))
         font.setItalic(bool(values.get("FontItalic")))
         font.setUnderline(bool(values.get("FontUnderline")))
         return font
@@ -71,7 +77,11 @@ class Picture(Drawing, PropertyHost):
     ``Picture(Width, Height, BackColor=None)`` is a new one (transparent
     without a BackColor) to draw on with ``Line``, ``Circle``, ``PSet``,
     ``Print``, ``PaintPicture`` and the drawing properties; ``LoadPicture``
-    reads one from a file. ``Width`` and ``Height`` are in pixels."""
+    reads one from a file. ``Width`` and ``Height`` are in pixels.
+
+    ``PixelRatio`` (VP6's own) is how many of its pixels make one pixel on the
+    screen: ``Picture(24, 24, PixelRatio=2)`` has 48 x 48 pixels, shown (and
+    drawn on) as 24 x 24, sharp on a Retina display."""
 
     TypeName = "Picture"
     _design_mode = False
@@ -79,23 +89,35 @@ class Picture(Drawing, PropertyHost):
         *(spec for spec in DRAWING_PROPERTIES if spec.name != "AutoRedraw"),
         P("ForeColor", "color", None, description="What the graphics methods draw with"),
         P("BackColor", "color", None, description="What Cls fills it with; unset: transparent"),
-        P("FontName", "font", None), P("FontSize", "int", None),
+        P("FontName", "font", None), P("FontSize", "number", None),  # (12.5 points)
         P("FontBold", "bool", False), P("FontItalic", "bool", False),
         P("FontUnderline", "bool", False),
+        P("FontWeight", "int", 0,
+          description="The letters' weight, as VB's StdFont.Weight: 100 (thin) to 900 "
+                      "(black), 400 normal, 600 semibold, 700 bold; 0: as FontBold says"),
     )
 
-    def __init__(self, Width: int = 0, Height: int = 0, BackColor=None, _image=None):
+    def __init__(self, Width: int = 0, Height: int = 0, BackColor=None, PixelRatio=1,
+                 _image=None):
+        from .app import ensure_app
+
+        ensure_app()  # (its fonts need the application: a Sub Main may make one first)
         d = self.__dict__
         d["_values"] = {}
         d["_surface"] = _PictureSurface(self)
+        ratio = float(PixelRatio)
+        if ratio <= 0:
+            raise ValueError(f"Picture: PixelRatio must be more than 0, not {PixelRatio!r}")
         if _image is None:
-            _image = QImage(max(0, int(Width)), max(0, int(Height)),
+            _image = QImage(max(0, round(float(Width) * ratio)),
+                            max(0, round(float(Height) * ratio)),
                             QImage.Format_ARGB32_Premultiplied)
             _image.fill(Qt.transparent)
         elif _image.format() != QImage.Format_ARGB32_Premultiplied:
             _image = _image.convertToFormat(QImage.Format_ARGB32_Premultiplied)
-        _image.setDevicePixelRatio(1.0)
+        _image.setDevicePixelRatio(ratio)
         d["_image"] = _image
+        d["_disabled"] = None
         self._init_values({"BackColor": BackColor})
         if BackColor is not None and not self._image.isNull():
             self._image.fill(colors.to_qcolor(BackColor))
@@ -107,16 +129,33 @@ class Picture(Drawing, PropertyHost):
             raise AttributeError(f"Picture has no property '{name}'")
 
     def __repr__(self):
-        return f"<Picture {self.Width} x {self.Height}>"
+        ratio = self.PixelRatio
+        return f"<Picture {self.Width} x {self.Height}" + \
+            (f" at {ratio:g}x>" if ratio != 1 else ">")
 
     # -- what it is ----------------------------------------------------------------------------
     @property
     def Width(self) -> int:
-        return self._image.width()
+        """Its width in pixels on the screen (its own pixels / PixelRatio)."""
+        return round(self._image.width() / self._image.devicePixelRatio())
 
     @property
     def Height(self) -> int:
-        return self._image.height()
+        return round(self._image.height() / self._image.devicePixelRatio())
+
+    @property
+    def PixelRatio(self) -> float:
+        """How many of its pixels make one on the screen (1, or 2 for a picture
+        sharp on a Retina display): the graphics methods and Width and Height
+        are in screen pixels."""
+        ratio = self._image.devicePixelRatio()
+        return int(ratio) if ratio == int(ratio) else ratio
+
+    @PixelRatio.setter
+    def PixelRatio(self, value) -> None:
+        if float(value) <= 0:
+            raise ValueError(f"Picture: PixelRatio must be more than 0, not {value!r}")
+        self._image.setDevicePixelRatio(float(value))
 
     @property
     def Type(self) -> int:
@@ -125,6 +164,31 @@ class Picture(Drawing, PropertyHost):
 
     def _pixmap(self) -> QPixmap:
         return QPixmap.fromImage(self._image)
+
+    @property
+    def DisabledPicture(self):
+        """The picture shown for it while what shows it is disabled (a menu item,
+        a Toolbar button, a ToolButton...); None: the system greys it."""
+        return self._disabled
+
+    @DisabledPicture.setter
+    def DisabledPicture(self, value):
+        if value is not None and not isinstance(value, Picture):
+            raise TypeError("Picture.DisabledPicture: a Picture, or None")
+        self.__dict__["_disabled"] = value
+
+    def Faded(self, Opacity: float = 0.35) -> "Picture":
+        """A copy of it you can partly see through (Opacity 0 to 1), e.g. its
+        DisabledPicture: visible but clearly inactive."""
+        image = QImage(self._image.size(), QImage.Format_ARGB32_Premultiplied)
+        image.fill(Qt.transparent)
+        painter = QPainter(image)
+        painter.setOpacity(max(0.0, min(float(Opacity), 1.0)))
+        source = QImage(self._image)
+        source.setDevicePixelRatio(1.0)
+        painter.drawImage(0, 0, source)
+        painter.end()
+        return Picture(PixelRatio=self._image.devicePixelRatio(), _image=image)
 
     def _fire(self, event, *args):
         return None  # (no events)
@@ -137,12 +201,12 @@ class Picture(Drawing, PropertyHost):
         return self._image
 
     def _draw_area_size(self) -> QSize:
-        return self._image.size()
+        return QSize(self.Width, self.Height)
 
     @property
     def Image(self) -> "Picture":
         """A copy of it (as a form's or PictureBox's Image is a Picture of it)."""
-        return Picture(_image=self._image.copy())
+        return Picture(PixelRatio=self._image.devicePixelRatio(), _image=self._image.copy())
 
     def Cls(self) -> None:
         """Fill it with its BackColor (transparent without one) and move the
@@ -158,7 +222,8 @@ class Picture(Drawing, PropertyHost):
         X, Y = self._to_px(X, Y)  # (ScaleMode's units)
         if not (0 <= X < self.Width and 0 <= Y < self.Height):
             return -1
-        color = self._image.pixelColor(QPoint(int(X), int(Y)))
+        ratio = self._image.devicePixelRatio()
+        color = self._image.pixelColor(QPoint(int(X * ratio), int(Y * ratio)))
         return -1 if color.alpha() == 0 else colors.from_qcolor(color)
 
 
@@ -219,6 +284,45 @@ def to_picture(value) -> Picture:
     if isinstance(value, (QPixmap, QImage)):
         return Picture(_image=value.toImage() if isinstance(value, QPixmap) else QImage(value))
     return LoadPicture(str(value or ""))
+
+
+def FileIcon(FileName, Size: int = 16) -> "Picture":
+    """The system's icon for a file or folder (as Finder or Explorer shows it),
+    Size pixels square on the screen, sharp at the screen's resolution."""
+    from PySide6.QtCore import QFileInfo
+    from PySide6.QtWidgets import QFileIconProvider
+
+    from .app import ensure_app
+
+    ensure_app()
+    app = QApplication.instance()
+    ratio = max(1.0, app.devicePixelRatio()) if app is not None else 1.0
+    icon = QFileIconProvider().icon(QFileInfo(str(FileName)))
+    pixmap = icon.pixmap(QSize(int(Size), int(Size)), ratio)
+    picture = Picture(PixelRatio=pixmap.devicePixelRatio() or 1.0,
+                      _image=pixmap.toImage())
+    return picture
+
+
+def picture_icon(owner, value, dark: bool = False, pixmap: QPixmap | None = None) -> QIcon:
+    """A picture property's value as an icon (``pixmap``: the picture as it is
+    shown, e.g. at an ImageList's size), with its DisabledPicture for the
+    disabled look when it has one."""
+    pixmap = picture_pixmap(owner, value, dark) if pixmap is None else pixmap
+    if pixmap.isNull():
+        return QIcon()
+    icon = QIcon(pixmap)
+    disabled = getattr(value, "_disabled", None) if isinstance(value, Picture) else None
+    if disabled is not None:
+        faded = disabled._pixmap()
+        size = pixmap.deviceIndependentSize().toSize()
+        if faded.deviceIndependentSize().toSize() != size:
+            ratio = pixmap.devicePixelRatio()
+            faded = faded.scaled(round(size.width() * ratio), round(size.height() * ratio),
+                                 Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            faded.setDevicePixelRatio(ratio)
+        icon.addPixmap(faded, QIcon.Disabled)
+    return icon
 
 
 def picture_pixmap(owner, value, dark: bool = False) -> QPixmap:

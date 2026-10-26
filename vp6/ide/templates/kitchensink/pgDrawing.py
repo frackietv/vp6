@@ -5,7 +5,8 @@ TextHeight), DrawWidth, DrawStyle, FillStyle and FillColor, a clock drawn in
 a Paint event (AutoRedraw False) that a Timer refreshes, in a User scale
 (Scale: its center 0, 0, up is up), the page's own Form_Paint, and an icon
 drawn beyond VB's methods: RoundRect, a LinearGradient, RGBA colors you can see
-through, and a GraphicsPath of Bézier curves (DrawPath)."""
+through, a GraphicsPath of Bézier curves (DrawPath) and one drawn smaller
+(Transform), and text in a box (DrawText, FontWeight)."""
 
 import math
 import time
@@ -70,6 +71,12 @@ class pgDrawing(Form):
         pic.DrawPath(bubble, RGBA(0, 0, 0, 0), RGBA(0, 0, 0, 70))  # (no outline: invisible)
         pic.DrawPath(GraphicsPath().AddEllipse(30, 34, 6, 6).AddEllipse(45, 34, 6, 6)
                      .AddEllipse(60, 34, 6, 6), RGBA(0, 0, 0, 0), vpWhite)
+        # The bubble again at a third of its size, in the corner (Transform: its pen too)
+        small = GraphicsPath().AddEllipse(20, 22, 56, 48).Transform(1 / 3, 0, 0, 1 / 3, 60, 62)
+        pic.DrawPath(small, RGB(30, 90, 200), vpWhite)
+        # Text in a box, semibold, shortened with … where it doesn't fit (DrawText)
+        pic.FontSize, pic.FontWeight, pic.ForeColor = 8, 600, vpWhite
+        pic.DrawText("VP6 draws icons", 8, 76, 62, 94, vpLeftJustify, EndEllipsis=True)
 
     # --- the page's own Paint (a form's AutoRedraw is False too) -----------------------------
     def Form_Paint(self):

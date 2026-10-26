@@ -59,6 +59,9 @@ vp6/                    runtime library - "from vp6 import *"
   make.py               package a project: a wheel, or a standalone executable (PyInstaller)
   helpdocs.py           VP6's own help: its documents and code made into vp6.vp6help
   ide/                  the IDE - "python -m vp6.ide" or the "vp6" command
+    logic/              what the IDE does without Qt: the command line, outline, search,
+                        menus, the Object Browser's library, the code window's model, themes,
+                        projects, Claude's and Codex's protocols and chats, the debugger's
     __main__.py         entry point
     mainwindow.py       MainWindow: menus, docks, MDI, running programs
     designer.py         FormDesigner: the form design surface
@@ -685,6 +688,15 @@ F1 asks `MainWindow.help_context()` what the focus is on (a word in the code,
 a property and its control's type, a control, a tool, the Object Browser's
 member) and the viewer shows the index's topic for it (the one about that
 type first), or searches for it.
+
+### 5.10 The IDE's logic without Qt
+
+What is not about widgets lives in `vp6/ide/logic/`, which never imports
+PySide6 (`tests/test_ide_logic.py` checks): the Qt modules import it and
+re-export their old names. Its objects tell what happens with
+`logic.events.Event` (`connect`, `disconnect`, `emit`) instead of signals,
+and it keeps its settings where the IDE says (`logic.settings.use`; by
+default the IDE's QSettings).
 
 ## 6. File formats
 

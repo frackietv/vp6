@@ -258,6 +258,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `ItemClick` | Item |
 | `ColumnClick` | ColumnHeader |
 | `ItemCheck` | Item |
+| `AfterLabelEdit` | Item, NewString |
 | `SelChange` | none |
 | `Highlight` | Line, Text, State |
 | `GutterClick` | Line |
@@ -330,6 +331,9 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `ControlResized` | Name |
 | `PropertyChanged` | Name, Property |
 | `GoToCode` | Name, Event |
+| `DrawFrame` | Frame |
+| `PaintFrame` | Frame |
+| `FormRenamed` | OldName, NewName |
 | `Error` (Winsock) | Number, Description |
 | `Validate` (Data) | Action, Save |
 | `SelChange` (MonthView) | StartDate, EndDate |
@@ -365,16 +369,21 @@ What the arguments mean:
 | `Caption` | str | `''` | The window title; defaults to the form's class name |
 | `ColorScheme` | enum | 0 - Project Default | 0 - Project Default, 1 - System, 2 - Light, 3 - Dark, 4 - IDE. Light or dark appearance. Project Default uses the project's color scheme; System follows the operating system; IDE follows the VP6 IDE's light/dark setting (System when run on its own). |
 | `ControlBox` | bool | `True` | Show the window buttons |
+| `DockTabPosition` | enum | 0 - Bottom | 0 - Bottom, 1 - Top. Where the tabs of DockPanels tabbed together are: under them, or above them |
+| `DrawCap` | enum | 0 - Automatic | 0 - Automatic, 1 - Flat, 2 - Square, 3 - Round. The ends of lines: Automatic as VB's (round when wider than 1, else not covering the end point), or flat, square or round |
+| `DrawJoin` | enum | 0 - Miter | 0 - Miter, 1 - Bevel, 2 - Round. The corners where lines meet (a polygon's, a path's): pointed, cut off or round |
 | `DrawStyle` | enum | 0 - Solid | 0 - Solid, 1 - Dash, 2 - Dot, 3 - Dash-Dot, 4 - Dash-Dot-Dot, 5 - Transparent, 6 - Inside Solid. The lines the graphics methods draw |
-| `DrawWidth` | int | `1` | The width of the lines the graphics methods draw |
+| `DrawWidth` | number (int or float) | `1` | The width of the lines the graphics methods draw, in pixels (a fraction too, e.g. 0.5 on a Picture with a PixelRatio of 2) |
 | `Enabled` | bool | `True` | Whether the form responds to the user |
 | `FillColor` | color | (default) | The fill of Circle and Line boxes (FillStyle); unset = ForeColor |
 | `FillStyle` | enum | 1 - Transparent | 0 - Solid, 1 - Transparent, 2 - Horizontal Line, 3 - Vertical Line, 4 - Upward Diagonal, 5 - Downward Diagonal, 6 - Cross, 7 - Diagonal Cross. How Circle and Line with a box (B) fill what they draw |
 | `FontBold` | bool | `False` | Bold text |
 | `FontItalic` | bool | `False` | Italic text |
 | `FontName` | font name | (default) | Font family; unset = the container's font |
-| `FontSize` | int | (default) | Font size in points; unset = the container's |
+| `FontScale` | number (int or float) | `1` | Print's text drawn that many times larger, as a magnified drawing shows it (its letters scaled, spaced as at the Font's own size) |
+| `FontSize` | number (int or float) | (default) | Font size in points (10.5: fractions too, as VB's); unset = the container's |
 | `FontUnderline` | bool | `False` | Underlined text |
+| `FontWeight` | int | `0` | The letters' weight, as VB's StdFont.Weight: 100 (thin) to 900 (black), 400 normal, 600 semibold, 700 bold; 0: as FontBold says |
 | `ForeColor` | color | (default) | Text color; unset = the default |
 | `Height` | int | `360` | Client area height in pixels |
 | `Icon` | file path | `''` | The window's icon: an image file (relative to the form's folder); unset = the program's icon |
@@ -389,6 +398,7 @@ What the arguments mean:
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop |
 | `Picture` | file path | `''` | A picture on the form's background, at its top left (a file relative to the form's folder) |
 | `ScaleMode` | enum | 3 - Pixels | 0 - User, 1 - Twips, 2 - Points, 3 - Pixels, 4 - Characters, 5 - Inches, 6 - Millimeters, 7 - Centimeters. The units of the graphics methods, CurrentX / CurrentY, ScaleWidth / ScaleHeight and its mouse events' X, Y (User: set by ScaleLeft, ScaleTop, ScaleWidth, ScaleHeight or Scale) |
+| `ShowInTaskbar` | bool | `True` | A button for its window in the taskbar (Windows); False: a dialog window, owned by the form that shows it (Show's OwnerForm, else the active form) |
 | `StartUpPosition` | enum | 2 - CenterScreen | 0 - Manual, 1 - CenterOwner, 2 - CenterScreen, 3 - Windows Default. Where the window first appears |
 | `Tag` | str | `''` | Free for your own use |
 | `Top` | int | `0` | Screen position; used with StartUpPosition Manual |
@@ -500,7 +510,10 @@ class frmDocument(Form):
   form's `AutoShowChildren` is True. A child can't be shown modally. Its
   `Left`, `Top` are in the workspace; `Width`, `Height` its inside;
   `WindowState` minimizes or maximizes it there. Several children of one
-  form class are instances of it (`frmDocument()`).
+  form class are instances of it (`frmDocument()`). A child shown for the
+  first time (StartUpPosition not Manual) goes where the workspace finds it
+  overlaps the other windows least, by its size (`WindowWidth`,
+  `WindowHeight`), kept inside the workspace.
 * **The MDI form:** controls aligned to its edges (Align: toolbars, status
   bars, PictureBoxes) stay around the workspace, which fills the rest; its
   `BackColor` and `Picture` (tiled) are the workspace's. `ActiveForm` is the
@@ -646,7 +659,8 @@ def Form_Load(self):
 | `TextWidth(Text)`, `TextHeight(Text)` | the size Print would give Text in the Font (the longest line; all its lines) |
 | `PaintPicture(Picture, X1, Y1, Width1=None, Height1=None, X2=0, Y2=0, Width2=None, Height2=None)` | draws a [picture](#picture-objects) (a Picture, a file relative to the form's folder, another control's `Image`) at X1, Y1, scaled to Width1 x Height1 when given; X2, Y2, Width2, Height2 take just that part of it |
 | `RoundRect(X1, Y1, X2, Y2, Radius, Color=None, Fill=None)` | a box with corners rounded by Radius, its outline in Color as the pen draws (an invisible `RGBA` color: none), filled with `Fill` (a color, an RGBA one or a `LinearGradient`; left out: as FillStyle says); the current point moves to X2, Y2. Not VB's. |
-| `DrawPath(Path, Color=None, Fill=None)` | a `GraphicsPath` (lines and Bézier curves): its outline in Color, its closed figures filled with Fill, as RoundRect's. Not VB's. |
+| `DrawPath(Path, Color=None, Fill=None)` | a `GraphicsPath` (lines and Bézier curves): its outline in Color, its closed figures filled with Fill, as RoundRect's (a path that is just one square-cornered rectangle is filled as Qt fills rectangles, its edges as sharp as a box's). Not VB's. |
+| `DrawText(Text, X1, Y1, X2, Y2, Alignment=vpCenter, VerticalAlignment=vpVAlignMiddle, EndEllipsis=False)` | Text in the box from X1, Y1 to X2, Y2, in the Font and ForeColor: `vpLeftJustify`, `vpRightJustify` or `vpCenter`; `vpVAlignTop`, `vpVAlignMiddle` or `vpVAlignBottom`. What doesn't fit is cut off at the box's edges, or (`EndEllipsis`) a line too long ends in "…". `FontScale` draws it larger. The current point stays. VB programs called Windows' `DrawText` for this. |
 
 <!-- keywords: GraphicsPath, LinearGradient, RGBA, RoundRect, DrawPath -->
 Beyond VB's methods, for pictures such as icons and window frames:
@@ -663,6 +677,20 @@ Beyond VB's methods, for pictures such as icons and window frames:
   figures: `AddRect(X, Y, Width, Height, Radius=0)`, `AddEllipse(X, Y,
   Width, Height)`, `AddPolygon(Points)`. Each returns the path, so they
   chain; its points are in the drawing's ScaleMode when drawn.
+  `Unite(Other)`, `Subtract(Other)` and `Intersect(Other)` make a new path
+  of two paths' areas: `disc.Subtract(bite)` is a moon, a bubble united
+  with its tail has one outline. `Transform(M11, M12, M21, M22, DX, DY)`
+  draws the path through a transformation, as a drawing magnified, turned or
+  moved (a point X, Y at X·M11 + Y·M21 + DX, X·M12 + Y·M22 + DY): the
+  outline's width, a gradient fill and the curves go with it, exactly as a
+  painter's transformation draws them (an icon drawn at half size inside
+  another).
+* **Pens and text as an icon painter has them:** `DrawCap` (`vpCapAutomatic`,
+  VB's: round when wider than one pixel; `vpCapFlat`, `vpCapSquare`,
+  `vpCapRound`) and `DrawJoin` (`vpJoinMiter`, `vpJoinBevel`, `vpJoinRound`)
+  shape the ends and corners of lines; `FontScale` draws Print's text that
+  many times larger, its letters magnified as in a scaled drawing (spaced as
+  at the Font's own size), where a larger FontSize would space them anew.
 
 ```python
 path = GraphicsPath().MoveTo(4, 20).CurveTo(4, 4, 28, 4, 28, 20).Close()
@@ -686,6 +714,8 @@ line, the point, the circle's center or the end of the text.
 | `DrawStyle` | 0 - Solid | `vpSolid`, `vpDash`, `vpDot`, `vpDashDot`, `vpDashDotDot`, `vpInvisible` (no line), `vpInsideSolid` (boxes and circles drawn inside their bounds). Dashes grow with DrawWidth, so wide lines are dashed too (VB's were always solid). A `Line` that starts where the last one ended goes on with its pattern, so a line drawn bit by bit (following the mouse) is dashed too. |
 | `FillStyle` | 1 - Transparent | `vpFSSolid`, `vpFSTransparent`, `vpHorizontalLine`, `vpVerticalLine`, `vpUpwardDiagonal`, `vpDownwardDiagonal`, `vpCross`, `vpDiagonalCross` |
 | `FillColor` | (ForeColor) | the fill's color |
+| `DrawCap`, `DrawJoin` | Automatic, Miter | the ends and corners of lines (see above) |
+| `FontScale` | 1 | Print's text magnified (see above) |
 
 #### ScaleMode
 
@@ -840,10 +870,11 @@ groups it has.
 | Colors | `BackColor` | color | (default) | Background color; unset = the default |
 | Colors | `ForeColor` | color | (default) | Text color; unset = the default |
 | Font | `FontName` | font name | (default) | Font family; unset = the container's font |
-| Font | `FontSize` | int | (default) | Font size in points; unset = the container's |
+| Font | `FontSize` | number (int or float) | (default) | Font size in points (10.5: fractions too, as VB's); unset = the container's |
 | Font | `FontBold` | bool | `False` | Bold text |
 | Font | `FontItalic` | bool | `False` | Italic text |
 | Font | `FontUnderline` | bool | `False` | Underlined text |
+| Font | `FontWeight` | int | `0` | The letters' weight, as VB's StdFont.Weight: 100 (thin) to 900 (black), 400 normal, 600 semibold, 700 bold; 0: as FontBold says |
 | Common | `Enabled` | bool | `True` | Whether the control responds to the user |
 | Common | `Visible` | bool | `True` | Whether the control is shown at run time |
 | Common | `TabIndex` | int | `0` | Position in the Tab key order |
@@ -987,15 +1018,19 @@ Default size 121 × 97. A container: other controls can be placed on it. Propert
 | `Align` | enum | 0 - None | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right, 5 - Fill. Dock to that edge of the form and follow its size, keeping the height (Top, Bottom) or width (Left, Right); Fill takes all the space the others leave; only on the form itself |
 | `AutoRedraw` | bool | `False` | True: what the graphics methods draw is kept (no Paint event); False: Paint fires whenever it needs drawing again |
 | `AutoSize` | bool | `False` | Resize to fit the picture |
-| `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A sunken border around the picture |
+| `BackStyle` | enum | 1 - Opaque | 0 - Transparent, 1 - Opaque. Opaque: filled with its BackColor (or the window color); Transparent: what is under it shows through (a page of controls on a TabStrip) |
+| `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single, 2 - Styled. A sunken border around the picture |
 | `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
 | `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `DrawCap` | enum | 0 - Automatic | 0 - Automatic, 1 - Flat, 2 - Square, 3 - Round. The ends of lines: Automatic as VB's (round when wider than 1, else not covering the end point), or flat, square or round |
+| `DrawJoin` | enum | 0 - Miter | 0 - Miter, 1 - Bevel, 2 - Round. The corners where lines meet (a polygon's, a path's): pointed, cut off or round |
 | `DrawStyle` | enum | 0 - Solid | 0 - Solid, 1 - Dash, 2 - Dot, 3 - Dash-Dot, 4 - Dash-Dot-Dot, 5 - Transparent, 6 - Inside Solid. The lines the graphics methods draw |
-| `DrawWidth` | int | `1` | The width of the lines the graphics methods draw |
+| `DrawWidth` | number (int or float) | `1` | The width of the lines the graphics methods draw, in pixels (a fraction too, e.g. 0.5 on a Picture with a PixelRatio of 2) |
 | `FillColor` | color | (default) | The fill of Circle and Line boxes (FillStyle); unset = ForeColor |
 | `FillStyle` | enum | 1 - Transparent | 0 - Solid, 1 - Transparent, 2 - Horizontal Line, 3 - Vertical Line, 4 - Upward Diagonal, 5 - Downward Diagonal, 6 - Cross, 7 - Diagonal Cross. How Circle and Line with a box (B) fill what they draw |
+| `FontScale` | number (int or float) | `1` | Print's text drawn that many times larger, as a magnified drawing shows it (its letters scaled, spaced as at the Font's own size) |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
@@ -1080,17 +1115,20 @@ Default size 97 × 25. Property groups: Position, Colors, Font, Common.
 | `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment |
 | `AutoSize` | bool | `False` | Resize to fit the text |
 | `BackStyle` | enum | 1 - Opaque | 0 - Transparent, 1 - Opaque. Opaque: the label fills its box (with BackColor, or its container's color) and hides what is behind it; Transparent: what is behind it (a picture, other controls) shows through, and BackColor is ignored |
-| `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single. A thin border around the label |
+| `BorderStyle` | enum | 0 - None | 0 - None, 1 - Fixed Single, 2 - Sunken. A thin border around the label, or a sunken panel's |
 | `Caption` | str (multi-line) | `''` | The text; in plain text an & before a letter underlines it, its access key (&& shows a literal &) |
 | `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
 | `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `Margin` | int | `0` | Room between its border and its text, in pixels |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
+| `Selectable` | bool | `False` | The text can be selected with the mouse and copied (a path, a message) |
 | `TextFormat` | enum | 0 - Plain | 0 - Plain, 1 - Rich Text, 2 - Markdown. Plain: the Caption as it is. Rich Text: HTML (bold, headings, links, colors). Markdown: bold, headings, lists and links written the Markdown way |
 | `UseMnemonic` | bool | `True` | An & in the Caption marks an access key: Alt+the letter (on macOS Control+Option+the letter) focuses the next control in the tab order. False: the & is shown as it is |
+| `VerticalAlignment` | enum | 0 - Top | 0 - Top, 1 - Middle, 2 - Bottom. Where the text is between the label's top and bottom (Middle: beside a box of the same height, as a form layout's labels) |
 | `WordWrap` | bool | `False` | Wrap long text onto several lines |
 
 Events: `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `LinkClick(URL)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
@@ -1108,6 +1146,7 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `Alignment` | enum | 0 - Left Justify | 0 - Left Justify, 1 - Right Justify, 2 - Center. Horizontal text alignment (single-line only) |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `ContextMenu` | str | `''` | The name of one of the form's menus: its items are in the right-click menu (after the standard ones: Undo, Copy, Select All...) |
 | `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
 | `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
@@ -1119,7 +1158,11 @@ Default size 121 × 25. Property groups: Position, Colors, Font, Common.
 | `MultiLine` | bool | `False` | A multi-line editor instead of a single line |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `PasswordChar` | str | `''` | Any character masks the input |
+| `Placeholder` | str | `''` | A hint shown greyed while it is empty (e.g. "Type a name") |
 | `ScrollBars` | enum | 0 - None | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Scroll bars of a multi-line TextBox |
+| `SelBackColor` | color | (default) | The selected text's background (and the focus frame's color); unset = the system's |
+| `SelForeColor` | color | (default) | The selected text's color; unset = the system's |
+| `StandardMenu` | bool | `True` | The right-click menu has the standard items (Undo, Copy, Paste, Select All...); False: only ContextMenu's |
 | `Text` | str (multi-line) | `''` | The contents |
 
 Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
@@ -1159,7 +1202,8 @@ self.lstWords.Move(self.txtCode.Left + self.txtCode.CaretLeft,
   MouseMove's.
 * **Scrolling:** `FirstVisibleLine` is the line at the top (setting it
   scrolls that line up, as far as possible), `ScrollLeft` the horizontal
-  scroll in pixels, and `ScrollToCaret()` brings the caret into view.
+  scroll in pixels, and `ScrollToCaret(Center=False)` brings the caret into view
+  (Center: its line in the middle of the editor, as far as the text allows).
 * **Undo:** `Undo()`, `Redo()`, `CanUndo`, `CanRedo`, and `ClearUndo()` to
   forget the history (e.g. after loading a file; setting `Text` also does).
 * `SelChange` fires when the caret or the selection moves (also from code).
@@ -1219,19 +1263,25 @@ Default size 201 × 121. Property groups: Position, Colors, Font, Common.
 | `AcceptsTab` | bool | `False` | Tab types a tab instead of moving to the next control (multi-line) |
 | `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A border around it |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `ContextMenu` | str | `''` | The name of one of the form's menus: its items are in the right-click menu (after the standard ones: Undo, Copy, Select All...) |
 | `DataField` | str | `''` | The field of the Data control's record it shows (and saves when changed) |
 | `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Locked` | bool | `False` | Read-only: the text can't be edited |
+| `Margin` | int | `4` | Room around its text inside its border, in pixels |
 | `MaxLength` | int | `0` | Maximum length; 0 = no limit |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
+| `Placeholder` | str | `''` | A hint shown greyed while it is empty (e.g. "Type a name") |
 | `ScrollBars` | enum | 2 - Vertical | 0 - None, 1 - Horizontal, 2 - Vertical, 3 - Both. Its scroll bars (shown when needed); with a horizontal one, lines don't wrap |
+| `SelBackColor` | color | (default) | The selected text's background (and the focus frame's color); unset = the system's |
+| `SelForeColor` | color | (default) | The selected text's color; unset = the system's |
+| `StandardMenu` | bool | `True` | The right-click menu has the standard items (Undo, Copy, Paste, Select All...); False: only ContextMenu's |
 | `Text` | str (multi-line) | `''` | The contents, as plain text |
 
-Events: `Change`, `SelChange`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
+Events: `Change`, `SelChange`, `LinkClick(URL)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Change`.
 <!-- END GENERATED -->
 
 ### CodeBox
@@ -1270,8 +1320,14 @@ self.codMain.HideLines(7, 10)                     # fold them: line 6 gets a + i
   before Form_Load.
 * **The gutter.** `LineNumbers` shows them; `LineMarker[Line] = "●"` puts
   a short text in a line's gutter (`LineMarker(Line)` reads it, `""` removes
-  it), and it moves with its line. `GutterClick(Line)` fires when the gutter
-  is clicked.
+  it), and it moves with its line; `SetLineMarker(Line, Text, Color=None)`
+  gives it a color of its own (a red ● for a breakpoint). `GutterBackColor`
+  and `GutterForeColor` color the gutter. `GutterClick(Line)` fires when the
+  gutter is clicked.
+* **Syntax colors.** `SetSyntaxColor(Role, Color=None, Bold=False,
+  Italic=False)` sets a role of the Language's coloring: keyword, builtin,
+  vp6 (VP6's names), self, string, comment, number, defname or decorator
+  (None: back to the CodeBox's own; builtin, vp6 and self have none).
 * **The current line** is shaded while `HighlightCurrentLine` (its color
   `CurrentLineColor`; unset, a translucent shade that keeps Highlight's
   backgrounds visible).
@@ -1343,6 +1399,9 @@ Default size 321 × 201. Property groups: Position, Colors, Font, Common.
 | `DataSource` | str | `''` | The Data control (its Name) whose current record it shows |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `FoldMarkerColor` | color | (default) | The fold markers' boxes (SetFoldMarker); unset = the line numbers' color |
+| `GutterBackColor` | color | (default) | The gutter's background; unset = a shade of the background |
+| `GutterForeColor` | color | (default) | The line numbers' color; unset = a faint text color |
 | `HighlightCurrentLine` | bool | `True` | Shade the caret's line |
 | `Language` | enum | 0 - None | 0 - None, 1 - Python. Built-in syntax coloring; add your own in the Highlight event |
 | `LineNumbers` | bool | `True` | Line numbers in the gutter |
@@ -1351,6 +1410,9 @@ Default size 321 × 201. Property groups: Position, Colors, Font, Common.
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `ProtectedColor` | color | (default) | The background of protected lines; unset = a tint of the background |
+| `ProtectedShading` | enum | 0 - Whole Lines | 0 - Whole Lines, 1 - Text. What ProtectedColor shades: the protected lines from edge to edge, or only their text |
+| `SelBackColor` | color | (default) | The selected text's background; unset = the system's |
+| `SelForeColor` | color | (default) | The selected text's color; unset = the system's |
 | `TabWidth` | int | `4` | Columns per indentation level (and tab stop) |
 | `Text` | str (multi-line) | `''` | The code |
 | `UseTabs` | bool | `False` | Indent with tab characters instead of spaces |
@@ -1406,6 +1468,15 @@ self.mdNotes.ApplyFormat(vpMarkdownBold)         # **the selection**; again: und
   Kitchen Sink's Markdown page does).
 * Pictures (`![alt](file.png)`) with relative paths are found in the form's
   folder; one wider than the control is shown smaller.
+* **Colored text:** `<span style="color:red">text</span>` or `<font
+  color="#0b5cad">text</font>` in the Markdown colors its text in the visual
+  editor and the preview (any color name or `#rrggbb`; Markdown inside it,
+  `**bold**`, `` `code` ``..., still works; in code it stays as it is). Text
+  colored in the visual editor is written back as such a span.
+* **A log or a chat:** `AppendText(Markdown)` adds Markdown at the end of
+  `Text` (joined to the last paragraph, unless it starts with a blank line);
+  the view follows the end if it was showing it. `ScrollToEnd()` scrolls to
+  the end.
 * `TextHTML` is the Markdown rendered as HTML (read-only); `LoadFile(FileName)`
   and `SaveFile(FileName)` read and write the Markdown. `Locked` makes the
   editors read-only. It can be [bound](#data) to a field (`DataSource`,
@@ -1592,6 +1663,9 @@ Events: `Change`, `Click`, `DblClick`, `DropDown`, `GotFocus`, `LostFocus`, `Key
 Run-time members:
 
 * `AddItem(Item, Index=None)`, `RemoveItem(Index)`, `Clear()`;
+* `List(i)` (or `List[i]`) reads an item's text, `List[i] = "Text"` changes it
+  in place (VB's `List(i) = "Text"`), keeping its place, `ItemData` and the
+  selection (in a `Sorted` list it moves to its place in the order);
 * `ListCount`;
 * `ListIndex` (-1 = none; setting it selects an item);
 * `NewIndex`: where the item `AddItem` added last is (where `Sorted` put it),
@@ -1645,6 +1719,9 @@ Events: `Click`, `DblClick`, `ItemCheck(Item)`, `GotFocus`, `LostFocus`, `KeyDow
 Run-time members:
 
 * `AddItem(Item, Index=None)`, `RemoveItem(Index)`, `Clear()`;
+* `List(i)` (or `List[i]`) reads an item's text, `List[i] = "Text"` changes it
+  in place (VB's `List(i) = "Text"`), keeping its `ItemData`, check box and
+  selection (in a `Sorted` list it moves to its place in the order);
 * `ListCount`, `ListIndex`, `NewIndex` (where the item `AddItem` added last
   is, -1 after `RemoveItem` or `Clear`), `TopIndex` (the item at the top;
   setting it scrolls);
@@ -2023,6 +2100,7 @@ Default size 161 × 193. Property groups: Position, Colors, Font, Common.
 | `LineStyle` | enum | 1 - Root Lines | 0 - Tree Lines, 1 - Root Lines. Root Lines: the top-level nodes have expand/collapse buttons too |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `MultiSelect` | bool | `False` | Several nodes can be selected (Ctrl/Cmd- and Shift-click): SelectedNodes |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `PathSeparator` | str | `'\\'` | Separates the texts in a node's FullPath |
 | `Sorted` | bool | `False` | Keep the top-level nodes in alphabetical order |
@@ -2061,6 +2139,7 @@ Default size 6 × 97. Property groups: Position.
 | `BackColor` | color | (default) | The bar's color; unset = a shade of the form's |
 | `Enabled` | bool | `True` | Whether the user can drag it |
 | `MinSize` | int | `30` | The smallest size the pane, and the space left beside it, can get |
+| `Style` | enum | 0 - VP6 | 0 - VP6, 1 - System. VP6: a bar with a grip; System: the system's own splitter handle (its PreferredWidth or PreferredHeight is the system's size for it) |
 | `Tag` | str | `''` | Free for your own use |
 | `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
 | `Visible` | bool | `True` | Whether the splitter is shown at run time |
@@ -2108,6 +2187,10 @@ def Form_Unload(self):
   it again, docked or floating as it was.
 * `DockChange` fires after it is docked, floated, moved to another edge,
   closed or shown again; `Resize` when its size changes.
+* `MinWidth` (at the left and right edges) and `MinHeight` (top and
+  bottom): the least size its contents need, as a main window's docks have
+  one; set narrower (or dragged), it stays that wide, and so do the panels
+  sharing its place.
 * **Tabbed together.** `TabWith(Panel)` puts it in tabs with another panel
   (and the ones already tabbed with it), in that panel's place: one shows at
   a time, with a tab for each visible one under them (a click shows that
@@ -2151,6 +2234,8 @@ Default size 161 × 201. A container: other controls can be placed on it. Proper
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Floatable` | bool | `True` | The user can float it and dock it to another edge (the float button, dragging the caption bar) |
 | `Floating` | bool | `False` | At run time: in a window of its own instead of docked |
+| `MinHeight` | int | `0` | The least Height it keeps at the top and bottom edges |
+| `MinWidth` | int | `0` | The least Width it keeps at the left and right edges (what its contents need): narrower, it widens |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
@@ -2408,7 +2493,7 @@ def cmdColor_Click(self):
   error number).
 
 <!-- BEGIN GENERATED: control CommonDialog -->
-Default size 32 × 32. Property groups: Font.
+Default size 32 × 32.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
@@ -2421,7 +2506,12 @@ Default size 32 × 32. Property groups: Font.
 | `Filter` | str | `''` | The file types offered: description|patterns pairs, e.g. Text Files (*.txt)|*.txt|All Files (*.*)|*.* |
 | `FilterIndex` | int | `1` | The Filter pair chosen, from 1 |
 | `Flags` | int | `0` | Options added together: vpOFN... (Open, Save), vpCC... (Color), vpCF... (Font), vpPD... (Printer) |
+| `FontBold` | bool | `False` | Bold |
+| `FontItalic` | bool | `False` | Italic |
+| `FontName` | str | `''` | The font chosen (the dialog starts with it) |
+| `FontSize` | int | `0` | Its size in points (0: the system's) |
 | `FontStrikethru` | bool | `False` | Struck through |
+| `FontUnderline` | bool | `False` | Underlined |
 | `FromPage` | int | `0` | The first page to print (with vpPDPageNums) |
 | `HelpCommand` | int | `0` | What ShowHelp shows of a .vp6help file: vpHelpContents (also 0), vpHelpKey, vpHelpPartialKey or vpHelpSearch (with HelpKey) |
 | `HelpFile` | file path | `''` | What ShowHelp opens: a help file (.vp6help), another file or a web address |
@@ -2538,7 +2628,9 @@ def wskServer_ConnectionRequest(self, RequestID):
   `Error(Number, Description)` if it can't be (`vpSckConnectionRefused`,
   `vpSckHostNotFound`, `vpSckTimedout`...).
 * `Listen()` waits for connections on `LocalPort` (0: a free one, which
-  LocalPort then is). Each fires `ConnectionRequest(RequestID)`;
+  LocalPort then is); `Bind(LocalPort=None, LocalIP=None)` first chooses the
+  port and the address (`"127.0.0.1"`: connections from this computer only;
+  without one, every address). Each fires `ConnectionRequest(RequestID)`;
   `Accept(RequestID)` on another Winsock (or this one, which stops
   listening) takes it. One not accepted by the end of the event is refused.
 * `SendData(Data)` sends text (as UTF-8) or bytes; `SendComplete` fires when
@@ -2633,22 +2725,60 @@ def dsgForm_GoToCode(self, Name, Event):            # a control double-clicked
     self.show_code(f"{Name or 'Form'}_{Event}")
 ```
 
-* `FileName` (or `LoadForm(FileName)`) opens a form's file; `Source` is its
-  text with the changes, `Modified` whether there are any, `Save(FileName=
-  None)` writes it (to another file: the view goes on with that one).
+* `FileName` (or `LoadForm(FileName, Source=None)`: with a Source, that
+  text instead of the file's) opens a form's file; `Source` is its text with
+  the changes (setting it loads a new text: an editor's, a reload),
+  `Reload()` reads the file again, `Modified` whether there are changes,
+  `Save(FileName=None)` writes it (to another file: the view goes on with
+  that one).
 * `SelectedControls`, `SelectControls(Names)` (none: the form),
   `ControlNames`, `ControlType(Name)`; `GetProperty(Name, Property)` and
   `SetProperty(Property, Value)` (on the selection, as the Properties
   window; a value it can't take raises ValueError); `AddControl(TypeName,
   Left=None, Top=None, Width=None, Height=None, Container="")`,
   `DeleteSelection()`; `Undo()`, `Redo()`, `CanUndo`, `CanRedo`.
+  `ObjectNames()` (the form and its controls as `(name, type)`, the form
+  first), `ObjectProperties(Name="")` (a control's, or the form's,
+  properties: `PropertyInfo`s), `SupportsIndex(Name)` (can be in a control
+  array); `GetProperty` also reads `"Name"` and `"Index"`.
+* The Format menu's commands on the selection: `Align(How)` ("left",
+  "center", "right", "top", "middle", "bottom" to the last selected; "grid"),
+  `MakeSameSize(How)` ("width", "height", "both"), `CenterInForm(Horizontal=
+  True)`, `BringToFront()`, `SendToBack()`; `Cut()`, `Copy()`, `Paste()`,
+  `SelectAll()`.
+* The Menu Editor's: `MenuEntries()` (the form's menus as
+  `vp6.ide.logic.menus.MenuEntry`s), `SetMenus(Entries)` (one undo step;
+  renamed menus take their handlers along), `MenuNamesTaken()`.
+* `ProjectColorScheme` (the scheme a form set to Project Default shows in),
+  `FormNamesTaken` (names the form can't be renamed to); `DropControl(
+  TypeName, X, Y)` adds one where a drag ended (DragDrop's X, Y).
 * `Tool`: the control type the next drag (or click) on the form draws (the
   pointer again after it); `Locked`: the controls stay where they are.
 * Events: `SelChange`; `ControlAdded(Name)`, `ControlDeleted(Name)`,
   `ControlMoved(Name)`, `ControlResized(Name)`, `PropertyChanged(Name,
   Property)` (Name `""` is the form) and `Change` after each change, undoing
   too; `GoToCode(Name, Event)` when a control (or the form) is
-  double-clicked, with its default event.
+  double-clicked, with its default event; `FormRenamed(OldName, NewName)`
+  when the form's Name is changed; `DragDrop`/`DragOver` when something is
+  dragged onto it (`DropControl` there).
+* `PaintFrame(Frame)`: with a handler, the frame is painted each time the
+  designer paints, straight onto it: `DrawFrame` then sets the metrics only,
+  and PaintFrame draws on `Frame.Picture`, whose graphics methods paint on
+  the designer (as a form's in its Paint event; the window's top left at
+  Margin, Margin), so its shadows and edges blend as the designer's own
+  frames do. `Frame.Part` says what to paint: 0 the frame; with a
+  CornerRadius, then 1 the shadow in the window's rounded bottom corners
+  (painted over the square form, clipped to them, the workspace's color
+  already there) and 2 the window's outline (clipped to those corners and the
+  form).
+* `DrawFrame(Frame)` lets the program draw the window frame around the form
+  (an IDE's own window style): `Frame` is a `DesignerFrame`, the window
+  to read (`Caption`, `BorderStyle`, `ControlBox`, `MinButton`, `MaxButton`,
+  `TitleDark`, `FormDark`, `Width`, `Height`, `MenuHeight`) and the frame to
+  set (`TitleHeight`, `BorderWidth`, `Margin` for a shadow, `CornerRadius`,
+  `Picture`: the frame drawn, (Width + 2 BorderWidth + 2 Margin) × (Height +
+  TitleHeight + MenuHeight + 2 BorderWidth + 2 Margin)). Without a Picture
+  the designer draws its own.
 * In the IDE's designer it is a placeholder; it designs at run time.
 
 <!-- BEGIN GENERATED: control DesignerView -->
@@ -2658,9 +2788,10 @@ Default size 401 × 301. Property groups: Position, Common.
 |---|---|---|---|
 | `FileName` | file path | `''` | The form's file being designed (relative to the form's folder) |
 | `Locked` | bool | `False` | The controls stay where they are: the mouse and the arrow keys don't move or resize them |
+| `ShowGrid` | bool | `True` | The grid of dots on the form (controls snap to it either way) |
 | `Tool` | str | `''` | The control type the next drag (or click) on the form draws; "" is the pointer |
 
-Events: `SelChange`, `Change`, `ControlAdded(Name)`, `ControlDeleted(Name)`, `ControlMoved(Name)`, `ControlResized(Name)`, `PropertyChanged(Name, Property)`, `GoToCode(Name, Event)`. Default event (double-click in the designer): `SelChange`.
+Events: `SelChange`, `Change`, `ControlAdded(Name)`, `ControlDeleted(Name)`, `ControlMoved(Name)`, `ControlResized(Name)`, `PropertyChanged(Name, Property)`, `GoToCode(Name, Event)`, `DrawFrame(Frame)`, `PaintFrame(Frame)`, `FormRenamed(OldName, NewName)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`. Default event (double-click in the designer): `SelChange`.
 <!-- END GENERATED -->
 
 ### Terminal
@@ -2694,13 +2825,18 @@ def cmdAgain_Click(self):
   as it is resized), a shell is interactive and Ctrl+C interrupts. On
   Windows it gets pipes (no pseudo-terminal there): programs may not echo or
   color what they write.
-* `Write(Text)` types text into it (`"\r"` is Enter); `Kill()`, `Clear()`
+* `Write(Text)` types text into it (`"\r"` is Enter); `Kill(Wait=False)`
+  (with Wait, until it has ended: Exited has fired), `Clear()`
   (the screen, history and pictures), `Copy()`, `Paste()`; `Running`, `ProcessID`,
   `ExitCode`, `Text` (the screen's text), `Title` (set by the program),
   `Rows`, `Columns`.
 * Events: `Exited(ExitCode)` (-1: killed), `TitleChange(Title)`,
   `GotFocus`, `LostFocus`. Its keys are the program's: Enter and Esc don't
   click the form's Default and Cancel buttons, Tab doesn't move the focus.
+  While no program runs, keys and the mouse are the form's: `KeyDown(KeyCode,
+  Shift)`, `MouseDown(Button, Shift, X, Y)` and `MouseUp(Button, Shift, X,
+  Y)` fire (e.g. a menu of the program's own on the left button: `PopupMenu`
+  in MouseDown); while one runs they go to it.
 * `BackColor` and `ForeColor` (unset: the color scheme's), `FontName` and
   `FontSize` (unset: the system's fixed-width font). A program still running
   when the form unloads is killed.
@@ -2783,6 +2919,7 @@ Default size 480 × 300. Property groups: Position, Colors, Common.
 |---|---|---|---|
 | `AutoStart` | bool | `True` | Start the program when the Terminal is first shown (else: Start) |
 | `CommandLine` | str | `''` | The program it runs: a command line (double quotes group words); empty: your shell |
+| `ContextMenu` | str | `''` | The name of one of the form's menus: its items are its right-click menu (unless the program uses the mouse itself) |
 | `FontName` | font name | (default) | Its font; unset: the system's fixed one |
 | `FontSize` | int | (default) | Font size in points; unset: the system's |
 | `Ligatures` | bool | `True` | Show the font's ligatures (->, !=, >=... in Fira Code, JetBrains Mono...); the cursor's cell shows its own character |
@@ -2790,7 +2927,7 @@ Default size 480 × 300. Property groups: Position, Colors, Common.
 | `TerminalType` | enum | 0 - xterm-256color | 0 - xterm-256color, 1 - xterm, 2 - vt100, 3 - vt102, 4 - vt220, 5 - ansi. The terminal it is (its TERM, keys and answers); a program started before keeps the TERM it had |
 | `WorkingDirectory` | str | `''` | Where the program runs (relative to the form's folder); empty: here |
 
-Events: `Exited(ExitCode)`, `TitleChange(Title)`, `GotFocus`, `LostFocus`. Default event (double-click in the designer): `Exited`.
+Events: `Exited(ExitCode)`, `TitleChange(Title)`, `KeyDown(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `GotFocus`, `LostFocus`. Default event (double-click in the designer): `Exited`.
 <!-- END GENERATED -->
 
 ### Toolbar
@@ -2841,6 +2978,7 @@ Default size 400 × 40. Property groups: Position, Font.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Align` | enum | 1 - Top | 0 - None, 1 - Top, 2 - Bottom, 3 - Left, 4 - Right. The edge it docks to (Top), like an aligned PictureBox; Left and Right make a vertical toolbar; None: where you put it |
+| `Appearance` | enum | 1 - 3D | 0 - Flat, 1 - 3D. 3D: drawn as a main window's toolbar (the style's shading, a line along the edge it docks to); Flat: the form's background only |
 | `Buttons` | buttons | `['Button1|button1']` | The buttons, set in the designer: one per line, Caption|Key|Image|ToolTipText|options (check, group, pressed, disabled, hidden); - alone is a separator |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
@@ -2850,7 +2988,7 @@ Default size 400 × 40. Property groups: Position, Font.
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Tag` | str | `''` | Free for your own use |
-| `TextAlignment` | enum | 0 - Bottom | 0 - Bottom, 1 - Right. Where a button's Caption is: under its picture, or beside it |
+| `TextAlignment` | enum | 0 - Bottom | 0 - Bottom, 1 - Right, 2 - None. Where a button's Caption is: under its picture, or beside it |
 | `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
 | `Visible` | bool | `True` | Whether the control is shown at run time |
 
@@ -2917,13 +3055,17 @@ Default size 257 × 177. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `AlternatingRowColors` | bool | `False` | Every other row of the Report view on a shade |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Checkboxes` | bool | `False` | A check box in front of every item |
 | `ColumnHeaders` | columns | `[]` | The Report view's columns, set in the designer: one per line, Text|Key|Width|alignment (left, right or center); the first shows the items' Text, the others their SubItems |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `GridHeight` | int | `0` | The Icon view's cells: each item's height (0: as the item needs) |
+| `GridWidth` | int | `0` | The Icon view's cells: each item's width, its text wrapped in it (0: as wide as the item needs) |
 | `HideColumnHeaders` | bool | `False` | Hide the Report view's column titles |
 | `Icons` | str | `''` | The name of the ImageList with the items' Icons (the Icon view) |
+| `LabelEdit` | enum | 1 - Manual | 0 - Automatic, 1 - Manual. Automatic: the user edits an item's Text (a double-click, F2); Manual: only after StartLabelEdit. AfterLabelEdit(NewString) can refuse it (return True) |
 | `ListItems` | listitems | `[]` | The items, set in the designer: one per line, Text|Key|Icon|SmallIcon|SubItem 1|SubItem 2... |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
@@ -2935,7 +3077,7 @@ Default size 257 × 177. Property groups: Position, Colors, Font, Common.
 | `Sorted` | bool | `False` | Keep the items sorted by the SortKey column |
 | `View` | enum | 0 - Icon | 0 - Icon, 1 - SmallIcon, 2 - List, 3 - Report. How the items are shown: large icons, small icons, a list, or a report with a column per ColumnHeader |
 
-Events: `ItemClick(Item)`, `ColumnClick(ColumnHeader)`, `ItemCheck(Item)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `ItemClick`.
+Events: `ItemClick(Item)`, `ColumnClick(ColumnHeader)`, `ItemCheck(Item)`, `AfterLabelEdit(Item, NewString)`, `Click`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `ItemClick`.
 <!-- END GENERATED -->
 
 ### FlexGrid
@@ -2973,7 +3115,8 @@ def grdProps_ValidateEdit(self, Row, Col, Text):
   when it moves, `SelChange` when the selection changes.
 * **The current cell's format:** `CellBackColor`, `CellForeColor`,
   `CellFontBold`, `CellFontItalic`, `CellAlignment`.
-* **Columns and rows:** `ColWidth(c)`, `RowHeight(r)` (pixels),
+* **Columns and rows:** `ColWidth(c)`, `RowHeight(r)` (pixels; 0 hides
+  the row, as VB's: scrolling leaves it out),
   `ColAlignment(c)` (`vpLeftJustify`, `vpRightJustify`, `vpCenter`) and
   `RowData(r)` (any value kept with a row), each read with `(i)` and set with
   `[i] = value`.
@@ -3031,7 +3174,10 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `AllowUserResizing` | enum | 1 - Columns | 0 - None, 1 - Columns, 2 - Rows, 3 - Both. What the user can resize by dragging the headings' edges |
+| `ButtonMenu` | str | `''` | With EditorsShown: the name of one of the form's menus that color cells' buttons drop down (Row and Col are that cell's while its items' Click handlers run) |
+| `ButtonStyle` | enum | 0 - Compact | 0 - Compact, 1 - Roomy. With EditorsShown, the cells' buttons: compact (a property grid's), or with more room around their text and a bigger color swatch |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `ColorPicker` | enum | 0 - Palette | 0 - Palette, 1 - CellButtonClick. What a color cell's button does: drop down the palette, or fire CellButtonClick for a picker of your own (CommonDialog.ShowColor) |
 | `Cols` | int | `2` | How many columns, the fixed one included |
 | `DataSource` | str | `''` | The Data control (its Name) whose records it shows; choosing a row goes to that record |
 | `DescriptionHeight` | int | `60` | The description pane's height |
@@ -3039,6 +3185,8 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Editable` | bool | `False` | The user can edit the cells, each with its column's or its own editor |
+| `EditorsShown` | bool | `False` | Every editable cell shows its editor all the time (a list's box, a text's field, a button, a check box in the middle of the cell), as a property grid does; else they show while editing |
+| `ExtendLastCol` | bool | `False` | The last column takes the room the others leave |
 | `FixedCols` | enum | 1 - 1 | 0 - 0, 1 - 1. 1: the first column is the row headings, staying put while scrolling |
 | `FixedRows` | enum | 1 - 1 | 0 - 0, 1 - 1. 1: the first row is the column headings, staying put while scrolling |
 | `FormatString` | str | `''` | Column headings and alignments: <Name|^Qty|>Price (< left, ^ center, > right) |
@@ -3047,7 +3195,8 @@ Default size 321 × 161. Property groups: Position, Colors, Font, Common.
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Rows` | int | `2` | How many rows, the fixed one included |
-| `SelectionMode` | enum | 0 - Free | 0 - Free, 1 - By Row, 2 - By Column. What a click selects: cells, whole rows or whole columns |
+| `SelectionMode` | enum | 0 - Free | 0 - Free, 1 - By Row, 2 - By Column, 3 - None. What a click selects: cells, whole rows or whole columns, or nothing (a table of editors) |
+| `StretchCol` | int | `-1` | A column that takes the room the others leave (-1: none), as ExtendLastCol does for the last one |
 
 Events: `Click`, `DblClick`, `EnterCell`, `LeaveCell`, `RowColChange`, `SelChange`, `Scroll`, `BeforeEdit(Row, Col)`, `ValidateEdit(Row, Col, Text)`, `AfterEdit(Row, Col)`, `CellButtonClick(Row, Col)`, `AfterCollapse(Row, Collapsed)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
@@ -3305,6 +3454,7 @@ Default size 400 × 25. Property groups: Position, Colors, Font.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Align` | enum | 2 - Bottom | 0 - None, 1 - Top, 2 - Bottom. The edge it docks to (Bottom), like an aligned PictureBox; None: where you put it |
+| `AutoSize` | bool | `False` | As high as the system's own status bars (its Height follows the font), as a main window's |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `Enabled` | bool | `True` | Whether the control responds to the user |
@@ -3313,6 +3463,7 @@ Default size 400 × 25. Property groups: Position, Colors, Font.
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Panels` | panels | `['|panel1|spring']` | The panels, set in the designer: one per line, Text|Key|options, the options being words: a width in pixels, spring or contents (AutoSize), caps, num, ins, scrl, time or date (Style), center or right (Alignment). E.g. Ready|status|spring |
 | `SimpleText` | str | `''` | The text shown when Style is Simple |
+| `SizeGrip` | bool | `True` | A grip at its right end to resize the window by (a sizable window's, when it isn't maximized) |
 | `Style` | enum | 0 - Normal | 0 - Normal, 1 - Simple. Normal: the panels; Simple: SimpleText across the whole bar |
 | `Tag` | str | `''` | Free for your own use |
 | `ToolTipText` | str | `''` | Text shown when the mouse rests on it |
@@ -3372,6 +3523,7 @@ Default size 257 × 177. Property groups: Position, Font, Common.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DocumentMode` | bool | `False` | The tabs on a line across its width, without a frame, as a document window's (or a property sheet's) tabs |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
 | `ImageList` | str | `''` | The name of an ImageList on the form: the tabs' Image is then a picture's Key or Index in it |
@@ -3426,6 +3578,7 @@ Default size 97 × 25. Property groups: Position, Colors, Font, Common.
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
 | `Prefix` | str | `''` | Text shown before the number, e.g. $ |
+| `SpecialValueText` | str | `''` | Shown in place of the number while the Value is Min, e.g. (Default) or Auto |
 | `Suffix` | str | `''` | Text shown after the number, e.g. ' kg' |
 | `Value` | number (int or float) | `0` | The number, kept between Min and Max; changing it fires Change |
 | `Wrap` | bool | `False` | Past Max go on from Min (and below Min from Max) instead of stopping |
@@ -3715,14 +3868,17 @@ Default size 33 × 33. Property groups: Position, Colors, Font, Common.
 
 | Property | Type | Default | Notes |
 |---|---|---|---|
+| `Alignment` | enum | 2 - Center | 0 - Left, 1 - Right, 2 - Center. Where its picture and Caption are: Center as a toolbar's; Left, the picture at the left and the Caption beside it (a list of tools) |
 | `ArrowType` | enum | 0 - None | 0 - None, 1 - Up, 2 - Down, 3 - Left, 4 - Right. An arrow instead of the Picture |
 | `AutoRaise` | bool | `True` | Flat, raised only while the mouse is over it (as on a toolbar) |
+| `AutoSize` | bool | `False` | As large as its picture and Caption need (the style's size for them), as a tool button in a toolbar |
 | `ButtonStyle` | enum | 0 - Icon Only | 0 - Icon Only, 1 - Text Only, 2 - Text Beside Icon, 3 - Text Under Icon. The picture, the Caption, or both (a button without a Picture shows its Caption) |
 | `Caption` | str | `''` | The text (shown as ButtonStyle says) |
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `Checkable` | bool | `False` | A toggle: a click presses it in, the next lets it out (Value) |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `IconSize` | int | `0` | The side of its picture in pixels; 0 = the picture's own size |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
 | `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
 | `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
@@ -3731,7 +3887,7 @@ Default size 33 × 33. Property groups: Position, Colors, Font, Common.
 | `PopupMode` | enum | 1 - Menu Button | 0 - Delayed, 1 - Menu Button, 2 - Instant. How the PopupMenu opens: holding the button down, from an arrow part beside it (a click on the rest is Click), or with any click |
 | `Value` | bool | `False` | Whether a Checkable button is pressed in |
 
-Events: `Click`, `ButtonMenuClick(ButtonMenu)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
+Events: `Click`, `DblClick`, `ButtonMenuClick(ButtonMenu)`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
 <!-- END GENERATED -->
 
 ### ButtonBox
@@ -4254,10 +4410,13 @@ Default size 241 × 181. Property groups: Position, Font, Common.
 | `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
 | `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
 | `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `DrawCap` | enum | 0 - Automatic | 0 - Automatic, 1 - Flat, 2 - Square, 3 - Round. The ends of lines: Automatic as VB's (round when wider than 1, else not covering the end point), or flat, square or round |
+| `DrawJoin` | enum | 0 - Miter | 0 - Miter, 1 - Bevel, 2 - Round. The corners where lines meet (a polygon's, a path's): pointed, cut off or round |
 | `DrawStyle` | enum | 0 - Solid | 0 - Solid, 1 - Dash, 2 - Dot, 3 - Dash-Dot, 4 - Dash-Dot-Dot, 5 - Transparent, 6 - Inside Solid. The lines the graphics methods draw |
-| `DrawWidth` | int | `1` | The width of the lines the graphics methods draw |
+| `DrawWidth` | number (int or float) | `1` | The width of the lines the graphics methods draw, in pixels (a fraction too, e.g. 0.5 on a Picture with a PixelRatio of 2) |
 | `FillColor` | color | (default) | The fill of Circle and Line boxes (FillStyle); unset = ForeColor |
 | `FillStyle` | enum | 1 - Transparent | 0 - Solid, 1 - Transparent, 2 - Horizontal Line, 3 - Vertical Line, 4 - Upward Diagonal, 5 - Downward Diagonal, 6 - Cross, 7 - Diagonal Cross. How Circle and Line with a box (B) fill what they draw |
+| `FontScale` | number (int or float) | `1` | Print's text drawn that many times larger, as a magnified drawing shows it (its letters scaled, spaced as at the Font's own size) |
 | `ForeColor` | color | (default) | The color of the graphics methods' lines and text; unset = the default |
 | `FrameRate` | int | `60` | How many times a second Animate paints it |
 | `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
@@ -4416,12 +4575,15 @@ Not in the Toolbox: designed with the Menu Editor.
 | Property | Type | Default | Notes |
 |---|---|---|---|
 | `Caption` | str | `''` | The text shown; & marks the access key (&File), and '-' makes a separator line |
+| `Checkable` | bool | `False` | An item that is on or off (a place for its check mark even while unchecked); Checked items are |
 | `Checked` | bool | `False` | Shows a check mark next to the item |
+| `Description` | str | `''` | A sentence about the item, shown in the form's StatusBar while the mouse is on it |
 | `Enabled` | bool | `True` | Whether the item can be chosen |
 | `Group` | str | `''` | Items of one menu with the same Group are choices: choosing one checks it and unchecks the others |
+| `MenuRole` | enum | 0 - Automatic | 0 - Automatic, 1 - None, 2 - About, 3 - Preferences, 4 - Quit. On macOS, where the item goes: Automatic = About, Preferences and Quit items (by their captions) go to the application menu; None = it stays; About, Preferences, Quit = it is that item of the application menu |
 | `NegotiatePosition` | enum | 0 - None | 0 - None, 1 - Left, 2 - Middle, 3 - Right. For a menu on the menu bar, when its form is shown in another form: None = not shown; Left = before that window's menus, Middle = after its first menu, Right = after its menus (before its Right ones) |
 | `Picture` | file path | `''` | A picture beside the caption: a file (relative to the form's folder; its .dark version while the form is dark), a Picture or a ListImage |
-| `Shortcut` | shortcut key | `''` | A key that chooses the item without opening the menu, from VB's list: Ctrl+A..Z, F1..F12, Ctrl+, Shift+ and Ctrl+Shift+F1..F12, Ctrl+Shift+A..Z, Ctrl+Ins, Shift+Ins, Del, Shift+Del, Alt+Backspace |
+| `Shortcut` | shortcut key | `''` | A key that chooses the item without opening the menu, from VB's list: Ctrl+A..Z, F1..F12, Ctrl+, Shift+ and Ctrl+Shift+F1..F12, Ctrl+Shift+A..Z, Ctrl+Ins, Shift+Ins, Del, Shift+Del, Alt+Backspace; in code any key (Alt+F10, Ctrl+Return), more than one between semicolons (F5; Ctrl+Return), and the system's own keys for a command in braces ({Quit}, {Redo}, {Preferences}) |
 | `Tag` | str | `''` | Free for your own use |
 | `Visible` | bool | `True` | Whether the item is shown |
 | `WindowList` | bool | `False` | An MDI form's menu (or its children's): lists the open child forms, the active one checked, to activate one |
@@ -4468,7 +4630,7 @@ def mnuEditCopy_Click(self):
 
 ### Dialogs
 
-**`MsgBox(prompt, buttons=vpOKOnly, title=None) -> int`**
+**`MsgBox(prompt, buttons=vpOKOnly, title=None, ExtraButton="") -> int`**
 
 Shows a message box and returns the button pressed. Combine a button set, an
 icon and a default button by adding constants:
@@ -4480,17 +4642,30 @@ if MsgBox("Save changes?", vpYesNoCancel + vpQuestion + vpDefaultButton1) == vpY
 
 | Part | Constants |
 |---|---|
-| Buttons | `vpOKOnly`, `vpOKCancel`, `vpAbortRetryIgnore`, `vpYesNoCancel`, `vpYesNo`, `vpRetryCancel` |
+| Buttons | `vpOKOnly`, `vpOKCancel`, `vpAbortRetryIgnore`, `vpYesNoCancel`, `vpYesNo`, `vpRetryCancel`, `vpSaveDiscardCancel` (Save, Don't Save or Discard as the system calls it, Cancel: closing with unsaved changes) |
 | Icon | `vpCritical`, `vpQuestion`, `vpExclamation`, `vpInformation` |
 | Default button | `vpDefaultButton1`, `vpDefaultButton2`, `vpDefaultButton3` |
-| Results | `vpOK`, `vpCancel`, `vpAbort`, `vpRetry`, `vpIgnore`, `vpYes`, `vpNo` |
+| Results | `vpOK`, `vpCancel`, `vpAbort`, `vpRetry`, `vpIgnore`, `vpYes`, `vpNo`, `vpSave`, `vpDiscard`, `vpExtraButton` |
 
 Closing the box with Esc returns `vpCancel` when the box has a Cancel button.
-The title defaults to `App.EXEName`.
+The title defaults to `App.EXEName`. `ExtraButton` (not VB's) adds a button of
+your own with that caption beside the others; clicking it returns
+`vpExtraButton`:
+
+```python
+if MsgBox(f"Made {path}", vpOKOnly + vpInformation, "Make",
+          ExtraButton="Show in Folder") == vpExtraButton:
+    ShellExecute(os.path.dirname(path))
+```
 
 **`InputBox(prompt, title=None, default="") -> str`**
 
 Asks for a line of text. Returns `""` if cancelled.
+
+**`InputNumber(prompt, title=None, default=0, minimum=0, maximum=2147483647, step=1) -> int | None`**
+
+Asks for a whole number between `minimum` and `maximum`, in a box with
+arrows (e.g. a line to go to). Returns it, or `None` if cancelled. Not VB's.
 
 **`ProgressBox(Prompt, Max=100, Title=None, Modal=True, Delay=500, CancelText="Cancel")`**
 
@@ -4539,6 +4714,7 @@ Both dialogs take the light/dark scheme of the form they are shown over.
 | `Beep()` | system beep |
 | `Shell(PathName, WindowStyle=vpNormalFocus)` | starts a program on its own (a command line, double quotes grouping words, or a list) and returns its process ID; `FileNotFoundError` when it can't be started. WindowStyle is accepted for VB's sake (programs open their windows themselves). To follow a program, its output and its end, use a [Process](#process). |
 | `ShellExecute(File, Operation="open")` | opens a URL, document or folder with what the system uses for it (VB programs called Windows' `ShellExecute`): a web page or `mailto:` in the browser or mail program, a document in its program, a folder in Finder or Explorer. `Operation="show"` shows a file selected in its folder instead. Returns whether it could be opened (False for a file that isn't there). |
+| `MoveToTrash(FileName)` | moves a file or folder to the Trash (the Recycle Bin on Windows), where it can be got back; returns False if it couldn't be. Not VB's. |
 | `SendKeys(Keys, Wait=False)` | types keys into the control with the focus, as if pressed (VB's syntax): text as it is; `+` Shift, `^` Ctrl, `%` Alt for the next key or a `(group)`; `~` Enter; `{ENTER}`, `{TAB}`, `{ESC}`, `{BS}`, `{DEL}`, `{HOME}`, `{END}`, `{LEFT}`, `{RIGHT}`, `{UP}`, `{DOWN}`, `{PGUP}`, `{PGDN}`, `{INS}`, `{F1}`..`{F16}` and VB's others; `{LEFT 3}` repeats; `{+}`, `{^}`, `{%}`, `{~}`, `{(}`, `{)}`, `{{}`, `{}}` are those characters. Each key goes to what has the focus when it arrives (`{TAB}` moves on, Enter clicks the Default button), menu shortcuts and Label access keys included. They arrive once the calling code is done; `Wait=True` sends them before returning. |
 
 ### The command line and settings
@@ -4571,7 +4747,7 @@ registry, under `HKEY_CURRENT_USER\Software\VP6 Program Settings\AppName\Section
 
 | Name | Description |
 |---|---|
-| `ShowHelp(HelpFile="", Keyword="", Search="", Page="", Regex=False, MatchCase=False)` | shows a help file in its window (one window per file, brought to the front): at what its index has for a `Keyword`, with the topics a `Search` finds (text, or a regular expression with `Regex`; matching case with `MatchCase`), at a `Page` (`"docs/guide.html#a-heading"`), or at its contents. The file is `HelpFile`, else `App.HelpFile` (relative paths are from the program's folder), else VP6's own help; `FileNotFoundError` when there is none. Returns the window. |
+| `ShowHelp(HelpFile="", Keyword="", Search="", Page="", Regex=False, MatchCase=False, Index=None, Context="", Tab="")` | shows a help file in its window (one window per file, brought to the front): at what its index has for a `Keyword` (the topic about `Context` first, e.g. the control a property is of), with the topics a `Search` finds (text, or a regular expression with `Regex`; matching case with `MatchCase`), at a `Page` (`"docs/guide.html#a-heading"`), with its index narrowed to `Index`'s text (`""`: the whole index), or at its contents; `Tab` (`"Contents"`, `"Index"` or `"Search"`) shows that tab, Search with the focus in its box. The file is `HelpFile`, else `App.HelpFile` (relative paths are from the program's folder), else VP6's own help; `FileNotFoundError` when there is none. Returns the window. |
 
 ```python
 def mnuHelpContents_Click(self):
@@ -4680,16 +4856,25 @@ Clipboard.SetData(badge)                         # and to other programs
 |---|---|
 | `LoadPicture(FileName="", Dark=False)` | a Picture from an image file (PNG, JPEG, BMP, GIF, ICO, SVG...; a relative name is from the current folder, which is the project's when it runs); `LoadPicture()` is an empty one, which clears a picture property. `Dark=True` takes the file's dark version where there is one beside it (`open.dark.png` or `open-dark.png` for `open.png`), e.g. `LoadPicture("open.png", Dark=self.DarkMode)`. A missing file raises `FileNotFoundError`, one that isn't a picture `ValueError`. |
 | `SavePicture(Picture, FileName)` | saves a Picture (or a picture file's picture) in the format the extension says (`.png`, `.jpg`, `.bmp`...); without one, BMP as in VB. Raises `OSError` when it can't. |
-| `Picture(Width=0, Height=0, BackColor=None)` | a new picture, transparent without a BackColor |
+| `Picture(Width=0, Height=0, BackColor=None, PixelRatio=1)` | a new picture, transparent without a BackColor; with a `PixelRatio` of 2, twice the pixels (sharp on a Retina display) |
+| `FileIcon(FileName, Size=16)` | the system's icon for a file or folder (as Finder or Explorer shows it), Size pixels square on the screen, sharp at its resolution. Not VB's. |
 
-A Picture has `Width` and `Height` (pixels), `Type` (`vpPicTypeBitmap`, or
+A Picture has `Width` and `Height` (screen pixels), `PixelRatio` (how many
+of its pixels make one on the screen: set it to 2 on a picture drawn or
+loaded at twice the size; the graphics methods, Width and Height count in
+screen pixels, and PaintPicture honours it), `Type` (`vpPicTypeBitmap`, or
 `vpPicTypeNone` for an empty one), `Image` (a copy), and the
 [graphics methods](#drawing-on-forms-and-pictureboxes) with their properties
 (`Line`, `Circle`, `Polygon`, `PSet`, `Print`, `PaintPicture`, `Point` (-1 where it is
 transparent), `Cls` (fills it with its BackColor), `DrawWidth`, `DrawStyle`,
 `FillStyle`, `FillColor`, `ForeColor`, `CurrentX`, `CurrentY`, `FontName`,
-`FontSize`, `FontBold`, `FontItalic`, and [ScaleMode](#scalemode) with its scale
-members). A property set to a Picture shows it as
+`FontSize` (fractions too, e.g. 12.75), `FontBold`, `FontItalic`, `FontWeight`
+(VB's StdFont.Weight: 100 to 900, 400 normal, 600 semibold, 700 bold; 0: as
+FontBold says), `DrawCap`, `DrawJoin`, `FontScale`, `DrawText`, and [ScaleMode](#scalemode) with its scale
+members). `DisabledPicture` is the picture a button or menu item shows while
+it is disabled (unset: the system grays it), and `Faded(Opacity=0.35)` a copy
+you can partly see through, e.g. for it: `icon.DisabledPicture =
+icon.Faded()`. A property set to a Picture shows it as
 it is then: draw on it again, and set the property again to show that.
 Reading the property gives what was set (a Picture, or a file name).
 
@@ -4730,7 +4915,7 @@ parameters, e.g. `["KeyCode", "Shift"]`), `IsDefault`.
 | Object | Members |
 |---|---|
 | `App` | `Title` (the project's name; without a project, `EXEName`), `Path` (the project's folder however it was started: its project file, `vp6-run`, a wheel's command or, for a project in a package, wherever the package is; without a project, the main script's folder), `EXEName`, `Major`, `Minor`, `Revision` (the project's `Version`, 1.0.0 by default), `ProductName` (the project's, else its name), `CompanyName`, `FileDescription` (the project's `Description`), `PrevInstance` (True when another copy of the program, the same one in the same folder, was already running when this one started), `HelpFile` (the program's [help file](#help), what `ShowHelp` shows; a path relative to `Path`), `ShowSplash(Picture, Message="", Alignment=vpCenter, Color=None)` (a splash screen: the picture, a file relative to `Path` or a Picture, in a window of its own while the program starts; it closes when the first form is shown), `SplashMessage(Text, Alignment=vpCenter, Color=None)` (a message at its bottom), `HideSplash()`, `SplashVisible`, `Active` (whether the program is the active application; forms get `AppActivate` and `AppDeactivate`), `RunOnMainThread(Procedure, *Args, Wait=False)` (runs it on the main thread, where forms live: the safe way for a `threading.Thread` to show what it did; `Wait=True` waits for its result, or its error), `ColorScheme` (the program's [color scheme](#7-color-schemes-lightdark), changeable while it runs), `Style` (`"Native"`, or a Qt style such as `"Fusion"`: how every control is drawn; `Styles` lists them) |
-| `Screen` | `Width`, `Height` (primary screen, pixels), `TwipsPerPixelX`, `TwipsPerPixelY` (15), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FixedFonts` (the fixed-width ones among them, for code and terminals), `FontCount`, `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
+| `Screen` | `Width`, `Height` (primary screen, pixels), `TwipsPerPixelX`, `TwipsPerPixelY` (15), `DarkMode` (whether the OS appearance is dark), `Fonts` (the names of the installed fonts, sorted: `Screen.Fonts[i]`, or `Screen.Fonts(i)` as in VB), `FixedFonts` (the fixed-width ones among them, for code and terminals), `FontCount`, `FontName` and `FontSize` (the system's own font, which controls without a FontName use, its size in points), `FontDPI` (the dots per inch those points count in: 72 on macOS, 96 elsewhere, so N points are N * FontDPI / 72 pixels), `LayoutSpacingX`, `LayoutSpacingY` (the room the system's style leaves between controls side by side and one under the other), `ActiveForm`, `ActiveControl` (the control with the focus, in any form), `MousePointer` and `MouseIcon` (the pointer over every window; see [the mouse](#the-mouse-pointers-and-drag-and-drop)) |
 | `Clipboard` | `GetText(Format=vpCFText)`, `SetText(text, Format=vpCFText)` (`vpCFRTF`: rich text, as RTF source), `GetFormat(Format)` (`vpCFText`, `vpCFBitmap` / `vpCFDIB`, `vpCFRTF`, `vpCFFiles`), `GetData(Format=vpCFBitmap)` (a [Picture](#picture-objects), or with `vpCFFiles` the files' paths; `None` when there is none), `SetData(Picture)` (a Picture or a picture file), `Clear()` |
 | `Debug` | `Debug.Print(*values)` writes a line to stdout (the IDE's Immediate window) |
 
@@ -4816,6 +5001,12 @@ App.ColorScheme = vpSchemeLight          # every Project Default form, at once
 App.Style = "Fusion"                     # every control drawn the same everywhere
 ```
 
+`App.ColorScheme` set to Light or Dark forces the whole application's look
+too, as an IDE forces its own: Qt's color scheme where the system can
+switch, else the scheme's palette (dialogs, menus, tooltips and the tint of
+selected icons follow); while it is forced, a form whose scheme is System
+asks the operating system whether it is dark.
+
 **Light or dark now.** A form's `DarkMode` (read-only) is whether it looks
 dark now: its scheme as it applies (System: the OS appearance; a form shown
 in another with `ShowIn`: like that form). `Screen.DarkMode` is whether the
@@ -4840,14 +5031,15 @@ All constants are plain ints or strings.
 <!-- BEGIN GENERATED: constants -->
 | Group | Constants | Values |
 |---|---|---|
-| MsgBox buttons | `vpOKOnly`, `vpOKCancel`, `vpAbortRetryIgnore`, `vpYesNoCancel`, `vpYesNo`, `vpRetryCancel` | 0, 1, 2, 3, 4, 5 |
+| MsgBox buttons | `vpOKOnly`, `vpOKCancel`, `vpAbortRetryIgnore`, `vpYesNoCancel`, `vpYesNo`, `vpRetryCancel`, `vpSaveDiscardCancel` | 0, 1, 2, 3, 4, 5, 6 |
 | MsgBox icons | `vpCritical`, `vpQuestion`, `vpExclamation`, `vpInformation` | 16, 32, 48, 64 |
 | MsgBox default button | `vpDefaultButton1`, `vpDefaultButton2`, `vpDefaultButton3` | 0, 256, 512 |
-| MsgBox results | `vpOK`, `vpCancel`, `vpAbort`, `vpRetry`, `vpIgnore`, `vpYes`, `vpNo` | 1, 2, 3, 4, 5, 6, 7 |
+| MsgBox results | `vpOK`, `vpCancel`, `vpAbort`, `vpRetry`, `vpIgnore`, `vpYes`, `vpNo`, `vpSave`, `vpDiscard`, `vpExtraButton` | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 |
 | Form.Show | `vpModeless`, `vpModal` | 0, 1 |
 | CheckBox.Value | `vpUnchecked`, `vpChecked`, `vpGrayed` | 0, 1, 2 |
 | Mouse buttons / shift state | `vpLeftButton`, `vpRightButton`, `vpMiddleButton`, `vpShiftMask`, `vpCtrlMask`, `vpAltMask` | 1, 2, 4, 1, 2, 4 |
 | Alignment | `vpLeftJustify`, `vpRightJustify`, `vpCenter` | 0, 1, 2 |
+| Label.VerticalAlignment | `vpVAlignTop`, `vpVAlignMiddle`, `vpVAlignBottom` | 0, 1, 2 |
 | Form.BorderStyle | `vpBSNone`, `vpFixedSingle`, `vpSizable`, `vpFixedDialog`, `vpFixedToolWindow`, `vpSizableToolWindow` | 0, 1, 2, 3, 4, 5 |
 | Form.WindowState | `vpNormal`, `vpMinimized`, `vpMaximized` | 0, 1, 2 |
 | Form.StartUpPosition | `vpStartUpManual`, `vpStartUpOwner`, `vpStartUpScreen`, `vpStartUpWindowsDefault` | 0, 1, 2, 3 |
@@ -4858,6 +5050,7 @@ All constants are plain ints or strings.
 | FillStyle (Shape, Form, PictureBox) | `vpFSSolid`, `vpFSTransparent`, `vpHorizontalLine`, `vpVerticalLine`, `vpUpwardDiagonal`, `vpDownwardDiagonal`, `vpCross`, `vpDiagonalCross` | 0, 1, 2, 3, 4, 5, 6, 7 |
 | BorderStyle (Shape, Line) | `vpBSTransparent`, `vpBSSolid`, `vpBSDash`, `vpBSDot`, `vpBSDashDot`, `vpBSDashDotDot`, `vpBSInsideSolid` | 0, 1, 2, 3, 4, 5, 6 |
 | DrawStyle (Form, PictureBox) | `vpSolid`, `vpDash`, `vpDot`, `vpDashDot`, `vpDashDotDot`, `vpInvisible`, `vpInsideSolid` | 0, 1, 2, 3, 4, 5, 6 |
+| DrawCap and DrawJoin (Form, PictureBox, Picture) | `vpCapAutomatic`, `vpCapFlat`, `vpCapSquare`, `vpCapRound`, `vpJoinMiter`, `vpJoinBevel`, `vpJoinRound` | 0, 1, 2, 3, 0, 1, 2 |
 | Label.TextFormat | `vpPlainText`, `vpRichText`, `vpMarkdown` | 0, 1, 2 |
 | ScrollBars (TextBox, PictureBox) | `vpSBNone`, `vpHorizontal`, `vpVertical`, `vpBoth` | 0, 1, 2, 3 |
 | PictureBox.Align | `vpAlignNone`, `vpAlignTop`, `vpAlignBottom`, `vpAlignLeft`, `vpAlignRight`, `vpAlignFill` | 0, 1, 2, 3, 4, 5 |
@@ -4870,18 +5063,24 @@ All constants are plain ints or strings.
 | Panel.AutoSize (StatusBar) | `vpSbrNoAutoSize`, `vpSbrSpring`, `vpSbrContents` | 0, 1, 2 |
 | Panel.Alignment (StatusBar) | `vpSbrLeft`, `vpSbrCenter`, `vpSbrRight` | 0, 1, 2 |
 | TabStrip.Placement | `vpTabPlacementTop`, `vpTabPlacementBottom`, `vpTabPlacementLeft`, `vpTabPlacementRight` | 0, 1, 2, 3 |
-| Button.Style (Toolbar) | `vpTbrDefault`, `vpTbrCheck`, `vpTbrButtonGroup`, `vpTbrSeparator` | 0, 1, 2, 3 |
+| Button.Style (Toolbar) | `vpTbrDefault`, `vpTbrCheck`, `vpTbrButtonGroup`, `vpTbrSeparator`, `vpTbrSpacer` | 0, 1, 2, 3, 4 |
 | Button.Value (Toolbar) | `vpTbrUnpressed`, `vpTbrPressed` | 0, 1 |
-| Toolbar.TextAlignment | `vpTbrTextAlignBottom`, `vpTbrTextAlignRight` | 0, 1 |
+| Toolbar.TextAlignment | `vpTbrTextAlignBottom`, `vpTbrTextAlignRight`, `vpTbrTextAlignNone` | 0, 1, 2 |
+| Toolbar.Appearance | `vpTbrFlat`, `vpTbr3D` | 0, 1 |
+| System colors (the palette's, as they are now) | `vpScrollBars`, `vpDesktop`, `vpActiveTitleBar`, `vpInactiveTitleBar`, `vpMenuBar`, `vpWindowBackground`, `vpWindowFrame`, `vpMenuText`, `vpWindowText`, `vpTitleBarText`, `vpActiveBorder`, `vpInactiveBorder`, `vpApplicationWorkspace`, `vpHighlight`, `vpHighlightText`, `vpButtonFace`, `vpButtonShadow`, `vpGrayText`, `vpButtonText`, `vpInactiveCaptionText`, `vp3DHighlight`, `vp3DDKShadow`, `vp3DLight`, `vpInfoText`, `vpInfoBackground`, `vpPlaceholderText`, `vpLinkText`, `vpFormText` | 2147483648, 2147483649, 2147483650, 2147483651, 2147483652, 2147483653, 2147483654, 2147483655, 2147483656, 2147483657, 2147483658, 2147483659, 2147483660, 2147483661, 2147483662, 2147483663, 2147483664, 2147483665, 2147483666, 2147483667, 2147483668, 2147483669, 2147483670, 2147483671, 2147483672, 2147483673, 2147483674, 2147483675 |
+| Menu.MenuRole | `vpMenuRoleAutomatic`, `vpMenuRoleNone`, `vpMenuRoleAbout`, `vpMenuRolePreferences`, `vpMenuRoleQuit` | 0, 1, 2, 3, 4 |
+| ColumnHeader.AutoSize (ListView) | `vpLvwColumnFixed`, `vpLvwColumnContents`, `vpLvwColumnFill` | 0, 1, 2 |
 | ListView.View | `vpLvwIcon`, `vpLvwSmallIcon`, `vpLvwList`, `vpLvwReport` | 0, 1, 2, 3 |
 | ColumnHeader.Alignment (ListView) | `vpLvwColumnLeft`, `vpLvwColumnRight`, `vpLvwColumnCenter` | 0, 1, 2 |
 | ListView.SortOrder | `vpLvwAscending`, `vpLvwDescending` | 0, 1 |
 | RichTextBox: LoadFile / SaveFile file types | `vpRtfHTML`, `vpRtfText` | 0, 1 |
 | RichTextBox.Find options (added together) | `vpRtfWholeWord`, `vpRtfMatchCase`, `vpRtfNoHighlight` | 2, 4, 8 |
 | CodeBox: Find, FindAll and Replace options (added together) | `vpFindWholeWord`, `vpFindMatchCase`, `vpFindNoHighlight`, `vpFindRegex`, `vpFindBackward` | 2, 4, 8, 16, 32 |
-| FlexGrid: ColEditor / CellEditor | `vpGridEditNone`, `vpGridEditText`, `vpGridEditList`, `vpGridEditCheck`, `vpGridEditColor`, `vpGridEditButton`, `vpGridEditNumber`, `vpGridEditFont`, `vpGridEditPicture` | 0, 1, 2, 3, 4, 5, 6, 7, 8 |
+| FlexGrid: ColEditor / CellEditor | `vpGridEditNone`, `vpGridEditText`, `vpGridEditList`, `vpGridEditCheck`, `vpGridEditColor`, `vpGridEditButton`, `vpGridEditNumber`, `vpGridEditFont`, `vpGridEditPicture`, `vpGridEditTextButton`, `vpGridEditCombo` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 |
 | FlexGrid.Sort | `vpGridSortGenericAscending`, `vpGridSortGenericDescending`, `vpGridSortNumericAscending`, `vpGridSortNumericDescending`, `vpGridSortStringNoCaseAscending`, `vpGridSortStringNoCaseDescending`, `vpGridSortStringAscending`, `vpGridSortStringDescending` | 1, 2, 3, 4, 5, 6, 7, 8 |
-| FlexGrid.SelectionMode | `vpGridSelectionFree`, `vpGridSelectionByRow`, `vpGridSelectionByColumn` | 0, 1, 2 |
+| FlexGrid.SelectionMode | `vpGridSelectionFree`, `vpGridSelectionByRow`, `vpGridSelectionByColumn`, `vpGridSelectionNone` | 0, 1, 2, 3 |
+| FlexGrid.ButtonStyle | `vpGridButtonsCompact`, `vpGridButtonsRoomy` | 0, 1 |
+| FlexGrid.ColorPicker | `vpGridColorPalette`, `vpGridColorEvent` | 0, 1 |
 | PopupMenu flags (added together) | `vpPopupMenuLeftAlign`, `vpPopupMenuCenterAlign`, `vpPopupMenuRightAlign`, `vpPopupMenuLeftButton`, `vpPopupMenuRightButton` | 0, 4, 8, 0, 2 |
 | Form_QueryUnload: UnloadMode | `vpFormControlMenu`, `vpFormCode`, `vpAppWindows`, `vpAppTaskManager`, `vpFormMDIForm`, `vpFormOwner` | 0, 1, 2, 3, 4, 5 |
 | MousePointer (controls, forms, Screen) | `vpDefault`, `vpArrow`, `vpCrosshair`, `vpIbeam`, `vpIconPointer`, `vpSizePointer`, `vpSizeNESW`, `vpSizeNS`, `vpSizeNWSE`, `vpSizeWE`, `vpUpArrow`, `vpHourglass`, `vpNoDrop`, `vpArrowHourglass`, `vpArrowQuestion`, `vpSizeAll`, `vpCustom` | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 99 |

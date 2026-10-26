@@ -365,3 +365,68 @@ def test_files(form, tmp_path):
     assert path.read_text() == "# Saved\n"
     form.mdSource.LoadFile(str(path))
     assert form.mdSource.Text == "# Saved\n"
+
+
+# --- colored text, AppendText and ScrollToEnd ------------------------------------------------
+
+def _fragments(widget):
+    out, block = [], widget.document().begin()
+    while block.isValid():
+        it = block.begin()
+        while not it.atEnd():
+            fragment = it.fragment()
+            fmt = fragment.charFormat()
+            color = fmt.foreground().color().name() \
+                if fmt.hasProperty(QTextFormat.ForegroundBrush) else None
+            out.append((fragment.text(), color, fmt.fontWeight() > QFont.Normal,
+                        fmt.fontFixedPitch()))
+            it += 1
+        block = block.next()
+    return out
+
+
+def test_colored_text_in_the_preview(form):
+    preview = form.mdPreview
+    preview.Text = ('Plain <span style="color: #00aa00; font-weight: bold">green **bold** '
+                    '`code`</span> and <font color="blue">blue</font>.\n\n'
+                    '- item <font color=red>red</font>\n\n'
+                    '```\n<span style="color:red">literal</span>\n```\n\n'
+                    'In `<font color="red">code</font>` too.\n')
+    parts = _fragments(preview._widget)
+    assert ("Plain ", None, False, False) in parts
+    assert ("green ", "#00aa00", False, False) in parts
+    assert ("bold", "#00aa00", True, False) in parts  # (the Markdown inside still works)
+    assert ("code", "#00aa00", False, True) in parts
+    assert ("blue", "#0000ff", False, False) in parts and ("red", "#ff0000", False, False) in parts
+    assert ('<span style="color:red">literal</span>', None, False, False) in parts
+    assert ('<font color="red">code</font>', None, False, True) in parts
+    assert "" not in preview._widget.toPlainText()
+    assert 'color:#00aa00' in preview.TextHTML.replace(" ", "")
+    # the visual editor writes colored text back as spans
+    document = preview._widget.document()
+    assert '<span style="color:#00aa00">green **bold** `code`</span>' in markdown_of(document)
+    assert '- item <span style="color:#ff0000">red</span>' in markdown_of(document)
+    assert '<span style="color:red">literal</span>' in markdown_of(document)  # (code as it was)
+    preview.Text = "an <span style='color:red'>unclosed span"  # (its mark goes, no color)
+    assert preview._widget.toPlainText() == "an unclosed span"
+
+
+def test_append_text_and_scroll_to_end(form):
+    for box in (form.mdSource, form.mdPreview):
+        box.Text = ""
+        box.AppendText("Hello ")
+        box.AppendText("**world**")
+        assert box.Text == "Hello **world**"
+        box.AppendText("\n\nNext <span style='color:red'>line</span>")
+        assert box.Text == "Hello **world**\n\nNext <span style='color:red'>line</span>"
+    assert ("line", "#ff0000", False, False) in _fragments(form.mdPreview._widget)
+    preview = form.mdPreview
+    preview.Text = "\n\n".join(f"Paragraph {i}" for i in range(80))
+    bar = preview._widget.verticalScrollBar()
+    bar.setValue(0)
+    preview.AppendText("\n\nMore")
+    assert bar.value() == 0  # (not following the end: stays)
+    preview.ScrollToEnd()
+    assert bar.value() == bar.maximum() > 0
+    preview.AppendText("\n\n" + "\n\n".join(f"Line {i}" for i in range(20)))
+    assert bar.value() == bar.maximum()  # (following it)

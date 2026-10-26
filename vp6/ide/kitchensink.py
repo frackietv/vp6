@@ -35,7 +35,7 @@ FORMS = (  # the window, its pages (in the index's order) and the modal dialog
     "pgTerminal.py", "pgCode.py", "pgEditing.py", "pgMarkdown.py", "pgRichText.py", "pgText.py",
     "pgTimer.py", "pgTree.py", "pgUndo.py", "pgWeb.py", "pgSchemes.py", "pgDialogs.py",
     "pgKeyboard.py", "pgMDI.py", "pgMouse.py", "pgLayout.py", "pgDocking.py", "pgEmbedded.py",
-    "pgPages.py", "pgScrolling.py", "pgGlobals.py", "pgArrays.py", "pgDesigner.py",
+    "pgPages.py", "pgScrolling.py", "pgGlobals.py", "pgIDE.py", "pgArrays.py", "pgDesigner.py",
     "pgMenus.py", "pgNetwork.py", "pgProcess.py", "pgUserControl.py",
     "frmDialog.py", "frmMDI.py", "frmNote.py", "frmSuggest.py", "frmWizard.py",
 )

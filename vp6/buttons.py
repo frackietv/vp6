@@ -10,8 +10,11 @@
   ``Value``, an ``ArrowType`` instead of a picture, and a drop-down
   ``PopupMenu`` (one of the form's menus, by name: make it invisible in the
   Menu Editor to have it only here) opened as its ``PopupMode`` says.
-  ``Click`` fires, and ``ButtonMenuClick(ButtonMenu)`` when one of its menu's
-  items is chosen there (the item's own Click fires too).
+  ``Click`` fires (``DblClick`` too, on a double-click), and
+  ``ButtonMenuClick(ButtonMenu)`` when one of its menu's items is chosen there
+  (the item's own Click fires too). ``IconSize`` sets its picture's size;
+  ``Alignment`` Left puts the picture at the left with the Caption beside it,
+  as in a list of tools.
 * **ButtonBox** shows the platform's standard dialog buttons in the
   platform's order (OK left or right of Cancel...). ``Buttons`` lists them,
   one per line: a standard button's name (OK, Cancel, Yes, No, Apply, Help,
@@ -26,22 +29,22 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QSize, Qt
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QCommandLinkButton, QDialogButtonBox, QPushButton, QToolButton
+from PySide6.QtCore import QEvent, QRect, QSize, Qt
+from PySide6.QtGui import QIcon, QPalette
+from PySide6.QtWidgets import (QCommandLinkButton, QDialogButtonBox, QPushButton, QStyle,
+                               QStyleOptionToolButton, QStylePainter, QToolButton)
 
 from ._props import P, enum_choices
 from .controls import (_COLORS, _COMMON, _FONT, _ORIENTATION, CONTROL_TYPES, EVENT_ARGS,
                        Control, Menu, _add_mouse_members, _add_validation, _geometry,
                        _PerItem)
-from .picture import picture_pixmap
+from .picture import picture_icon
 
 EVENT_ARGS.update({"ButtonMenuClick": "ButtonMenu", "Accepted": "", "Rejected": ""})
 
 
 def _picture_icon(control, value) -> QIcon:
-    pixmap = picture_pixmap(control, value or "")
-    return QIcon(pixmap) if not pixmap.isNull() else QIcon()
+    return picture_icon(control, value or "")
 
 
 # --- CommandLink ---------------------------------------------------------------------------
@@ -106,6 +109,39 @@ class CommandLink(Control):
 
 # --- ToolButton ------------------------------------------------------------------------------
 
+class _AlignedToolButton(QToolButton):
+    """A ToolButton's widget: as QToolButton's, or (``left``) its icon at the
+    left with its text beside it (QToolButton centres them)."""
+
+    left = False
+    PADDING, GAP = 4, 6  # (left of the icon and right of the text; between them)
+
+    def paintEvent(self, event):
+        if not self.left:
+            super().paintEvent(event)
+            return
+        option = QStyleOptionToolButton()
+        self.initStyleOption(option)
+        option.text = ""
+        option.icon = QIcon()
+        painter = QStylePainter(self)
+        painter.drawComplexControl(QStyle.CC_ToolButton, option)  # (hovered, checked)
+        size = self.iconSize()
+        left = self.PADDING
+        if not self.icon().isNull() and self.toolButtonStyle() != Qt.ToolButtonTextOnly:
+            self.icon().paint(painter, QRect(left, (self.height() - size.height()) // 2,
+                                             size.width(), size.height()),
+                              Qt.AlignCenter, QIcon.Normal if self.isEnabled() else
+                              QIcon.Disabled)
+            left += size.width() + self.GAP
+        if self.toolButtonStyle() != Qt.ToolButtonIconOnly:
+            text = self.rect().adjusted(left, 0, -self.PADDING, 0)
+            painter.setPen(option.palette.color(QPalette.ButtonText))
+            painter.drawText(text, Qt.AlignVCenter | Qt.AlignLeft,
+                             self.fontMetrics().elidedText(self.text(), Qt.ElideRight,
+                                                           text.width()))
+
+
 _TOOL_STYLES = (Qt.ToolButtonIconOnly, Qt.ToolButtonTextOnly, Qt.ToolButtonTextBesideIcon,
                 Qt.ToolButtonTextUnderIcon)
 _POPUP_MODES = (QToolButton.DelayedPopup, QToolButton.MenuButtonPopup, QToolButton.InstantPopup)
@@ -118,8 +154,8 @@ class ToolButton(Control):
 
     TypeName = "ToolButton"
     DefaultSize = (33, 33)
-    Events = ("Click", "ButtonMenuClick", "GotFocus", "LostFocus", "KeyDown", "KeyPress",
-              "KeyUp", "MouseDown", "MouseMove", "MouseUp")
+    Events = ("Click", "DblClick", "ButtonMenuClick", "GotFocus", "LostFocus", "KeyDown",
+              "KeyPress", "KeyUp", "MouseDown", "MouseMove", "MouseUp")
     _qss_type = "QToolButton"
     Properties = (
         P("Caption", "str", "", description="The text (shown as ButtonStyle says)"),
@@ -129,6 +165,14 @@ class ToolButton(Control):
           enum_choices("Icon Only", "Text Only", "Text Beside Icon", "Text Under Icon"),
           description="The picture, the Caption, or both (a button without a Picture shows "
                       "its Caption)"),
+        P("AutoSize", "bool", False,
+          description="As large as its picture and Caption need (the style's size for "
+                      "them), as a tool button in a toolbar"),
+        P("IconSize", "int", 0,
+          description="The side of its picture in pixels; 0 = the picture's own size"),
+        P("Alignment", "enum", 2, enum_choices("Left", "Right", "Center"),
+          description="Where its picture and Caption are: Center as a toolbar's; Left, the "
+                      "picture at the left and the Caption beside it (a list of tools)"),
         P("AutoRaise", "bool", True,
           description="Flat, raised only while the mouse is over it (as on a toolbar)"),
         P("Checkable", "bool", False,
@@ -146,10 +190,11 @@ class ToolButton(Control):
     )
 
     def _create_widget(self, parent):
-        button = QToolButton(parent)
+        button = _AlignedToolButton(parent)
         button.setFocusPolicy(Qt.StrongFocus)
         button.setIconSize(QSize(20, 20))
         return button
+
 
     def _connect_signals(self):
         self._widget.clicked.connect(self._on_clicked)
@@ -162,13 +207,32 @@ class ToolButton(Control):
         self._widget.setText(v)
         self._apply_ButtonStyle(self._values.get("ButtonStyle", 0))
 
+    def _apply_AutoSize(self, v=None):
+        if self._values.get("AutoSize") and self._widget is not None:
+            hint = self._widget.sizeHint()
+            if (hint.width(), hint.height()) != (self._values.get("Width"),
+                                                 self._values.get("Height")):
+                self.Width, self.Height = hint.width(), hint.height()
+
     def _apply_Picture(self, v):
         icon = _picture_icon(self, v)
         self._widget.setIcon(icon)
+        self._apply_IconSize(self._values.get("IconSize", 0))
+        self._apply_ButtonStyle(self._values.get("ButtonStyle", 0))
+
+    def _apply_IconSize(self, v):
+        if v:
+            self._widget.setIconSize(QSize(int(v), int(v)))
+            self._apply_AutoSize()
+            return
+        icon = self._widget.icon()
         if not icon.isNull():
             size = icon.availableSizes()[0] if icon.availableSizes() else QSize(20, 20)
             self._widget.setIconSize(size.boundedTo(QSize(48, 48)))
-        self._apply_ButtonStyle(self._values.get("ButtonStyle", 0))
+
+    def _apply_Alignment(self, v):
+        self._widget.left = int(v) == 0
+        self._widget.update()
 
     def _apply_ButtonStyle(self, v):
         style = _TOOL_STYLES[int(v) if 0 <= int(v) <= 3 else 0]
@@ -176,9 +240,18 @@ class ToolButton(Control):
                 not self._values.get("ArrowType"):
             style = Qt.ToolButtonTextOnly  # (nothing else to show)
         self._widget.setToolButtonStyle(style)
+        self._apply_AutoSize()
 
     def _apply_AutoRaise(self, v):
         self._widget.setAutoRaise(bool(v))
+        self._apply_AutoSize()
+
+    def _apply_font(self, _=None):
+        super()._apply_font(_)
+        self._apply_AutoSize()
+
+    _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
 
     def _apply_Checkable(self, v):
         self._widget.setCheckable(bool(v))

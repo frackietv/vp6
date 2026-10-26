@@ -98,7 +98,7 @@ class _Designed:
         scheme = self._effective_scheme()
         if scheme == appearance.vpSchemeSystem and appearance.app_override_active():
             os_dark = appearance.system_is_dark()
-            if os_dark != ide_is_dark():
+            if os_dark != appearance.native_is_dark():
                 return appearance.vpSchemeDark if os_dark else appearance.vpSchemeLight
         return scheme
 
@@ -113,7 +113,7 @@ class _Designed:
             else appearance.scheme_palette(scheme == appearance.vpSchemeDark)
         back = self._values.get("BackColor")
         base = colors.to_qcolor(back) if back is not None else palette.color(QPalette.Window)
-        if theme_manager().state.show_grid:
+        if self._designer.show_grid():
             tile = QPixmap(GRID, GRID)
             tile.fill(base)
             painter = QPainter(tile)
@@ -174,14 +174,17 @@ class _Canvas(QWidget):
 
     def form_frame_rect(self) -> QRect:
         d = self.designer
-        return chrome.frame_rect(d.form_canvas_rect(), d.frame_style(), d.frame_info())
+        return d.frame_rect()
 
     def paintEvent(self, event):
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(WORKSPACE[ide_is_dark()]))
+        p.fillRect(self.rect(), QColor(WORKSPACE[self.designer.ide_dark()]))
         d = self.designer
         if d.form is not None:
-            chrome.paint(p, d.frame_style(), d.form_canvas_rect(), d.frame_info())
+            if d.frame_drawer is not None:  # (a program's own: DesignerView's DrawFrame)
+                d.frame_drawer.paint(p, d.form_canvas_rect(), d.frame_info())
+            else:
+                chrome.paint(p, d.frame_style(), d.form_canvas_rect(), d.frame_info())
 
 
 class _Overlay(QWidget):
@@ -199,8 +202,10 @@ class _Overlay(QWidget):
         p = QPainter(self)
         d = self.d
         if d.form is not None:  # the window's rounded bottom corners, over the square form
-            chrome.paint_corners(p, d.frame_style(), d.form_canvas_rect(), d.frame_info(),
-                                 QColor(WORKSPACE[ide_is_dark()]))
+            (d.frame_drawer.paint_corners if d.frame_drawer is not None else
+             lambda *args: chrome.paint_corners(args[0], d.frame_style(), *args[1:]))(
+                p, d.form_canvas_rect(), d.frame_info(),
+                                 QColor(WORKSPACE[d.ide_dark()]))
         selection = d.selection
         if not selection:
             for handle_rect in self._form_handles().values():
@@ -525,6 +530,13 @@ class FormDesigner(QWidget):
         # The project's color scheme, used by forms set to "Project Default"
         self.project_scheme = project_scheme
         self.form: DesignForm | None = None
+        # Who draws the window frame: chrome (None), or a program's DesignerView
+        # (metrics(info), paint(p, client, info), paint_corners(p, client, info, workspace))
+        self.frame_drawer = None
+        # Whether the IDE is dark (the workspace's color) and shows the grid: the Qt
+        # IDE's settings, unless a program says (DesignerView)
+        self.ide_dark: Callable[[], bool] = ide_is_dark
+        self.show_grid: Callable[[], bool] = lambda: theme_manager().state.show_grid
         self.controls: dict[str, Control] = {}
         self.form_def = FormDef(document.form_def.class_name)
         self.selection: list[str] = []  # empty = the form itself
@@ -661,11 +673,29 @@ class FormDesigner(QWidget):
             menus=tuple(self.form_def.control(key).props.get("Caption", "")
                         for key in self.menu_bar_keys()))
 
+    def frame_metrics(self, info) -> tuple[int, int]:
+        """(title bar height, border width) of the frame drawn around the form."""
+        if self.frame_drawer is not None:
+            return self.frame_drawer.metrics(info)
+        return chrome.metrics(self.frame_style(), info)
+
+    def frame_rect(self) -> QRect:
+        """The window frame's rectangle on the canvas (its menu bar included)."""
+        if self.frame_drawer is None:
+            return chrome.frame_rect(self.form_canvas_rect(), self.frame_style(),
+                                     self.frame_info())
+        info = self.frame_info()
+        client = self.form_canvas_rect()
+        title, border = self.frame_metrics(info)
+        title += chrome.menu_height(info)
+        return QRect(client.left() - border, client.top() - border - title,
+                     client.width() + 2 * border, client.height() + title + 2 * border)
+
     def _layout_form(self) -> None:
         """Place the form below the frame's title bar (its height depends on
         the frame style and BorderStyle)."""
         info = self.frame_info()
-        title, border = chrome.metrics(self.frame_style(), info)
+        title, border = self.frame_metrics(info)
         position = QPoint(MARGIN + border, MARGIN + border + title + chrome.menu_height(info))
         if self.form_widget().pos() != position:
             self.form_widget().move(position)

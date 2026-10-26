@@ -143,6 +143,16 @@ class PropertyHost:
         if applier is not None:
             applier(value)
 
+    def _apply_system_colors(self) -> None:
+        """The palette changed (light, dark): its properties set to system colors
+        (vpButtonFace...) take the new ones."""
+        for name, spec in self._specs.items():
+            value = self._values.get(name)
+            if spec.kind == "color" and colors.is_system(value):
+                applier = getattr(self, "_apply_" + name, None)
+                if applier is not None:
+                    applier(value)
+
     @classmethod
     def properties(cls) -> tuple[PropSpec, ...]:
         return cls.Properties

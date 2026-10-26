@@ -71,7 +71,7 @@ class pgNetwork(Form):
 
     # --- the server: listens, and a control array element takes each connection --------------
     def cmdListen_Click(self):
-        self.wskServer.LocalPort = 0  # any free port: it tells which
+        self.wskServer.Bind(0, "127.0.0.1")  # any free port (it tells which), from here only
         self.wskServer.Listen()
         self.net(f"Server: listening on port {self.wskServer.LocalPort} (vpSckListening: "
                  f"{self.wskServer.State == vpSckListening})")

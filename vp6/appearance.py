@@ -61,6 +61,7 @@ ide_scheme_provider = None
 project_scheme: int | None = None
 # App.ColorScheme set while running: what Project Default means now (None: not set)
 app_scheme: int | None = None
+app_forced_override = False  # (App.ColorScheme forced light or dark: set_app_override's)
 _found_schemes: dict[str, int] = {}
 _fusion = None  # see fusion_style
 _fusion_address = None
@@ -145,6 +146,56 @@ def _qt_scheme_is_dark() -> bool:
     if scheme == Qt.ColorScheme.Light:
         return False
     return QGuiApplication.palette().color(QPalette.Window).lightness() < 128
+
+
+_app_look_before = None  # (force_app_look: the palette before, while it is forced)
+
+
+def force_app_look(dark: bool | None) -> None:
+    """App.ColorScheme forced light or dark (None: not any more): the whole
+    application's look, as the IDE forces its own: Qt's color scheme where the
+    platform can switch, else the scheme's palette (dialogs, menus, tooltips
+    and selected icons' tint follow); a form whose scheme is System asks the
+    operating system while it is forced (set_app_override)."""
+    global _app_look_before, app_forced_override
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        return
+    hints = app.styleHints()
+    if dark is None:
+        if app_forced_override:
+            app_forced_override = False
+            hints.unsetColorScheme()
+            if _app_look_before is not None:
+                app.setPalette(_app_look_before)
+                _app_look_before = None
+            set_app_override(False)
+        return
+    if app_override_active() and not app_forced_override:
+        return  # (an IDE in this process forces the look already)
+    if not app_forced_override:
+        app_forced_override = True
+        set_app_override(True)
+    wanted = Qt.ColorScheme.Dark if dark else Qt.ColorScheme.Light
+    hints.setColorScheme(wanted)
+    if hints.colorScheme() == wanted:
+        if _app_look_before is not None:
+            app.setPalette(_app_look_before)
+            _app_look_before = None
+        return
+    if _app_look_before is None:  # (the platform can't switch: the scheme's palette)
+        _app_look_before = QPalette(app.palette())
+    app.setPalette(scheme_palette(dark))
+
+
+def native_is_dark() -> bool:
+    """Whether a form drawn natively (no forced scheme) looks dark now: Qt's
+    scheme, or its palette (an IDE forcing the application's look changes
+    them; App.ColorScheme doesn't, its forms are each drawn in the scheme)."""
+    return _qt_scheme_is_dark()
 
 
 # The IDE can force the whole application light or dark. Qt then reports the

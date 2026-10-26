@@ -12,16 +12,15 @@ and takes the next message.
 
 from __future__ import annotations
 
-import os
-
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QMessageBox
 
 from . import codex
-from .claudepanel import ChatWindow, ClaudePanel, tool_summary
+from .claudepanel import ChatWindow, ClaudePanel
 from .codex import (CodexChat, CodexServer, CodexSession, describe_account, find_codex,
-                    list_params, session_of, user_text)
+                    list_params, session_of)
+from .logic.chats import CodexMessages, command_line  # noqa: F401
 
 INSTALL_URL = "https://developers.openai.com/codex/cli"
 
@@ -176,17 +175,6 @@ class CodexPanel(ClaudePanel):
 
 # -- a chat ------------------------------------------------------------------------------------
 
-_CHANGE_KINDS = {"add": "Add", "delete": "Delete", "update": "Edit"}
-
-
-def command_line(item: dict) -> str:
-    """The command a commandExecution item runs (without the shell around it)."""
-    actions = [a for a in item.get("commandActions") or [] if isinstance(a, dict)]
-    if len(actions) == 1 and actions[0].get("command"):
-        return actions[0]["command"]
-    return item.get("command") or ""
-
-
 class CodexChatWindow(ChatWindow):
     """A session with Codex (a ``CodexChat`` on the shared server)."""
 
@@ -199,10 +187,10 @@ class CodexChatWindow(ChatWindow):
     def __init__(self, server: CodexServer, folder: str, session: CodexSession | None = None,
                  parent=None):
         self._server = server
-        self._failure = ""  # an error Codex gave up on, until its turn completes
         super().__init__(folder, session, parent)
 
     def _make_chat(self, folder: str, session: CodexSession | None):
+        self.messages = CodexMessages(self, folder)
         chat = CodexChat(self._server, folder, session.id if session else None,
                          mode=codex.default_mode(), parent=self)
         chat.resumed.connect(self._show_thread)
@@ -214,91 +202,4 @@ class CodexChatWindow(ChatWindow):
 
     def _show_thread(self, thread: dict) -> None:
         """What was said before in the resumed session."""
-        for turn in thread.get("turns") or []:
-            for item in turn.get("items") or []:
-                if isinstance(item, dict):
-                    self._item_started(item, history=True)
-                    self._item_completed(item, history=True)
-        self.state.setText("Resumed: your next message goes on with this session")
-
-    # -- showing messages -------------------------------------------------------------------------
-    def show_message(self, data: dict) -> None:
-        """Show one of the thread's notifications."""
-        method = data.get("method")
-        params = data.get("params") or {}
-        if method == "vp6/threadLoaded":
-            if params.get("model") and "Resum" not in self.state.text():
-                self.state.setText(f"Model: {params['model']}")
-        elif method == "item/started":
-            self._item_started(params.get("item") or {})
-        elif method == "item/completed":
-            self._item_completed(params.get("item") or {})
-        elif method == "error":
-            message = (params.get("error") or {}).get("message") or "error"
-            if params.get("willRetry"):
-                self.state.setText(f"Retrying: {message}")
-            else:
-                self._failure = message
-        elif method == "turn/completed":
-            self._turn_completed(params.get("turn") or {})
-
-    def _item_started(self, item: dict, history: bool = False) -> None:
-        kind = item.get("type")
-        if kind == "commandExecution":
-            self._show_tool("Shell", tool_summary("Shell", {"command": command_line(item)}))
-        elif kind == "fileChange":
-            for change in item.get("changes") or []:
-                path = change.get("path", "")
-                if os.path.isabs(path) and path.startswith(self.chat.folder + os.sep):
-                    path = os.path.relpath(path, self.chat.folder)
-                what = (change.get("kind") or {}).get("type", "update")
-                self._show_tool(_CHANGE_KINDS.get(what, "Edit"), path)
-        elif kind == "mcpToolCall":
-            arguments = item.get("arguments")
-            self._show_tool(f"{item.get('server', '?')}/{item.get('tool', '?')}",
-                            tool_summary("", arguments if isinstance(arguments, dict) else {}))
-        elif kind == "dynamicToolCall":
-            arguments = item.get("arguments")
-            self._show_tool(item.get("tool", "?"),
-                            tool_summary("", arguments if isinstance(arguments, dict) else {}))
-        elif kind == "webSearch":
-            self._show_tool("Search", item.get("query") or "")
-        elif kind == "imageView":
-            self._show_tool("View", item.get("path") or "")
-
-    def _item_completed(self, item: dict, history: bool = False) -> None:
-        kind = item.get("type")
-        status = item.get("status")
-        if kind == "agentMessage":
-            if (item.get("text") or "").strip():
-                self._show_text("assistant", item["text"].strip())
-        elif kind == "userMessage" and history:
-            text = user_text(item)
-            if text:
-                self._show_text("user", text)
-        elif kind == "commandExecution":
-            code = item.get("exitCode")
-            if status == "declined":
-                self._show_tool_error("Declined")
-            elif status == "failed" or code not in (None, 0):
-                output = (item.get("aggregatedOutput") or "").strip()
-                lines = output.splitlines()
-                self._show_tool_error(lines[-1] if lines else f"exit code {code}")
-        elif kind == "fileChange" and status in ("failed", "declined"):
-            self._show_tool_error("Declined" if status == "declined" else "Not changed")
-        elif kind == "mcpToolCall" and item.get("error"):
-            self._show_tool_error(str((item["error"] or {}).get("message", "error")))
-
-    def _turn_completed(self, turn: dict) -> None:
-        status = turn.get("status")
-        failure, self._failure = self._failure, ""
-        if status == "interrupted":
-            self.state.setText("Stopped")
-        elif status == "failed":
-            self.state.setText("")
-            error = turn.get("error") or {}
-            self._show_error(error.get("message") or failure or "Codex couldn't answer.")
-        else:
-            duration = turn.get("durationMs")
-            self.state.setText(f"Done ({duration / 1000:.1f} s)"
-                               if isinstance(duration, (int, float)) else "Done")
+        self.messages.show_thread(thread)

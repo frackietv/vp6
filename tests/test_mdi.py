@@ -307,3 +307,23 @@ def test_window_list_in_the_menu_editor(qapp):
     assert editor.entries[0].props.get("WindowList") is True
     editor.window_list.setChecked(False)
     assert "WindowList" not in editor.entries[0].props
+
+
+def test_a_new_child_placed_by_its_size(shell):
+    """A child shown for the first time goes where it overlaps the others least,
+    by its own size (as a QMdiArea places a window of that size), inside the
+    workspace."""
+    from vp6 import DoEvents
+
+    first, second = frmChild(), frmChild()
+    first.Show()
+    DoEvents()
+    first.WindowWidth, first.WindowHeight = 300, 250
+    second.WindowWidth, second.WindowHeight = 260, 200
+    second.Show()
+    DoEvents()
+    area = first._mdi_sub.mdiArea().viewport().rect()
+    a, b = first._mdi_sub.geometry(), second._mdi_sub.geometry()
+    assert (b.width(), b.height()) == (260, 200) and area.contains(b)
+    assert not a.intersects(b) or (a.intersected(b).width() * a.intersected(b).height() <
+                                   b.width() * b.height())

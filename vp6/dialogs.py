@@ -1,4 +1,4 @@
-"""MsgBox and InputBox; ProgressBox (a progress dialog) and ShowError (an
+"""MsgBox, InputBox and InputNumber; ProgressBox (a progress dialog) and ShowError (an
 error message with "Show this message again")."""
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ _BUTTON_SETS = {
                       (QMessageBox.Cancel, c.vpCancel)],
     c.vpYesNo: [(QMessageBox.Yes, c.vpYes), (QMessageBox.No, c.vpNo)],
     c.vpRetryCancel: [(QMessageBox.Retry, c.vpRetry), (QMessageBox.Cancel, c.vpCancel)],
+    c.vpSaveDiscardCancel: [(QMessageBox.Save, c.vpSave), (QMessageBox.Discard, c.vpDiscard),
+                            (QMessageBox.Cancel, c.vpCancel)],
 }
 
 _ICONS = {
@@ -30,8 +32,11 @@ _ICONS = {
 }
 
 
-def MsgBox(prompt, buttons: int = c.vpOKOnly, title: str | None = None) -> int:
-    """Show a message box and return vpOK, vpCancel, vpYes, ...
+def MsgBox(prompt, buttons: int = c.vpOKOnly, title: str | None = None,
+           ExtraButton: str = "") -> int:
+    """Show a message box and return vpOK, vpCancel, vpYes, ... ExtraButton
+    adds a button of your own with that caption beside the others (e.g.
+    "Show in Folder"): clicking it returns vpExtraButton.
 
     >>> if MsgBox("Save changes?", vpYesNo + vpQuestion) == vpYes: ...
     """
@@ -42,19 +47,23 @@ def MsgBox(prompt, buttons: int = c.vpOKOnly, title: str | None = None) -> int:
     box.setText(str(prompt))
     box.setIcon(_ICONS.get(buttons & 0x70, QMessageBox.NoIcon))
 
-    pairs = _BUTTON_SETS.get(buttons & 0x7, _BUTTON_SETS[c.vpOKOnly])
+    pairs = _BUTTON_SETS.get(buttons & 0xF, _BUTTON_SETS[c.vpOKOnly])
     std = QMessageBox.StandardButton(0)
     for qt_button, _ in pairs:
         std |= qt_button
     box.setStandardButtons(std)
+    extra = box.addButton(str(ExtraButton), QMessageBox.ActionRole) if ExtraButton else None
     default_index = (buttons & 0xF00) // 256
     if default_index < len(pairs):
         box.setDefaultButton(pairs[default_index][0])
     match_dialog(box, parent)
 
-    clicked = QMessageBox.StandardButton(box.exec())
+    box.exec()
+    clicked = box.clickedButton()
+    if extra is not None and clicked is extra:
+        return c.vpExtraButton
     for qt_button, result in pairs:
-        if clicked == qt_button:
+        if clicked is not None and clicked is box.button(qt_button):
             return result
     # Closed with Escape / the window close button
     return c.vpCancel if any(r == c.vpCancel for _, r in pairs) else pairs[-1][1]
@@ -70,6 +79,23 @@ def InputBox(prompt, title: str | None = None, default: str = "") -> str:
     dialog.setTextValue(str(default))
     match_dialog(dialog, parent)
     return dialog.textValue() if dialog.exec() else ""
+
+
+def InputNumber(prompt, title: str | None = None, default: int = 0, minimum: int = 0,
+                maximum: int = 2147483647, step: int = 1) -> int | None:
+    """Ask the user for a whole number between ``minimum`` and ``maximum`` (a
+    box with arrows, e.g. a line to go to). Returns it, or None when cancelled."""
+    ensure_app()
+    parent = QApplication.activeWindow()
+    dialog = QInputDialog(parent)
+    dialog.setInputMode(QInputDialog.IntInput)
+    dialog.setWindowTitle(title if title is not None else (App.EXEName or "VP6"))
+    dialog.setLabelText(str(prompt))
+    dialog.setIntRange(int(minimum), int(maximum))
+    dialog.setIntStep(int(step))
+    dialog.setIntValue(int(default))
+    match_dialog(dialog, parent)
+    return dialog.intValue() if dialog.exec() else None
 
 
 class _ProgressBox:

@@ -26,8 +26,8 @@ import math
 from contextlib import contextmanager
 
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
-from PySide6.QtGui import (QBrush, QFontMetricsF, QImage, QLinearGradient, QPainter,
-                           QPainterPath, QPalette, QPen, QPolygonF)
+from PySide6.QtGui import (QBrush, QFontMetrics, QFontMetricsF, QImage, QLinearGradient, QPainter,
+                           QPainterPath, QPalette, QPen, QPolygonF, QTransform)
 
 from . import colors
 from ._props import P, enum_choices
@@ -49,10 +49,21 @@ DRAWING_PROPERTIES = (
     P("AutoRedraw", "bool", False,
       description="True: what the graphics methods draw is kept (no Paint event); False: "
                   "Paint fires whenever it needs drawing again"),
-    P("DrawWidth", "int", 1, description="The width of the lines the graphics methods draw"),
+    P("DrawWidth", "number", 1,
+      description="The width of the lines the graphics methods draw, in pixels (a fraction "
+                  "too, e.g. 0.5 on a Picture with a PixelRatio of 2)"),
     P("DrawStyle", "enum", 0, enum_choices(
         "Solid", "Dash", "Dot", "Dash-Dot", "Dash-Dot-Dot", "Transparent", "Inside Solid"),
       description="The lines the graphics methods draw"),
+    P("DrawCap", "enum", 0, enum_choices("Automatic", "Flat", "Square", "Round"),
+      description="The ends of lines: Automatic as VB's (round when wider than 1, else "
+                  "not covering the end point), or flat, square or round"),
+    P("DrawJoin", "enum", 0, enum_choices("Miter", "Bevel", "Round"),
+      description="The corners where lines meet (a polygon's, a path's): pointed, cut off "
+                  "or round"),
+    P("FontScale", "number", 1,
+      description="Print's text drawn that many times larger, as a magnified drawing shows "
+                  "it (its letters scaled, spaced as at the Font's own size)"),
     P("FillStyle", "enum", 1, enum_choices(
         "Solid", "Transparent", "Horizontal Line", "Vertical Line", "Upward Diagonal",
         "Downward Diagonal", "Cross", "Diagonal Cross"),
@@ -82,10 +93,12 @@ class GraphicsPath:
     MoveTo starts a new figure; LineTo, CurveTo (cubic) and QuadTo
     (quadratic) go on from the last point; Close closes the figure.
     AddRect (with rounded corners: Radius), AddEllipse and AddPolygon add
-    whole figures."""
+    whole figures. Unite, Subtract and Intersect make a new path of two
+    paths' areas (a disc with a bite out of it: ``disc.Subtract(bite)``)."""
 
     def __init__(self):
         self._steps = []  # (operation, numbers...) in the drawing's units
+        self._transform = None  # (m11, m12, m21, m22, dx, dy), or None
 
     def __repr__(self):
         return f"<GraphicsPath: {len(self._steps)} steps>"
@@ -135,13 +148,74 @@ class GraphicsPath:
             self.Close()
         return self
 
+    def Transform(self, M11=1.0, M12=0.0, M21=0.0, M22=1.0, DX=0.0, DY=0.0) -> "GraphicsPath":
+        """Draw the path through a transformation, as a drawing magnified,
+        turned or moved: a point X, Y is drawn at X*M11 + Y*M21 + DX,
+        X*M12 + Y*M22 + DY; the outline's width, a LinearGradient Fill and
+        the curves go with it. (1, 0, 0, 1, 0, 0) is none. It replaces the
+        one before; a path made by Unite, Subtract or Intersect starts with
+        none."""
+        values = tuple(float(v) for v in (M11, M12, M21, M22, DX, DY))
+        self._transform = None if values == (1.0, 0.0, 0.0, 1.0, 0.0, 0.0) else values
+        return self
+
+    def _combined(self, operation: str, Other: "GraphicsPath") -> "GraphicsPath":
+        if not isinstance(Other, GraphicsPath):
+            raise TypeError(f"{operation} takes a GraphicsPath, not {Other!r}")
+        path = GraphicsPath()
+        left, right = GraphicsPath(), GraphicsPath()
+        left._steps, right._steps = list(self._steps), list(Other._steps)
+        left._transform, right._transform = self._transform, Other._transform
+        path._steps.append(("combine", operation, left, right))
+        return path
+
+    def Unite(self, Other: "GraphicsPath") -> "GraphicsPath":
+        """A new path: the area of both paths (their figures filled)."""
+        return self._combined("united", Other)
+
+    def Subtract(self, Other: "GraphicsPath") -> "GraphicsPath":
+        """A new path: this path's area without the other's."""
+        return self._combined("subtracted", Other)
+
+    def Intersect(self, Other: "GraphicsPath") -> "GraphicsPath":
+        """A new path: the area the two paths share."""
+        return self._combined("intersected", Other)
+
+    def _qt_matrix(self, drawing) -> QTransform | None:
+        """Transform's, in the drawing's pixels (the path's points are mapped to
+        pixels first, so it is applied there: through the pixels' scale)."""
+        if self._transform is None:
+            return None
+        m11, m12, m21, m22, dx, dy = self._transform
+        to_px = drawing._px_transform()  # (Qt's order: pixels to units, Transform, back)
+        return to_px.inverted()[0] * QTransform(m11, m12, m21, m22, dx, dy) * to_px
+
+    def _qt_transformed(self, drawing) -> QPainterPath:
+        """The path with its transformation applied to its points (to combine it)."""
+        path, matrix = self._qt(drawing), self._qt_matrix(drawing)
+        return path if matrix is None else matrix.map(path)
+
+    def _rect(self, drawing) -> QRectF | None:
+        """The rectangle the path is, in the drawing's pixels, if it is just one
+        (square corners), else None."""
+        if len(self._steps) != 1 or self._steps[0][0] != "rect" or self._steps[0][5]:
+            return None
+        _kind, x, y, width, height, _radius = self._steps[0]
+        x, y = drawing._to_px(x, y)
+        width, height = drawing._to_px_size(width, height)
+        return QRectF(x, y, width, height).normalized()
+
     def _qt(self, drawing) -> QPainterPath:
         """The path in the drawing's pixels."""
         path = QPainterPath()
         point = drawing._to_px
         for step in self._steps:
             kind, numbers = step[0], step[1:]
-            if kind == "move":
+            if kind == "combine":
+                operation, left, right = numbers
+                path.addPath(getattr(left._qt_transformed(drawing), operation)(
+                    right._qt_transformed(drawing)))
+            elif kind == "move":
                 path.moveTo(*point(*numbers))
             elif kind == "line":
                 path.lineTo(*point(*numbers))
@@ -259,6 +333,11 @@ class Drawing:
         """A point in ScaleMode's units, in pixels of the drawing area."""
         left, top, fx, fy = self._scale_factors()
         return (float(x) - left) * fx, (float(y) - top) * fy
+
+    def _px_transform(self) -> QTransform:
+        """ScaleMode's units to pixels, as a QTransform."""
+        left, top, fx, fy = self._scale_factors()
+        return QTransform(fx, 0, 0, fy, -left * fx, -top * fy)
 
     def _to_px_size(self, width, height) -> tuple[float, float]:
         _left, _top, fx, fy = self._scale_factors()
@@ -491,15 +570,17 @@ class Drawing:
             source = to_picture(Picture)._image
         if source.isNull():
             return
-        width2 = source.width() - X2 if Width2 is None else Width2
-        height2 = source.height() - Y2 if Height2 is None else Height2
+        # (the source's part in its screen pixels: a picture with a PixelRatio has more)
+        ratio = source.devicePixelRatio()
+        width2 = source.width() / ratio - X2 if Width2 is None else Width2
+        height2 = source.height() / ratio - Y2 if Height2 is None else Height2
         x1, y1 = self._to_px(X1, Y1)  # (where: in ScaleMode's units; the source: its pixels)
         width1 = width2 if Width1 is None else self._to_px_size(Width1, 0)[0]
         height1 = height2 if Height1 is None else self._to_px_size(0, Height1)[1]
         with self._draw_painter(antialias=True) as painter:
             painter.setRenderHint(QPainter.SmoothPixmapTransform)
             painter.drawImage(QRectF(x1, y1, width1, height1), source,
-                              QRectF(X2, Y2, width2, height2))
+                              QRectF(X2 * ratio, Y2 * ratio, width2 * ratio, height2 * ratio))
 
     # -- colors and pens -----------------------------------------------------------------
     def _draw_text_color(self):
@@ -511,9 +592,14 @@ class Drawing:
     def _draw_color(self, Color):
         return self._draw_text_color() if Color is None else colors.to_qcolor(Color)
 
+    def _draw_width(self) -> float:
+        """DrawWidth as the pen's width (1 for 0 or less, as VB's)."""
+        width = float(self._values.get("DrawWidth", 1) or 0)
+        return width if width > 0 else 1.0
+
     def _draw_pen(self, color) -> QPen:
         style = int(self._values.get("DrawStyle", 0))
-        width = max(1, int(self._values.get("DrawWidth", 1)))
+        width = self._draw_width()
         if style == _TRANSPARENT:
             return QPen(Qt.NoPen)
         pen = QPen(color, width)
@@ -521,15 +607,18 @@ class Drawing:
         # A one-pixel line doesn't cover its end point, as in VB; wider solid ones are
         # round (dashes keep their gaps)
         solid = pen.style() == Qt.SolidLine
-        pen.setCapStyle(Qt.RoundCap if width > 1 and solid else Qt.FlatCap)
-        pen.setJoinStyle(Qt.MiterJoin)
+        cap = int(self._values.get("DrawCap", 0) or 0)
+        pen.setCapStyle((Qt.RoundCap if width > 1 and solid else Qt.FlatCap) if cap == 0 else
+                        (Qt.FlatCap, Qt.SquareCap, Qt.RoundCap)[min(cap, 3) - 1])
+        pen.setJoinStyle((Qt.MiterJoin, Qt.BevelJoin, Qt.RoundJoin)[
+            min(int(self._values.get("DrawJoin", 0) or 0), 2)])
         return pen
 
     def _draw_inset(self) -> float:
         """Inside Solid: boxes and circles drawn inside their bounds."""
         if int(self._values.get("DrawStyle", 0)) != _INSIDE_SOLID:
             return 0.0
-        return max(1, int(self._values.get("DrawWidth", 1))) / 2
+        return self._draw_width() / 2
 
     def _draw_fill(self, painter: QPainter, path: QPainterPath) -> None:
         from .controls import _HATCHES, _hatch
@@ -559,8 +648,8 @@ class Drawing:
         state = self._draw_state()
         x, y = self._point(X, Y, Step)
         color = self._draw_color(Color)
-        width = max(1, int(self._values.get("DrawWidth", 1)))
-        with self._draw_painter(antialias=width > 1) as painter:
+        width = self._draw_width()
+        with self._draw_painter(antialias=width != 1) as painter:
             if int(self._values.get("DrawStyle", 0)) == _TRANSPARENT:
                 pass  # (it just moves the current point)
             elif width == 1:
@@ -700,19 +789,31 @@ class Drawing:
         state = self._draw_state()
         state["x"], state["y"] = points[0]
 
-    def _fill_with(self, painter: QPainter, path: QPainterPath, Fill) -> None:
-        """A shape's fill: Fill (a color or a LinearGradient), else as FillStyle says."""
+    def _fill_with(self, painter: QPainter, path: QPainterPath, Fill,
+                   rect: QRectF | None = None) -> None:
+        """A shape's fill: Fill (a color or a LinearGradient), else as FillStyle says.
+        A rectangle (``rect``, the path's) is filled as QPainter fills rectangles,
+        whose edges' coverage differs a little from a path's."""
         if Fill is None:
-            self._draw_fill(painter, path)
-        elif isinstance(Fill, LinearGradient):
-            painter.fillPath(path, Fill._qt(self))
+            if int(self._values.get("FillStyle", 1)) == 0 and rect is not None:
+                fill = self._values.get("FillColor")
+                Fill = fill if fill is not None else colors.from_qcolor(self._draw_text_color())
+            else:
+                self._draw_fill(painter, path)
+                return
+        brush = Fill._qt(self) if isinstance(Fill, LinearGradient) else colors.to_qcolor(Fill)
+        if rect is not None:
+            painter.fillRect(rect, brush)
         else:
-            painter.fillPath(path, colors.to_qcolor(Fill))
+            painter.fillPath(path, brush)
 
-    def _shape(self, path: QPainterPath, Color, Fill) -> None:
+    def _shape(self, path: QPainterPath, Color, Fill, rect: QRectF | None = None,
+               matrix: QTransform | None = None) -> None:
         color = self._draw_color(Color)
         with self._draw_painter(antialias=True) as painter:
-            self._fill_with(painter, path, Fill)
+            if matrix is not None:  # (GraphicsPath.Transform: the pen and the fill too)
+                painter.setTransform(matrix, True)
+            self._fill_with(painter, path, Fill, rect)
             if color.alpha():  # (an invisible color, e.g. RGBA(0, 0, 0, 0): no outline)
                 painter.setPen(self._draw_pen(color))
                 painter.setBrush(Qt.NoBrush)
@@ -732,7 +833,7 @@ class Drawing:
         rect = QRectF(QPointF(x1, y1), QPointF(x2, y2)).normalized().adjusted(
             inset, inset, -inset, -inset)
         path.addRoundedRect(rect, radius, radius)
-        self._shape(path, Color, Fill)
+        self._shape(path, Color, Fill, rect if not radius else None)
         state = self._draw_state()
         state["x"], state["y"] = float(x2), float(y2)
 
@@ -743,7 +844,7 @@ class Drawing:
         FillStyle says)."""
         if not isinstance(Path, GraphicsPath):
             raise TypeError(f"DrawPath draws a GraphicsPath, not {Path!r}")
-        self._shape(Path._qt(self), Color, Fill)
+        self._shape(Path._qt(self), Color, Fill, Path._rect(self), Path._qt_matrix(self))
 
     def Print(self, *values, sep: str = " ", end: str = "\n") -> None:
         """Write text at the current point, in the Font and ForeColor, like
@@ -754,6 +855,7 @@ class Drawing:
         text = sep.join(str(value) for value in values) + end
         font = self._drawing_surface().font()
         metrics = QFontMetricsF(font)
+        scale = self._font_scale()
         lines = text.split("\n")
         with self._draw_painter(antialias=True) as painter:
             painter.setFont(font)
@@ -761,10 +863,50 @@ class Drawing:
             for number, line in enumerate(lines):
                 if number:  # a new line
                     state["x"] = 0.0
-                    state["y"] += metrics.lineSpacing()
-                if line:
+                    state["y"] += metrics.lineSpacing() * scale
+                if line and scale == 1:
                     painter.drawText(QPointF(state["x"], state["y"] + metrics.ascent()), line)
-                    state["x"] += metrics.horizontalAdvance(line)
+                elif line:  # (the letters scaled from the point)
+                    painter.save()
+                    painter.translate(state["x"], state["y"])
+                    painter.scale(scale, scale)
+                    painter.drawText(QPointF(0, metrics.ascent()), line)
+                    painter.restore()
+                if line:
+                    state["x"] += metrics.horizontalAdvance(line) * scale
+
+    def DrawText(self, Text, X1, Y1, X2, Y2, Alignment: int = 2,
+                 VerticalAlignment: int = 1, EndEllipsis: bool = False) -> None:
+        """Write Text in the box from X1, Y1 to X2, Y2, in the Font and
+        ForeColor: Alignment vpLeftJustify, vpRightJustify or vpCenter (the
+        default), VerticalAlignment vpVAlignTop, vpVAlignMiddle (the default)
+        or vpVAlignBottom; text that doesn't fit is cut off at the box's edges
+        (Windows' DrawText, which VB programs called for this); EndEllipsis
+        shortens a line too long for the box with "…" instead. FontScale
+        draws it that much larger. The current point doesn't move."""
+        x1, y1 = self._to_px(X1, Y1)
+        x2, y2 = self._to_px(X2, Y2)
+        rect = QRectF(QPointF(x1, y1), QPointF(x2, y2)).normalized()
+        flags = {0: Qt.AlignLeft, 1: Qt.AlignRight}.get(int(Alignment), Qt.AlignHCenter) | \
+            {0: Qt.AlignTop, 2: Qt.AlignBottom}.get(int(VerticalAlignment), Qt.AlignVCenter)
+        scale = self._font_scale()
+        font = self._drawing_surface().font()
+        text = str(Text)
+        if EndEllipsis:
+            text = QFontMetrics(font).elidedText(text, Qt.ElideRight,
+                                                 max(int(rect.width() / scale), 0))
+        with self._draw_painter(antialias=True) as painter:
+            painter.setFont(font)
+            painter.setPen(self._draw_text_color())
+            if scale != 1:  # (the letters scaled, as a magnified drawing shows them)
+                painter.translate(rect.topLeft())
+                painter.scale(scale, scale)
+                rect = QRectF(0, 0, rect.width() / scale, rect.height() / scale)
+            painter.drawText(rect, flags, text)
+
+    def _font_scale(self) -> float:
+        scale = float(self._values.get("FontScale", 1) or 1)
+        return scale if scale > 0 else 1.0
 
     def Cls(self) -> None:
         """Clear what the graphics methods drew (not the Picture), and move the
@@ -799,10 +941,10 @@ class Drawing:
         """How wide Print would write Text, in the Font (its longest line)."""
         metrics = QFontMetricsF(self._drawing_surface().font())
         width = max(metrics.horizontalAdvance(line) for line in str(Text).split("\n"))
-        return width / abs(self._scale_factors()[2])
+        return width * self._font_scale() / abs(self._scale_factors()[2])
 
     def TextHeight(self, Text) -> float:
         """How tall Print would write Text: its lines' height, in the Font."""
         metrics = QFontMetricsF(self._drawing_surface().font())
-        return metrics.lineSpacing() * (str(Text).count("\n") + 1) / \
+        return metrics.lineSpacing() * (str(Text).count("\n") + 1) * self._font_scale() / \
             abs(self._scale_factors()[3])

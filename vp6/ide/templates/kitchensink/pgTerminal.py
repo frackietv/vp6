@@ -151,7 +151,7 @@ class pgTerminal(Form):
         self.restart = True  # (started again in Exited, once the shell has gone)
         self.termShell.Clear()
         if self.termShell.Running:
-            self.termShell.Kill()
+            self.termShell.Kill(Wait=True)  # (ended when it returns: Exited has fired)
         else:
             self.termShell_Exited(-1)
 
@@ -168,7 +168,13 @@ class pgTerminal(Form):
             self.termShell.Start()
             self.lblStatus.Caption = f"Shell restarted ({self.termShell.TermName})"
         else:
-            self.lblStatus.Caption = f"The shell ended ({ExitCode}): Restart starts it again"
+            self.lblStatus.Caption = f"The shell ended ({ExitCode}): click it to start it again"
+
+    def termShell_MouseDown(self, Button, Shift, X, Y):
+        # (only while no program runs: else the mouse is the program's)
+        if Button == vpLeftButton:
+            self.termShell.Start()
+            self.lblStatus.Caption = f"Shell started ({self.termShell.TermName})"
 
     def termShell_TitleChange(self, Title):
         self.lblStatus.Caption = f"Title: {Title}"

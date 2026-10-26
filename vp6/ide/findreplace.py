@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
 from typing import Callable
 
 from PySide6.QtGui import QTextCursor, QTextDocument
@@ -37,91 +36,14 @@ from PySide6.QtWidgets import (QCheckBox, QDialog, QGridLayout, QGroupBox, QHBox
                                QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QPushButton, QRadioButton, QVBoxLayout, QWidget)
 
-from .. import formfile
+from .logic import search
+from .logic.search import (Found, Positions, Result, SearchOptions,  # noqa: F401
+                           compile_pattern, find_in, pattern_or_result, replacement)
 
-_ASTRAL = re.compile("[\U00010000-\U0010FFFF]")
-
-
-@dataclass
-class SearchOptions:
-    find: str
-    replace: str = ""
-    match_case: bool = False
-    whole_word: bool = False
-    regex: bool = False
-
-
-def compile_pattern(options: SearchOptions) -> re.Pattern:
-    """The pattern for these options. Raises re.error for a bad regex."""
-    pattern = options.find if options.regex else re.escape(options.find)
-    if options.whole_word:
-        pattern = rf"(?<!\w)(?:{pattern})(?!\w)"
-    flags = re.MULTILINE | (0 if options.match_case else re.IGNORECASE)
-    return re.compile(pattern, flags)
-
-
-def replacement(match: re.Match, options: SearchOptions) -> str:
-    """The text replacing a match: a template (groups, escapes) for regular
-    expressions, else the replace text as it is."""
-    return match.expand(options.replace) if options.regex else options.replace
-
-
-def find_in(text: str, pattern: re.Pattern, start: int, backward: bool = False,
-            skip: tuple[int, int] | None = None) -> tuple[re.Match | None, bool]:
-    """The next match from ``start`` (or the previous one before it), wrapping
-    around the end of the text. ``skip`` is the current selection, which is
-    not found again. Returns (match or None, whether the search wrapped)."""
-    matches = list(pattern.finditer(text))
-
-    def usable(match):
-        return (match.start(), match.end()) != skip
-
-    if backward:
-        before = [m for m in matches if m.start() < start and usable(m)]
-        if before:
-            return before[-1], False
-        after = [m for m in matches if m.start() >= start and usable(m)]
-        return (after[-1], True) if after else (None, False)
-    for match in matches:
-        if match.start() >= start and usable(match):
-            return match, False
-    for match in matches:
-        if match.start() < start and usable(match):
-            return match, True
-    return None, False
-
-
-class _Positions:
-    """Maps Python string indexes to Qt text positions, which count characters
-    outside the Basic Multilingual Plane (e.g. emoji) as two."""
-
-    def __init__(self, text: str):
-        self.text = text
-        self._wide = _ASTRAL.search(text) is not None
-
-    def to_qt(self, index: int) -> int:
-        if not self._wide:
-            return index
-        return len(self.text[:index].encode("utf-16-le")) // 2
-
-    def from_qt(self, position: int) -> int:
-        if not self._wide:
-            return position
-        count = 0
-        for index, char in enumerate(self.text):
-            if count >= position:
-                return index
-            count += 2 if ord(char) > 0xFFFF else 1
-        return len(self.text)
+_Positions = Positions  # (its old name)
 
 
 # --- on a code editor ---------------------------------------------------------------------------
-
-@dataclass
-class Result:
-    found: bool
-    message: str = ""
-
 
 def _selection(editor, positions: _Positions) -> tuple[int, int]:
     cursor = editor.textCursor()
@@ -279,64 +201,23 @@ class ProjectFiles:
         raise NotImplementedError
 
 
-@dataclass
-class Found:
-    """A match in a file: its Qt positions, line (from 1) and that line's text."""
-    path: str
-    start: int
-    end: int
-    line: int
-    text: str
-
-
 def region_span(document: QTextDocument) -> tuple[int, int] | None:
     """The Qt positions of a form's designer region in a document, or None."""
-    try:
-        region = formfile.find_region(document.toPlainText())
-    except formfile.FormFileError:
-        return None
-    if region is None:
-        return None
-    first = document.findBlockByNumber(region[0])
-    last = document.findBlockByNumber(region[1])
-    return first.position(), last.position() + last.length() - 1
+    return search.region_span(document.toPlainText())
 
 
 def _matches(path: str, document: QTextDocument, pattern: re.Pattern) -> list[Found]:
-    text = document.toPlainText()
-    positions = _Positions(text)
-    found = []
-    for match in pattern.finditer(text):
-        start, end = positions.to_qt(match.start()), positions.to_qt(match.end())
-        block = document.findBlock(start)
-        found.append(Found(path, start, end, block.blockNumber() + 1, block.text().strip()))
-    return found
+    return search.matches(path, document.toPlainText(), pattern)
 
 
-def _pattern_or_result(options: SearchOptions):
-    if not options.find:
-        return Result(False, "Enter the text to find")
-    try:
-        return compile_pattern(options)
-    except re.error as exc:
-        return Result(False, f"Invalid regular expression: {exc}")
+_pattern_or_result = pattern_or_result
 
 
 def find_all(files: ProjectFiles, options: SearchOptions,
              only: str | None = None) -> tuple[list[Found], Result]:
     """Every match in the project's code files (or in the file ``only``)."""
-    pattern = _pattern_or_result(options)
-    if isinstance(pattern, Result):
-        return [], pattern
-    found = []
-    for path, document in files.documents():
-        if only is None or path == only:
-            found += _matches(path, document, pattern)
-    if not found:
-        return [], Result(False, f"'{options.find}' was not found")
-    count = len({f.path for f in found})
-    return found, Result(True, f"{len(found)} match{'es' if len(found) != 1 else ''} in "
-                               f"{count} file{'s' if count != 1 else ''}")
+    return search.find_all([(path, document.toPlainText())
+                            for path, document in files.documents()], options, only)
 
 
 def show_found(files: ProjectFiles, found: Found) -> None:
@@ -352,56 +233,18 @@ def find_next_in_project(files: ProjectFiles, options: SearchOptions,
     """The next (or previous) match: in the current code window after (before)
     the selection, then in the project's other code files in turn, then
     round to the start (end) of the current one."""
-    pattern = _pattern_or_result(options)
-    if isinstance(pattern, Result):
-        return pattern
     documents = files.documents()
-    if not documents:
-        return Result(False, "The project has no code files")
-    by_path = dict(documents)
-    paths = list(by_path)
     current = files.current_path()
-
-    def pick(found):
-        return found[-1] if backward else found[0]
-
-    if current not in by_path:  # no code window of the project: from its first (last) file
-        for path in (reversed(paths) if backward else paths):
-            found = _matches(path, by_path[path], pattern)
-            if found:
-                show_found(files, pick(found))
-                return Result(True)
-        return Result(False, f"'{options.find}' was not found in the project")
-    cursor = files.editor_for(current).textCursor()
-    selection = (cursor.selectionStart(), cursor.selectionEnd())
-    here = [f for f in _matches(current, by_path[current], pattern)
-            if (f.start, f.end) != selection]
-    onward = [f for f in here if f.end <= selection[0]] if backward else \
-        [f for f in here if f.start >= selection[1]]
-    if onward:
-        show_found(files, pick(onward))
-        return Result(True)
-    index = paths.index(current)
-    order = list(reversed(paths[:index])) + list(reversed(paths[index + 1:])) if backward \
-        else paths[index + 1:] + paths[:index]
-    where = "beginning" if backward else "end"
-    wrapped = Result(True, f"Passed the {where} of the project, continued from the other end")
-    for path in order:
-        found = _matches(path, by_path[path], pattern)
-        if found:
-            show_found(files, pick(found))
-            # (past the last file, or before the first: round the project)
-            return wrapped if (paths.index(path) > index) == backward else Result(True)
-    if here:  # round to the other end of this file
-        show_found(files, pick(here))
-        return wrapped
-    if selection[0] != selection[1]:
-        text = by_path[current].toPlainText()
-        positions = _Positions(text)
-        if pattern.fullmatch(text, positions.from_qt(selection[0]),
-                             positions.from_qt(selection[1])):
-            return Result(True, "This is the only match")
-    return Result(False, f"'{options.find}' was not found in the project")
+    selection = (0, 0)
+    if current in dict(documents):
+        cursor = files.editor_for(current).textCursor()
+        selection = (cursor.selectionStart(), cursor.selectionEnd())
+    found, result = search.next_in_project(
+        [(path, document.toPlainText()) for path, document in documents], current, selection,
+        options, backward)
+    if found is not None:
+        show_found(files, found)
+    return result
 
 
 def replace_one_in_project(files: ProjectFiles, options: SearchOptions) -> Result:

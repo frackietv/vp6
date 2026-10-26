@@ -1217,7 +1217,7 @@ class _OutputPane(QWidget):
                 palette.setColor(group, QPalette.HighlightedText,
                                  QColor(colors["selection_foreground"]))
             dimmed = QColor(colors["foreground"])
-            dimmed.setAlpha(130)
+            dimmed.setAlpha(128)  # (half opacity, as Qt's placeholders)
             palette.setColor(QPalette.Disabled, QPalette.Base, QColor(colors["background"]))
             palette.setColor(QPalette.Disabled, QPalette.Text, dimmed)
             for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):

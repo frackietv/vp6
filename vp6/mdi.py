@@ -119,6 +119,9 @@ class MDIForm(Form):
         else:  # VB's application workspace color
             area.setBackground(QBrush(area.palette().color(QPalette.Dark)))
 
+    def _window_back(self):
+        return None  # (its BackColor is the workspace's, as VB's)
+
     def _apply_colors(self, _=None):
         super()._apply_colors()
         self._apply_workspace_look()
@@ -172,13 +175,21 @@ class MDIForm(Form):
             sub.setWidget(child._widget)
             icon = child._widget.windowIcon()  # (its Icon, else the program's)
             sub.setWindowIcon(icon if not icon.isNull() else QApplication.windowIcon())
+            wanted = child.__dict__.pop("_window_size", None)  # (WindowWidth, WindowHeight)
+            # (sized before it is added: the workspace's placer puts it where it overlaps
+            # the other windows least, by its size)
+            area.addSubWindow(sub)  # (its margins are the workspace's style's once in it)
+            target = QSize(*wanted) if wanted is not None else _framed(sub, size)
+            area.removeSubWindow(sub)
+            sub.resize(target)
             area.addSubWindow(sub)
             child.__dict__.update(_mdi_sub=sub, _mdi_parent=self, _shown_once=True)
             self._mdi_children.append(child)
             sub.show()
-            sub.resize(_framed(sub, size))
             if child.StartUpPosition == 0:  # Manual: where Left and Top say
                 sub.move(child._values.get("Left", 0), child._values.get("Top", 0))
+            else:
+                _fit(sub, area)
         state = child.WindowState
         if state == 2:
             sub.showMaximized()
@@ -290,6 +301,18 @@ class MDIForm(Form):
                 return False
             self._remove_child(child)
         return self._finish_unload(force)
+
+
+def _fit(sub: QMdiSubWindow, area: QMdiArea) -> None:
+    """Keep a new child inside the workspace: moved in, and smaller if it is
+    larger (once the workspace has a size)."""
+    room = area.viewport().rect()
+    if room.width() < 100 or room.height() < 100:
+        return
+    size = sub.size().boundedTo(room.size())
+    sub.resize(size)
+    sub.move(max(0, min(sub.x(), room.width() - size.width())),
+             max(0, min(sub.y(), room.height() - size.height())))
 
 
 def _framed(sub: QMdiSubWindow, inside: QSize) -> QSize:

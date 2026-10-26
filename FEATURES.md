@@ -1,5 +1,56 @@
 # VP6 features
 
+**Version:** 0.4.64
+**Date:** 2026-10-25
+
+## IDE
+
+- Fixes: a stray tab bar left by QMainWindow between the panels, the bottom panels' area growing when tabbed (their contents' least height), new bottom panels joining as the last tab, the toolbar's icons growing to 32 pixels after the dark look, the Make dialog cutting its text, a code window's editor not taking the focus, the execution arrow's outline
+- The IDE's logic apart from its windows, without Qt (vp6.ide.logic: the command line, the outline, searching, the Menu Editor's model, the Object Browser's library, the code window's model, themes, projects, Claude's and Codex's protocols and what their chats show, the debugger's protocol), tested without a window
+
+## Controls
+
+- FlexGrid as a property grid: EditorsShown (every cell's editor shown: a list's box, a field, a field with "…", a combo, a color's button with ButtonMenu's menu, a check box in the middle), CellPlaceholder, ExtendLastCol, StretchCol, ColorPicker (CellButtonClick for a picker of your own), ButtonStyle, SelectionMode None, RowHeight(-1) for every row, Row -1 (none); the TextButton and Combo editors
+- ListView: LabelEdit (Manual, StartLabelEdit, AfterLabelEdit refusing a name), columns sized to their contents or filling the rest, Bold items, SetSubItemColor, AlternatingRowColors, the Icon view's GridWidth and GridHeight; TreeView: MultiSelect, SelectedNodes, a Node's ToolTipText; ListBox and ComboBox: ItemToolTip
+- Menu: Checkable, MenuRole (About, Preferences, Quit in macOS's application menu), Description (the status bar's tip), the system's standard keys as Shortcuts ({Copy}, {Preferences}...); Toolbar: a <> spacer, TextAlignment None, a button's Description; StatusBar: ShowMessage, ClearMessage, Message, SizeGrip, AutoSize
+- ToolButton: AutoSize, IconSize, Alignment, DblClick; Label: VerticalAlignment, Selectable, a Sunken BorderStyle, Margin, access keys underlined as the system shows them; TextBox and RichTextBox: Placeholder, ContextMenu, StandardMenu; RichTextBox: AppendHTML, LinkClick, Margin; SpinBox: SpecialValueText
+- CodeBox: SetFoldMarker and FoldMarkerColor, ProtectedShading (the text only), SelBackColor and SelForeColor, its colors in the palette, the gutter as the IDE's (markers at the left, a breakpoint's dot, ring and the execution arrow drawn as shapes, the numbers in the code's font); SetSyntaxColor, gutter colors, SetLineMarker with a color of its own
+- Terminal: KeyDown while no program runs, ContextMenu, SelText, Display; DockPanel: QDockWidget's title bar, Resizing, the system's separator; TabStrip: DocumentMode; Splitter: the system's handle (Style); PictureBox: BackStyle, a Styled border, controls aligned in it; ScrollPanel: ScrollBarWidth
+- Every control: PreferredWidth and PreferredHeight (as tall or wide as it wants to be); forms: WindowWidth, WindowHeight, MenuBarHeight, DockTabPosition
+- DesignerView: the window frame drawn by the program (DrawFrame and DesignerFrame), FormRenamed, DragDrop and DragOver with DropControl, LoadForm with a text, Source set, Reload; the Format and Menu Editor methods; ShowGrid, PreferredWidth and PreferredHeight
+- Winsock.Bind; Terminal.Kill(Wait=True); menu shortcuts: more than one, between semicolons
+- ListBox and ComboBox: List(i) = Text changes an item in place (its ItemData and the selection kept)
+- Terminal: MouseDown and MouseUp while no program runs
+- MarkdownBox: colored text (HTML spans and font tags, the Markdown inside them still working, written back by the visual editor), AppendText(Markdown) and ScrollToEnd()
+- Toolbar.Appearance (3D: a main window's toolbar, the default; Flat); TabStrip's DocumentMode tabs as a lone tab bar's; TextBox and RichTextBox colors in the palette (the frame unchanged, the placeholder and disabled text the ForeColor at half opacity), SelBackColor and SelForeColor; ListView colors in the palette (headers as the system draws them, in the list's font); StatusBar: the size grip in the corner, messages placed as a QStatusBar's; FontSize with fractions (VB's Single)
+- DockPanel: MinWidth and MinHeight; split panels' resizing edges drawn as one separator
+- FlexGrid: shown editors changing kind keep the cells' text (an old field no longer commits over it), heading rows become current, not selected, RowHeight 0 hides a row
+- Form.ShowInTaskbar (False: a dialog window owned by the form that shows it); Form.SetFocus keeps the focus on its active control; an MDI child placed by its size where it overlaps least; menu separators drawn as lines only
+- DesignerView: PaintFrame (the frame painted straight onto the designer, Frame.Part for the rounded corners); App.ColorScheme Light or Dark forces the application's look (and a System form then follows the operating system)
+- CodeBox: ScrollToCaret(Center=True)
+
+## Graphics
+
+- System colors (vpButtonFace, vpInfoBackground, vpActiveBorder...) following the light or dark look
+- DrawCap and DrawJoin (the ends and corners of lines), FontScale (text magnified as in a scaled drawing), a Picture's fractional FontSize; GraphicsPath's Unite, Subtract and Intersect
+- DrawText(Text, X1, Y1, X2, Y2, Alignment, VerticalAlignment, EndEllipsis): text in a box, cut off (or shortened with …) at its edges, as Windows' DrawText; GraphicsPath.Transform (drawn through a transformation, its pen and gradient too, as a painter's); a rectangle path filled as Qt fills rectangles; FontWeight for forms, controls and Pictures (VB's StdFont.Weight: 600 semibold...)
+- Picture.PixelRatio: pictures with twice the pixels, sharp on a Retina display; DisabledPicture and Faded; FileIcon (the system's icon for a file or folder); DrawWidth takes fractions
+
+## Functions
+
+- InputNumber (a whole number, in a box with arrows); MsgBox's vpSaveDiscardCancel (vpSave, vpDiscard) and ExtraButton (vpExtraButton); MoveToTrash
+- Screen: FontName, FontSize, FontDPI, LayoutSpacingX and LayoutSpacingY; ControlTypes(AsRegistered=True)
+- ShowHelp: Index, Context, Tab (its Search tab, the focus in its box)
+
+## Kitchen Sink
+
+- The Lists page renames an item in place (List(i) = Text); the Terminal page starts the shell again with a click once it has ended (MouseDown); the Markdown page's sample has colored text and an Append button (AppendText, ScrollToEnd)
+- The Building an IDE page: a property grid and a table of colors, lists, a code box with a fold marker, a chat box, pictures drawn like icons, a toolbar, a status bar and the questions an IDE asks
+
+## Backlog
+
+- Self-hosting abandoned: the IDE written in VP6 (the studio) and its steps left out; what VP6 gained for it kept
+
 **Version:** 0.4.63
 **Date:** 2026-10-12
 

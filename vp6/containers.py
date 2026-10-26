@@ -33,7 +33,7 @@ from __future__ import annotations
 from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer
 from PySide6.QtGui import QPainter, QPalette, QPen
 from PySide6.QtWidgets import (QAbstractButton, QFrame, QLabel, QScrollArea, QStackedWidget,
-                               QToolBox, QWidget)
+                               QStyle, QToolBox, QWidget)
 
 from ._props import P, enum_choices
 from .controls import (_COLORS, _COMMON, _FONT, CONTROL_TYPES, EVENT_ARGS, Control,
@@ -619,6 +619,15 @@ class ScrollPanel(Control):
 
     def _apply_BorderStyle(self, v):
         self._widget.setFrameStyle(QFrame.StyledPanel | QFrame.Sunken if v else QFrame.NoFrame)
+
+    @property
+    def ScrollBarWidth(self) -> int:
+        """The room a vertical scroll bar takes beside its contents when it shows
+        (0 where scroll bars float over them, as macOS's do by default)."""
+        area = self._widget
+        if area.style().styleHint(QStyle.SH_ScrollBar_Transient, None, area):
+            return 0
+        return area.verticalScrollBar().sizeHint().width()
 
     @property
     def ScrollLeft(self) -> int:

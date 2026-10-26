@@ -42,9 +42,9 @@ def about(qapp):
 
 
 def test_plain_text_underlines_access_keys(about):
-    # (drawn as rich text, the access key letter underlined; still plain text to VB code)
-    assert about.lblPlain._widget.text() == \
-        '<span style="white-space: pre-wrap"><u>N</u>ame &amp; more</span>'
+    # (plain text, the access key letter underlined as the style shows access keys)
+    assert about.lblPlain._widget.text() == "Name & more"
+    assert about.lblPlain._widget.mnemonic == "&Name && more"
     assert about.lblPlain.AccessKey == "N"
     assert about.lblPlain.TextFormat == vpPlainText
 
@@ -152,8 +152,8 @@ def _focused(form):
 
 def test_access_keys_focus_the_next_control(keys):
     name = keys.lblName
-    assert name.AccessKey == "N" and "<u>N</u>ame:" in name._widget.text()
-    assert name._widget.textFormat() == Qt.RichText and name._shortcut is not None
+    assert name.AccessKey == "N" and name._widget.mnemonic == "&Name:"
+    assert name._widget.textFormat() == Qt.PlainText and name._shortcut is not None
     name._shortcut.activated.emit()
     assert _focused(keys) is keys.txtName._widget  # the next control in the tab order
     keys.lblHidden._shortcut.activated.emit()  # skipping a hidden and a disabled box,
@@ -194,7 +194,7 @@ def test_no_access_keys_while_designing(qapp, tmp_path):
     d.select([name])
     assert d.set_property("Caption", "&Name:") is None
     label = d.controls[name]
-    assert "<u>N</u>" in label._widget.text() and label._shortcut is None  # shown, not active
+    assert label._widget.mnemonic == "&Name:" and label._shortcut is None  # shown, not active
     d.close()
 
 

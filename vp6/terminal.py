@@ -1113,10 +1113,29 @@ class _TerminalView(QWidget):
         if action == "paste":
             self._terminal.Paste()
             return
-        text = key_text(event.key(), event.modifiers(), event.text(), self._terminal._screen)
+        terminal = self._terminal
+        if not terminal.Running and not terminal._design_mode:  # (no program: the form's key)
+            from .controls import vp_key_code, vp_shift
+
+            terminal._fire("KeyDown", vp_key_code(event.key()), vp_shift(event.modifiers()))
+            return
+        text = key_text(event.key(), event.modifiers(), event.text(), terminal._screen)
         if text:
             self.scroll.setValue(self.scroll.maximum())  # (typing: back to the bottom)
-            self._terminal._send(text)
+            terminal._send(text)
+
+    def contextMenuEvent(self, event):
+        """ContextMenu's items, unless the program has the mouse (its right
+        button is its own)."""
+        terminal = self._terminal
+        from .controls import Menu
+
+        menu = terminal._form.__dict__.get(terminal._values.get("ContextMenu", ""))
+        if not isinstance(menu, Menu) or menu._submenu is None or terminal._design_mode or \
+                (terminal._screen.mouse_mode and terminal.Running):
+            return super().contextMenuEvent(event)
+        menu._fire("Click")  # (as before it opens: its items made ready)
+        menu._submenu.exec(event.globalPos())
 
     def inputMethodEvent(self, event):
         if event.commitString():
@@ -1452,7 +1471,8 @@ class Terminal(Control):
     TypeName = "Terminal"
     DefaultEvent = "Exited"
     DefaultSize = (480, 300)
-    Events = ("Exited", "TitleChange", "GotFocus", "LostFocus")
+    Events = ("Exited", "TitleChange", "KeyDown", "MouseDown", "MouseUp", "GotFocus",
+              "LostFocus")
     Properties = (
         *_geometry(*DefaultSize),
         P("CommandLine", "str", "",
@@ -1466,6 +1486,9 @@ class Terminal(Control):
           description="The terminal it is (its TERM, keys and answers); a program started "
                       "before keeps the TERM it had", category="Behavior"),
         P("ScrollbackLines", "int", 1000, description="How many lines scrolled off it keeps"),
+        P("ContextMenu", "str", "",
+          description="The name of one of the form's menus: its items are its right-click "
+                      "menu (unless the program uses the mouse itself)"),
         P("BackColor", "color", None, description="Background color; unset: the scheme's"),
         P("ForeColor", "color", None, description="Text color; unset: the scheme's"),
         P("FontName", "font", None, description="Its font; unset: the system's fixed one"),
@@ -1495,6 +1518,11 @@ class Terminal(Control):
 
     def _on_key_press(self, watched, event) -> bool:
         return False  # (its keys are the program's, Enter and Esc too: not the form's)
+
+    def _fire(self, event: str, *args):
+        if event in ("MouseDown", "MouseUp") and self.Running:
+            return None  # (the mouse is the program's while one runs, as the keys)
+        return super()._fire(event, *args)
 
     def _event_targets(self):
         return [self._widget]
@@ -1675,10 +1703,14 @@ class Terminal(Control):
             raise RuntimeError(f"Terminal '{self.Name}' isn't running a program")
         self._send(str(Text))
 
-    def Kill(self) -> None:
-        """End the program at once."""
+    def Kill(self, Wait: bool = False) -> None:
+        """End the program at once; with Wait, until it has ended (Exited has
+        fired then)."""
         if self.Running:
-            self._program.kill()
+            if Wait:
+                self._program.end()
+            else:
+                self._program.kill()
 
     def Clear(self) -> None:
         """Clear the screen, its history and its pictures (the program may draw
@@ -1690,11 +1722,12 @@ class Terminal(Control):
         screen.graphics.reset()  # (its pictures too)
         self._redraw()
 
-    def Copy(self) -> None:
-        """Copy the selected text to the clipboard."""
+    @property
+    def SelText(self) -> str:
+        """The text selected with the mouse ("" for none)."""
         view = self._widget
         if view is None or view.selection is None:
-            return
+            return ""
         (l1, c1), (l2, c2) = view.selection
         lines = self._screen.all_lines()
         parts = []
@@ -1703,7 +1736,18 @@ class Terminal(Control):
             start = c1 if index == l1 else 0
             end = c2 + 1 if index == l2 else len(text)
             parts.append(text[start:end].rstrip())
-        QGuiApplication.clipboard().setText("\n".join(parts))
+        return "\n".join(parts)
+
+    def Copy(self) -> None:
+        """Copy the selected text to the clipboard."""
+        if self._widget is not None and self._widget.selection is not None:
+            QGuiApplication.clipboard().setText(self.SelText)
+
+    def Display(self, Text) -> None:
+        """Show text on the screen as if the program had written it (ANSI codes
+        too: "\\x1b[2m" dims it), e.g. a note when the program has ended."""
+        self._screen.feed(str(Text))
+        self._redraw()
 
     def Paste(self) -> None:
         """Send the clipboard's text to the program."""

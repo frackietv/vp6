@@ -19,18 +19,22 @@ from PySide6.QtCore import (QByteArray, QDate, QEvent, QFileInfo, QItemSelection
                             QMimeData, QObject, QPoint, QPointF, QRect, QRectF, QSize,
                             QStringListModel, Qt, QTime, QTimer, QUrl, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QCursor, QDesktopServices,
+                           QDoubleValidator,
                            QDrag, QFont, QFontDatabase, QIcon, QKeyEvent, QKeySequence, QPainter,
                            QPainterPath,
-                           QPalette, QPen, QPixmap, QShortcut, QStandardItem, QStandardItemModel,
+                           QPalette, QPen, QPixmap, QPolygonF, QShortcut, QStandardItem,
+                           QStandardItemModel,
                            QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
                            QTextDocumentFragment, QTextFormat)
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QCompleter,
-    QDialog,
+    QAbstractButton, QAbstractItemView, QApplication, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QCompleter,
+    QDialog, QDockWidget,
     QFileDialog, QFontDialog, QFrame, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QListView, QListWidget, QListWidgetItem, QMenu, QPlainTextEdit, QProgressBar, QPushButton,
-    QRadioButton, QRubberBand, QScrollArea, QScrollBar, QSizeGrip, QSlider, QStackedLayout, QStyle,
-    QStyledItemDelegate, QStyleOptionTabWidgetFrame, QStyleOptionViewItem, QTabBar, QTableWidget,
+    QRadioButton, QRubberBand, QScrollArea, QScrollBar, QSizeGrip, QSizePolicy, QSlider,
+    QSpacerItem, QStackedLayout, QStyle,
+    QStyledItemDelegate, QStyleOption, QStyleOptionTab, QStyleOptionTabWidgetFrame, QStyleOptionToolBar, QStyleOptionViewItem, QTabBar,
+    QTableWidget,
     QTableWidgetItem, QTableWidgetSelectionRange, QTabWidget, QTextEdit, QToolBar, QToolButton,
     QTreeView, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -38,7 +42,7 @@ from PySide6.QtWidgets import (
 from . import colors
 from ._props import P, PropertyHost, _make_property, enum_choices
 from .drawing import DRAWING_PROPERTIES, Drawing
-from .picture import is_picture, picture_pixmap
+from .picture import is_picture, picture_icon, picture_pixmap
 from .app import call_handler
 
 # Parameters passed to each event handler; used by the IDE to generate stubs.
@@ -56,6 +60,7 @@ EVENT_ARGS = {
     "UpClick": "", "DownClick": "", "PanelClick": "Panel", "PanelDblClick": "Panel",
     "BeforeClick": "", "ButtonClick": "Button",
     "ItemClick": "Item", "ColumnClick": "ColumnHeader", "ItemCheck": "Item",
+    "AfterLabelEdit": "Item, NewString",
     "SelChange": "", "Highlight": "Line, Text, State", "GutterClick": "Line",
     "ProtectedEdit": "Line", "CompletionRequest": "Context, Prefix",
     "CompletionChosen": "Text",
@@ -177,10 +182,14 @@ def _geometry(width, height):
 
 _FONT = (
     P("FontName", "font", None, description="Font family; unset = the container's font"),
-    P("FontSize", "int", None, description="Font size in points; unset = the container's"),
+    P("FontSize", "number", None,
+      description="Font size in points (10.5: fractions too, as VB's); unset = the container's"),
     P("FontBold", "bool", False, description="Bold text"),
     P("FontItalic", "bool", False, description="Italic text"),
     P("FontUnderline", "bool", False, description="Underlined text"),
+    P("FontWeight", "int", 0,
+      description="The letters' weight, as VB's StdFont.Weight: 100 (thin) to 900 (black), "
+                  "400 normal, 600 semibold, 700 bold; 0: as FontBold says"),
 )
 _COLORS = (P("BackColor", "color", None, description="Background color; unset = the default"),
            P("ForeColor", "color", None, description="Text color; unset = the default"))
@@ -583,6 +592,18 @@ class Control(PropertyHost):
                 return True
         return self._form._handle_default_cancel(self, event)
 
+    # -- its natural size ---------------------------------------------------------------
+    @property
+    def PreferredWidth(self) -> int:
+        """The width the system's style gives it for what it shows (its text, its
+        picture...), as a layout would; e.g. to place controls in a row."""
+        return self._widget.sizeHint().width() if self._widget is not None else 0
+
+    @property
+    def PreferredHeight(self) -> int:
+        """The height the system's style gives it (a ComboBox's, a TextBox's...)."""
+        return self._widget.sizeHint().height() if self._widget is not None else 0
+
     # -- common properties -----------------------------------------------------------
     def _read_Left(self):
         return self._widget.x() if self._widget else self._values.get("Left", 0)
@@ -634,17 +655,26 @@ class Control(PropertyHost):
         if values.get("FontName"):
             font.setFamily(values["FontName"])
         if values.get("FontSize"):
-            font.setPointSize(values["FontSize"])
+            font.setPointSizeF(float(values["FontSize"]))
         if values.get("FontBold"):
             font.setBold(True)
         if values.get("FontItalic"):
             font.setItalic(True)
         if values.get("FontUnderline"):
             font.setUnderline(True)
+        if values.get("FontWeight"):  # (VB's StdFont.Weight: over FontBold)
+            font.setWeight(QFont.Weight(max(100, min(900, int(values["FontWeight"])))))
         self._widget.setFont(font)
 
     _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
-        _apply_FontUnderline = _apply_font
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
+
+    def _qcolor(self, value):
+        """A color as this control shows it (a system color: its form's palette's)."""
+        form = self.__dict__.get("_form")
+        window = getattr(form, "_widget", None) if form is not None else None
+        palette = window.palette() if window is not None and colors.is_system(value) else None
+        return colors.to_qcolor(value, palette)
 
     def _apply_colors(self, _=None):
         if not self._widget:
@@ -652,9 +682,9 @@ class Control(PropertyHost):
         back, fore = self._values.get("BackColor"), self._values.get("ForeColor")
         rules = []
         if back is not None:
-            rules.append(f"background-color: {colors.to_qcolor(back).name()};")
+            rules.append(f"background-color: {colors.css(self._qcolor(back))};")
         if fore is not None:
-            rules.append(f"color: {colors.to_qcolor(fore).name()};")
+            rules.append(f"color: {colors.css(self._qcolor(fore))};")
         self._widget.setStyleSheet(
             f"{self._qss_type} {{ {' '.join(rules)} }}" if rules else "")
 
@@ -835,10 +865,16 @@ class Label(Control):
                       "Control+Option+the letter) focuses the next control in the tab "
                       "order. False: the & is shown as it is"),
         P("Alignment", "enum", 0, _ALIGNMENT, description="Horizontal text alignment"),
+        P("VerticalAlignment", "enum", 0, enum_choices("Top", "Middle", "Bottom"),
+          description="Where the text is between the label's top and bottom (Middle: beside "
+                      "a box of the same height, as a form layout's labels)"),
         P("AutoSize", "bool", False, description="Resize to fit the text"),
         P("WordWrap", "bool", False, description="Wrap long text onto several lines"),
-        P("BorderStyle", "enum", 0, enum_choices("None", "Fixed Single"),
-          description="A thin border around the label"),
+        P("Selectable", "bool", False,
+          description="The text can be selected with the mouse and copied (a path, a message)"),
+        P("BorderStyle", "enum", 0, enum_choices("None", "Fixed Single", "Sunken"),
+          description="A thin border around the label, or a sunken panel's"),
+        P("Margin", "int", 0, description="Room between its border and its text, in pixels"),
         P("BackStyle", "enum", 1, enum_choices("Transparent", "Opaque"),
           description="Opaque: the label fills its box (with BackColor, or its container's "
                       "color) and hides what is behind it; Transparent: what is behind it "
@@ -847,7 +883,7 @@ class Label(Control):
     )
 
     def _create_widget(self, parent):
-        label = QLabel(parent)
+        label = _MnemonicLabel(parent)
         label.setTextFormat(Qt.PlainText)
         label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         label.setOpenExternalLinks(False)  # links go through LinkClick
@@ -861,15 +897,21 @@ class Label(Control):
 
     def _apply_TextFormat(self, v):
         self._widget.setTextFormat(_TEXT_FORMATS.get(v, Qt.PlainText))
-        links = self._formatted() and not self._design_mode
-        self._widget.setTextInteractionFlags(
-            Qt.LinksAccessibleByMouse | Qt.LinksAccessibleByKeyboard if links
-            else Qt.NoTextInteraction)
+        self._apply_Selectable(self._values.get("Selectable", False))
         if "Caption" in self._values:
             self._apply_Caption(self._values["Caption"])
 
+    def _apply_Selectable(self, v):
+        live = not self._design_mode
+        flags = Qt.LinksAccessibleByMouse | Qt.LinksAccessibleByKeyboard \
+            if self._formatted() and live else Qt.NoTextInteraction
+        if v and live:
+            flags |= Qt.TextSelectableByMouse
+        self._widget.setTextInteractionFlags(flags)
+
     def _apply_Caption(self, v):
         key = None
+        self._widget.mnemonic = None
         if self._formatted():
             self._widget.setText(v)
         elif not self._values.get("UseMnemonic", True):  # the & as it is
@@ -877,15 +919,11 @@ class Label(Control):
             self._widget.setText(v)
         else:
             text, index = parse_mnemonic(v)
-            if index < 0:
-                self._widget.setTextFormat(Qt.PlainText)
-                self._widget.setText(text)
-            else:  # the access key letter underlined (drawn as rich text)
-                self._widget.setTextFormat(Qt.RichText)
-                self._widget.setText(
-                    '<span style="white-space: pre-wrap">' + html.escape(text[:index]) +
-                    f"<u>{html.escape(text[index])}</u>" + html.escape(text[index + 1:]) +
-                    "</span>")
+            self._widget.setTextFormat(Qt.PlainText)
+            self._widget.setText(text)
+            if index >= 0:  # the access key letter underlined, as the system's style shows it
+                self._widget.mnemonic = text[:index].replace("&", "&&") + "&" + \
+                    text[index:].replace("&", "&&")
                 key = access_key_sequence(text[index])
         self._set_access_key(key)
         if self._values.get("AutoSize"):
@@ -949,7 +987,13 @@ class Label(Control):
             QDesktopServices.openUrl(QUrl(url))
 
     def _apply_Alignment(self, v):
-        self._widget.setAlignment(_QT_ALIGN.get(v, Qt.AlignLeft) | Qt.AlignTop)
+        vertical = (Qt.AlignTop, Qt.AlignVCenter, Qt.AlignBottom)[
+            int(self._values.get("VerticalAlignment", 0) or 0) % 3]
+        self._widget.setAlignment(_QT_ALIGN.get(self._values.get("Alignment", 0), Qt.AlignLeft)
+                                  | vertical)
+
+    def _apply_VerticalAlignment(self, v):
+        self._apply_Alignment(v)
 
     def _apply_AutoSize(self, v):
         if v:
@@ -959,7 +1003,21 @@ class Label(Control):
         self._widget.setWordWrap(v)
 
     def _apply_BorderStyle(self, v):
-        self._widget.setFrameStyle(QFrame.Box | QFrame.Plain if v else QFrame.NoFrame)
+        self._widget.setFrameStyle(QFrame.Panel | QFrame.Sunken if v == 2 else
+                                   QFrame.Box | QFrame.Plain if v else QFrame.NoFrame)
+
+    def _apply_Margin(self, v):
+        self._widget.setMargin(max(int(v or 0), 0))
+
+    @property
+    def PreferredHeight(self) -> int:
+        """The height its text needs (word-wrapped: at its width)."""
+        widget = self._widget
+        if self._values.get("WordWrap") and widget.width() > 0:
+            height = widget.heightForWidth(widget.width())
+            if height > 0:
+                return height
+        return widget.sizeHint().height()
 
     def _apply_colors(self, _=None):
         """BackStyle decides the background: Opaque fills it (BackColor, or
@@ -972,11 +1030,11 @@ class Label(Control):
         fore = self._values.get("ForeColor")
         rules = []
         if back is not None:
-            rules.append(f"background-color: {colors.to_qcolor(back).name()};")
+            rules.append(f"background-color: {colors.css(self._qcolor(back))};")
         elif not opaque:
             rules.append("background: transparent;")
         if fore is not None:
-            rules.append(f"color: {colors.to_qcolor(fore).name()};")
+            rules.append(f"color: {colors.css(self._qcolor(fore))};")
         self._widget.setStyleSheet(f"QLabel {{ {' '.join(rules)} }}" if rules else "")
         # (In a Frame the "container's color" is the frame's panel, which the
         # platform draws in its own shade, e.g. lighter on macOS: there an
@@ -990,11 +1048,62 @@ class Label(Control):
 
 # --- TextBox ------------------------------------------------------------------------
 
+_TEXT_MENU_PROPS = (
+    P("Placeholder", "str", "",
+      description="A hint shown greyed while it is empty (e.g. \"Type a name\")"),
+    P("ContextMenu", "str", "",
+      description="The name of one of the form's menus: its items are in the right-click "
+                  "menu (after the standard ones: Undo, Copy, Select All...)"),
+    P("StandardMenu", "bool", True,
+      description="The right-click menu has the standard items (Undo, Copy, Paste, Select "
+                  "All...); False: only ContextMenu's"),
+)
+
+
 class _TextEditing:
     """What TextBox and RichTextBox share for editors: lines and columns, the
     caret's place on screen, scrolling, undo and redo, AcceptsTab and
     SelChange. A line is a paragraph (it ends where Enter was pressed),
-    counted from 0, as are columns; a single-line TextBox has one line."""
+    counted from 0, as are columns; a single-line TextBox has one line.
+    Placeholder, ContextMenu and StandardMenu too."""
+
+    def _apply_Placeholder(self, v):
+        if self._widget is not None and hasattr(self._widget, "setPlaceholderText"):
+            self._widget.setPlaceholderText(str(v or ""))
+
+    def _apply_ContextMenu(self, v):
+        widget = self._widget
+        if widget is None or self._design_mode:
+            return
+        custom = bool(v) or not self._values.get("StandardMenu", True)
+        if custom and not self.__dict__.get("_menu_hooked"):
+            widget.setContextMenuPolicy(Qt.CustomContextMenu)
+            widget.customContextMenuRequested.connect(self._show_text_menu)
+            self.__dict__["_menu_hooked"] = True
+        elif not custom and self.__dict__.get("_menu_hooked"):
+            widget.setContextMenuPolicy(Qt.DefaultContextMenu)
+
+    _apply_StandardMenu = lambda self, v: self._apply_ContextMenu(  # noqa: E731
+        self._values.get("ContextMenu", ""))
+
+    def _show_text_menu(self, pos) -> None:
+        """The right-click menu: the standard items, then ContextMenu's."""
+        widget = self._widget
+        if widget.contextMenuPolicy() != Qt.CustomContextMenu:
+            return
+        menu = widget.createStandardContextMenu() if self._values.get("StandardMenu", True) \
+            else QMenu(widget)
+        extra = self._form.__dict__.get(self._values.get("ContextMenu", ""))
+        if isinstance(extra, Menu) and extra._submenu is not None:
+            extra._fire("Click")  # (as before it opens: its items made ready)
+            if not menu.isEmpty():
+                menu.addSeparator()
+            for action in extra._submenu.actions():
+                if action.isVisible():
+                    menu.addAction(action)
+        menu.exec(widget.mapToGlobal(pos) if isinstance(widget, QLineEdit) else
+                  widget.viewport().mapToGlobal(pos))
+        menu.deleteLater()
 
     def _editor(self):
         """The multi-line editor (QPlainTextEdit, QTextEdit); None for one line."""
@@ -1186,11 +1295,20 @@ class _TextEditing:
         if editor is not None:
             editor.horizontalScrollBar().setValue(int(value))
 
-    def ScrollToCaret(self) -> None:
-        """Scroll so the caret is in view."""
+    def ScrollToCaret(self, Center: bool = False) -> None:
+        """Scroll so the caret is in view (Center: its line in the middle, as
+        far as the text goes)."""
         editor = self._editor()
-        if editor is not None:
+        if editor is None:
+            return
+        if not Center:
             editor.ensureCursorVisible()
+        elif hasattr(editor, "centerCursor"):
+            editor.centerCursor()
+        else:  # (a QTextEdit: the caret's line moved to the middle)
+            bar = editor.verticalScrollBar()
+            rect = editor.cursorRect()
+            bar.setValue(bar.value() + rect.center().y() - editor.viewport().height() // 2)
 
     # -- undo -------------------------------------------------------------------------------
     def Undo(self) -> None:
@@ -1234,7 +1352,54 @@ _ACCEPTS_TAB = P("AcceptsTab", "bool", False,
                              "(multi-line)")
 
 
-class TextBox(_TextEditing, Control):
+_SEL_COLORS = (
+    P("SelBackColor", "color", None,
+      description="The selected text's background (and the focus frame's color); unset = "
+                  "the system's", category="Appearance"),
+    P("SelForeColor", "color", None,
+      description="The selected text's color; unset = the system's", category="Appearance"),
+)
+
+
+class _PaletteColors:
+    """BackColor and ForeColor in a text editor's palette (Base and Text: a
+    style sheet would draw its frame another way, from a white Window role):
+    the unset roles inherited, following the scheme. The ForeColor at half
+    opacity is the placeholder's color, and the text's while disabled."""
+
+    def _apply_colors(self, _=None):
+        widget = self._widget
+        if not widget:
+            return
+        palette = QPalette()
+        back, fore = self._values.get("BackColor"), self._values.get("ForeColor")
+        groups = (QPalette.Active, QPalette.Inactive, QPalette.Disabled)
+        if back is not None:
+            for group in groups:
+                palette.setColor(group, QPalette.Base, self._qcolor(back))
+        if fore is not None:
+            dimmed = QColor(self._qcolor(fore))
+            dimmed.setAlpha(128)
+            for group in groups:
+                palette.setColor(group, QPalette.Text,
+                                 dimmed if group == QPalette.Disabled else self._qcolor(fore))
+                palette.setColor(group, QPalette.PlaceholderText, dimmed)
+        for role, name in ((QPalette.Highlight, "SelBackColor"),
+                           (QPalette.HighlightedText, "SelForeColor")):
+            value = self._values.get(name)
+            if value is not None:
+                for group in (QPalette.Active, QPalette.Inactive):
+                    palette.setColor(group, role, self._qcolor(value))
+        widget.setStyleSheet("")
+        widget.setPalette(palette)
+        if hasattr(widget, "viewport"):
+            widget.viewport().setPalette(palette)
+
+    _apply_BackColor = _apply_ForeColor = _apply_SelBackColor = _apply_SelForeColor = \
+        _apply_colors
+
+
+class TextBox(_PaletteColors, _TextEditing, Control):
     TypeName = "TextBox"
     DefaultEvent = "Change"
     DefaultSize = (121, 25)
@@ -1252,7 +1417,8 @@ class TextBox(_TextEditing, Control):
         P("ScrollBars", "enum", 0, enum_choices("None", "Horizontal", "Vertical", "Both"),
           description="Scroll bars of a multi-line TextBox"),
         _ACCEPTS_TAB,
-        *_COLORS, *_FONT, *_COMMON,
+        *_TEXT_MENU_PROPS,
+        *_COLORS, *_SEL_COLORS, *_FONT, *_COMMON,
     )
 
     def __init__(self, parent, Name: str = "", **props):
@@ -1377,7 +1543,23 @@ _RTF_QT_ALIGN = {0: Qt.AlignLeft, 1: Qt.AlignRight, 2: Qt.AlignHCenter}
 
 class _RichEdit(QTextEdit):
     """The RichTextBox's editor: pasted text keeps its formatting, but
-    not pictures or tables from elsewhere (just their text)."""
+    not pictures or tables from elsewhere (just their text). A click on a
+    link of a Locked one fires LinkClick."""
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        box = getattr(self, "_vp_box", None)
+        if box is not None and event.button() == Qt.LeftButton and self.isReadOnly() and \
+                not self.textCursor().hasSelection():
+            anchor = self.anchorAt(event.position().toPoint())
+            if anchor:
+                box._fire("LinkClick", anchor)
+
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+        if self.isReadOnly():  # (a pointing hand over its links)
+            over = bool(self.anchorAt(event.position().toPoint()))
+            self.viewport().setCursor(Qt.PointingHandCursor if over else Qt.IBeamCursor)
 
     def insertFromMimeData(self, source):
         if not source.hasHtml():
@@ -1449,7 +1631,7 @@ class _EditorSelection:
         self._widget.textCursor().insertText(str(value))
 
 
-class RichTextBox(_EditorSelection, _TextEditing, Control):
+class RichTextBox(_PaletteColors, _EditorSelection, _TextEditing, Control):
     """Text with colors, fonts, bold, italic and underline, and aligned
     paragraphs, like VB's RichTextBox. Format the selection with its Sel...
     properties (SelBold, SelColor...; with nothing selected, what is typed
@@ -1459,7 +1641,7 @@ class RichTextBox(_EditorSelection, _TextEditing, Control):
     TypeName = "RichTextBox"
     DefaultEvent = "Change"
     DefaultSize = (201, 121)
-    Events = ("Change", "SelChange", "Click", "DblClick", "GotFocus", "LostFocus",
+    Events = ("Change", "SelChange", "LinkClick", "Click", "DblClick", "GotFocus", "LostFocus",
               "KeyDown", "KeyPress", "KeyUp", "MouseDown", "MouseMove", "MouseUp")
     _qss_type = "QTextEdit"
     Properties = (
@@ -1472,15 +1654,30 @@ class RichTextBox(_EditorSelection, _TextEditing, Control):
                       "don't wrap"),
         P("BorderStyle", "enum", 1, enum_choices("None", "Fixed Single"),
           description="A border around it"),
+        P("Margin", "int", 4, description="Room around its text inside its border, in pixels"),
         _ACCEPTS_TAB,
-        *_COLORS, *_FONT, *_COMMON,
+        *_TEXT_MENU_PROPS,
+        *_COLORS, *_SEL_COLORS, *_FONT, *_COMMON,
     )
 
     def _create_widget(self, parent):
         self.__dict__["_trimming"] = False
         widget = _RichEdit(parent)
+        widget._vp_box = self
         widget.setTabChangesFocus(True)
+        widget.setMouseTracking(True)
         return widget
+
+    def _apply_Margin(self, v):
+        self._widget.document().setDocumentMargin(max(float(v or 0), 0))
+
+    def AppendHTML(self, Html) -> None:
+        """Add a paragraph of HTML at the end and show it (a chat's next
+        message), as a log's."""
+        widget = self._widget
+        widget.append(str(Html))
+        widget.moveCursor(QTextCursor.End)
+        widget.ensureCursorVisible()
 
     def _event_targets(self):
         return [self._widget, self._widget.viewport()]
@@ -1765,6 +1962,27 @@ _PY_COLORS = {  # (on a light background, on a dark one)
     "defname": ("#795e26", "#dcdcaa"), "decorator": ("#af00db", "#c586c0"),
 }
 _PY_IN_SINGLE, _PY_IN_DOUBLE = 1, 2  # inside ''' or """ at the line's end
+# The roles SetSyntaxColor colors: the ones above, and these (uncolored until then)
+SYNTAX_ROLES = ("keyword", "builtin", "vp6", "self", "string", "comment", "number", "defname",
+                "decorator")
+_PY_NAMES: list = []
+
+
+def _py_name_rules() -> list:
+    """(pattern, role) of the names colored only when given a color: Python's
+    built-ins, VP6's names and self."""
+    if not _PY_NAMES:
+        import builtins
+
+        import vp6
+
+        names = sorted(vp6.__all__, key=len, reverse=True)
+        built = sorted({n for n in dir(builtins) if not n.startswith("_")} -
+                       set(keyword.kwlist), key=len, reverse=True)
+        _PY_NAMES.extend([(re.compile(r"\b(?:%s)\b" % "|".join(names)), "vp6"),
+                          (re.compile(r"\b(?:%s)\b" % "|".join(built)), "builtin"),
+                          (re.compile(r"\bself\b"), "self")])
+    return _PY_NAMES
 
 
 class _CodeHighlighter(QSyntaxHighlighter):
@@ -1785,6 +2003,13 @@ class _CodeHighlighter(QSyntaxHighlighter):
             if name == "comment":
                 fmt.setFontItalic(True)
             self.formats[name] = fmt
+        for name, (color, bold, italic) in self.box._syntax.items():  # (SetSyntaxColor)
+            fmt = QTextCharFormat()
+            fmt.setForeground(colors.to_qcolor(color))
+            if bold:
+                fmt.setFontWeight(QFont.Bold)
+            fmt.setFontItalic(bool(italic))
+            self.formats[name] = fmt
 
     def highlightBlock(self, text: str) -> None:
         previous = max(self.previousBlockState(), 0)
@@ -1799,6 +2024,10 @@ class _CodeHighlighter(QSyntaxHighlighter):
 
     def _python(self, text: str, state: int) -> int:
         formats = self.formats
+        for pattern, name in _py_name_rules():  # (only the roles given a color)
+            if name in formats:
+                for match in pattern.finditer(text):
+                    self.setFormat(match.start(), match.end() - match.start(), formats[name])
         for pattern, name in ((_PY_KEYWORDS, "keyword"), (_PY_NUMBER, "number"),
                               (_PY_DECORATOR, "decorator")):
             for match in pattern.finditer(text):
@@ -1836,6 +2065,47 @@ class _CodeHighlighter(QSyntaxHighlighter):
                     continue
             index += 1
         return state
+
+
+_GUTTER_MARKS = 14  # the gutter's columns of markers (left) and fold boxes (right)
+_DOT, _RING, _ARROW = "●", "○", "➤"  # markers drawn as shapes
+
+
+def _paint_marker(painter: QPainter, widget, top: int, height: int, text: str, color) -> None:
+    """A line's marker in the gutter's left column: a dot, a ring or an arrow
+    (a breakpoint, a disabled one, the execution point) drawn as shapes, any
+    other text as it is."""
+    ink = colors.to_qcolor(color) if color is not None else \
+        widget.palette().color(QPalette.Text)
+    size = min(height - 2, _GUTTER_MARKS - 4)
+    box = QRectF(2, top + (height - size) / 2, size, size)
+    painter.save()
+    painter.setRenderHint(QPainter.Antialiasing)
+    if text == _DOT:
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(ink)
+        painter.drawEllipse(box.adjusted(0.75, 0.75, -0.75, -0.75))
+    elif text == _RING:
+        painter.setPen(QPen(ink, 1.5))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(box.adjusted(0.75, 0.75, -0.75, -0.75))
+    elif text == _ARROW:
+        if color is None:
+            ink = QColor("#ffcc00")
+        painter.setPen(QPen(ink.darker(210), 0.8))
+        painter.setBrush(ink)
+        painter.drawPolygon(QPolygonF([
+            QPointF(box.left(), box.top() + size * 0.3),
+            QPointF(box.left() + size * 0.5, box.top() + size * 0.3),
+            QPointF(box.left() + size * 0.5, box.top()),
+            QPointF(box.right(), box.center().y()),
+            QPointF(box.left() + size * 0.5, box.bottom()),
+            QPointF(box.left() + size * 0.5, box.top() + size * 0.7),
+            QPointF(box.left(), box.top() + size * 0.7)]))
+    else:
+        painter.setPen(ink)
+        painter.drawText(QRectF(0, top, _GUTTER_MARKS, height), Qt.AlignCenter, text)
+    painter.restore()
 
 
 class _CodeGutter(QWidget):
@@ -1930,7 +2200,7 @@ class _LineMarkers:
             self._box._markers.remove(entry)
         if text:
             cursor = QTextCursor(block)
-            self._box._markers.append([cursor, str(text)])
+            self._box._markers.append([cursor, str(text), None])
         self._box._update_gutter()
 
 
@@ -1973,6 +2243,19 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
           description="The current line's shade; unset = a shade of the background"),
         P("ProtectedColor", "color", None,
           description="The background of protected lines; unset = a tint of the background"),
+        P("ProtectedShading", "enum", 0, enum_choices("Whole Lines", "Text"),
+          description="What ProtectedColor shades: the protected lines from edge to edge, or "
+                      "only their text"),
+        P("GutterBackColor", "color", None,
+          description="The gutter's background; unset = a shade of the background"),
+        P("GutterForeColor", "color", None,
+          description="The line numbers' color; unset = a faint text color"),
+        P("SelBackColor", "color", None,
+          description="The selected text's background; unset = the system's"),
+        P("SelForeColor", "color", None,
+          description="The selected text's color; unset = the system's"),
+        P("FoldMarkerColor", "color", None,
+          description="The fold markers' boxes (SetFoldMarker); unset = the line numbers' color"),
         P("TabWidth", "int", 4, description="Columns per indentation level (and tab stop)"),
         P("UseTabs", "bool", False, description="Indent with tab characters instead of spaces"),
         P("AutoIndent", "bool", True,
@@ -1985,7 +2268,9 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
     )
 
     def _create_widget(self, parent):
-        self.__dict__.update(_protected=[], _markers=[], _highlighting=None, _highlighter=None,
+        self.__dict__.update(_protected=[], _markers=[], _folds=[], _highlighting=None,
+                             _highlighter=None,
+                             _syntax={},
                              _completer=None, _marks=[])
         widget = _CodeEdit(self, parent)
         self._widget = widget
@@ -2036,13 +2321,29 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
             self._widget.setFont(font)
 
     _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
-        _apply_FontUnderline = _apply_font
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
 
     def _apply_colors(self, _=None):
-        super()._apply_colors()
+        """The colors in the editor's palette (a style sheet would draw its
+        frame another way): the unset ones inherited, following the scheme."""
+        widget = self._widget
+        if not widget:
+            return
+        palette = QPalette()
+        for role, name in ((QPalette.Base, "BackColor"), (QPalette.Text, "ForeColor"),
+                           (QPalette.Highlight, "SelBackColor"),
+                           (QPalette.HighlightedText, "SelForeColor")):
+            value = self._values.get(name)
+            if value is not None:
+                for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+                    palette.setColor(group, role, self._qcolor(value))
+        widget.setStyleSheet("")
+        widget.setPalette(palette)
+        widget.viewport().setPalette(palette)
         self._restyle()
 
-    _apply_BackColor = _apply_ForeColor = _apply_colors
+    _apply_BackColor = _apply_ForeColor = _apply_SelBackColor = _apply_SelForeColor = \
+        _apply_colors
 
     def _apply_Language(self, v):
         self._highlighter.rehighlight()
@@ -2053,7 +2354,8 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
     def _apply_HighlightCurrentLine(self, v):
         self._update_extra()
 
-    _apply_CurrentLineColor = _apply_ProtectedColor = _apply_HighlightCurrentLine
+    _apply_CurrentLineColor = _apply_ProtectedColor = _apply_ProtectedShading = \
+        _apply_HighlightCurrentLine
 
     def _apply_TabWidth(self, v):
         self._restyle()
@@ -2074,6 +2376,7 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
             # (a new text: no protected, hidden or marked lines from the old one)
             self._protected.clear()
             self._markers.clear()
+            self._folds.clear()
             self._marks.clear()
             self._show_marks()
             self._update_gutter()
@@ -2096,6 +2399,7 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
         shade = colors.to_qcolor(current) if current is not None else (
             QColor(255, 255, 255, 22) if dark else QColor(0, 0, 0, 16))
         show_current = self._values.get("HighlightCurrentLine", True)
+        text_only = self._values.get("ProtectedShading") == 1
         ranges = [(start.blockNumber(), end.blockNumber()) for start, end in self._protected]
         caret = widget.textCursor().blockNumber()
         block = widget.firstVisibleBlock()
@@ -2104,9 +2408,18 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
             height = widget.blockBoundingRect(block).height()
             if block.isVisible() and top + height >= rect.top():
                 number = block.blockNumber()
-                line = QRect(0, round(top), widget.viewport().width(), round(height))
+                margin = round(widget.document().documentMargin())  # (as MarkLine's)
+                line = QRect(margin, round(top), widget.viewport().width(), round(height))
                 if any(first <= number <= last for first, last in ranges):
-                    painter.fillRect(line, tint)
+                    if text_only:  # (as far as each of its lines' text goes)
+                        layout = block.layout()
+                        left = round(widget.contentOffset().x())  # (lines: from the margin)
+                        for index in range(layout.lineCount()):
+                            part = layout.lineAt(index)
+                            rect_of = part.naturalTextRect().translated(left, top)
+                            painter.fillRect(rect_of.toAlignedRect(), tint)
+                    else:
+                        painter.fillRect(line, tint)
                 if show_current and number == caret:
                     painter.fillRect(line, shade)
             top += height
@@ -2114,13 +2427,14 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
 
     # -- the gutter ------------------------------------------------------------------------
     def _gutter_width(self) -> int:
+        """Markers at the left (14 pixels), the line numbers, the fold markers
+        at the right (as the IDE's code windows)."""
         widget = self._widget
-        marks = 14 if (self._values.get("LineNumbers", True) or self._markers or
-                       self._has_hidden()) else 0
         if not self._values.get("LineNumbers", True):
-            return marks
+            return (_GUTTER_MARKS if self._markers else 0) + \
+                (_GUTTER_MARKS if self._folds or self._has_hidden() else 0)
         digits = max(3, len(str(widget.blockCount())))
-        return 6 + widget.fontMetrics().horizontalAdvance("9") * digits + marks
+        return _GUTTER_MARKS + 18 + widget.fontMetrics().horizontalAdvance("9") * digits
 
     def _has_hidden(self) -> bool:
         block = self._widget.document().begin()
@@ -2155,11 +2469,22 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
         widget = self._widget
         painter = QPainter(gutter)
         base, dark = self._base_color(), self._dark()
-        painter.fillRect(event.rect(), base.lighter(115) if dark else base.darker(104))
-        ink = QColor(widget.palette().color(QPalette.Text))
-        ink.setAlpha(130)
+        back = self._values.get("GutterBackColor")
+        gutter_back = colors.to_qcolor(back) if back is not None else \
+            base.lighter(115) if dark else base.darker(104)
+        painter.fillRect(event.rect(), gutter_back)
+        fore = self._values.get("GutterForeColor")
+        if fore is not None:
+            ink = colors.to_qcolor(fore)
+        else:
+            ink = QColor(widget.palette().color(QPalette.Text))
+            ink.setAlpha(130)
         numbers = self._values.get("LineNumbers", True)
-        markers = {cursor.blockNumber(): text for cursor, text in self._markers}
+        markers = {cursor.blockNumber(): (text, color) for cursor, text, color in self._markers}
+        folds = {cursor.blockNumber(): folded for cursor, folded in self._folds}
+        fold_color = self._values.get("FoldMarkerColor")
+        fold_ink = colors.to_qcolor(fold_color) if fold_color is not None else ink
+        painter.setFont(widget.font())  # (the numbers in the code's font)
         block = widget.firstVisibleBlock()
         top = round(widget.blockBoundingGeometry(block).translated(widget.contentOffset()).top())
         height = widget.fontMetrics().height()
@@ -2170,19 +2495,24 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
                 number = block.blockNumber()
                 if numbers:
                     painter.setPen(ink)
-                    painter.drawText(0, top, width - 16, height, Qt.AlignRight, str(number + 1))
+                    painter.drawText(0, top, width - _GUTTER_MARKS, height, Qt.AlignRight,
+                                     str(number + 1))
                 marker = markers.get(number)
-                folded = block.next().isValid() and not block.next().isVisible()
                 if marker:
-                    painter.setPen(widget.palette().color(QPalette.Text))
-                    painter.drawText(width - 14, top, 14, height, Qt.AlignCenter, marker)
-                elif folded:  # (hidden lines follow: a + box)
+                    _paint_marker(painter, widget, top, height, *marker)
+                folded = folds.get(number)
+                if folded is None and block.next().isValid() and not block.next().isVisible():
+                    folded = True  # (hidden lines follow: a + box)
+                if folded is not None:
                     box = QRect(width - 12, top + (height - 9) // 2, 9, 9)
-                    painter.setPen(ink)
+                    painter.setPen(fold_ink)
+                    painter.setBrush(gutter_back)
                     painter.drawRect(box)
+                    painter.setBrush(Qt.NoBrush)
                     center = box.center()
                     painter.drawLine(center.x() - 2, center.y(), center.x() + 2, center.y())
-                    painter.drawLine(center.x(), center.y() - 2, center.x(), center.y() + 2)
+                    if folded:
+                        painter.drawLine(center.x(), center.y() - 2, center.x(), center.y() + 2)
             block = block.next()
             top = bottom
         painter.end()
@@ -2197,6 +2527,47 @@ class CodeBox(_EditorSelection, _TextEditing, Control):
         """A short text in a line's gutter (●, ▸...): ``LineMarker[5] = "●"``
         sets line 5's, ``LineMarker(5)`` reads it; "" removes it."""
         return _LineMarkers(self)
+
+    def SetLineMarker(self, Line: int, Text, Color=None) -> None:
+        """A line's marker in a color of its own (a red ● for a breakpoint);
+        Color None: the text's."""
+        self.LineMarker[Line] = Text
+        entry = self.LineMarker._find(int(Line))
+        if entry is not None:
+            entry[2] = colors.normalize(Color) if Color is not None else None
+            self._update_gutter()
+
+    def SetFoldMarker(self, Line: int, Folded=True) -> None:
+        """A box in a line's gutter for a section that folds: + while Folded,
+        - while not (None: no box). It stays with its line; folding is yours to
+        do (HideLines, ShowLines in GutterClick)."""
+        block = self._line_block(Line)
+        self._folds[:] = [entry for entry in self._folds
+                          if entry[0].blockNumber() != int(Line)]
+        if Folded is not None:
+            self._folds.append([QTextCursor(block), bool(Folded)])
+        self._update_gutter()
+
+    def SetSyntaxColor(self, Role: str, Color=None, Bold: bool = False,
+                       Italic: bool = False) -> None:
+        """The color (and boldness, italics) of a role of the Language's
+        coloring: keyword, builtin, vp6 (VP6's names), self, string, comment,
+        number, defname (the names def and class define) or decorator; Color
+        None: back to the CodeBox's own (builtin, vp6 and self: none)."""
+        if Role not in SYNTAX_ROLES:
+            raise ValueError(f"CodeBox '{self.Name}': no syntax role {Role!r} "
+                             f"({', '.join(SYNTAX_ROLES)})")
+        if Color is None:
+            self._syntax.pop(Role, None)
+        else:
+            self._syntax[Role] = (colors.normalize(Color), bool(Bold), bool(Italic))
+        self._highlighter.set_dark(self._dark())
+        self._highlighter.rehighlight()
+
+    def _apply_GutterBackColor(self, v):
+        self._update_gutter()
+
+    _apply_GutterForeColor = _apply_GutterBackColor
 
     # -- syntax coloring -------------------------------------------------------------------
     def _highlight(self, highlighter, line: int, text: str, state: int) -> int:
@@ -2833,7 +3204,7 @@ class _Graphical:
             self._widget.setFont(font)
 
     _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
-        _apply_FontUnderline = _apply_font
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
 
 
 class CommandButton(_Graphical, Control):
@@ -3024,6 +3395,42 @@ class _PerItem:
         return self._control.ListCount
 
 
+class _ItemList(list):
+    """A ListBox's or ComboBox's List: the items' texts as a list, and VB's
+    ``List1.List(2)`` to read one. Writing one changes the item in place
+    (``List1.List[2] = "Two"``, VB's ``List1.List(2) = "Two"``), keeping its
+    ItemData and the selection (a Sorted list keeps its order)."""
+
+    def __init__(self, control, items):
+        super().__init__(items)
+        self._control = control
+
+    def __call__(self, index):
+        return self[index]
+
+    def __setitem__(self, index, value):
+        if isinstance(index, slice):
+            raise TypeError(f"{self._control.TypeName} '{self._control.Name}': set the items "
+                            f"one by one, or the whole List")
+        index = int(index)
+        if index < 0:
+            index += len(self)
+        if not 0 <= index < len(self):
+            raise IndexError(f"{self._control.TypeName} '{self._control.Name}': no item "
+                             f"{index} (ListCount is {len(self)})")
+        super().__setitem__(index, str(value))
+        self._control._set_text(index, str(value))
+
+    def __reduce_ex__(self, protocol):  # (copies and pickles are plain lists)
+        return list, (list(self),)
+
+    def __copy__(self):
+        return list(self)
+
+    def __deepcopy__(self, memo):
+        return list(self)
+
+
 # The item roles of ListBox and ComboBox items (Qt's data roles)
 _ITEM_DATA_ROLE = Qt.UserRole
 _ITEM_IMAGE_ROLE = Qt.UserRole + 1
@@ -3033,8 +3440,8 @@ _CHECKED_ROLE = Qt.UserRole + 3  # (a Checkbox ListBox: the state last seen, for
 
 class _ListMixin:
     """AddItem / RemoveItem / Clear / ListCount / ListIndex / List shared by
-    ListBox and ComboBox, and their per-item ItemData, ItemImage, ItemBold,
-    ItemItalic and ItemForeColor. The widget-specific part: ``_role(index,
+    ListBox and ComboBox, and their per-item ItemData, ItemImage, ItemToolTip,
+    ItemBold, ItemItalic and ItemForeColor. The widget-specific part: ``_role(index,
     role)`` and ``_set_role(index, role, value)``."""
 
     _IMAGE_LIST_PROPS = ("ImageList",)
@@ -3072,6 +3479,13 @@ class _ListMixin:
             self._set_role(index, Qt.FontRole, font)
 
         return _PerItem(self, name, read, write)
+
+    @property
+    def ItemToolTip(self) -> _PerItem:
+        """The tip shown while the mouse rests on an item (e.g. a file's whole
+        path); "" = none."""
+        return _PerItem(self, "ItemToolTip", lambda i: self._role(i, Qt.ToolTipRole) or "",
+                        lambda i, v: self._set_role(i, Qt.ToolTipRole, str(v) if v else None))
 
     @property
     def ItemBold(self) -> _PerItem:
@@ -3141,7 +3555,7 @@ class _ListMixin:
         return len(self._items())
 
     def _read_List(self):
-        return self._items()
+        return _ItemList(self, self._items())
 
     def _apply_List(self, items):
         self._widget.clear()
@@ -3216,6 +3630,9 @@ class ListBox(_ListMixin, Control):
 
     def _remove(self, index):
         self._widget.takeItem(index)
+
+    def _set_text(self, index, text):
+        self._widget.item(index).setText(text)
 
     def _make_checkable(self, item, checkable: bool) -> None:
         with self._quietly():
@@ -3353,6 +3770,13 @@ class _SimpleCombo(QWidget):
     def removeItem(self, index):
         self.list.takeItem(index)
 
+    def setItemText(self, index, text):
+        self.list.item(index).setText(text)
+        if index == self.list.currentRow():  # (as QComboBox: the chosen item's text shown)
+            blocked = self.edit.blockSignals(True)
+            self.edit.setText(text)
+            self.edit.blockSignals(blocked)
+
     def clear(self):
         self.list.clear()
 
@@ -3430,6 +3854,19 @@ class ComboBox(_ListMixin, Control):
             return _SimpleCombo(parent)
         return _ComboWidget(parent)
 
+    @property
+    def PreferredWidth(self) -> int:
+        """The width its longest item needs (as a combo box filled before it is
+        first shown gets)."""
+        widget = self._widget
+        if not isinstance(widget, QComboBox):
+            return super().PreferredWidth
+        policy = widget.sizeAdjustPolicy()
+        widget.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        width = widget.sizeHint().width()
+        widget.setSizeAdjustPolicy(policy)
+        return width
+
     def _event_targets(self):
         if isinstance(self._widget, _SimpleCombo):
             return [self._widget, self._widget.edit, self._widget.list.viewport()]
@@ -3481,6 +3918,15 @@ class ComboBox(_ListMixin, Control):
 
     def _remove(self, index):
         self._widget.removeItem(index)
+
+    def _set_text(self, index, text):
+        blocked = self._widget.blockSignals(True)  # (no Change: VB's has none either)
+        try:
+            self._widget.setItemText(index, text)
+            if self._values.get("Sorted"):  # (as a sorted ListBox: in its place)
+                self._sort()
+        finally:
+            self._widget.blockSignals(blocked)
 
     def _apply_Style(self, v):
         if isinstance(self._widget, _SimpleCombo) != (v == 1):
@@ -4457,8 +4903,12 @@ class _Docked:
     ordinary controls."""
 
     def _relayout(self) -> None:
-        """Docked (or just undocked): let the form place its aligned panes."""
-        if self in self._form._controls:
+        """Docked (or just undocked): let the form (or the PictureBox it is in)
+        place its aligned panes."""
+        parent = self.Parent
+        if isinstance(parent, PictureBox) and self in self._form._controls:
+            parent._layout_aligned()
+        elif self in self._form._controls:
             self._form._layout_aligned()
 
     def _apply_Align(self, v):
@@ -4492,6 +4942,32 @@ class _Docked:
             self._relayout()  # a hidden pane gives its space to the others
 
 
+class _MnemonicLabel(QLabel):
+    """A Label's widget: plain text with an access key is drawn as the style
+    draws a buddy's label, its letter underlined where the system shows them
+    (``mnemonic``: the text with the & before that letter)."""
+
+    mnemonic = None
+
+    def paintEvent(self, event):
+        if self.mnemonic is None or self.textFormat() != Qt.PlainText:
+            super().paintEvent(event)
+            return
+        painter = QPainter(self)
+        self.drawFrame(painter)
+        style = self.style()
+        rect = self.contentsRect().adjusted(self.margin(), self.margin(), -self.margin(),
+                                            -self.margin())
+        flags = int(self.alignment()) | (
+            Qt.TextShowMnemonic if style.styleHint(QStyle.SH_UnderlineShortcut, None, self)
+            else Qt.TextHideMnemonic)
+        if self.wordWrap():
+            flags |= Qt.TextWordWrap
+        style.drawItemText(painter, rect, flags, self.palette(), self.isEnabled(),
+                           self.mnemonic, self.foregroundRole())
+        painter.end()
+
+
 class _PictureWidget(QLabel):
     """A PictureBox's widget: its picture, then what the graphics methods drew."""
 
@@ -4516,7 +4992,7 @@ class PictureBox(_Docked, Drawing, Control):
         P("Picture", "file", "", description="Image file (relative to the form's folder)"),
         P("Stretch", "bool", False, description="Scale the picture to fit the control"),
         P("AutoSize", "bool", False, description="Resize to fit the picture"),
-        P("BorderStyle", "enum", 1, enum_choices("None", "Fixed Single"),
+        P("BorderStyle", "enum", 1, enum_choices("None", "Fixed Single", "Styled"),
           description="A sunken border around the picture"),
         P("Align", "enum", 0, enum_choices("None", "Top", "Bottom", "Left", "Right", "Fill"),
           description="Dock to that edge of the form and follow its size, keeping the height "
@@ -4525,6 +5001,9 @@ class PictureBox(_Docked, Drawing, Control):
         P("ScrollBars", "enum", 0, enum_choices("None", "Horizontal", "Vertical", "Both"),
           description="Scroll bars that appear when the controls in it reach beyond its "
                       "edges (at run time); the picture stays in place"),
+        P("BackStyle", "enum", 1, enum_choices("Transparent", "Opaque"),
+          description="Opaque: filled with its BackColor (or the window color); Transparent: "
+                      "what is under it shows through (a page of controls on a TabStrip)"),
         *DRAWING_PROPERTIES,
         *_COLORS, *_FONT, *_COMMON,
     )
@@ -4539,8 +5018,18 @@ class PictureBox(_Docked, Drawing, Control):
         if event.type() == QEvent.Resize and watched is self._widget:
             if self._scroll_area is not None:
                 self._scroll_area.setGeometry(self._widget.contentsRect())
+            self._layout_aligned()  # (the controls aligned in it)
             self._fire("Resize")  # e.g. a docked pane resized by its form or a Splitter
         return super()._on_qt_event(watched, event)
+
+    def _layout_aligned(self) -> None:
+        """Place the controls aligned in it (Align), as a form places its own."""
+        from .form import layout_aligned
+
+        children = [c for c in self._form._controls if c.Parent is self and
+                    c._values.get("Align") and "Align" in c._specs]
+        if children:
+            layout_aligned(self, children)
 
     # -- scrolling -------------------------------------------------------------------------
     def _container_widget(self) -> QWidget:
@@ -4686,16 +5175,17 @@ class PictureBox(_Docked, Drawing, Control):
             self._widget.resize(self._widget.pixmap().size())
 
     def _apply_BorderStyle(self, v):
-        self._widget.setFrameStyle(QFrame.Panel | QFrame.Sunken if v else QFrame.NoFrame)
+        self._widget.setFrameStyle(QFrame.StyledPanel if v == 2 else
+                                   QFrame.Panel | QFrame.Sunken if v else QFrame.NoFrame)
 
     def _apply_colors(self, _=None):
         _container_palette(self)
         # Opaque like VB's PictureBox (the scheme's window color without a
         # BackColor), so e.g. a docked pane covers what is underneath
         if self._widget is not None:
-            self._widget.setAutoFillBackground(True)
+            self._widget.setAutoFillBackground(self._values.get("BackStyle", 1) != 0)
 
-    _apply_BackColor = _apply_ForeColor = _apply_colors
+    _apply_BackColor = _apply_ForeColor = _apply_BackStyle = _apply_colors
 
     # -- the graphics methods (drawing.Drawing) -------------------------------------------
     def _drawing_surface(self) -> QWidget:
@@ -4781,6 +5271,14 @@ class _SplitterBar(QWidget):
     def paintEvent(self, event):
         splitter = self._splitter
         painter = QPainter(self)
+        if splitter._values.get("Style", 0) == 1:  # (the system's, as a QSplitter's handle)
+            option = QStyleOption()
+            option.initFrom(self)
+            option.rect = self.rect()
+            if splitter._vertical():  # (a vertical bar: a horizontal QSplitter's handle)
+                option.state |= QStyle.State_Horizontal
+            self.style().drawControl(QStyle.CE_Splitter, option, painter, self)
+            return
         back = splitter._values.get("BackColor")
         # Unset: the button color (the Window color can be a pattern, e.g. the
         # designer's grid, whose color isn't the one you see)
@@ -4836,6 +5334,9 @@ class Splitter(_Docked, Control):
                       "same edge before it)"),
         P("MinSize", "int", 30,
           description="The smallest size the pane, and the space left beside it, can get"),
+        P("Style", "enum", 0, enum_choices("VP6", "System"),
+          description="VP6: a bar with a grip; System: the system's own splitter handle "
+                      "(its PreferredWidth or PreferredHeight is the system's size for it)"),
         P("BackColor", "color", None,
           description="The bar's color; unset = a shade of the form's"),
         P("Enabled", "bool", True, description="Whether the user can drag it"),
@@ -4875,7 +5376,8 @@ class Splitter(_Docked, Control):
         align = self._values.get("Align")
         grow = delta if align in (1, 3) else -delta  # Top/Left grow with the mouse
         minimum = max(0, self._values.get("MinSize", 30))
-        left, top, right, bottom = self._form._free_area
+        host = self.Parent if isinstance(self.Parent, PictureBox) else self._form
+        left, top, right, bottom = host.__dict__.get("_free_area", (0, 0, 0, 0))
         free = (right - left) if self._vertical() else (bottom - top)
         current = pane.Width if self._vertical() else pane.Height
         largest = max(minimum, current + free - minimum)  # leave MinSize beside it
@@ -4888,12 +5390,20 @@ class Splitter(_Docked, Control):
     def _apply_Align(self, v):
         if self._widget is not None:
             self._widget.setCursor(Qt.SplitHCursor if v in (3, 4) else Qt.SplitVCursor)
-        if self in self._form._controls:
-            self._form._layout_aligned()
+        _Docked._relayout(self)
 
     def _apply_BackColor(self, v):
         if self._widget is not None:
             self._widget.update()
+
+    _apply_Style = _apply_BackColor
+
+    @property
+    def PreferredWidth(self) -> int:
+        """The system's splitter handle width (a Left or Right one's Width)."""
+        return QApplication.style().pixelMetric(QStyle.PM_SplitterWidth)
+
+    PreferredHeight = PreferredWidth
 
     def _apply_Enabled(self, v):
         if self._widget is not None:
@@ -4904,15 +5414,37 @@ class Splitter(_Docked, Control):
 # --- DockPanel -------------------------------------------------------------------------
 
 _DOCK_ALIGN = ((1, "1 - Top"), (2, "2 - Bottom"), (3, "3 - Left"), (4, "4 - Right"))
-_DOCK_CAPTION = 22  # the caption bar's height
-_DOCK_SIZER = 5  # the resizing edge of a docked panel
+_DOCK_CAPTION = 22  # (about a caption bar's height: the least room a panel keeps)
+
+
+def _dock_sizer() -> int:
+    """The width of a docked panel's resizing edge (and of the handle between
+    panels side by side): the style's, as a main window's dock separators."""
+    return max(QApplication.style().pixelMetric(QStyle.PM_DockWidgetSeparatorExtent), 1)
+
+
+def _paint_dock_separator(widget: QWidget, horizontal: bool, span: QRect | None = None) -> None:
+    """A resizing edge drawn by the style, as a main window's dock separator
+    (``horizontal``: a line across, between panels above and below); ``span``:
+    the whole separator it is a part of (in the widget's coordinates)."""
+    option = QStyleOption()
+    option.initFrom(widget)
+    option.rect = widget.rect() if span is None else span
+    if horizontal:
+        option.state |= QStyle.State_Horizontal
+    painter = QPainter(widget)
+    widget.style().drawPrimitive(QStyle.PE_IndicatorDockWidgetResizeHandle, option, painter,
+                                 widget)
+    painter.end()
 _DOCK_ZONE = 40  # how near an edge a dragged panel docks there
 
 
 class _DockCaption(QWidget):
     """A DockPanel's caption bar: its Caption, a float button and a close
-    button. Dragging it tears the panel off (floating) and docks it where it
-    is dropped; double-clicking it floats or docks it."""
+    button, drawn by a QDockWidget without contents (the style's own title
+    bar, as a QMainWindow's docks have). Dragging it tears the panel off
+    (floating) and docks it where it is dropped; double-clicking it floats or
+    docks it."""
 
     def __init__(self, panel: "DockPanel", parent):
         super().__init__(parent)
@@ -4921,54 +5453,63 @@ class _DockCaption(QWidget):
         self._press = None  # (global point, point in the bar) while the button is down
         self._pressed_button = None
         self._dragging = False
+        dock = self.dock = QDockWidget(self)
+        dock.setWidget(QWidget())
+        dock.widget().setFixedHeight(0)
+        dock.installEventFilter(self)  # (its title's mouse events are the bar's)
+        for name, button in (("float", "qt_dockwidget_floatbutton"),
+                             ("close", "qt_dockwidget_closebutton")):
+            widget = dock.findChild(QAbstractButton, button)
+            if widget is not None:
+                widget.clicked.disconnect()
+                widget.clicked.connect(lambda _=False, n=name: self._clicked(n))
+        self.update_title()
+
+    def title_height(self) -> int:
+        return self.dock.minimumSizeHint().height()
+
+    def update_title(self) -> None:
+        values = self.panel._values
+        features = QDockWidget.DockWidgetMovable
+        if values.get("Closable", True):
+            features |= QDockWidget.DockWidgetClosable
+        if values.get("Floatable", True):
+            features |= QDockWidget.DockWidgetFloatable
+        self.dock.setFeatures(features)
+        self.dock.setWindowTitle(values.get("Caption", ""))
+        self.dock.setFont(self.font())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.dock.setGeometry(0, 0, self.width(), self.height())
 
     def button_rects(self) -> dict:
-        size = self.height() - 6
-        right = self.width() - 4
         rects = {}
-        if self.panel._values.get("Closable", True):
-            rects["close"] = QRect(right - size, 3, size, size)
-            right -= size + 2
-        if self.panel._values.get("Floatable", True):
-            rects["float"] = QRect(right - size, 3, size, size)
+        for name, button in (("float", "qt_dockwidget_floatbutton"),
+                             ("close", "qt_dockwidget_closebutton")):
+            widget = self.dock.findChild(QAbstractButton, button)
+            if widget is not None and not widget.isHidden():
+                rects[name] = QRect(widget.mapTo(self, QPoint(0, 0)), widget.size())
         return rects
 
     def _button_at(self, point):
         return next((name for name, rect in self.button_rects().items()
                      if rect.contains(point)), None)
 
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        palette = self.palette()
-        window = palette.color(QPalette.Window)
-        dark = window.lightness() < 128
-        painter.fillRect(self.rect(), window.lighter(125) if dark else window.darker(112))
-        ink = palette.color(QPalette.WindowText)
-        painter.setPen(ink)
-        font = QFont(self.font())
-        font.setBold(True)
-        painter.setFont(font)
-        rects = self.button_rects()
-        right = min((r.left() for r in rects.values()), default=self.width()) - 4
-        painter.drawText(QRect(6, 0, max(right - 6, 0), self.height()),
-                         Qt.AlignLeft | Qt.AlignVCenter,
-                         painter.fontMetrics().elidedText(self.panel._values.get("Caption", ""),
-                                                          Qt.ElideRight, max(right - 6, 0)))
-        pen = QPen(ink, 1.2)
-        painter.setPen(pen)
-        painter.setRenderHint(QPainter.Antialiasing)
-        if "close" in rects:
-            r = rects["close"].adjusted(4, 4, -4, -4)
-            painter.drawLine(r.topLeft(), r.bottomRight())
-            painter.drawLine(r.topRight(), r.bottomLeft())
-        if "float" in rects:
-            r = rects["float"].adjusted(4, 4, -4, -4)
-            if self.panel._floating:  # (dock it: one box)
-                painter.drawRect(r)
-            else:  # (float it: two boxes)
-                painter.drawRect(r.adjusted(3, 0, 0, -3))
-                painter.drawRect(r.adjusted(0, 3, -3, 0))
-        painter.end()
+    def _clicked(self, name: str) -> None:
+        if not self.panel._design_mode:
+            self.panel._caption_button(name)
+
+    def eventFilter(self, watched, event):
+        kind = event.type()
+        handlers = {QEvent.MouseButtonPress: self.mousePressEvent,
+                    QEvent.MouseMove: self.mouseMoveEvent,
+                    QEvent.MouseButtonRelease: self.mouseReleaseEvent,
+                    QEvent.MouseButtonDblClick: self.mouseDoubleClickEvent}
+        if watched is self.dock and kind in handlers:
+            handlers[kind](event)  # (the dock is where the bar is: the same positions)
+            return True
+        return False
 
     def mousePressEvent(self, event):
         if self.panel._design_mode or event.button() != Qt.LeftButton:
@@ -5020,6 +5561,7 @@ class _DockSizer(QWidget):
             align = self.panel._values.get("Align", 3)
             size = self.panel._values.get("Height" if align in (1, 2) else "Width")
             self._start = (event.globalPosition().toPoint(), size)
+            self.panel.__dict__["_resizing"] = True
 
     def mouseMoveEvent(self, event):
         if self._start is not None:
@@ -5031,6 +5573,28 @@ class _DockSizer(QWidget):
 
     def mouseReleaseEvent(self, event):
         self._start = None
+        self.panel.__dict__["_resizing"] = False
+
+    def paintEvent(self, event):
+        _paint_dock_separator(self, self.panel._values.get("Align", 3) in (1, 2), self._span())
+
+    def _span(self) -> QRect | None:
+        """Panels side by side in one place have one resizing edge, as a main
+        window's dock area has one separator: each panel's is the part of it
+        beside the panel (drawn as the whole, grips in its middle)."""
+        slot = self.panel._slot
+        area = self.parentWidget().parentWidget() if self.parentWidget() is not None else None
+        if slot is None or area is None:
+            return None
+        sizers = [item.shown()._widget.sizer for item in slot.visible_items()
+                  if item.shown() is not None and item.shown()._widget is not None]
+        sizers = [s for s in sizers if s.isVisible() and s.parentWidget().parentWidget() is area]
+        if len(sizers) < 2:
+            return None
+        whole = QRect()
+        for sizer in sizers:
+            whole = whole.united(QRect(sizer.mapTo(area, QPoint(0, 0)), sizer.size()))
+        return whole.translated(-self.mapTo(area, QPoint(0, 0)))
 
 
 class _DockFrame(QFrame):
@@ -5120,7 +5684,8 @@ class _DockSlot:
         down = align in (3, 4)  # (items one above the other)
         length = rect.height() if down else rect.width()
         handles = len(items) - 1
-        room = max(length - _DOCK_SIZER * handles, 0)
+        sizer = _dock_sizer()
+        room = max(length - sizer * handles, 0)
         size_name = "Height" if down else "Width"
         weights = [max(int(item.shown()._values.get(size_name) or 1), 1) for item in items]
         total = sum(weights) or 1
@@ -5141,20 +5706,33 @@ class _DockSlot:
                     handle.setParent(area)
                 handle.items = (item, items[index + 1])
                 handle.down = down
-                handle.setCursor(Qt.SizeVerCursor if down else Qt.SizeHorCursor)
-                places.append((handle, QRect(rect.left(), start, rect.width(), _DOCK_SIZER)
-                               if down else QRect(start, rect.top(), _DOCK_SIZER,
-                                                  rect.height())))
+                handle.setCursor(Qt.SplitVCursor if down else Qt.SplitHCursor)
+                across = rect  # (beside the panels' resizing edge, as a main window's)
+                edge = item.shown()._edge() if item.shown() is not None else 0
+                if edge:
+                    across = rect.adjusted(edge if align == 4 else 0, edge if align == 2 else 0,
+                                           -edge if align == 3 else 0,
+                                           -edge if align == 1 else 0)
+                places.append((handle, QRect(across.left(), start, across.width(), sizer)
+                               if down else QRect(start, across.top(), sizer, across.height())))
                 handle.show()
                 handle.raise_()
-                start += _DOCK_SIZER
+                start += sizer
         return places
 
     def _item_places(self, item: _DockTabs, rect: QRect, area: QWidget) -> list:
         visible, shown = item.visible(), item.shown()
+        tops = getattr(shown._form, "_values", {}).get("DockTabPosition", 0) == 1 \
+            if shown is not None else False
         for panel in item.panels:
             if panel._widget is not None:
                 panel._widget.setVisible(panel is shown)
+            room = panel.__dict__.get("_tab_room", 0)
+            wanted = room if panel is shown and len(visible) >= 2 and tops else 0
+            if room != wanted:
+                panel.__dict__["_tab_room"] = wanted
+                if panel._widget is not None:
+                    panel._place_parts()
         if len(visible) < 2:
             if item.bar is not None:
                 item.bar.hide()
@@ -5162,10 +5740,20 @@ class _DockSlot:
         bar = item.bar
         if bar is None or bar.parent() is not area:
             bar = item.bar = _DockTabBar(item, area)
+        top = getattr(shown._form, "_values", {}).get("DockTabPosition", 0) == 1
+        bar.setShape(QTabBar.RoundedNorth if top else QTabBar.RoundedSouth)
         bar.sync(visible, shown)
         height = bar.sizeHint().height()
         bar.show()
         bar.raise_()
+        if top:  # (the tabs above the panel shown, under its resizing edge, as a main
+            # window's North tabs: the panel leaves room for them)
+            if shown.__dict__.get("_tab_room") != height:
+                shown.__dict__["_tab_room"] = height
+                shown._place_parts()
+            edge = shown._edge() if shown._values.get("Align", 3) == 2 else 0
+            return [(shown._widget, QRect(rect)),
+                    (bar, QRect(rect.left(), rect.top() + edge, rect.width(), height))]
         return [(shown._widget, QRect(rect.left(), rect.top(), rect.width(),
                                       max(rect.height() - height, 0))),
                 (bar, QRect(rect.left(), rect.bottom() + 1 - height, rect.width(), height))]
@@ -5190,11 +5778,22 @@ class _DockTabBar(QTabBar):
         self.item = item
         self.panels = []
         self.setShape(QTabBar.RoundedSouth)
-        self.setDocumentMode(True)
-        self.setExpanding(False)
-        self.setDrawBase(False)
+        self.setExpanding(False)  # (as a main window's tabs of docks)
+        self.setDrawBase(True)
         self.setElideMode(Qt.ElideRight)
+        self.setUsesScrollButtons(True)
+        self.setMovable(True)
         self.currentChanged.connect(self._chosen)
+        self.tabMoved.connect(self._moved)
+
+    def _moved(self, old: int, new: int) -> None:
+        """A tab dragged elsewhere: its panel moves there among the others."""
+        panel = self.panels.pop(old)
+        self.panels.insert(new, panel)
+        order = self.item.panels
+        visible = [p for p in order if p in self.panels]
+        hidden = [p for p in order if p not in self.panels]
+        self.item.panels[:] = sorted(visible, key=self.panels.index) + hidden
 
     def sync(self, panels: list, shown) -> None:
         self.blockSignals(True)
@@ -5251,6 +5850,9 @@ class _DockSplitHandle(QWidget):
     def mouseReleaseEvent(self, event):
         self._start = None
 
+    def paintEvent(self, event):
+        _paint_dock_separator(self, self.down)
+
 
 class DockPanel(_Docked, Control):
     """A tool window docked to an edge of its form (Align), like the IDE's
@@ -5281,6 +5883,12 @@ class DockPanel(_Docked, Control):
                       "dragging the caption bar)"),
         P("Closable", "bool", True, description="A close button in its caption bar"),
         P("Resizable", "bool", True, description="Its inner edge can be dragged to resize it"),
+        P("MinWidth", "int", 0,
+          description="The least Width it keeps at the left and right edges (what its "
+                      "contents need): narrower, it widens", category="Position"),
+        P("MinHeight", "int", 0,
+          description="The least Height it keeps at the top and bottom edges",
+          category="Position"),
         *_COLORS, *_FONT, *_COMMON,
     )
 
@@ -5292,6 +5900,33 @@ class DockPanel(_Docked, Control):
 
     def _container_widget(self) -> QWidget:
         return self._widget.content
+
+    def _edge(self) -> int:
+        """The width of its resizing edge, docked: outside its Width (Height at
+        the top and bottom), as a main window's dock separator."""
+        if self._floating or self._design_mode or not self._values.get("Resizable", True):
+            return 0
+        return _dock_sizer()
+
+    def _read_Width(self):
+        width = super()._read_Width()
+        if self._widget is not None and self._values.get("Align", 3) in (3, 4) and \
+                not self._floating and self in self._form._controls:
+            return max(width - self._edge(), 0)
+        return width
+
+    def _read_Height(self):
+        height = super()._read_Height()
+        if self._widget is not None and self._values.get("Align", 3) in (1, 2) and \
+                not self._floating and self in self._form._controls:
+            return max(height - self._edge(), 0)
+        return height
+
+    @property
+    def Resizing(self) -> bool:
+        """Whether the user is dragging its edge now (e.g. to fit its contents to
+        the width chosen once the mouse lets go)."""
+        return bool(self.__dict__.get("_resizing"))
 
     def _event_targets(self):
         return [self._widget, self._widget.content]
@@ -5307,40 +5942,44 @@ class DockPanel(_Docked, Control):
         docked = not self._floating and not self._design_mode and \
             self._values.get("Resizable", True)
         align = self._values.get("Align", 3)
-        sizer = _DOCK_SIZER if docked else 0
+        sizer = _dock_sizer() if docked else 0
         inner = QRect(rect)  # (the inner edge: the side facing the form's middle)
         if sizer:
             if align == 1:
                 frame.sizer.setGeometry(rect.left(), rect.bottom() - sizer + 1, rect.width(),
                                         sizer)
                 inner.setBottom(rect.bottom() - sizer)
-                frame.sizer.setCursor(Qt.SizeVerCursor)
+                frame.sizer.setCursor(Qt.SplitVCursor)
             elif align == 2:
                 frame.sizer.setGeometry(rect.left(), rect.top(), rect.width(), sizer)
                 inner.setTop(rect.top() + sizer)
-                frame.sizer.setCursor(Qt.SizeVerCursor)
+                frame.sizer.setCursor(Qt.SplitVCursor)
             elif align == 3:
                 frame.sizer.setGeometry(rect.right() - sizer + 1, rect.top(), sizer,
                                         rect.height())
                 inner.setRight(rect.right() - sizer)
-                frame.sizer.setCursor(Qt.SizeHorCursor)
+                frame.sizer.setCursor(Qt.SplitHCursor)
             else:
                 frame.sizer.setGeometry(rect.left(), rect.top(), sizer, rect.height())
                 inner.setLeft(rect.left() + sizer)
-                frame.sizer.setCursor(Qt.SizeHorCursor)
+                frame.sizer.setCursor(Qt.SplitHCursor)
         frame.sizer.setVisible(bool(sizer))
-        frame.caption.setGeometry(inner.left(), inner.top(), inner.width(), _DOCK_CAPTION)
-        frame.content.setGeometry(inner.left(), inner.top() + _DOCK_CAPTION, inner.width(),
-                                  max(inner.height() - _DOCK_CAPTION, 0))
-        frame.caption.update()
+        title = frame.caption.title_height()
+        inner.setTop(inner.top() + self.__dict__.get("_tab_room", 0))  # (tabs over it)
+        frame.caption.setGeometry(inner.left(), inner.top(), inner.width(), title)
+        frame.content.setGeometry(inner.left(), inner.top() + title, inner.width(),
+                                  max(inner.height() - title, 0))
+        # (docked: no frame, as a main window's docks; floating: its window's)
+        frame.setFrameShape(QFrame.StyledPanel if self._floating else QFrame.NoFrame)
 
     def _apply_Caption(self, v):
-        self._widget.caption.update()
+        self._widget.caption.update_title()
         if self._float_window is not None:
             self._float_window.setWindowTitle(v)
 
     def _apply_Closable(self, v):
-        self._widget.caption.update()
+        self._widget.caption.update_title()
+        self._place_parts()
 
     _apply_Floatable = _apply_Closable
 
@@ -5355,13 +5994,34 @@ class DockPanel(_Docked, Control):
         if not self._floating:
             super()._apply_Align(v)
 
+    def _least(self, name: str) -> int:
+        """MinWidth or MinHeight, where it is the panel's thickness (docked at
+        the left and right, or at the top and bottom; the most of its slot's)."""
+        across = (name == "Width") == (self._values.get("Align", 3) in (3, 4))
+        if not across or self._floating:
+            return 0
+        panels = self._slot.panels() if self._slot is not None else [self]
+        return max(int(p._values.get("Min" + name) or 0) for p in panels)
+
+    def _apply_MinWidth(self, v):
+        if (self._values.get("Width") or 0) < self._least("Width"):
+            self.Width = self._least("Width")
+
+    def _apply_MinHeight(self, v):
+        if (self._values.get("Height") or 0) < self._least("Height"):
+            self.Height = self._least("Height")
+
     # (floating: its size and place are the window's, not the form's)
     def _apply_Width(self, v):
+        if v is not None and v < self._least("Width"):  # (as a main window's docks: as wide
+            v = self._values["Width"] = self._least("Width")  # as their contents need)
         self._sync_slot_size("Width", v)
         if not self._floating:
             super()._apply_Width(v)
 
     def _apply_Height(self, v):
+        if v is not None and v < self._least("Height"):
+            v = self._values["Height"] = self._least("Height")
         self._sync_slot_size("Height", v)
         if not self._floating:
             super()._apply_Height(v)
@@ -5887,7 +6547,9 @@ class ListImage(_KeyedItem):
         so a 32-pixel picture shown at 16 stays sharp."""
         pixmap = picture_pixmap(self._images, self._picture)
         width, height = self._images._size()
-        if pixmap.isNull() or (width, height) == (pixmap.width(), pixmap.height()):
+        own = pixmap.devicePixelRatio()  # (a Picture with a PixelRatio: more pixels)
+        if pixmap.isNull() or (width, height) == (round(pixmap.width() / own),
+                                                  round(pixmap.height() / own)):
             return pixmap
         app = QApplication.instance()
         ratio = app.devicePixelRatio() if app is not None else 1.0
@@ -5897,8 +6559,7 @@ class ListImage(_KeyedItem):
         return pixmap
 
     def _icon(self) -> QIcon:
-        pixmap = self._pixmap()
-        return QIcon(pixmap) if not pixmap.isNull() else QIcon()
+        return picture_icon(self._images, self._picture, pixmap=self._pixmap())
 
     @property
     def Width(self) -> int:
@@ -5986,7 +6647,9 @@ class ImageList(Control):
         if (not width or not height) and self._images is not None and len(self._images):
             first = self._images._list[0]
             pixmap = picture_pixmap(self, first._picture)
-            width, height = width or pixmap.width(), height or pixmap.height()
+            ratio = pixmap.devicePixelRatio()  # (its size on the screen)
+            width = width or round(pixmap.width() / ratio)
+            height = height or round(pixmap.height() / ratio)
         return max(width, 0), max(height, 0)
 
     def _apply_ImageWidth(self, v):
@@ -6066,8 +6729,7 @@ def _picture_icon(control, ref, strict: bool = False, prop: str = "ImageList") -
             raise ValueError(f"{control.TypeName} '{control.Name}': Image {ref} needs an "
                              "ImageList")
         return QIcon()
-    pixmap = picture_pixmap(control, ref)  # (a file, or a Picture)
-    return QIcon(pixmap) if not pixmap.isNull() else QIcon()
+    return picture_icon(control, ref)  # (a file, or a Picture)
 
 
 # --- StatusBar ---------------------------------------------------------------------------------
@@ -6244,12 +6906,35 @@ class _Panels(_KeyedCollection):
         return panel
 
 
+class _StatusFrame(QFrame):
+    """A StatusBar's widget: its size grip in the corner, outside the panels'
+    margins, as a QStatusBar's."""
+
+    grip = None
+
+    def place_grip(self) -> None:
+        if self.grip is not None:
+            hint = self.grip.sizeHint()
+            self.grip.setGeometry(self.width() - hint.width(), self.height() - hint.height(),
+                                  hint.width(), hint.height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.place_grip()
+
+
 class StatusBar(_Docked, Control):
     """A bar of panels at the bottom of a form, like VB's StatusBar (Windows
     Common Controls). Each panel shows a text, or the time, the date or the
     state of a lock key; Spring panels share the space left. It docks like an
     aligned PictureBox (Bottom by default). Style = Simple shows SimpleText
-    across the whole bar instead of the panels."""
+    across the whole bar instead of the panels.
+
+    ``ShowMessage(Text, Duration=0)`` shows a message over the panels for a
+    while (Duration in milliseconds; 0: until the next one), as a QStatusBar
+    does; ``ClearMessage()``, ``Message``. A menu item's or Toolbar button's
+    Description shows there while the mouse is on it (an item without one
+    clears the message)."""
 
     TypeName = "StatusBar"
     DefaultEvent = "PanelClick"
@@ -6266,6 +6951,12 @@ class StatusBar(_Docked, Control):
         P("Style", "enum", 0, enum_choices("Normal", "Simple"),
           description="Normal: the panels; Simple: SimpleText across the whole bar"),
         P("SimpleText", "str", "", description="The text shown when Style is Simple"),
+        P("AutoSize", "bool", False,
+          description="As high as the system's own status bars (its Height follows the "
+                      "font), as a main window's"),
+        P("SizeGrip", "bool", True,
+          description="A grip at its right end to resize the window by (a sizable window's, "
+                      "when it isn't maximized)"),
         P("Panels", "panels", ["|panel1|spring"],
           description="The panels, set in the designer: one per line, Text|Key|options, "
                       "the options being words: a width in pixels, spring or contents "
@@ -6281,13 +6972,21 @@ class StatusBar(_Docked, Control):
     def _create_widget(self, parent):
         self.__dict__["_panels"] = _Panels(self, self._update_panels)
         self.__dict__["_panel_labels"] = []
-        widget = QFrame(parent)
+        widget = _StatusFrame(parent)
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(2, 1, 2, 1)
         layout.setSpacing(2)
         self.__dict__["_simple_label"] = QLabel(widget)
         layout.addWidget(self._simple_label, 1)
         self._simple_label.hide()
+        self.__dict__["_message"] = ""
+        message_timer = QTimer(widget)
+        message_timer.setSingleShot(True)
+        message_timer.timeout.connect(self.ClearMessage)
+        self.__dict__["_message_timer"] = message_timer
+        grip = widget.grip = QSizeGrip(widget)
+        self.__dict__["_grip"] = grip
+        self.__dict__["_grip_room"] = QSpacerItem(0, 0)  # (the grip's room in the row)
         # The time, the date and the lock keys are shown as they change
         timer = QTimer(widget)
         timer.setInterval(250)
@@ -6331,10 +7030,12 @@ class StatusBar(_Docked, Control):
                 label.hide()
                 label.deleteLater()
         self._panel_labels.clear()
-        simple = self._values.get("Style", 0) == 1
+        message = self.__dict__.get("_message", "")
+        simple = self._values.get("Style", 0) == 1 or bool(message)
         layout.addWidget(self._simple_label, 1)
         self._simple_label.setVisible(simple)
-        self._simple_label.setText(self._values.get("SimpleText", ""))
+        self._simple_label.setText(message or self._values.get("SimpleText", ""))
+        self._simple_label.setIndent(4 if message else -1)  # (a message 6 pixels in, as Qt's)
         live = False
         for panel in self._panels._list:
             panel._label = None
@@ -6367,6 +7068,10 @@ class StatusBar(_Docked, Control):
         if not simple and not any(label._vp_panel._auto_size == 1
                                   for label in self._panel_labels):
             layout.addStretch(1)  # no Spring panel: the panels on the left
+        grip = self.__dict__.get("_grip")
+        if grip is not None:  # (in the bottom right corner, as a QStatusBar's: _StatusFrame)
+            layout.addItem(self._grip_room)
+            self._apply_SizeGrip(self._values.get("SizeGrip", True))
         if live and not self._design_mode:
             self._timer.start()
         else:
@@ -6383,7 +7088,63 @@ class StatusBar(_Docked, Control):
         self._update_panels()
 
     def _apply_SimpleText(self, v):
-        self._simple_label.setText(v)
+        if not self._message:
+            self._simple_label.setText(v)
+
+    def _apply_SizeGrip(self, v):
+        grip = self.__dict__.get("_grip")
+        if grip is None:
+            return
+        sizable = getattr(self._form, "_values", {}).get("BorderStyle", 2) in (2, 5)
+        shown = bool(v) and sizable and not self._design_mode and \
+            self._values.get("Align", 2) == 2
+        grip.setVisible(shown)
+        self._grip_room.changeSize(grip.sizeHint().width() if shown else 0, 0)
+        self._widget.layout().invalidate()
+        self._widget.place_grip()
+
+    def _apply_AutoSize(self, v):
+        if v and self._widget is not None:
+            from PySide6.QtWidgets import QStatusBar
+
+            probe = QStatusBar()  # (the system's own, in its font)
+            probe.setFont(self._widget.font())
+            height = probe.sizeHint().height()
+            probe.deleteLater()
+            if height > 0 and height != self._values.get("Height"):
+                self.Height = height
+
+    def _apply_font(self, _=None):
+        super()._apply_font(_)
+        self._apply_AutoSize(self._values.get("AutoSize"))
+
+    _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
+
+    # -- a message over the panels ---------------------------------------------------------------
+    def ShowMessage(self, Text, Duration: int = 0) -> None:
+        """Show a message over the panels (Duration in milliseconds; 0: until the
+        next message or ClearMessage); an empty Text clears it."""
+        self._message_timer.stop()
+        self.__dict__["_message"] = str(Text or "")
+        self._update_panels()
+        if self._message and Duration:
+            self._message_timer.start(int(Duration))
+
+    def ClearMessage(self) -> None:
+        self.ShowMessage("")
+
+    @property
+    def Message(self) -> str:
+        """The message shown over the panels ("" for none)."""
+        return self._message
+
+    def _form_loaded(self) -> None:
+        """Status tips (menu items', Toolbar buttons' Descriptions) of its form's
+        window are its messages, as a QStatusBar's."""
+        window = self._form._widget
+        if window is not None and not self._design_mode:
+            window.installEventFilter(_StatusTips(self, window))
 
     def _apply_Enabled(self, v):
         super()._apply_Enabled(v)
@@ -6408,6 +7169,20 @@ class StatusBar(_Docked, Control):
             elif panel is not None and self._widget.rect().contains(pos):
                 self._fire("PanelClick", panel)
         return super()._on_qt_event(watched, event)
+
+
+class _StatusTips(QObject):
+    """The status tips reaching a form's window, shown in its StatusBar."""
+
+    def __init__(self, bar: StatusBar, window: QWidget):
+        super().__init__(window)
+        self._bar = bar
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.StatusTip and self._bar._widget is not None:
+            self._bar.ShowMessage(event.tip())
+            return True
+        return False
 
 
 # --- TabStrip ----------------------------------------------------------------------------------
@@ -6490,9 +7265,23 @@ class _Tabs(_KeyedCollection):
         return tab
 
 
+class _TabStripBar(QTabBar):
+    """A TabStrip's tabs: in DocumentMode drawn as a lone QTabBar's (Qt gives
+    a QTabWidget's tabs the style's framed look even without a frame)."""
+
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if self.documentMode():
+            option.features &= ~QStyleOptionTab.TabFeature.HasFrame
+
+
 class _TabWidget(QTabWidget):
     """A QTabWidget that can say where its pages go before it's shown (Qt
     lays them out only once it is visible)."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setTabBar(_TabStripBar(self))
 
     def contents_rect(self) -> QRect:
         """The pages' area, in the widget's coordinates: what Qt's own layout
@@ -6520,6 +7309,9 @@ class TabStrip(_UsesImageList, Control):
           description="The tabs, set in the designer: one per line, "
                       "Caption|Key|ToolTipText|Image (an & in the Caption underlines its "
                       "access key; the Image is a Key or Index in the ImageList)"),
+        P("DocumentMode", "bool", False,
+          description="The tabs on a line across its width, without a frame, as a document "
+                      "window's (or a property sheet's) tabs"),
         P("Placement", "enum", 0, enum_choices("Top", "Bottom", "Left", "Right"),
           description="Which side the tabs are on"),
         P("ImageList", "str", "",
@@ -6537,6 +7329,17 @@ class TabStrip(_UsesImageList, Control):
         widget = _TabWidget(parent)
         widget.setUsesScrollButtons(True)
         return widget
+
+    def _apply_DocumentMode(self, v):
+        self._widget.setDocumentMode(bool(v))
+
+    @property
+    def PreferredHeight(self) -> int:
+        """The height of its tabs (in DocumentMode: all it shows), else as a
+        control's."""
+        if self._values.get("DocumentMode"):
+            return self._widget.tabBar().sizeHint().height()
+        return super().PreferredHeight
 
     def _event_targets(self):
         return [self._widget, self._widget.tabBar()]
@@ -6647,18 +7450,21 @@ class TabStrip(_UsesImageList, Control):
 
 # --- Toolbar -----------------------------------------------------------------------------------
 
-_TBR_STYLE_WORDS = {"check": 1, "group": 2, "separator": 3}
+_TBR_STYLE_WORDS = {"check": 1, "group": 2, "separator": 3, "spacer": 4}
 
 
 def parse_button(line: str) -> dict:
     """A button as the designer writes it (Toolbar.Buttons):
     ``Caption|Key|Image|ToolTipText|options``, the Image a Key or Index in the
-    Toolbar's ImageList and the options words: check or group (the Style),
-    pressed, disabled, hidden. A line of just ``-`` is a separator. E.g.
+    Toolbar's ImageList and the options words: check, group or spacer (the
+    Style), pressed, disabled, hidden. A line of just ``-`` is a separator,
+    one of just ``<>`` a spacer (the buttons after it at the far end). E.g.
     ``Open|open|open|Open a file`` or ``|bold|bold|Bold|check``."""
     line = str(line).strip()
     if line == "-":
         line = "||||separator"
+    elif line == "<>":
+        line = "||||spacer"
     caption, key, image, tip, options = ([part.strip() for part in line.split("|", 4)] +
                                          [""] * 5)[:5]
     words = options.lower().split()
@@ -6681,6 +7487,7 @@ class Button(_KeyedItem):
         self._image = image
         self._value = 0
         self._tooltip = ""
+        self._description = ""
         self._enabled = True
         self._visible = True
         self.Tag = ""
@@ -6713,7 +7520,9 @@ class Button(_KeyedItem):
 
     @property
     def Style(self) -> int:
-        """vpTbrDefault, vpTbrCheck, vpTbrButtonGroup or vpTbrSeparator."""
+        """vpTbrDefault, vpTbrCheck, vpTbrButtonGroup, vpTbrSeparator or
+        vpTbrSpacer (an empty space taking the room left: the buttons after it
+        at the far end)."""
         return self._style
 
     @Style.setter
@@ -6743,6 +7552,17 @@ class Button(_KeyedItem):
     @ToolTipText.setter
     def ToolTipText(self, value):
         self._tooltip = str(value)
+        self._changed()
+
+    @property
+    def Description(self) -> str:
+        """A sentence about the button, shown in the form's StatusBar while the
+        mouse is on it."""
+        return self._description
+
+    @Description.setter
+    def Description(self, value):
+        self._description = str(value or "")
         self._changed()
 
     @property
@@ -6805,6 +7625,31 @@ class _Buttons(_KeyedCollection):
         return button
 
 
+class _ToolBarWidget(QToolBar):
+    """A Toolbar's widget: with Appearance 3D, painted as a QMainWindow's
+    toolbar is (styles such as Fusion shade only those, by their parent),
+    along the edge it is aligned to."""
+
+    _AREAS = {1: Qt.TopToolBarArea, 2: Qt.BottomToolBarArea, 3: Qt.LeftToolBarArea,
+              4: Qt.RightToolBarArea}
+
+    def __init__(self, control, parent):
+        super().__init__(parent)
+        self._control = control
+
+    def paintEvent(self, event):
+        values = self._control._values
+        if values.get("Appearance", 1) != 1 or values.get("Align", 1) not in self._AREAS:
+            return super().paintEvent(event)
+        painter = QPainter(self)
+        option = QStyleOptionToolBar()
+        self.initStyleOption(option)
+        option.toolBarArea = self._AREAS[values.get("Align", 1)]
+        option.positionOfLine = option.positionWithinLine = QStyleOptionToolBar.OnlyOne
+        self.style().drawControl(QStyle.CE_ToolBar, option, painter, None)  # (no widget:
+        painter.end()                                       # the main window's look)
+
+
 class Toolbar(_Docked, _UsesImageList, Control):
     """A row of buttons along the top of a form, like VB's Toolbar (Windows
     Common Controls): pictures from an ImageList, captions, check buttons,
@@ -6830,8 +7675,11 @@ class Toolbar(_Docked, _UsesImageList, Control):
         P("ImageList", "str", "",
           description="The name of an ImageList on the form: the buttons' Image is then a "
                       "picture's Key or Index in it"),
-        P("TextAlignment", "enum", 0, enum_choices("Bottom", "Right"),
+        P("TextAlignment", "enum", 0, enum_choices("Bottom", "Right", "None"),
           description="Where a button's Caption is: under its picture, or beside it"),
+        P("Appearance", "enum", 1, enum_choices("Flat", "3D"),
+          description="3D: drawn as a main window's toolbar (the style's shading, a line "
+                      "along the edge it docks to); Flat: the form's background only"),
         *_FONT,
         P("Enabled", "bool", True, description="Whether the control responds to the user"),
         P("Visible", "bool", True, description="Whether the control is shown at run time"),
@@ -6842,7 +7690,7 @@ class Toolbar(_Docked, _UsesImageList, Control):
     def _create_widget(self, parent):
         self.__dict__["_buttons"] = _Buttons(self, self._update_buttons)
         self.__dict__["_groups"] = []  # the QActionGroups of the ButtonGroup runs
-        widget = QToolBar(parent)
+        widget = _ToolBarWidget(self, parent)
         widget.setMovable(False)
         widget.setFloatable(False)
         return widget
@@ -6897,7 +7745,10 @@ class Toolbar(_Docked, _UsesImageList, Control):
             widget.setIconSize(QSize(*images._size()))
         vertical = self._values.get("Align", 1) in (3, 4)
         widget.setOrientation(Qt.Vertical if vertical else Qt.Horizontal)
-        widget.setToolButtonStyle(Qt.ToolButtonTextBesideIcon
+        captions = any(b._caption for b in self._buttons._list if b._visible) and \
+            self._values.get("TextAlignment", 0) != 2  # (None: in the tips and overflow menu)
+        widget.setToolButtonStyle(Qt.ToolButtonIconOnly if not captions  # (no room for none)
+                                  else Qt.ToolButtonTextBesideIcon
                                   if self._values.get("TextAlignment", 0) == 1
                                   else Qt.ToolButtonTextUnderIcon)
         group = None
@@ -6910,8 +7761,16 @@ class Toolbar(_Docked, _UsesImageList, Control):
             if button._style == 3:
                 button._action = widget.addSeparator()
                 continue
+            if button._style == 4:  # (the room left, along the toolbar)
+                spacer = QWidget()
+                spacer.setSizePolicy(*((QSizePolicy.Preferred, QSizePolicy.Expanding)
+                                       if vertical else
+                                       (QSizePolicy.Expanding, QSizePolicy.Preferred)))
+                button._action = widget.addWidget(spacer)
+                continue
             action = widget.addAction(_picture_icon(self, button._image), button._caption)
             action.setToolTip(button._tooltip or button._caption)
+            action.setStatusTip(button._description)
             action.setEnabled(button._enabled)
             if button._style in (1, 2):
                 action.setCheckable(True)
@@ -6960,13 +7819,16 @@ class Toolbar(_Docked, _UsesImageList, Control):
     def _apply_TextAlignment(self, v):
         self._update_buttons()
 
+    def _apply_Appearance(self, v):
+        self._widget.update()
+
     def _apply_font(self, _=None):
         super()._apply_font()
         if self._widget is not None and "_buttons" in self.__dict__:
             self._fit()
 
     _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
-        _apply_FontUnderline = _apply_font
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
 
 
 # --- ListView ----------------------------------------------------------------------------------
@@ -6975,15 +7837,21 @@ _LVW_ALIGNMENT = ("left", "right", "center")  # ColumnHeader.Alignment, by value
 _QT_COLUMN_ALIGN = {0: Qt.AlignLeft, 1: Qt.AlignRight, 2: Qt.AlignHCenter}
 
 
+_LVW_AUTOSIZE = ("fixed", "contents", "fill")
+
+
 def parse_column(line: str) -> dict:
     """A column as the designer writes it (ListView.ColumnHeaders):
-    ``Text|Key|Width|alignment``, the alignment left, right or center, e.g.
-    ``Size|size|80|right``."""
-    text, key, width, align = ([part.strip() for part in str(line).split("|", 3)] +
-                               [""] * 4)[:4]
+    ``Text|Key|Width|alignment|size``, the alignment left, right or center,
+    the size fixed, contents or fill (AutoSize), e.g. ``Size|size|80|right``
+    or ``Name|name|100|left|fill``."""
+    text, key, width, align, size = ([part.strip() for part in str(line).split("|", 4)] +
+                                     [""] * 5)[:5]
     return {"Text": text, "Key": key, "Width": int(width) if width.isdigit() else 100,
             "Alignment": _LVW_ALIGNMENT.index(align.lower())
-            if align.lower() in _LVW_ALIGNMENT else 0}
+            if align.lower() in _LVW_ALIGNMENT else 0,
+            "AutoSize": _LVW_AUTOSIZE.index(size.lower()) if size.lower() in _LVW_AUTOSIZE
+            else 0}
 
 
 def parse_list_item(line: str) -> dict:
@@ -7002,12 +7870,13 @@ class ColumnHeader(_KeyedItem):
     by Key): the first shows the items' Text, the others their SubItems."""
 
     def __init__(self, view: "ListView", key: str = "", text: str = "", width: int = 100,
-                 alignment: int = 0):
+                 alignment: int = 0, autosize: int = 0):
         self._view = view
         self._key = key
         self._text = text
         self._width = int(width)
         self._alignment = int(alignment)
+        self._autosize = int(autosize)
         self.Tag = ""
 
     def __repr__(self):
@@ -7043,6 +7912,18 @@ class ColumnHeader(_KeyedItem):
     @Alignment.setter
     def Alignment(self, value):
         self._alignment = int(value)
+        self._changed()
+
+    @property
+    def AutoSize(self) -> int:
+        """vpLvwColumnFixed (its Width; the user can drag it), vpLvwColumnContents
+        (as wide as its widest text) or vpLvwColumnFill (the room the others
+        leave)."""
+        return self._autosize
+
+    @AutoSize.setter
+    def AutoSize(self, value):
+        self._autosize = int(value)
         self._changed()
 
     @property
@@ -7102,6 +7983,7 @@ class ListItem:
         self._icon = ""
         self._small_icon = ""
         self._check = Qt.Unchecked
+        self._label = cell.text()  # (its Text as last known: an edit is a change of it)
         self.Tag = ""
         cell.setData(self, Qt.UserRole)
 
@@ -7153,6 +8035,7 @@ class ListItem:
 
     @Text.setter
     def Text(self, value):
+        self.__dict__["_label"] = str(value)
         with self._view._quietly():
             self._cell0.setText(str(value))
         self._view._keep_sorted()
@@ -7160,6 +8043,31 @@ class ListItem:
     @property
     def SubItems(self) -> _SubItems:
         return _SubItems(self)
+
+    @property
+    def Bold(self) -> bool:
+        """Its texts in bold (every column's)."""
+        return self._cell0.font().bold()
+
+    @Bold.setter
+    def Bold(self, value):
+        model = self._view._model
+        with self._view._quietly():
+            for column in range(model.columnCount()):
+                cell = self._cell(column)
+                if cell is not None:
+                    font = cell.font()
+                    font.setBold(bool(value))
+                    cell.setFont(font)
+
+    def SetSubItemColor(self, Index: int, Color=None) -> None:
+        """A column's text color for this item (Index from 1: a SubItem; 0: its
+        Text); None: the ListView's own."""
+        cell = self._cell(int(Index))
+        if cell is None:
+            self._set_cell(int(Index), "")
+            cell = self._cell(int(Index))
+        cell.setForeground(QBrush() if Color is None else QBrush(colors.to_qcolor(Color)))
 
     @property
     def Icon(self):
@@ -7203,7 +8111,11 @@ class ListItem:
         flags = QItemSelectionModel.Select if value else QItemSelectionModel.Deselect
         with self._view._quietly():
             if value and not self._view._values.get("MultiSelect"):
-                self._view._selection().clear()
+                self._view._selection().clear()  # (and the current one, as VB's)
+                self._view._selection().setCurrentIndex(
+                    self._cell0.index(), QItemSelectionModel.ClearAndSelect |
+                    QItemSelectionModel.Rows)
+                return
             self._view._selection().select(
                 self._cell0.index(), flags | QItemSelectionModel.Rows)
 
@@ -7275,7 +8187,7 @@ class _ListItems:
             raise KeyError(f"Key '{Key}' is not unique in the collection")
         view = self._view
         cell = QStandardItem(str(Text))
-        cell.setEditable(False)
+        cell.setEditable(True)  # (its Text, as the LabelEdit says)
         item = ListItem(view, cell, Key)
         with view._quietly():
             row = view._model.rowCount() if Index is None else \
@@ -7315,8 +8227,9 @@ class ListView(_UsesImageList, Control):
     TypeName = "ListView"
     DefaultEvent = "ItemClick"
     DefaultSize = (257, 177)
-    Events = ("ItemClick", "ColumnClick", "ItemCheck", "Click", "DblClick", "GotFocus",
-              "LostFocus", "KeyDown", "KeyPress", "KeyUp", "MouseDown", "MouseMove", "MouseUp")
+    Events = ("ItemClick", "ColumnClick", "ItemCheck", "AfterLabelEdit", "Click", "DblClick",
+              "GotFocus", "LostFocus", "KeyDown", "KeyPress", "KeyUp", "MouseDown", "MouseMove",
+              "MouseUp")
     _synthesize_click = True
     _qss_type = "QAbstractItemView"
     _IMAGE_LIST_PROPS = ("Icons", "SmallIcons")
@@ -7347,6 +8260,17 @@ class ListView(_UsesImageList, Control):
         P("Checkboxes", "bool", False, description="A check box in front of every item"),
         P("HideColumnHeaders", "bool", False,
           description="Hide the Report view's column titles"),
+        P("AlternatingRowColors", "bool", False,
+          description="Every other row of the Report view on a shade"),
+        P("GridWidth", "int", 0,
+          description="The Icon view's cells: each item's width, its text wrapped in it (0: "
+                      "as wide as the item needs)"),
+        P("GridHeight", "int", 0,
+          description="The Icon view's cells: each item's height (0: as the item needs)"),
+        P("LabelEdit", "enum", 1, enum_choices("Automatic", "Manual"),
+          description="Automatic: the user edits an item's Text (a double-click, F2); "
+                      "Manual: only after StartLabelEdit. AfterLabelEdit(NewString) can "
+                      "refuse it (return True)"),
         *_COLORS, *_FONT, *_COMMON,
     )
     _QT_VIEWS = {  # View -> (QListView mode, flow): Report is the QTreeView
@@ -7433,7 +8357,7 @@ class ListView(_UsesImageList, Control):
         for line in lines or []:
             spec = parse_column(line)
             self._columns._insert(ColumnHeader(self, spec["Key"], spec["Text"], spec["Width"],
-                                               spec["Alignment"]))
+                                               spec["Alignment"], spec["AutoSize"]))
         self._update_columns()
 
     def _columns_shown(self) -> bool:
@@ -7452,7 +8376,11 @@ class ListView(_UsesImageList, Control):
         model.setHorizontalHeaderLabels(
             [c._text for c in self._columns._list] +
             [""] * (count - len(self._columns)))
+        header = tree.header()
         for number, column in enumerate(self._columns._list):
+            header.setSectionResizeMode(number, (QHeaderView.Interactive,
+                                                 QHeaderView.ResizeToContents,
+                                                 QHeaderView.Stretch)[column._autosize])
             tree.setColumnWidth(number, column._width)
             align = self._column_alignment(number)
             model.setHeaderData(number, Qt.Horizontal, int(align), Qt.TextAlignmentRole)
@@ -7481,9 +8409,19 @@ class ListView(_UsesImageList, Control):
             self._icons.setFlow(flow)
             self._icons.setWrapping(True)
             self._icons.setResizeMode(QListView.Adjust)
-            self._icons.setSpacing(8 if v == 0 else 2)
+            self._icons.setMovement(QListView.Static)
+            grid = (int(self._values.get("GridWidth", 0) or 0),
+                    int(self._values.get("GridHeight", 0) or 0)) if v == 0 else (0, 0)
+            self._icons.setGridSize(QSize(*grid) if all(grid) else QSize())
+            self._icons.setWordWrap(all(grid))
+            self._icons.setSpacing(0 if all(grid) else 8 if v == 0 else 2)
             self._stack.setCurrentWidget(self._icons)
         self._refresh_images()  # Icons in the Icon view, SmallIcons in the others
+
+    def _apply_GridWidth(self, v):
+        self._apply_View(self._values.get("View", 0))
+
+    _apply_GridHeight = _apply_GridWidth
 
     def _show_icon(self, item: ListItem) -> None:
         large = self._values.get("View", 0) == 0
@@ -7545,14 +8483,24 @@ class ListView(_UsesImageList, Control):
                 view.setFont(self._widget.font())
 
     _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
-        _apply_FontUnderline = _apply_font
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
 
     def _apply_colors(self, _=None):
-        super()._apply_colors()
-        if self._widget is not None:
-            sheet = self._widget.styleSheet()
-            for view in (self._icons, self._tree):
-                view.setStyleSheet(sheet)
+        """BackColor and ForeColor in the views' palettes (Base, Text): a style
+        sheet would draw the column headers flat, and keep them from taking
+        the views' font."""
+        if self._widget is None:
+            return
+        palette = QPalette()
+        for role, name in ((QPalette.Base, "BackColor"), (QPalette.Text, "ForeColor")):
+            value = self._values.get(name)
+            if value is not None:
+                for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+                    palette.setColor(group, role, self._qcolor(value))
+        for view in (self._icons, self._tree):
+            view.setStyleSheet("")
+            view.setPalette(palette)
+            view.viewport().setPalette(palette)
 
     _apply_BackColor = _apply_ForeColor = _apply_colors
 
@@ -7591,11 +8539,37 @@ class ListView(_UsesImageList, Control):
         if not self._quiet and 0 <= section < len(self._columns):
             self._fire("ColumnClick", self._columns._list[section])
 
+    def _apply_AlternatingRowColors(self, v):
+        self._tree.setAlternatingRowColors(bool(v))
+
+    def _apply_LabelEdit(self, v):
+        triggers = QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed \
+            if int(v) == 0 else QAbstractItemView.NoEditTriggers
+        for view in (self._icons, self._tree):
+            view.setEditTriggers(triggers)
+
+    def StartLabelEdit(self) -> None:
+        """Edit the selected item's Text now (AfterLabelEdit when done)."""
+        item = self.SelectedItem
+        if item is not None:
+            view = self._current_view()
+            view.setFocus()
+            view.edit(item._cell0.index())
+
     def _on_item_changed(self, cell):
         if self._quiet or cell.column() != 0:
             return
         item = cell.data(Qt.UserRole)
-        if item is None or not cell.isCheckable():
+        if item is None:
+            return
+        label = item.__dict__.get("_label")
+        if label is not None and cell.text() != label:  # (its Text edited by the user)
+            if self._fire("AfterLabelEdit", item, cell.text()) is True:
+                with self._quietly():
+                    cell.setText(label)  # (refused: as it was)
+            item.__dict__["_label"] = cell.text()
+            return
+        if not cell.isCheckable():
             return
         state = cell.checkState()
         if state != item._check:
@@ -7844,12 +8818,21 @@ class Shape(Control):
 
 _GRID_EDITOR_ROLE = Qt.UserRole + 10  # a cell's own editor (else its column's)
 _GRID_LIST_ROLE = Qt.UserRole + 11  # a cell's own list of choices
+def _silence(widget: QWidget) -> None:
+    """An editor about to go: its signals blocked (a text field losing the focus
+    as it is deleted would commit its old text over the cell's new one)."""
+    for part in [widget, *widget.findChildren(QWidget)]:
+        part.blockSignals(True)
+
+
+_GRID_HINT_ROLE = Qt.UserRole + 17
+_GRID_ZERO_ROLE = Qt.UserRole + 18  # a row whose RowHeight is 0: hidden (its header item)  # a cell's placeholder (EditorsShown)
 _GRID_ROW_DATA_ROLE = Qt.UserRole + 12  # RowData, kept in the row's header item
 # A row's outline level, whether it is collapsed, a heading, its description (its header item)
 _GRID_LEVEL_ROLE, _GRID_COLLAPSED_ROLE, _GRID_HEADING_ROLE, _GRID_DESCRIPTION_ROLE = (
     Qt.UserRole + 13, Qt.UserRole + 14, Qt.UserRole + 15, Qt.UserRole + 16)
 _EDIT_NONE, _EDIT_TEXT, _EDIT_LIST, _EDIT_CHECK, _EDIT_COLOR, _EDIT_BUTTON, _EDIT_NUMBER, \
-    _EDIT_FONT, _EDIT_PICTURE = range(9)
+    _EDIT_FONT, _EDIT_PICTURE, _EDIT_TEXT_BUTTON, _EDIT_COMBO = range(11)
 _OUTLINE_INDENT = 14  # pixels per outline level
 _GRID_PALETTE = (  # the Color editor's Palette tab: VB's palette, eight to a row
     "#ffffff", "#ffc0c0", "#ffe0c0", "#ffffc0", "#c0ffc0", "#c0ffff", "#c0c0ff", "#ffc0ff",
@@ -7899,6 +8882,40 @@ class _GridIndexed:
 
     def __len__(self):
         return self._count()
+
+
+class _GridRowHeights(_GridIndexed):
+    """FlexGrid.RowHeight: as VB's, RowHeight[-1] = h sets every row's height
+    (and the new rows')."""
+
+    def __setitem__(self, index, value):
+        if int(index) == -1:
+            table = self._grid._widget
+            table.verticalHeader().setDefaultSectionSize(int(value))
+            for row in range(table.rowCount()):
+                table.setRowHeight(row, int(value))
+            return
+        super().__setitem__(index, value)
+
+
+def _every_role(palette: QPalette) -> QPalette:
+    """A copy of a palette that sets every role (an inherited palette's
+    unresolved roles would be ignored by setPalette)."""
+    palette = QPalette(palette)
+    palette.setResolveMask(0xFFFFFFFFFFFFFFFF)
+    return palette
+
+
+def _cell_color(text: str):
+    """A color cell's color from its text: "#rrggbb", or VB's "&H00BBGGRR&"."""
+    text = (text or "").strip()
+    if text.upper().startswith(("&H", "0X")):
+        try:
+            return colors.to_qcolor(int(text[2:].rstrip("&"), 16))
+        except ValueError:
+            return None
+    color = QColor(text)
+    return color if color.isValid() and text else None
 
 
 class _TextMatrix:
@@ -7966,6 +8983,8 @@ class _GridDelegate(QStyledItemDelegate):
             QStyledItemDelegate.paint(self, painter, option, index)
             return
         kind = grid._editor_of(row, col)
+        if kind == _EDIT_CHECK and grid._widget.indexWidget(index) is not None:
+            return  # (its check box shown, EditorsShown)
         if kind == _EDIT_COLOR:
             option = QStyleOptionViewItem(option)
             self.initStyleOption(option, index)
@@ -8032,6 +9051,9 @@ class _GridDelegate(QStyledItemDelegate):
             return None
         if kind == _EDIT_BUTTON:  # (F2 or Enter on it: as clicking its button)
             grid._fire("CellButtonClick", row, col)
+            return None
+        if kind == _EDIT_COLOR and grid._values.get("ColorPicker"):
+            grid._fire("CellButtonClick", row, col)  # (a picker of the program's own)
             return None
         if kind == _EDIT_COLOR:  # its palette, then no editor
             rect = grid._widget.visualRect(index)
@@ -8193,8 +9215,28 @@ class FlexGrid(Control):
                       "> right)"),
         P("Editable", "bool", False,
           description="The user can edit the cells, each with its column's or its own editor"),
-        P("SelectionMode", "enum", 0, enum_choices("Free", "By Row", "By Column"),
-          description="What a click selects: cells, whole rows or whole columns"),
+        P("EditorsShown", "bool", False,
+          description="Every editable cell shows its editor all the time (a list's box, a "
+                      "text's field, a button, a check box in the middle of the cell), as a "
+                      "property grid does; else they show while editing"),
+        P("ExtendLastCol", "bool", False,
+          description="The last column takes the room the others leave"),
+        P("StretchCol", "int", -1,
+          description="A column that takes the room the others leave (-1: none), as "
+                      "ExtendLastCol does for the last one"),
+        P("ButtonMenu", "str", "",
+          description="With EditorsShown: the name of one of the form's menus that color "
+                      "cells' buttons drop down (Row and Col are that cell's while its items' "
+                      "Click handlers run)"),
+        P("ButtonStyle", "enum", 0, enum_choices("Compact", "Roomy"),
+          description="With EditorsShown, the cells' buttons: compact (a property grid's), or "
+                      "with more room around their text and a bigger color swatch"),
+        P("ColorPicker", "enum", 0, enum_choices("Palette", "CellButtonClick"),
+          description="What a color cell's button does: drop down the palette, or fire "
+                      "CellButtonClick for a picker of your own (CommonDialog.ShowColor)"),
+        P("SelectionMode", "enum", 0, enum_choices("Free", "By Row", "By Column", "None"),
+          description="What a click selects: cells, whole rows or whole columns, or nothing "
+                      "(a table of editors)"),
         P("AllowUserResizing", "enum", 1, enum_choices("None", "Columns", "Rows", "Both"),
           description="What the user can resize by dragging the headings' edges"),
         P("GridLines", "bool", True, description="Lines between the cells"),
@@ -8234,6 +9276,8 @@ class FlexGrid(Control):
         table.horizontalScrollBar().valueChanged.connect(lambda *_: self._fire("Scroll"))
 
     def _on_current_changed(self, row, col, previous_row, previous_col):
+        if row >= 0:
+            self.__dict__["_no_current"] = False  # (a cell is current again)
         self._show_description()
         if previous_row >= 0 and previous_col >= 0:
             self._fire("LeaveCell")
@@ -8270,6 +9314,7 @@ class FlexGrid(Control):
     def _apply_Rows(self, v):
         self._widget.setRowCount(max(int(v), self._frows) - self._frows)
         self._fill_headers()
+        self._schedule_editors()
 
     def _read_Cols(self):
         return self._widget.columnCount() + self._fcols
@@ -8278,6 +9323,7 @@ class FlexGrid(Control):
         self._widget.setColumnCount(max(int(v), self._fcols) - self._fcols)
         self._fill_headers()
         self._apply_FormatString(self._values.get("FormatString", ""))
+        self._apply_StretchCol(self._values.get("StretchCol", -1))
 
     def _apply_FixedRows(self, v):
         v = int(v)
@@ -8350,8 +9396,202 @@ class FlexGrid(Control):
             QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed |
             QAbstractItemView.AnyKeyPressed if v else QAbstractItemView.NoEditTriggers)
         table.viewport().update()
+        self._schedule_editors()
+
+    def _apply_ExtendLastCol(self, v):
+        self._widget.horizontalHeader().setStretchLastSection(bool(v))
+
+    def _apply_EditorsShown(self, v):
+        self._schedule_editors()
+
+    def _scheme_changed(self, dark: bool) -> None:
+        """Its form turned light or dark: the shown editors too (their style
+        sheets keep them from inheriting the grid's palette)."""
+        table = self._widget
+        for row in range(table.rowCount()):
+            for col in range(table.columnCount()):
+                editor = table.cellWidget(row, col)
+                if editor is not None:
+                    editor.setPalette(_every_role(table.palette()))
+
+    def _apply_ButtonStyle(self, v):
+        for row in range(self._widget.rowCount()):  # (made again in the new style)
+            for col in range(self._widget.columnCount()):
+                if isinstance(self._widget.cellWidget(row, col), QPushButton):
+                    self._widget.removeCellWidget(row, col)
+        self._schedule_editors()
+
+    # -- editors shown all the time (EditorsShown) -------------------------------------------
+    def _schedule_editors(self) -> None:
+        """Show the cells' editors again soon (once for a burst of changes)."""
+        if self._widget is None or self.__dict__.get("_editors_pending"):
+            return
+        if not self._values.get("EditorsShown") and not self.__dict__.get("_had_editors"):
+            return
+        self.__dict__["_editors_pending"] = True
+        QTimer.singleShot(0, self._widget, self._show_editors)
+
+    def _show_editors(self) -> None:
+        self.__dict__["_editors_pending"] = False
+        table = self._widget
+        shown = bool(self._values.get("EditorsShown")) and \
+            bool(self._values.get("Editable")) and not self._design_mode
+        self.__dict__["_had_editors"] = shown
+        for row in range(self._frows, self.Rows):
+            for col in range(self._fcols, self.Cols):
+                r, c = row - self._frows, col - self._fcols
+                kind = self._editor_of(row, col) if shown else _EDIT_NONE
+                old = table.cellWidget(r, c)
+                if kind == _EDIT_NONE:
+                    if old is not None:
+                        _silence(old)
+                        table.removeCellWidget(r, c)
+                    continue
+                text = self._get_text(row, col)
+                choices = self._list_of(row, col)
+                if old is not None and getattr(old, "_vp_kind", None) == kind and \
+                        getattr(old, "_vp_choices", None) == choices:
+                    old._vp_show(text)
+                    continue
+                editor = self._cell_editor(row, col, kind, text, choices)
+                editor._vp_kind, editor._vp_choices = kind, choices
+                if old is not None:
+                    _silence(old)
+                table.setCellWidget(r, c, editor)
+                editor.setPalette(_every_role(table.palette()))  # (style sheet: not inherited)
+
+    def _cell_editor(self, row: int, col: int, kind: int, text: str, choices: list) -> QWidget:
+        """A cell's editor widget, shown all the time: a list's box, a text's
+        field (with a "..." button), or a button."""
+        def started() -> bool:  # (BeforeEdit can refuse)
+            return not self._fire_cancel("BeforeEdit", row, col)
+
+        if kind == _EDIT_CHECK:  # (a check box in the middle of the cell)
+            holder = QWidget()
+            layout = QHBoxLayout(holder)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setAlignment(Qt.AlignCenter)
+            box = QCheckBox()
+            layout.addWidget(box)
+
+            def show_check(value, b=box):
+                b.blockSignals(True)
+                b.setChecked(value == "True")
+                b.blockSignals(False)
+            show_check(text)
+            holder._vp_show = show_check
+
+            def toggled(on, b=box):
+                value = "True" if on else "False"
+                if value != self._get_text(row, col) and started():
+                    self._commit(row, col, value)
+                show_check(self._get_text(row, col))  # (refused: as it was)
+            box.toggled.connect(toggled)
+            holder.setFocusProxy(box)
+            return holder
+
+        if kind in (_EDIT_LIST, _EDIT_COMBO):
+            combo = QComboBox()
+            combo.addItems([str(v) for v in choices])
+            if kind == _EDIT_COMBO:
+                combo.setEditable(True)
+
+            def show_list(value, c=combo):
+                c.blockSignals(True)
+                index = c.findText(value)
+                c.setCurrentIndex(index)
+                if c.isEditable():
+                    c.setEditText(value)
+                c.blockSignals(False)
+            show_list(text)
+            combo._vp_show = show_list
+
+            def chosen(_index=None, c=combo):
+                value = c.currentText()
+                if value != self._get_text(row, col) and started():
+                    self._commit(row, col, value)
+            combo.activated.connect(chosen)
+            if kind == _EDIT_COMBO:
+                def typed(c=combo):  # (only what was typed: not a box the cell outlived)
+                    if c.lineEdit().isModified():
+                        c.lineEdit().setModified(False)
+                        chosen(c=c)
+                combo.lineEdit().editingFinished.connect(typed)
+            return combo
+        if kind in (_EDIT_TEXT, _EDIT_NUMBER, _EDIT_TEXT_BUTTON, _EDIT_PICTURE):
+            edit = QLineEdit(text)
+            edit.setFrame(False)
+            hint = self._cell_role(row, col, _GRID_HINT_ROLE)
+            if hint:
+                edit.setPlaceholderText(str(hint))
+            if kind == _EDIT_NUMBER:
+                validator = QDoubleValidator(edit)
+                validator.setLocale(QLocale.c())  # (a point, as in code: 2.5)
+                edit.setValidator(validator)
+            edit._vp_show = lambda value, e=edit: (None if e.hasFocus() else e.setText(value))
+
+            def finished(e=edit):
+                value = e.text()
+                if not e.isModified():  # (not typed in: e.g. a field the cell outlived)
+                    return
+                e.setModified(False)
+                if value != self._get_text(row, col) and started():
+                    self._commit(row, col, value)
+                    if self._get_text(row, col) != value:  # (refused: as it was)
+                        e.setText(self._get_text(row, col))
+            edit.editingFinished.connect(finished)
+            if kind in (_EDIT_TEXT, _EDIT_NUMBER):
+                return edit
+            box = QWidget()  # (the field, and its "..." button)
+            layout = QHBoxLayout(box)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            layout.addWidget(edit)
+            more = QToolButton()
+            more.setText("…")
+            layout.addWidget(more)
+            if kind == _EDIT_PICTURE:
+                more.clicked.connect(lambda _=False: self._pick_picture(row, col))
+            else:
+                more.clicked.connect(lambda _=False: self._fire("CellButtonClick", row, col))
+            box.setFocusProxy(edit)
+            box._vp_show = edit._vp_show
+            return box
+        button = QPushButton(text)
+        roomy = self._values.get("ButtonStyle") == 1
+        button.setStyleSheet("text-align: left; padding: 2px 6px;" if roomy else
+                             "text-align: left; padding-left: 4px;")
+
+        def show_button(value, b=button):
+            b.setText(value)
+            if kind == _EDIT_COLOR:
+                pixmap = QPixmap(16, 16) if roomy else QPixmap(14, 14)
+                color = _cell_color(value)
+                pixmap.fill(color if color is not None else QColor(0, 0, 0, 0))
+                b.setIcon(QIcon(pixmap))
+        show_button(text)
+        button._vp_show = show_button
+        menu = self._form.__dict__.get(self._values.get("ButtonMenu", "")) \
+            if kind == _EDIT_COLOR else None
+        if menu is not None and getattr(menu, "_submenu", None) is not None:
+            button.setMenu(menu._submenu)  # (its items work on this cell)
+            button.pressed.connect(
+                lambda: self._widget.setCurrentCell(row - self._frows, col - self._fcols))
+        elif kind == _EDIT_COLOR and self._values.get("ColorPicker"):
+            button.clicked.connect(lambda _=False: started() and
+                                   self._fire("CellButtonClick", row, col))
+        elif kind == _EDIT_COLOR:
+            button.clicked.connect(lambda _=False, b=button: started() and self._pick_color(
+                row, col, QRect(b.mapTo(self._widget.viewport(), QPoint(0, 0)), b.size())))
+        elif kind == _EDIT_FONT:
+            button.clicked.connect(lambda _=False: started() and self._pick_font(row, col))
+        else:
+            button.clicked.connect(lambda _=False: self._fire("CellButtonClick", row, col))
+        return button
 
     def _apply_SelectionMode(self, v):
+        self._widget.setSelectionMode(QAbstractItemView.NoSelection if int(v) == 3 else
+                                      QAbstractItemView.ContiguousSelection)
         self._widget.setSelectionBehavior({1: QAbstractItemView.SelectRows,
                                            2: QAbstractItemView.SelectColumns}.get(
             int(v), QAbstractItemView.SelectItems))
@@ -8363,6 +9603,13 @@ class FlexGrid(Control):
             QHeaderView.Interactive if v in (1, 3) else QHeaderView.Fixed)
         table.verticalHeader().setSectionResizeMode(
             QHeaderView.Interactive if v in (2, 3) else QHeaderView.Fixed)
+        self._apply_StretchCol(self._values.get("StretchCol", -1))
+
+    def _apply_StretchCol(self, v):
+        header = self._widget.horizontalHeader()
+        col = int(v) - self._fcols
+        if 0 <= col < header.count():
+            header.setSectionResizeMode(col, QHeaderView.Stretch)
 
     def _apply_GridLines(self, v):
         self._widget.setShowGrid(bool(v))
@@ -8420,6 +9667,7 @@ class FlexGrid(Control):
                                Qt.Unchecked)
         else:
             item.setText(text)
+        self._schedule_editors()
 
     @property
     def TextMatrix(self) -> _TextMatrix:
@@ -8430,6 +9678,8 @@ class FlexGrid(Control):
     def _current(self) -> tuple[int, int]:
         table = self._widget
         row, col = table.currentRow(), table.currentColumn()
+        if row < 0 and self.__dict__.get("_no_current"):  # (Row = -1: none, until one is)
+            return -1, col + self._fcols if col >= 0 else self._fcols
         return (row + self._frows if row >= 0 else self._frows,
                 col + self._fcols if col >= 0 else self._fcols)
 
@@ -8458,7 +9708,13 @@ class FlexGrid(Control):
 
     @Row.setter
     def Row(self, value):
-        self._move(value, self.Col)
+        if int(value) == -1:  # (no current cell: nothing highlighted; Row reads -1)
+            self._widget.setCurrentCell(-1, -1)
+            self._widget.clearSelection()
+            self.__dict__["_no_current"] = True
+            return
+        self.__dict__["_no_current"] = False
+        self._move(value, max(self.Col, self._fcols))
 
     @property
     def Col(self) -> int:
@@ -8586,6 +9842,7 @@ class FlexGrid(Control):
         text = self._get_text(row, col)
         change()
         self._show_value(row, col, text)
+        self._schedule_editors()
 
     def _show_value(self, row: int, col: int, text: str) -> None:
         """Show a cell's value as its editor needs: a check box's as its state."""
@@ -8610,6 +9867,21 @@ class FlexGrid(Control):
         self._change_editor(row, col, lambda: self._item(row, col).setData(
             _GRID_EDITOR_ROLE, None if value is None else int(value)))
 
+    def _cell_role(self, row: int, col: int, role: int):
+        item = self._item(row, col, create=False)
+        return item.data(role) if item is not None else None
+
+    @property
+    def CellPlaceholder(self) -> str:
+        """The current cell's hint, greyed in its empty text field (EditorsShown),
+        e.g. "(Default)"."""
+        return self._cell_role(*self._current(), _GRID_HINT_ROLE) or ""
+
+    @CellPlaceholder.setter
+    def CellPlaceholder(self, value):
+        self._current_item().setData(_GRID_HINT_ROLE, str(value or "") or None)
+        self._schedule_editors()
+
     @property
     def CellList(self) -> list:
         """The current cell's choices for vpGridEditList (else its column's)."""
@@ -8618,6 +9890,7 @@ class FlexGrid(Control):
     @CellList.setter
     def CellList(self, value):
         self._current_item().setData(_GRID_LIST_ROLE, [str(v) for v in value])
+        self._schedule_editors()
 
     @property
     def ColEditor(self) -> _GridIndexed:
@@ -8632,6 +9905,7 @@ class FlexGrid(Control):
             for row in rows:
                 self._show_value(row, col, texts[row])
             self._widget.viewport().update()
+            self._schedule_editors()
 
         return _GridIndexed(self, "ColEditor", lambda: self.Cols,
                             lambda col: self._col_editors.get(col, _EDIT_TEXT), write)
@@ -8738,7 +10012,7 @@ class FlexGrid(Control):
         table, row = self._widget, self._frows
         self.__dict__["_outlined"] = self._has_outline()
         while row < self.Rows:
-            table.setRowHidden(row - self._frows, False)
+            table.setRowHidden(row - self._frows, bool(self._row_role(row, _GRID_ZERO_ROLE)))
             if self._row_role(row, _GRID_COLLAPSED_ROLE):
                 end = self._children_end(row)
                 for hidden in range(row + 1, end):
@@ -8781,11 +10055,16 @@ class FlexGrid(Control):
         bold on a shade, not edited (e.g. a category over the rows under it)."""
         def write(row, value):
             self._set_row_role(row, _GRID_HEADING_ROLE, bool(value))
+            item = self._item(row, self._fcols)
+            if item is not None:  # (clicked, it becomes current, not selected: a heading)
+                item.setFlags(item.flags() & ~Qt.ItemIsSelectable if value else
+                              item.flags() | Qt.ItemIsSelectable)
             span = max(1, self.Cols - self._fcols) if value else 1
             table = self._widget
             if table.columnSpan(row - self._frows, 0) != span:
                 table.setSpan(row - self._frows, 0, 1, span)
             table.viewport().update()
+            self._schedule_editors()
 
         return _GridIndexed(self, "RowHeading", lambda: self.Rows,
                             lambda row: bool(self._row_role(row, _GRID_HEADING_ROLE)), write)
@@ -8877,15 +10156,26 @@ class FlexGrid(Control):
         def read(row):
             if row < self._frows:
                 return table.horizontalHeader().height()
+            if self._row_role(row, _GRID_ZERO_ROLE):
+                return 0
             return table.rowHeight(row - self._frows)
 
         def write(row, value):
             if row < self._frows:
                 table.horizontalHeader().setFixedHeight(int(value))
-            else:
-                table.setRowHeight(row - self._frows, int(value))
+                return
+            zero = int(value) <= 0  # (hidden, as VB's: scrolling leaves it out too)
+            self._set_row_role(row, _GRID_ZERO_ROLE, zero or None)
+            if zero:
+                table.setRowHidden(row - self._frows, True)
+                return
+            table.setRowHeight(row - self._frows, int(value))
+            if table.isRowHidden(row - self._frows):
+                table.setRowHidden(row - self._frows, False)
+                if self.__dict__.get("_outlined"):
+                    self._apply_outline()  # (unless under a collapsed row)
 
-        return _GridIndexed(self, "RowHeight", lambda: self.Rows, read, write)
+        return _GridRowHeights(self, "RowHeight", lambda: self.Rows, read, write)
 
     @property
     def RowData(self) -> _GridIndexed:
@@ -9174,14 +10464,31 @@ class Node:
 
     @property
     def Selected(self) -> bool:
+        if self._tree._values.get("MultiSelect"):
+            return self._item.isSelected()
         return self._tree._widget.currentItem() is self._item
 
     @Selected.setter
     def Selected(self, value):
+        if self._tree._values.get("MultiSelect"):  # (one more selected, or one less)
+            with self._tree._quietly():
+                if value and not self._tree._widget.selectedItems():
+                    self._tree._widget.setCurrentItem(self._item)
+                self._item.setSelected(bool(value))
+            return
         if value:
             self._tree.SelectedItem = self
         elif self.Selected:
             self._tree.SelectedItem = None
+
+    @property
+    def ToolTipText(self) -> str:
+        """Text shown when the mouse rests on the node."""
+        return self._item.toolTip(0)
+
+    @ToolTipText.setter
+    def ToolTipText(self, value):
+        self._item.setToolTip(0, str(value or ""))
 
     @property
     def Checked(self) -> bool:
@@ -9433,6 +10740,9 @@ class TreeView(_UsesImageList, Control):
           description="Root Lines: the top-level nodes have expand/collapse buttons too"),
         P("Indentation", "int", 20, description="How far each level is indented, in pixels"),
         P("Checkboxes", "bool", False, description="A check box in front of every node"),
+        P("MultiSelect", "bool", False,
+          description="Several nodes can be selected (Ctrl/Cmd- and Shift-click): "
+                      "SelectedNodes"),
         P("Sorted", "bool", False, description="Keep the top-level nodes in alphabetical order"),
         P("PathSeparator", "str", "\\", description="Separates the texts in a node's FullPath"),
         P("ImageList", "str", "",
@@ -9533,7 +10843,30 @@ class TreeView(_UsesImageList, Control):
         """The node at a position (as the mouse events give it), or None."""
         return self._node(self._widget.itemAt(int(X), int(Y)))
 
+    @property
+    def SelectedNodes(self) -> list:
+        """The nodes selected, in the tree's order (with MultiSelect several;
+        else the SelectedItem, if any)."""
+        if not self._values.get("MultiSelect"):
+            node = self.SelectedItem
+            return [node] if node is not None else []
+        chosen = set(id(item) for item in self._widget.selectedItems())
+        found = []
+
+        def walk(item):
+            for index in range(item.childCount()):
+                child = item.child(index)
+                if id(child) in chosen:
+                    found.append(self._node(child))
+                walk(child)
+        walk(self._widget.invisibleRootItem())
+        return [node for node in found if node is not None]
+
     # -- properties ----------------------------------------------------------------------------
+    def _apply_MultiSelect(self, v):
+        self._widget.setSelectionMode(QAbstractItemView.ExtendedSelection if v
+                                      else QAbstractItemView.SingleSelection)
+
     def _apply_LineStyle(self, v):
         self._widget.setRootIsDecorated(v == 1)
 
@@ -9584,6 +10917,34 @@ def _shortcut_choices() -> tuple[tuple[str, str], ...]:
 
 SHORTCUT_CHOICES = _shortcut_choices()
 
+# MenuRole: where an item goes on macOS (Automatic: by its caption, as Qt guesses)
+_MENU_ROLES = (QAction.MenuRole.TextHeuristicRole, QAction.MenuRole.NoRole,
+               QAction.MenuRole.AboutRole, QAction.MenuRole.PreferencesRole,
+               QAction.MenuRole.QuitRole)
+
+
+def shortcut_keys(text) -> list[QKeySequence]:
+    """A Shortcut's keys: each between semicolons a key (Ctrl+O), or a command
+    in braces, the system's own key for it ({Quit}: Cmd+Q on macOS, Ctrl+Q
+    where the system has one; {Redo}: Cmd+Shift+Z on macOS, else Ctrl+Y...),
+    any of QKeySequence's standard keys by name."""
+    keys = []
+    for part in str(text or "").split(";"):
+        part = part.strip()
+        if part.startswith("{") and part.endswith("}"):
+            from .app import ensure_app
+
+            ensure_app()  # (the system's keys come from the platform)
+            standard = getattr(QKeySequence.StandardKey, part[1:-1].strip(), None)
+            if standard is None:
+                raise ValueError(f"Shortcut: no standard key {part!r}")
+            key = QKeySequence(standard)  # (its first key, as a QAction's standard shortcut)
+            if not key.isEmpty():
+                keys.append(key)
+        elif part:
+            keys.append(QKeySequence(part))
+    return keys
+
 
 class Menu(Control):
     """A menu, menu item or separator, designed with the Menu Editor.
@@ -9616,6 +10977,9 @@ class Menu(Control):
           description="The text shown; & marks the access key (&File), and '-' makes a "
                       "separator line"),
         P("Checked", "bool", False, description="Shows a check mark next to the item"),
+        P("Checkable", "bool", False,
+          description="An item that is on or off (a place for its check mark even while "
+                      "unchecked); Checked items are"),
         P("Group", "str", "",
           description="Items of one menu with the same Group are choices: choosing one checks "
                       "it and unchecks the others"),
@@ -9635,7 +10999,18 @@ class Menu(Control):
           description="A key that chooses the item without opening the menu, from VB's list: "
                       "Ctrl+A..Z, F1..F12, Ctrl+, Shift+ and Ctrl+Shift+F1..F12, "
                       "Ctrl+Shift+A..Z, Ctrl+Ins, Shift+Ins, Del, Shift+Del, "
-                      "Alt+Backspace"),
+                      "Alt+Backspace; in code any key (Alt+F10, Ctrl+Return), more than "
+                      "one between semicolons (F5; Ctrl+Return), and the system's own keys "
+                      "for a command in braces ({Quit}, {Redo}, {Preferences})"),
+        P("Description", "str", "",
+          description="A sentence about the item, shown in the form's StatusBar while the "
+                      "mouse is on it"),
+        P("MenuRole", "enum", 0,
+          enum_choices("Automatic", "None", "About", "Preferences", "Quit"),
+          description="On macOS, where the item goes: Automatic = About, Preferences and "
+                      "Quit items (by their captions) go to the application menu; None = it "
+                      "stays; About, Preferences, Quit = it is that item of the application "
+                      "menu"),
         P("Tag", "str", "", description="Free for your own use"),
     )
 
@@ -9725,12 +11100,28 @@ class Menu(Control):
     def _apply_Caption(self, v):
         if self._action is not None:
             self._action.setSeparator(v == "-")
-            self._action.setText(v)
+            self._action.setText("" if v == "-" else v)  # (a separator's text: a heading)
+
+    def _checkable(self) -> bool:
+        values = self._values
+        return bool(values.get("Checked") or values.get("Group") or values.get("Checkable"))
 
     def _apply_Checked(self, v):
         if self._action is not None:
-            self._action.setCheckable(bool(v) or bool(self._values.get("Group")))
+            self._action.setCheckable(self._checkable())
             self._action.setChecked(bool(v))
+
+    def _apply_Checkable(self, v):
+        if self._action is not None:
+            self._action.setCheckable(self._checkable())
+
+    def _apply_Description(self, v):
+        if self._action is not None:
+            self._action.setStatusTip(str(v or ""))
+
+    def _apply_MenuRole(self, v):
+        if self._action is not None:
+            self._action.setMenuRole(_MENU_ROLES[int(v or 0)])
 
     def _group_items(self) -> list:
         """The items of its menu with the same Group (itself included)."""
@@ -9752,14 +11143,13 @@ class Menu(Control):
                 group = groups[v] = QActionGroup(self._form._widget)
                 group.setExclusionPolicy(QActionGroup.ExclusionPolicy.ExclusiveOptional)
             group.addAction(action)
-        action.setCheckable(bool(v) or bool(self._values.get("Checked")))
+        action.setCheckable(self._checkable())
         action.setChecked(bool(self._values.get("Checked")))
 
     def _apply_Picture(self, v):
         if self._action is not None:
-            pixmap = picture_pixmap(self._form, v, dark=self._form._is_dark()) if v else None
-            self._action.setIcon(QIcon(pixmap) if pixmap is not None and not pixmap.isNull()
-                                 else QIcon())
+            self._action.setIcon(picture_icon(self._form, v, dark=self._form._is_dark())
+                                 if v else QIcon())
 
     def _scheme_changed(self, dark: bool) -> None:
         """Its form turned light or dark: its picture's version for that."""
@@ -9782,8 +11172,8 @@ class Menu(Control):
                 window._update_menu_bar()
 
     def _apply_Shortcut(self, v):
-        if self._action is not None:
-            self._action.setShortcut(QKeySequence(v or ""))
+        if self._action is not None:  # (VP6's own: more keys than one, between semicolons)
+            self._action.setShortcuts(shortcut_keys(v))
 
 
 # --- WebView ----------------------------------------------------------------------------------
@@ -10228,7 +11618,7 @@ class CommonDialog(Control):
         pass
 
     _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
-        _apply_FontUnderline = _apply_font
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
 
     @property
     def FileTitle(self) -> str:
@@ -10325,7 +11715,7 @@ class CommonDialog(Control):
         values = self._values
         font = QFont(values.get("FontName") or QApplication.font().family())
         if values.get("FontSize"):
-            font.setPointSize(values["FontSize"])
+            font.setPointSizeF(float(values["FontSize"]))
         font.setBold(bool(values.get("FontBold")))
         font.setItalic(bool(values.get("FontItalic")))
         font.setUnderline(bool(values.get("FontUnderline")))

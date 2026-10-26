@@ -76,12 +76,16 @@ def ControlCategories() -> list[str]:
     return titles
 
 
-def ControlTypes(Category: str | None = None) -> list[str]:
+def ControlTypes(Category: str | None = None, AsRegistered: bool = False) -> list[str]:
     """The control types' names in the Toolbox's order: each category's in
     its own order, then the others (e.g. user controls) as registered. With
-    a Category, just that category's. (Menu, made with the Menu Editor, is
-    not in the Toolbox, so not here.)"""
+    a Category, just that category's. AsRegistered: in the order VP6 has them
+    (the IDE Toolbox's own order, user controls last). (Menu, made with the
+    Menu Editor, is not in the Toolbox, so not here.)"""
     types = [name for name, cls in _types().items() if cls.InToolbox]
+    if AsRegistered:
+        return [name for name in types
+                if Category is None or category_of_type(name) == str(Category)]
     ordered = [name for _title, names in TOOLBOX_CATEGORIES for name in names if name in types]
     ordered += [name for name in types if name not in ordered]
     if Category is None:

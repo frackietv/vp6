@@ -196,3 +196,25 @@ def test_toolbox_icon_and_constants(qapp):
     assert not icons.icon("StatusBar").isNull()
     assert (vpSbrText, vpSbrCaps, vpSbrTime, vpSbrDate) == (0, 1, 5, 6)
     assert (vpSbrSpring, vpSbrContents, vpSbrCenter, vpSbrRight) == (1, 2, 1, 2)
+
+
+def test_size_grip_in_the_corner_and_messages_as_qstatusbars(qapp):
+    from PySide6.QtWidgets import QSizeGrip
+
+    class Bar(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 400, 200
+            self.sbr = StatusBar(self, Style=1)
+
+    form = Bar()
+    form.Show()
+    try:
+        bar = form.sbr._widget
+        grip = bar.findChild(QSizeGrip)
+        assert grip.isVisible() and grip.geometry().bottomRight() == bar.rect().bottomRight()
+        form.sbr.ShowMessage("Opened")
+        assert form.sbr._simple_label.indent() == 4  # (6 pixels in, with the margin)
+        form.sbr.ClearMessage()
+        assert form.sbr._simple_label.indent() == -1
+    finally:
+        form.Unload()

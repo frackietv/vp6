@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import os
 import re
 import shlex
@@ -14,7 +13,8 @@ from PySide6.QtCore import (QEvent, QFile, QFileSystemWatcher, QProcess, QProces
 from PySide6.QtGui import QAction, QActionGroup, QColor, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QDockWidget, QFileDialog, QInputDialog, QLineEdit, QMainWindow, QMdiArea,
-    QMdiSubWindow, QMessageBox, QPlainTextEdit, QSizePolicy, QTabWidget, QTextEdit, QWidget,
+    QMdiSubWindow, QMessageBox, QPlainTextEdit, QSizePolicy, QTabBar, QTabWidget, QTextEdit,
+    QWidget,
 )
 
 import vp6
@@ -28,7 +28,7 @@ from ..project import EXTENSION, SUB_MAIN, Project, copy_project
 from ..runner import import_folders
 from ..usercontrol import (load_user_control, register_user_control,
                            unregister_user_controls, user_control_types)
-from . import icons, kitchensink, samples
+from . import icons
 from .claude import find_claude, shell_quote
 from .claudepanel import ChatWindow, ClaudeChatWindow, ClaudePanel
 from .codexpanel import CodexChatWindow, CodexPanel
@@ -36,6 +36,8 @@ from .codeeditor import CodeWindow
 from .debugger import DebugSession, WatchWindow, describe, same_file
 from .debugpanel import DebugPanel
 from .designer import FormDesigner, is_identifier
+from .logic.commandline import argument_parser, parse_arguments  # noqa: F401
+from .logic.projects import create_project
 from .dialogs import AboutDialog, MakeDialog, NewProjectDialog, ProjectPropertiesDialog
 from .splash import SplashScreen
 from .documents import Document, FormDocument, open_document
@@ -250,6 +252,8 @@ class MainWindow(QMainWindow):
         dock = QDockWidget(title, self)
         dock.setObjectName(name)
         dock.setWidget(widget)
+        if area == Qt.BottomDockWidgetArea:  # (as low as the user likes: tabbed together,
+            widget.setMinimumHeight(1)      # the edge keeps its height, not the tallest's least)
         self.addDockWidget(area, dock)
         # Bound methods (not lambdas), so they're disconnected on shutdown
         dock.dockLocationChanged.connect(self._on_dock_moved)
@@ -270,18 +274,34 @@ class MainWindow(QMainWindow):
         ForceTabbedDocks would do this for every edge, but the right edge keeps
         Project and Properties stacked."""
         self._bottom_tabs_pending = False
+        self._hide_stale_tab_bars()
         docks = [dock for dock in self.findChildren(QDockWidget)
                  if self.dockWidgetArea(dock) == Qt.BottomDockWidgetArea
                  and not dock.isFloating()
                  and dock.toggleViewAction().isChecked()]  # open, even if not the current tab
         if len(docks) < 2:
             return
+        # The group there already (the Immediate window's) takes the new ones, as its
+        # last tabs (findChildren's order isn't the docks' own)
+        docks.sort(key=lambda dock: (-len(self.tabifiedDockWidgets(dock)),
+                                     dock is not self.immediate_dock))
         first = docks[0]
         grouped = {first, *self.tabifiedDockWidgets(first)}
         for dock in docks[1:]:
             if dock not in grouped:
                 self.tabifyDockWidget(first, dock)  # adds it as a tab and shows it
                 grouped.add(dock)
+
+    def _hide_stale_tab_bars(self):
+        """Qt leaves the tab bar of a tab group that lost its tabs (the Outline
+        hidden beside Properties) where it was, peeking out between the panels:
+        a tab bar naming a hidden panel isn't the layout's any more."""
+        hidden = {dock.windowTitle() for dock in self.findChildren(QDockWidget)
+                  if dock.isHidden()}
+        for bar in self.findChildren(QTabBar):
+            if bar.parentWidget() is self and bar.isVisible() and \
+                    any(bar.tabText(i) in hidden for i in range(bar.count())):
+                bar.hide()
 
     def _action(self, text, slot, shortcut=None, icon=None, tip=None) -> QAction:
         action = QAction(text, self)
@@ -583,6 +603,8 @@ class MainWindow(QMainWindow):
         toolbar = self.toolbar = self.addToolBar("Standard")
         toolbar.setObjectName("standard")
         toolbar.setMovable(False)
+        toolbar.setIconSize(QSize(24, 24))  # (the icons' own size: else a style changed to
+        # emulate a color scheme leaves them at 32, scaled up)
         for act in (self.act_new, self.act_add_form, self.act_add_module, self.act_open,
                     self.act_save, None, self.act_run, self.act_break, self.act_end):
             toolbar.addSeparator() if act is None else toolbar.addAction(act)
@@ -2701,59 +2723,6 @@ class _ProjectFiles(ProjectFiles):
     def editor_for(self, path):
         window = self._window.view_code(path)
         return window.editor if window is not None else None
-
-
-def create_project(location: str, name: str, template: str) -> str:
-    """Create a new project folder from a template; returns the .vp6p path."""
-    # Every new project has Form1 and Module1, and starts in Module1's Main():
-    # a console Main talks through print()/input(), a windowed one shows Form1.
-    directory = os.path.join(location, name)
-    os.makedirs(directory, exist_ok=True)
-    path = os.path.join(directory, name + EXTENSION)
-    if template == "kitchensink" or template in samples.SAMPLES:
-        if template == "kitchensink":
-            project = kitchensink.create(directory, name)
-        else:
-            project = samples.create(template, directory, name)
-        project.path = path
-        project.save(path)
-        return path
-    console = template == "console"
-    with open(os.path.join(directory, "Form1.py"), "w", encoding="utf-8") as f:
-        f.write(formfile.new_form_source("Form1"))
-    with open(os.path.join(directory, "Module1.py"), "w", encoding="utf-8") as f:
-        f.write(formfile.new_module_source(with_main=True, console=console,
-                                           startup_form=None if console else "Form1"))
-    project = Project(name=name, type="console" if console else "exe", startup=SUB_MAIN,
-                      forms=["Form1.py"], modules=["Module1.py"], path=path)
-    project.save(path)  # (no icon of its own: the installed VP6 icon until it gets one)
-    return path
-
-
-def argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="vp6", description=f"VP6 {vp6.__version__}: a VB6 style IDE for Python.",
-        epilog="environment:\n"
-               "  VP6_NO_OUTPUT_CAPTURE  show the IDE's own messages in the terminal, not in "
-               "its Output window\n"
-               "  VP6_SETTINGS_DIR       keep the IDE's settings in an INI file in this folder\n\n"
-               "Other commands: vp6-run PROJECT.vp6p (run a project), vp6-make PROJECT.vp6p "
-               "(build a wheel; --exe: an executable); both take --help.",
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("project", metavar="PROJECT.vp6p", nargs="?",
-                        help="a project file to open")
-    parser.add_argument("--no-splash", action="store_true",
-                        help="start without the splash screen")
-    return parser
-
-
-def parse_arguments(argv: list[str]) -> tuple[str | None, bool]:
-    """(the project to open or None, whether to show the splash screen) from
-    the command line: ``vp6 [--help] [--no-splash] [Project.vp6p]`` (--help
-    prints the help and exits). Arguments it doesn't know are left to Qt."""
-    args, _ = argument_parser().parse_known_args(argv[1:])
-    project = args.project if args.project and os.path.exists(args.project) else None
-    return project, not args.no_splash
 
 
 def main(argv: list[str] | None = None) -> int:

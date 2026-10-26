@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from .. import colors
 from .._props import PropSpec, category_of, normalize
 from ..formfile import format_value
+from .logic.propertygrid import LIST_HINTS, LIST_TITLES
 
 _MIXED = object()
 
@@ -476,37 +477,8 @@ class PropertiesWindow(QWidget):
             self._commit(prop, colors.from_qcolor(color))
 
     def _edit_list(self, prop: str, value, kind: str = "list") -> None:
-        hint = {
-            "outline": "One node per line. Indent a node (spaces or a tab) to make it a child "
-                       "of the node above; add |key at the end to give it a key, e.g. "
-                       "\"Cats|cats\".",
-            "panels": "One panel per line: Text|Key|options. The options are words: a width "
-                      "in pixels, spring (shares the space left) or contents (as wide as its "
-                      "text), caps, num, ins, scrl, time or date (what it shows), center or "
-                      "right. E.g. \"Ready|status|spring\" or \"|clock|time 80 right\".",
-            "tabs": "One tab per line: Caption|Key|ToolTipText|Image, e.g. \"&General|general|"
-                    "Name and size|gear\". An & in the Caption underlines the letter of its "
-                    "access key; the Image is a Key or Index in the TabStrip's ImageList.",
-            "images": "One picture per line: path|key, the path relative to the form's "
-                      "folder, e.g. \"images/open.png|open\". Add Pictures… adds files.",
-            "buttons": "One button per line: Caption|Key|Image|ToolTipText|options, the Image "
-                       "a Key or Index in the Toolbar's ImageList, the options words: check "
-                       "or group (a button of a group, one of which is pressed), pressed, "
-                       "disabled, hidden. A line of just - is a separator. E.g. "
-                       "\"Open|open|open|Open a file\" or \"|bold|bold|Bold|check\".",
-            "columns": "One column per line: Text|Key|Width|alignment, the alignment left, "
-                       "right or center, e.g. \"Size|size|80|right\". The first column shows "
-                       "the items' Text, the next ones their SubItems.",
-            "listitems": "One item per line: Text|Key|Icon|SmallIcon|SubItem 1|SubItem 2..., "
-                         "the icons Keys or Indexes in the Icons and SmallIcons ImageLists, "
-                         "e.g. \"Earth|earth|planet|planet|12756 km|1 moon\".",
-        }.get(kind)
-        if kind == "outline":
-            hint += (" A third part is the node's Image: a Key or Index in the TreeView's "
-                     "ImageList, e.g. \"Cats|cats|cat\".")
-        title = {"list": "List", "outline": "Tree", "panels": "Panels", "tabs": "Tabs",
-                 "images": "Pictures", "buttons": "Buttons", "columns": "Columns",
-                 "listitems": "Items"}[kind]
+        hint = LIST_HINTS.get(kind) if kind != "list" else None
+        title = LIST_TITLES[kind]
         base = self.designer.base_dir if kind == "images" and self.designer else None
         dialog = TextListDialog(f"{prop} ({title})",
                                 "\n".join(value or []), self, hint, pictures_dir=base)

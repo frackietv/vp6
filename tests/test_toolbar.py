@@ -188,3 +188,36 @@ def test_toolbox_icon_and_constants(qapp):
     assert not icons.icon("Toolbar").isNull()
     assert (vpTbrDefault, vpTbrCheck, vpTbrButtonGroup, vpTbrSeparator) == (0, 1, 2, 3)
     assert (vpTbrUnpressed, vpTbrPressed) == (0, 1)
+
+
+def test_appearance_as_a_main_windows_toolbar(qapp):
+    """Appearance 3D (the default) paints the toolbar as a QMainWindow's (the
+    style's shading, the line under it); Flat leaves the form's background."""
+    from PySide6.QtWidgets import QMainWindow, QToolBar
+
+    from vp6 import vpTbr3D, vpTbrFlat
+
+    class Bar(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 300, 100
+            self.tbr = Toolbar(self, Buttons=["One|one"])
+
+    form = Bar()
+    form.Show()
+    try:
+        assert form.tbr.Appearance == vpTbr3D == 1 and vpTbrFlat == 0
+        window = QMainWindow()  # (the same width and height: Qt's own look)
+        toolbar = QToolBar(window)
+        window.addToolBar(toolbar)
+        toolbar.setFixedSize(form.tbr._widget.size())
+        window.show()
+        ours, qts = form.tbr._widget.grab().toImage(), toolbar.grab().toImage()
+        bottom = ours.height() - 2
+        assert ours.pixelColor(150, 1) == qts.pixelColor(150, 1)  # (the shading)
+        assert ours.pixelColor(150, bottom) == qts.pixelColor(150, bottom)  # (the line)
+        window.close()
+        form.tbr.Appearance = vpTbrFlat
+        flat = form.tbr._widget.grab().toImage()
+        assert flat.pixelColor(150, 1) == flat.pixelColor(150, bottom)
+    finally:
+        form.Unload()

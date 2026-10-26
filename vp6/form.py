@@ -281,6 +281,10 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         P("WindowState", "enum", 0, enum_choices("Normal", "Minimized", "Maximized"),
           description="Normal, minimized or maximized window"),
         P("ControlBox", "bool", True, description="Show the window buttons"),
+        P("ShowInTaskbar", "bool", True,
+          description="A button for its window in the taskbar (Windows); False: a dialog "
+                      "window, owned by the form that shows it (Show's OwnerForm, else the "
+                      "active form)"),
         P("MinButton", "bool", True, description="Show a minimize button"),
         P("MaxButton", "bool", True, description="Show a maximize button (sizable forms)"),
         P("KeyPreview", "bool", False,
@@ -288,6 +292,9 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         P("NegotiateMenus", "bool", True,
           description="The menus of forms shown in this one (ShowIn) join its menu bar while "
                       "they are visible, placed by their NegotiatePosition"),
+        P("DockTabPosition", "enum", 0, enum_choices("Bottom", "Top"),
+          description="Where the tabs of DockPanels tabbed together are: under them, or "
+                      "above them"),
         P("ColorScheme", "enum", 0,
           enum_choices("Project Default", "System", "Light", "Dark", "IDE"),
           description="Light or dark appearance. Project Default uses the project's "
@@ -524,73 +531,26 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         self._client.setGeometry(0, height, widget.width(), widget.height() - height)
         self._layout_aligned()
 
+    def _apply_DockTabPosition(self, v):
+        if self.__dict__.get("_controls") is not None and self._widget is not None:
+            self._layout_aligned()
+
     def _layout_aligned(self) -> None:
         """Dock the PictureBoxes whose Align is set to the edges of the form's
         client area, in the order they were created: each takes its edge of
         the space the earlier ones left, keeping its height (Top, Bottom) or
-        width (Left, Right). Then Fill ones take all the space left. Hidden
-        ones take no space (at run time)."""
-        area = self._container_widget().rect()
-        left, top, right, bottom = 0, 0, area.width(), area.height()
-        places = []  # (widget, rect): computed first, applied below
-        fills = []  # Align = Fill: the space the others leave, after them
-        slots = []  # DockPanels sharing a place: laid out where the first of them comes
-        for control in self._controls:
-            align = control._values.get("Align", 0) if "Align" in control._specs else 0
-            widget = control._widget
-            if not align or widget is None or control.Parent is not self or \
-                    control.__dict__.get("_floating"):  # (a DockPanel in its own window)
-                continue
-            slot = control.__dict__.get("_slot")
-            if slot is not None:
-                if slot in slots:
-                    continue
-                slots.append(slot)
-                if not self._design_mode and not slot.visible_items():
-                    continue
-            elif not self._design_mode and not control._values.get("Visible", True):
-                continue
-            if align == 5:  # Fill
-                fills.append(widget)
-                continue
-            width, height = max(right - left, 0), max(bottom - top, 0)
-            # Its thickness: the Height (Top, Bottom) or Width (Left, Right) it was given
-            thick_h = control._values.get("Height", widget.height())
-            thick_w = control._values.get("Width", widget.width())
-            if align == 1:  # Top
-                size = min(thick_h, height)
-                rect = QRect(left, top, width, size)
-                top += size
-            elif align == 2:  # Bottom
-                size = min(thick_h, height)
-                rect = QRect(left, bottom - size, width, size)
-                bottom -= size
-            elif align == 3:  # Left
-                size = min(thick_w, width)
-                rect = QRect(left, top, size, height)
-                left += size
-            elif align == 4:  # Right
-                size = min(thick_w, width)
-                rect = QRect(right - size, top, size, height)
-                right -= size
-            else:
-                continue
-            if slot is not None:  # (its panels, their tabs and the edges between them)
-                places += slot.places(rect, align, self._container_widget())
-            else:
-                places.append((widget, rect))
-        rest = QRect(left, top, max(right - left, 0), max(bottom - top, 0))
-        places += [(widget, rest) for widget in fills]
-        self.__dict__["_free_area"] = (left, top, right, bottom)  # what the edge panes left
-        # Moves first, resizes last: a pane's Resize handler then sees every
-        # pane (e.g. the Splitter beside it) already in its new place
-        places.sort(key=lambda place: place[0].size() != place[1].size())
-        for widget, rect in places:
-            widget.setGeometry(rect)
+        width (Left, Right). DockPanels come after the other aligned controls
+        (toolbars, status bars), those at the top and bottom first, across
+        the width left, then those at the left and right between them, as a
+        main window's docks. Then Fill ones take all the space left. Hidden
+        ones take no space (at run time). (A PictureBox does the same with
+        the controls aligned in it: layout_aligned.)"""
+        layout_aligned(self, self._controls)
 
     # -- dock panels ------------------------------------------------------------------------------
     def _dock_panels(self) -> list:
         return [c for c in self._controls if c.TypeName == "DockPanel" and c.Parent is self]
+
 
     @staticmethod
     def _dock_key(panel) -> str:
@@ -744,6 +704,65 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         self._dark_changed()
 
     @property
+    def WindowWidth(self) -> int:
+        """Its width with its frame (an MDI child's: its subwindow's; a window's,
+        once shown: with its borders); setting it before an MDI child is shown
+        gives its subwindow that width."""
+        sub = self.__dict__.get("_mdi_sub")
+        if sub is not None:
+            return sub.width()
+        pending = self.__dict__.get("_window_size")
+        if pending is not None:
+            return pending[0]
+        return self._widget.frameGeometry().width()
+
+    @WindowWidth.setter
+    def WindowWidth(self, value):
+        self._set_window_size(int(value), None)
+
+    @property
+    def WindowHeight(self) -> int:
+        """Its height with its frame (title bar, borders), as WindowWidth."""
+        sub = self.__dict__.get("_mdi_sub")
+        if sub is not None:
+            return sub.height()
+        pending = self.__dict__.get("_window_size")
+        if pending is not None:
+            return pending[1]
+        return self._widget.frameGeometry().height()
+
+    @WindowHeight.setter
+    def WindowHeight(self, value):
+        self._set_window_size(None, int(value))
+
+    def _set_window_size(self, width, height) -> None:
+        sub = self.__dict__.get("_mdi_sub")
+        if sub is not None:
+            sub.resize(width if width is not None else sub.width(),
+                       height if height is not None else sub.height())
+            return
+        if self._values.get("MDIChild"):  # (its subwindow comes when it is shown)
+            old = self.__dict__.get("_window_size") or (self._widget.width(),
+                                                        self._widget.height())
+            self.__dict__["_window_size"] = (width if width is not None else old[0],
+                                             height if height is not None else old[1])
+            return
+        widget = self._widget
+        frame = widget.frameGeometry()
+        extra_w, extra_h = frame.width() - widget.width(), frame.height() - widget.height()
+        widget.resize((width - extra_w) if width is not None else widget.width(),
+                      (height - extra_h) if height is not None else widget.height())
+
+    @property
+    def MenuBarHeight(self) -> int:
+        """The height of the form's menu bar inside its window, which its Height
+        leaves out (0 without one, and on macOS, where the menu bar is the
+        system's at the top of the screen)."""
+        if self._client is not None and self._menubar is not None:
+            self._layout_menu_bar()
+        return self._menu_height
+
+    @property
     def DarkMode(self) -> bool:
         """Whether the form is light or dark now: its ColorScheme as it applies
         (System: the OS appearance, which Screen.DarkMode tells)."""
@@ -783,6 +802,8 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
                 changed = getattr(control, "_scheme_changed", None)
                 if changed is not None:
                     changed(dark)
+            for host in [self, *self._controls]:  # (system colors: the palette's new ones)
+                host._apply_system_colors()
         if before is not None and before != dark and self._loaded:
             self._fire("ColorSchemeChanged", dark)
         for form in self.__dict__.get("_embedded", ()):  # (forms shown in it look like it)
@@ -851,7 +872,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         style = self.BorderStyle
         if style in (4, 5):
             flags = Qt.Tool
-        elif style == 3:
+        elif style == 3 or not self._values.get("ShowInTaskbar", True):
             flags = Qt.Dialog
         else:
             flags = Qt.Window
@@ -915,6 +936,10 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         # (none, or a file that can't be read: the program's icon)
         pixmap = picture_pixmap(self, v)  # (a file, or a Picture)
         self._widget.setWindowIcon(QIcon(pixmap) if not pixmap.isNull() else QIcon())
+        sub = self.__dict__.get("_mdi_sub")
+        if sub is not None:  # (an MDI child already in its window: that one's too)
+            sub.setWindowIcon(QIcon(pixmap) if not pixmap.isNull() else
+                              QApplication.windowIcon())
 
     def _apply_Picture(self, v):
         """A picture on the form's background, at the top left (under the
@@ -991,7 +1016,22 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             if visible:
                 self._widget.show()
 
-    _apply_ControlBox = _apply_MinButton = _apply_MaxButton = _apply_BorderStyle
+    _apply_ControlBox = _apply_MinButton = _apply_MaxButton = _apply_ShowInTaskbar = \
+        _apply_BorderStyle
+
+    def _own(self, owner: "Form | None") -> None:
+        """Not in the taskbar: its window owned by the form showing it (a dialog
+        with a parent, as Qt's dialogs: no taskbar button, above its owner)."""
+        if self._values.get("ShowInTaskbar", True) or self._design_mode:
+            return
+        if owner is None:
+            owner = getattr(QApplication.activeWindow(), "_vp_form", None)
+        widget = self._widget
+        if owner is None or owner is self or owner._widget is None:
+            return
+        window = owner._widget.window()
+        if widget.parentWidget() is not window:
+            widget.setParent(window, widget.windowFlags())
 
     def _apply_Enabled(self, v):
         self._widget.setEnabled(v)
@@ -1001,7 +1041,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         # System: an empty palette, so the form follows the OS appearance live
         palette = QPalette() if scheme == appearance.vpSchemeSystem else \
             appearance.scheme_palette(scheme == appearance.vpSchemeDark)
-        back, fore = self._values.get("BackColor"), self._values.get("ForeColor")
+        back, fore = self._window_back(), self._values.get("ForeColor")
         if back is not None:
             palette.setColor(QPalette.Window, colors.to_qcolor(back))
         if fore is not None:
@@ -1011,23 +1051,29 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
 
     _apply_BackColor = _apply_ForeColor = _apply_colors
 
+    def _window_back(self):
+        """The color behind the controls (an MDI form's BackColor is its workspace's)."""
+        return self._values.get("BackColor")
+
     def _apply_font(self, _=None):
         values = self._values
         font = QFont()
         if values.get("FontName"):
             font.setFamily(values["FontName"])
         if values.get("FontSize"):
-            font.setPointSize(values["FontSize"])
+            font.setPointSizeF(float(values["FontSize"]))
         if values.get("FontBold"):
             font.setBold(True)
         if values.get("FontItalic"):
             font.setItalic(True)
         if values.get("FontUnderline"):
             font.setUnderline(True)
+        if values.get("FontWeight"):  # (VB's StdFont.Weight: over FontBold)
+            font.setWeight(QFont.Weight(max(100, min(900, int(values["FontWeight"])))))
         self._widget.setFont(font)
 
     _apply_FontName = _apply_FontSize = _apply_FontBold = _apply_FontItalic = \
-        _apply_FontUnderline = _apply_font
+        _apply_FontUnderline = _apply_FontWeight = _apply_font
 
     # -- VB API --------------------------------------------------------------------------------
     @property
@@ -1096,6 +1142,7 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
             return
         if not self._shown_once:
             self._apply_window_flags()
+            self._own(OwnerForm)
             self._position_on_first_show(OwnerForm)
             self.__dict__["_shown_once"] = True
         if Modal:
@@ -1377,8 +1424,14 @@ class Form(Drawing, PropertyHost, metaclass=_FormType):
         self._widget.update()
 
     def SetFocus(self) -> None:
-        self._widget.activateWindow()
-        self._widget.setFocus()
+        """Activate the form (raised); the control that has the focus in it
+        keeps it (its ActiveControl, as VB's), else the form takes it."""
+        widget = self._widget
+        widget.raise_()
+        widget.activateWindow()
+        focused = widget.focusWidget()
+        if focused is None or not widget.isAncestorOf(focused):
+            widget.setFocus()
 
     @classmethod
     def Run(cls) -> int:
@@ -1419,3 +1472,75 @@ def run(form) -> int:
 
 
 __all__ = ["Form", "Forms", "Load", "Unload", "run"]
+
+
+def layout_aligned(host, controls) -> None:
+    """Place the controls aligned to the edges of ``host`` (a form, or a
+    PictureBox for the controls in it): see Form._layout_aligned."""
+    area = host._container_widget().rect()
+    left, top, right, bottom = 0, 0, area.width(), area.height()
+    places = []  # (widget, rect): computed first, applied below
+    fills = []  # Align = Fill: the space the others leave, after them
+    slots = []  # DockPanels sharing a place: laid out where the first of them comes
+    from .controls import DockPanel
+
+    def order(control) -> int:  # (others, then top and bottom panels, then the sides)
+        if not isinstance(control, DockPanel):
+            return 0
+        return 1 if control._values.get("Align", 3) in (1, 2) else 2
+
+    for control in sorted(controls, key=order):
+        align = control._values.get("Align", 0) if "Align" in control._specs else 0
+        widget = control._widget
+        if not align or widget is None or control.Parent is not host or \
+                control.__dict__.get("_floating"):  # (a DockPanel in its own window)
+            continue
+        slot = control.__dict__.get("_slot")
+        if slot is not None:
+            if slot in slots:
+                continue
+            slots.append(slot)
+            if not host._design_mode and not slot.visible_items():
+                continue
+        elif not host._design_mode and not control._values.get("Visible", True):
+            continue
+        if align == 5:  # Fill
+            fills.append(widget)
+            continue
+        width, height = max(right - left, 0), max(bottom - top, 0)
+        # Its thickness: the Height (Top, Bottom) or Width (Left, Right) it was given
+        thick_h = control._values.get("Height", widget.height())
+        thick_w = control._values.get("Width", widget.width())
+        edge = control._edge() if isinstance(control, DockPanel) else 0
+        thick_h, thick_w = thick_h + edge, thick_w + edge  # (a panel's edge: outside it)
+        if align == 1:  # Top
+            size = min(thick_h, height)
+            rect = QRect(left, top, width, size)
+            top += size
+        elif align == 2:  # Bottom
+            size = min(thick_h, height)
+            rect = QRect(left, bottom - size, width, size)
+            bottom -= size
+        elif align == 3:  # Left
+            size = min(thick_w, width)
+            rect = QRect(left, top, size, height)
+            left += size
+        elif align == 4:  # Right
+            size = min(thick_w, width)
+            rect = QRect(right - size, top, size, height)
+            right -= size
+        else:
+            continue
+        if slot is not None:  # (its panels, their tabs and the edges between them)
+            places += slot.places(rect, align, host._container_widget())
+        else:
+            places.append((widget, rect))
+    rest = QRect(left, top, max(right - left, 0), max(bottom - top, 0))
+    places += [(widget, rest) for widget in fills]
+    host.__dict__["_free_area"] = (left, top, right, bottom)  # what the edge panes left
+    # Moves first, resizes last: a pane's Resize handler then sees every
+    # pane (e.g. the Splitter beside it) already in its new place
+    places.sort(key=lambda place: place[0].size() != place[1].size())
+    for widget, rect in places:
+        widget.setGeometry(rect)
+

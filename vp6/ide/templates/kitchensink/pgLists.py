@@ -47,6 +47,9 @@ class pgLists(Form):
                                   ToolTipText='A Simple Combo: the list is always shown')
         self.lblSimple = Label(self, Caption='', Left=190, Top=300, Width=220, Height=25,
                                TabIndex=13)
+        self.cmdRename = CommandButton(self, Caption='Re&name', Left=490, Top=52, Width=90,
+                                       Height=30, Enabled=False, TabIndex=14,
+                                       ToolTipText='The selected item gets the text typed: List(i) = Text')
         self.imlLists = ImageList(self, Left=580, Top=16, ImageWidth=16, ImageHeight=16,
                                   ListImages=['images/leaf.png|leaf', 'images/star.png|star'])
     # endregion
@@ -72,7 +75,7 @@ class pgLists(Form):
         MsgBox(self.lstItems.Text, vpOKOnly, "You double-clicked")
 
     def txtItem_Change(self):
-        self.cmdAdd.Enabled = bool(self.txtItem.Text.strip())
+        self.cmdAdd.Enabled = self.cmdRename.Enabled = bool(self.txtItem.Text.strip())
 
     def cmdAdd_Click(self):
         text = self.txtItem.Text.strip()
@@ -90,6 +93,15 @@ class pgLists(Form):
             MsgBox("Select an item first.", vpExclamation)
             return
         self.lstItems.RemoveItem(self.lstItems.ListIndex)
+
+    def cmdRename_Click(self):
+        if self.lstItems.ListIndex < 0:
+            MsgBox("Select an item first.", vpExclamation)
+            return
+        # VB's List1.List(i) = "..." : the item changes in place (its ItemData, picture
+        # and the selection stay)
+        self.lstItems.List[self.lstItems.ListIndex] = self.txtItem.Text.strip()
+        self.lstItems_Click()
 
     def cboColors_Click(self):
         color = self.cboColors.ItemData[self.cboColors.ListIndex]

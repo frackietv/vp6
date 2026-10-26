@@ -236,3 +236,34 @@ def test_adding_items_selects_none(qapp, style):
     form.cbo.AddItem("c", 0)  # a choice made stays with its item
     assert form.cbo.Text == "a" and form.clicks == [1]
     form.Unload()
+
+
+def test_list_item_changed_in_place(control):
+    control.ItemData[1] = 42
+    control.ListIndex = 1
+    clicks = []
+    control._fire = lambda event, *args: clicks.append(event)
+    control.List[1] = "Changed"
+    assert control.List == ["Bravo", "Changed"] if control.Name == "lst" else \
+        control.List == ["Red", "Changed"]
+    assert control.List(1) == "Changed" and control.ItemData[1] == 42
+    assert control.ListIndex == 1 and control.Text == "Changed" and not clicks
+    control.List[-1] = "Last"  # (from the end, as a list)
+    assert control.List(1) == "Last"
+    with pytest.raises(IndexError, match="ListCount is 2"):
+        control.List[2] = "x"
+    import copy
+    assert type(copy.deepcopy(control.List)) is list
+
+
+def test_simple_combo_item_changed_in_place(qapp):
+    class Simple(Form):
+        def InitializeComponent(self):
+            self.cbo = ComboBox(self, Style=1, List=["One", "Two"])
+
+    form = Simple()
+    form.cbo.ListIndex = 0
+    form.cbo.List[0] = "First"
+    assert form.cbo.List == ["First", "Two"] and form.cbo.Text == "First"
+    form.cbo.List[1] = "Second"
+    assert form.cbo.Text == "First"

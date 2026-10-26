@@ -178,3 +178,30 @@ def test_toolbox_icon_and_constants(qapp):
     assert not icons.icon("TabStrip").isNull()
     assert (vpTabPlacementTop, vpTabPlacementBottom, vpTabPlacementLeft,
             vpTabPlacementRight) == (0, 1, 2, 3)
+
+
+def test_document_mode_tabs_as_a_tab_bars(qapp):
+    """In DocumentMode the tabs look like a lone QTabBar's (a property sheet's),
+    not a QTabWidget's framed ones."""
+    from PySide6.QtWidgets import QTabBar
+
+    class Tabs(Form):
+        def InitializeComponent(self):
+            self.tabs = TabStrip(self, Left=0, Top=0, Width=286, Height=31, DocumentMode=True,
+                                 Tabs=["Alphabetic|a", "Categorized|c"])
+
+    form = Tabs()
+    form.Show()
+    try:
+        bar = QTabBar()
+        bar.addTab("Alphabetic")
+        bar.addTab("Categorized")
+        bar.setExpanding(False)
+        bar.setDocumentMode(True)
+        bar.resize(form.tabs._widget.tabBar().size())
+        bar.show()
+        ours, qts = form.tabs._widget.tabBar().grab().toImage(), bar.grab().toImage()
+        assert ours.pixelColor(10, 6) == qts.pixelColor(10, 6)  # (the chosen tab's shade)
+        bar.close()
+    finally:
+        form.Unload()

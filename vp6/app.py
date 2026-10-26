@@ -556,6 +556,9 @@ class _App:
             raise ValueError(f"App.ColorScheme is vpSchemeProjectDefault, vpSchemeSystem, "
                              f"vpSchemeLight, vpSchemeDark or vpSchemeIDE, not {value}")
         ensure_app()
+        # Forced light or dark: the application's look too, as an IDE forces its own
+        appearance.force_app_look(value == appearance.vpSchemeDark if value in (
+            appearance.vpSchemeLight, appearance.vpSchemeDark) else None)
         appearance.set_app_scheme(None if value == 0 else value)
 
     @property
@@ -643,6 +646,42 @@ class _Screen:
         ensure_app()
         return len(_font_families())
 
+    @property
+    def LayoutSpacingX(self) -> int:
+        """The room the system's style leaves between buttons side by side (in a
+        row of them, as its own layouts do)."""
+        return _layout_spacing(False)
+
+    @property
+    def LayoutSpacingY(self) -> int:
+        """The room the system's style leaves between rows of buttons."""
+        return _layout_spacing(True)
+
+    @property
+    def FontDPI(self) -> float:
+        """The dots per inch the system's font sizes are counted in (72 on
+        macOS, 96 elsewhere): a control's FontSize of N points is N * FontDPI
+        / 72 pixels."""
+        from PySide6.QtGui import QGuiApplication
+
+        ensure_app()
+        screen = QGuiApplication.primaryScreen()
+        return float(screen.logicalDotsPerInchY()) if screen is not None else 96.0
+
+    @property
+    def FontName(self) -> str:
+        """The system's own font, which controls without a FontName use."""
+        ensure_app()
+        return QApplication.font().family()
+
+    @property
+    def FontSize(self) -> float:
+        """The system's own font size in points, which controls without a FontSize
+        use (e.g. FontSize = Screen.FontSize * 0.85 for a smaller heading)."""
+        ensure_app()
+        size = QApplication.font().pointSizeF()
+        return round(size, 2) if size > 0 else 9.0
+
     TwipsPerPixelX = TwipsPerPixelY = 15  # (VP6's pixel: 1/96 inch, 1440 twips an inch)
 
     @property
@@ -708,12 +747,39 @@ class _Fonts(list):
 
 # --- help --------------------------------------------------------------------------------------
 
+def _layout_spacing(vertical: bool) -> int:
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QSizePolicy, QStyle
+
+    ensure_app()
+    style = QApplication.style()
+    metric = style.pixelMetric(QStyle.PM_LayoutVerticalSpacing if vertical
+                               else QStyle.PM_LayoutHorizontalSpacing)
+    if metric >= 0:
+        return metric
+    return max(0, style.layoutSpacing(QSizePolicy.ToolButton, QSizePolicy.ToolButton,
+                                      Qt.Vertical if vertical else Qt.Horizontal))
+
+
+def MoveToTrash(FileName) -> bool:
+    """Move a file or folder to the Trash (the Recycle Bin on Windows), where it
+    can be got back; False if it couldn't be."""
+    from PySide6.QtCore import QFile
+
+    ensure_app()
+    return bool(QFile.moveToTrash(str(FileName)))
+
+
 def ShowHelp(HelpFile: str = "", Keyword: str = "", Search: str = "", Page: str = "",
-             Regex: bool = False, MatchCase: bool = False):
+             Regex: bool = False, MatchCase: bool = False, Index=None, Context: str = "",
+             Tab: str = ""):
     """Shows a help file (``.vp6help``, made with vp6help-make) in its window:
-    at what its index has for a Keyword, with the topics a Search finds (text,
-    or a regular expression with Regex; matching case with MatchCase), at a
-    Page (``docs/guide.html#a-heading``), or at its contents. The file is
+    at what its index has for a Keyword (the topic about Context first, e.g.
+    the control a property is of), with the topics a Search finds (text, or a
+    regular expression with Regex; matching case with MatchCase), at a Page
+    (``docs/guide.html#a-heading``), with its index narrowed to Index's text
+    ("" the whole index), or at its contents; Tab ("Contents", "Index" or
+    "Search") shows that tab (Search: the focus in its box). The file is
     HelpFile, else ``App.HelpFile`` (relative paths: from the program's
     folder), else VP6's own help. Returns the help window."""
     ensure_app()
@@ -731,8 +797,17 @@ def ShowHelp(HelpFile: str = "", Keyword: str = "", Search: str = "", Page: str 
         path = help_file()
         if path is None:
             raise FileNotFoundError("VP6's help isn't installed")
-    return show_help(path, page=Page or None, keyword=Keyword or None, search=Search or None,
-                     regex=Regex, case=MatchCase)
+    viewer = show_help(path, page=Page or None, keyword=Keyword or None, search=Search or None,
+                       index=None if Index is None else str(Index), regex=Regex,
+                       case=MatchCase, context=str(Context or ""))
+    tab = {"contents": 0, "index": 1, "search": 2}.get(str(Tab or "").lower())
+    if tab is not None:
+        viewer.tabs.setCurrentIndex(tab)
+        if tab == 2:
+            viewer.search_text.setFocus()
+    elif Tab:
+        raise ValueError(f"ShowHelp: no tab {Tab!r} (Contents, Index or Search)")
+    return viewer
 
 
 # --- the command line and settings -----------------------------------------------------------

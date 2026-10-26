@@ -17,64 +17,15 @@ import vp6
 
 from ..project import SUB_MAIN, Project
 from . import icons
-from .projectprops import COLOR_SCHEME_CHOICES, TYPE_CHOICES
+from .logic.projects import (COLOR_SCHEME_CHOICES, DEFAULT_LOCATION, TEMPLATES,  # noqa: F401
+                             TYPE_CHOICES, categories, next_free_name)
 
 # The logo: a copy of images/vp6logo.png scaled to 720 pixels wide, shown at
 # half that (sharp on high-DPI screens)
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "images", "vp6logo.png")
 LOGO_WIDTH = 360
 
-DEFAULT_LOCATION = os.path.join(os.path.expanduser("~"), "VP6 Projects")
-
-# (key, title, icon, description, category): a category is a path of folders
-# ("Sample Projects/Graphics"); "" is the top level
-TEMPLATES = [
-    ("exe", "Standard EXE", "Form",
-     "A windowed application: Sub Main in Module1 shows Form1.", ""),
-    ("console", "Console Application", "Console",
-     "A text-mode program that starts in Sub Main (Module1) and uses print() / input(). "
-     "Form1 is included for when you need a window.", ""),
-    ("kitchensink", "Kitchen Sink", "KitchenSink",
-     "A demo that shows every VP6 control and feature working. A good place to learn "
-     "from and to copy code out of.", "Sample Projects"),
-    ("projection", "Projection", "Isometric",
-     "A model turning in a parallel projection on a single form, drawn with the graphics "
-     "methods: isometric, elevation, plan, dimetric, trimetric, military, cavalier or "
-     "top-down; a cube, a pyramid, a torus, a house, a few boxes or a downtown, solid and "
-     "shaded or as a wireframe, the axes behind it. Drag an axis to move it, the space "
-     "around to turn the axes, the model to turn it; sliders for its roll, pitch and "
-     "tumble and their rates; the angles between the axes.",
-     "Sample Projects/Graphics"),
-    ("perspectives", "Perspectives", "Perspective",
-     "A model turning in perspective on a single form, drawn with the graphics methods: "
-     "1-, 2- or 3-point linear perspective, or 4-, 5- or 6-point curvilinear perspective "
-     "(cylindrical, fisheye, the whole sphere); the same models and turns as Projection, "
-     "with perspective lines to the vanishing points and the horizon instead of axes. Drag "
-     "a vanishing point to move it, the space around to turn the scene, the model to turn "
-     "it; put any axis's vanishing point at infinity up, down, left or right; move the eye "
-     "nearer or farther, even inside the model.",
-     "Sample Projects/Graphics"),
-]
 FOLDER_ROLE = Qt.UserRole + 1  # a folder item's category
-
-
-def categories() -> list[str]:
-    """Every category of TEMPLATES and the folders above them, in order."""
-    found: list[str] = []
-    for *_, category in TEMPLATES:
-        parts = category.split("/") if category else []
-        for i in range(1, len(parts) + 1):
-            path = "/".join(parts[:i])
-            if path not in found:
-                found.append(path)
-    return found
-
-
-def next_free_name(base: str, location: str) -> str:
-    i = 1
-    while os.path.exists(os.path.join(location, f"{base}{i}")):
-        i += 1
-    return f"{base}{i}"
 
 
 class NewProjectDialog(QDialog):
@@ -475,4 +426,5 @@ class MakeDialog(QDialog):
         layout.addWidget(self.onefile)
         layout.addWidget(self.where)
         layout.addWidget(buttons)
-        self.resize(460, 0)
+        # (as high as the wrapped labels need at that width: else they're cut short)
+        self.resize(460, layout.totalHeightForWidth(460))

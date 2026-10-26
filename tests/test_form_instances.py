@@ -141,3 +141,33 @@ def test_icon(qapp, tmp_path, monkeypatch):
     assert form._widget.windowIcon().cacheKey() == qapp.windowIcon().cacheKey()
     form._widget.close()
     QTest.qWait(1)
+
+
+def test_show_in_taskbar_false_a_dialog_owned_by_its_form(qapp):
+    """ShowInTaskbar False: a dialog window (no taskbar button, as Qt's dialogs),
+    owned by the form that shows it."""
+    from PySide6.QtCore import Qt
+
+    from vp6 import Form, Unload
+
+    class Owner(Form):
+        _vp_no_default = True
+
+    class Dialog(Form):
+        _vp_no_default = True
+
+        def InitializeComponent(self):
+            self.ShowInTaskbar = False
+
+    owner, dialog, plain = Owner(), Dialog(), Owner()
+    owner.Show()
+    dialog.Show(0, owner)
+    plain.Show(0, owner)
+    try:
+        assert dialog._widget.windowType() == Qt.Dialog
+        assert dialog._widget.parentWidget() is owner._widget
+        assert dialog._widget.isWindow() and dialog.Visible
+        assert plain._widget.windowType() == Qt.Window and plain._widget.parentWidget() is None
+    finally:
+        for form in (dialog, plain, owner):
+            Unload(form)

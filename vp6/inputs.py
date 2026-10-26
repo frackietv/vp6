@@ -162,6 +162,9 @@ class SpinBox(_InnerEdits, Control):
           description="How much an arrow (or the Up and Down keys) changes the Value"),
         P("Prefix", "str", "", description="Text shown before the number, e.g. $"),
         P("Suffix", "str", "", description="Text shown after the number, e.g. ' kg'"),
+        P("SpecialValueText", "str", "",
+          description="Shown in place of the number while the Value is Min, e.g. (Default) "
+                      "or Auto"),
         P("Wrap", "bool", False,
           description="Past Max go on from Min (and below Min from Max) instead of stopping"),
         P("Alignment", "enum", 0, _ALIGNMENT, description="Where the number is in the box"),
@@ -208,6 +211,9 @@ class SpinBox(_InnerEdits, Control):
 
     def _apply_Suffix(self, v):
         self._widget.setSuffix(v)
+
+    def _apply_SpecialValueText(self, v):
+        self._widget.setSpecialValueText(v)
 
     def _apply_Wrap(self, v):
         self._widget.setWrapping(bool(v))

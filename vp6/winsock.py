@@ -24,7 +24,8 @@ connection, or a server waiting for them::
   out): ``Connect`` fires once connected, ``Error(Number, Description)`` if
   it can't be.
 * ``Listen()`` waits for connections on ``LocalPort`` (0: any free port,
-  which LocalPort then tells); each one fires ``ConnectionRequest
+  which LocalPort then tells), at the address ``Bind(LocalPort, LocalIP)``
+  gave (``"127.0.0.1"``: from this computer only; every one without); each one fires ``ConnectionRequest
   (RequestID)``; ``Accept(RequestID)`` on this or another Winsock takes it
   (one not accepted by the end of the event is refused).
 * ``SendData(Data)`` sends text (as UTF-8) or bytes; ``SendComplete`` fires
@@ -193,12 +194,26 @@ class Winsock(Control):
         socket.errorOccurred.connect(
             lambda error, s=socket: s is self._socket and self._on_error(error))
 
+    def Bind(self, LocalPort=None, LocalIP=None) -> None:
+        """The port (and the address: one of this computer's, e.g. "127.0.0.1"
+        for connections from it only) Listen waits on; without a LocalIP,
+        every address."""
+        self._need_closed("bind")
+        if LocalPort is not None:
+            self._values["LocalPort"] = int(LocalPort)
+        address = QHostAddress(str(LocalIP)) if LocalIP else None
+        if address is not None and address.isNull():
+            raise ValueError(f"Winsock '{self.Name}': {LocalIP!r} is not an address")
+        self.__dict__["_bound"] = address
+
     def Listen(self) -> None:
         """Wait for connections on LocalPort (0: a free one, which LocalPort
-        then is); each fires ConnectionRequest(RequestID)."""
+        then is) at the address Bind gave (every one without); each fires
+        ConnectionRequest(RequestID)."""
         self._need_closed("listen")
         server = QTcpServer(self._form._widget)
-        if not server.listen(QHostAddress.Any, int(self._values.get("LocalPort", 0))):
+        address = self.__dict__.get("_bound") or QHostAddress(QHostAddress.Any)
+        if not server.listen(address, int(self._values.get("LocalPort", 0))):
             number = _ERRORS.get(server.serverError(), _OTHER_ERROR)
             message = server.errorString()
             server.deleteLater()

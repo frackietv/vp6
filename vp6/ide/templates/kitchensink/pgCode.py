@@ -1,7 +1,8 @@
 """Kitchen Sink page: the CodeBox, a code editor: Python coloring (Language) plus the
 page's own (TODO and FIXME in the Highlight event), line numbers, the current line,
-breakpoint markers and a foldable region in the gutter (LineMarker, GutterClick,
-HideLines, ShowLines), protected lines the user can't change (ProtectLines,
+breakpoint markers and a foldable region in the gutter (LineMarker, SetLineMarker
+in red, GutterClick, HideLines, ShowLines, the gutter's colors), a syntax role's color
+(SetSyntaxColor), protected lines the user can't change (ProtectLines,
 ProtectedEdit); for a code window: completion while typing (CompletionRequest,
 CompletionChosen), every match of a word marked (FindAll, MarkRange, ClearMarks), Replace,
 and comments (ToggleComment)."""
@@ -79,6 +80,9 @@ class pgCode(Form):
         self.region = self.find_region()
         self.codSample.ProtectLines(*self.region)
         self.codSample.LineMarker[self.region[0]] = "-"  # the region can fold
+        self.codSample.SetSyntaxColor("comment", RGB(0, 128, 96), Italic=True)
+        self.codSample.GutterBackColor = RGB(240, 240, 236)
+        self.codSample.GutterForeColor = RGB(128, 128, 128)
 
     def find_region(self) -> tuple[int, int]:
         """The lines of the "# region" to "# endregion" block (from 0)."""
@@ -103,7 +107,7 @@ class pgCode(Form):
             code.LineMarker[Line] = ""
             self.lblEvent.Caption = f"Breakpoint removed from line {Line + 1}"
         else:
-            code.LineMarker[Line] = BREAKPOINT
+            code.SetLineMarker(Line, BREAKPOINT, vpRed)
             self.lblEvent.Caption = f"Breakpoint on line {Line + 1} (GutterClick)"
 
     def toggle_fold(self):

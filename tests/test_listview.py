@@ -27,9 +27,9 @@ ITEMS = ["Earth|earth|||12756|1", "Mars|mars|||6792|2", "Jupiter|jupiter|||14298
 
 def test_parse_column_and_item():
     assert parse_column("Size|size|80|right") == {"Text": "Size", "Key": "size", "Width": 80,
-                                                  "Alignment": vpLvwColumnRight}
+                                                  "Alignment": vpLvwColumnRight, "AutoSize": 0}
     assert parse_column("Name") == {"Text": "Name", "Key": "", "Width": 100,
-                                    "Alignment": vpLvwColumnLeft}
+                                    "Alignment": vpLvwColumnLeft, "AutoSize": 0}
     assert parse_list_item("Earth|earth|planet|2|12756 km|1 moon") == {
         "Text": "Earth", "Key": "earth", "Icon": "planet", "SmallIcon": 2,
         "SubItems": ["12756 km", "1 moon"]}

@@ -259,7 +259,7 @@ def test_text_page(sink):
     assert "containers" in page.lblInfo.Caption
     assert page.lblAuto.Width < 150  # AutoSize fits the text
     # Access keys: the label's letter underlined; the key focuses the box after it
-    assert page.lblPassword.AccessKey == "P" and "<u>P</u>" in page.lblPassword._widget.text()
+    assert page.lblPassword.AccessKey == "P" and page.lblPassword._widget.mnemonic.startswith("&P")
     page.lblPassword._shortcut.activated.emit()
     assert page._widget.window().focusWidget() is page.txtPassword._widget
     assert page.lblKeys.AccessKey == "" and "Rock & Roll" in page.lblKeys._widget.text()
@@ -425,6 +425,7 @@ def test_user_control_page(sink):
     assert page.lblAverage.Caption == "Average: 3.4 of 5 stars"
     QTest.mouseClick(service.lblStar[2]._widget, Qt.LeftButton)  # its own control's Click
     assert service.Value == 3 and page.lblEvent.Caption == "Service: 3 of 3 stars (Change)"
+    QTest.mouseMove(food.lblStar[3]._widget)  # (from elsewhere: the cursor may be there)
     QTest.mouseMove(food.lblStar[1]._widget)  # Hover: the rating the mouse is on
     assert page.lblEvent.Caption == "Food: 2 stars? (Hover)"
     page.cmdReset._widget.click()  # Value from code: Change comes here too
@@ -1640,3 +1641,54 @@ def test_more_of_the_ides_needs_on_the_pages(sink, monkeypatch):
     # Drawing: the icon
     icon = _page(sink, "drawing").picIcon
     assert (icon.Point(10, 80) >> 16) & 0xFF > 150  # (the gradient's blue, at the bottom)
+
+
+def test_building_an_ide_page(sink, monkeypatch):
+    page = _page(sink, "ide")
+    import pgIDE
+
+    # The property grid: every cell's editor shown, a color's button with ButtonMenu
+    grid = page.grdProps
+    assert grid.Row == -1 and grid.EditorsShown and grid.ButtonMenu == "mnuColor"
+    QTest.qWait(20)
+    editors = [grid._widget.cellWidget(r, 1) for r in range(grid.Rows)]
+    assert all(e is not None for e in editors)  # (a check box too, in the middle)
+    grid.Row = 2
+    page.mnuColorDefault_Click()
+    assert grid.TextMatrix(2, 1) == ""
+    assert page.grdColors.ColorPicker == 1 and page.grdColors.StretchCol == 0
+    picked = []
+    monkeypatch.setattr(type(page.dlgColor), "ShowColor", lambda self: picked.append(1) or False)
+    page.grdColors_CellButtonClick(1, 1)
+    assert picked
+    page.spnZoom.Value = 0
+    assert page.spnZoom.Text == "(Default)"
+    # The lists
+    files = page.lvwFiles.ListItems
+    assert files("pgIDE.py").Bold and page.lvwFiles.LabelEdit == 1
+    assert page.lvwFiles_AfterLabelEdit(files("Form1.py"), "Form1") is True  # (refused)
+    assert page.tvwParts.Nodes("Form1").ToolTipText.startswith("Form1.py")
+    page.tvwParts.Nodes("Form1").Selected = True
+    page.tvwParts.Nodes("pgIDE").Selected = True
+    page.tvwParts_NodeClick(page.tvwParts.Nodes("pgIDE"))
+    assert "Form1, pgIDE" in page.sbIDE.Message
+    assert page.lstRecent.ItemToolTip[0].endswith("Demo.vp6p")
+    # The code: a fold marker, a link, a placeholder, the Terminal's Display
+    page.codDemo_GutterClick(1)
+    assert page.codDemo.IsLineHidden(2) and page.folded
+    page.rtbChat_LinkClick("https://example.com")
+    assert "LinkClick" in page.sbIDE.Message
+    assert "A Terminal shows" in page.trmOut.Text and page.txtAsk.Placeholder
+    # The pictures, the questions
+    page.chkEnabled.Value = 0
+    assert not page.tbnOpen.Enabled and page.tbnOpen.Picture.DisabledPicture is not None
+    monkeypatch.setattr(pgIDE, "InputNumber", lambda *a: 7)
+    page.cmdNumber_Click()
+    assert page.lblAnswer.Caption == "Line 7"
+    monkeypatch.setattr(pgIDE, "MsgBox", lambda *a, **k: vp6.vpExtraButton)
+    page.cmdMade_Click()
+    assert page.lblAnswer.Caption == "Show in Folder"
+    assert "FontDPI" in page.lblScreen.Caption and "AsRegistered" in page.lblScreen.Caption
+    page.tabParts.SelectedItem = page.tabParts.Tabs("pictures")
+    page.tabParts_Click()
+    assert page.picPictures.Visible and not page.picGrid.Visible

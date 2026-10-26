@@ -49,22 +49,44 @@ def form(qapp):
 
 
 def geometry(control):
+    """Where a control is; a docked DockPanel's own place, without its resizing
+    edge (outside it, as a main window's dock separator)."""
     g = control._widget.geometry()
-    return g.x(), g.y(), g.width(), g.height()
+    x, y, w, h = g.x(), g.y(), g.width(), g.height()
+    if isinstance(control, DockPanel) and not control.Floating:
+        edge = control._edge()
+        align = control.Align
+        if align == vpAlignLeft:
+            w -= edge
+        elif align == vpAlignRight:
+            x, w = x + edge, w - edge
+        elif align == vpAlignTop:
+            h -= edge
+        elif align == vpAlignBottom:
+            y, h = y + edge, h - edge
+    return x, y, w, h
+
+
+def edge():
+    from vp6.controls import _dock_sizer
+
+    return _dock_sizer()
 
 
 def test_docked_layout(form):
     left, bottom = form.dckLeft, form.dckBottom
-    assert geometry(left) == (0, 0, 150, 400)
-    assert geometry(bottom) == (150, 300, 450, 100)  # (beside the earlier one)
-    assert geometry(form.picMiddle) == (150, 0, 450, 300)  # Fill: what they leave
+    e = edge()  # (the panels' resizing edges, outside them)
+    assert geometry(bottom) == (0, 300, 600, 100)  # (the bottom first, as a main window's)
+    assert geometry(left) == (0, 0, 150, 300 - e)  # (above it and its edge)
+    assert geometry(form.picMiddle) == (150 + e, 0, 450 - e, 300 - e)  # Fill: the rest
     assert form.cmdInside._widget.parent() is left._widget.content  # a container
     content = left._widget.content.geometry()
-    assert content.top() >= 22 and content.width() < 150  # under its caption, beside its edge
+    assert content.top() == left._widget.caption.title_height() >= 14  # under its caption...
+    assert content.width() == 150  # ...its edge beside it, outside its Width
     left.Width = 200
-    assert geometry(left)[2] == 200 and geometry(form.picMiddle)[0] == 200
+    assert geometry(left)[2] == 200 and geometry(form.picMiddle)[0] == 200 + e
     left.Align = vpAlignRight
-    assert geometry(left) == (400, 0, 200, 400) and geometry(bottom) == (0, 300, 400, 100)
+    assert geometry(left) == (400, 0, 200, 300 - e) and geometry(bottom) == (0, 300, 600, 100)
 
 
 def test_floating_and_docking(form):
@@ -271,7 +293,8 @@ def test_tabbed_together(groups):
         ["Immediate", "Output"]
     panel, tabs = geometry(output), bar.geometry()
     assert panel[1] + panel[3] == tabs.y() and tabs.bottom() == 399  # the tabs under it
-    assert panel[2] == 340 and geometry(groups.picMiddle)[3] == 280  # one place: 120 high
+    e = edge()
+    assert panel[2] == 600 and geometry(groups.picMiddle)[3] == 280 - e  # one place: 120 high
     bar.setCurrentIndex(0)  # a click on a tab
     assert immediate.ActiveTab is immediate and immediate._widget.isVisible()
     # A hidden panel in the group has no tab; shown, it joins them in front
@@ -287,7 +310,7 @@ def test_tabbed_together(groups):
     output.Visible = True
     output.Separate()
     assert output.TabPanels == [output] and immediate.TabPanels == [immediate, terminal]
-    assert output._widget.isVisible() and geometry(groups.picMiddle)[3] == 160  # (120 each)
+    assert output._widget.isVisible() and geometry(groups.picMiddle)[3] == 160 - 2 * e  # 120 each
     terminal.Separate()
     assert immediate._slot is None and terminal._slot is None
 
@@ -300,7 +323,9 @@ def test_side_by_side(groups):
     assert top[0] == bottom[0] == 440 and top[2] == bottom[2] == 160
     handle = project._slot.handles[0]
     assert top[1] == 0 and handle.geometry().top() == top[3]
-    assert bottom[1] == handle.geometry().bottom() + 1 and bottom[1] + bottom[3] == 400
+    middle = geometry(groups.picMiddle)  # (above the bottom panels, as the middle is)
+    assert bottom[1] == handle.geometry().bottom() + 1 and \
+        bottom[1] + bottom[3] == middle[1] + middle[3]
     assert abs(top[3] - 3 * bottom[3]) < 4  # their Heights: 300 to 100
     project.Width = 200  # the place's width: both
     assert geometry(props)[2] == 200 and props._values["Width"] == 200
@@ -366,9 +391,37 @@ def test_dock_panels_on_an_mdi_form(qapp):
     form = Workspace()
     form.Show()
     QTest.qWait(10)
+    e = edge()
     area = form._workspace().geometry()
-    assert (area.x(), area.y(), area.width(), area.height()) == (150, 0, 450, 300)
+    assert (area.x(), area.y(), area.width(), area.height()) == (150 + e, 0, 450 - e, 300 - e)
     form.dckOut.TabWith(form.dckTools)
     area = form._workspace().geometry()
-    assert (area.x(), area.width(), area.height()) == (150, 450, 400)
+    assert (area.x(), area.width(), area.height()) == (150 + e, 450 - e, 400)
     form.Unload()
+
+
+def test_min_width_keeps_the_panels_place_wide_enough(qapp):
+    class Docks(Form):
+        def InitializeComponent(self):
+            self.Width, self.Height = 600, 400
+            self.dckTop = DockPanel(self, Caption="Top", Align=4, Width=150)
+            self.dckLow = DockPanel(self, Caption="Low", Align=4, Width=150)
+            self.dckBottom = DockPanel(self, Caption="Bottom", Align=2, Height=100)
+
+    form = Docks()
+    form.Show()
+    try:
+        form.dckLow.SplitWith(form.dckTop)
+        form.dckTop.MinWidth = 220
+        assert form.dckTop.Width == 220 and form.dckLow.Width == 220  # (its place: both)
+        form.dckLow.Width = 100
+        assert form.dckLow.Width == 220 == form.dckTop.Width  # (no narrower)
+        form.dckTop.MinWidth = 0
+        form.dckLow.Width = 100
+        assert form.dckLow.Width == 100
+        form.dckBottom.MinHeight = 150
+        assert form.dckBottom.Height == 150
+        form.dckBottom.MinWidth = 500  # (across its edge: not its thickness)
+        assert form.dckBottom.Height == 150
+    finally:
+        form.Unload()

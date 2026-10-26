@@ -32,7 +32,7 @@ class pgDocking(Form):
                                      Width=128, Height=28, TabIndex=9,
                                      ToolTipText='Notes in tabs with Output (TabWith), or on its own (Separate)')
         self.dckProps = DockPanel(self, Left=490, Top=0, Width=150, Height=440,
-                                  Caption='Properties', Align=4)
+                                  Caption='Properties', Align=4, MinWidth=140)
         self.grdProps = FlexGrid(self.dckProps, Left=0, Top=0, Width=140, Height=200, Rows=4,
                                  FixedCols=0, FormatString='Panel|Where', TabIndex=6)
         self.dckOutput = DockPanel(self, Left=0, Top=330, Width=640, Height=110, Caption='Output',

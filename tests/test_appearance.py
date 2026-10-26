@@ -209,3 +209,44 @@ def test_project_properties_offers_follow_ide(qapp):
     dialog.apply(project)
     assert project.color_scheme == "ide"
     assert appearance.scheme_from_name(project.color_scheme) == vpSchemeIDE
+
+
+def test_app_color_scheme_forces_the_applications_look(qapp, monkeypatch):
+    """App.ColorScheme Light or Dark: the application's look too (where Qt can't
+    switch schemes, as offscreen: the scheme's palette), and a System form then
+    asks the operating system; Project Default gives it all back."""
+    from PySide6.QtWidgets import QApplication
+
+    before = QApplication.palette().color(QPalette.Window).name()
+    monkeypatch.setattr(appearance, "_query_os_dark", lambda: True)
+    App.ColorScheme = vpSchemeDark
+    try:
+        assert appearance.app_forced_override and appearance.app_override_active()
+        assert QApplication.palette().color(QPalette.Window).lightness() < 128
+        assert appearance.native_is_dark() and appearance.system_is_dark()
+    finally:
+        App.ColorScheme = vpSchemeProjectDefault
+    assert not appearance.app_forced_override and not appearance.app_override_active()
+    assert QApplication.palette().color(QPalette.Window).name() == before
+
+
+def test_text_boxes_colors_in_their_palette(qapp):
+    """BackColor and ForeColor in the palette (the frame drawn as without them);
+    the placeholder and disabled text: the ForeColor at half opacity."""
+    class Boxes(Form):
+        def InitializeComponent(self):
+            self.txt = TextBox(self, BackColor=vpWhite, ForeColor=vpBlue, Placeholder="Type")
+            self.rtb = RichTextBox(self, BackColor=vpYellow, Top=40)
+
+    form = Boxes()
+    try:
+        palette = form.txt._widget.palette()
+        assert form.txt._widget.styleSheet() == "" and form.rtb._widget.styleSheet() == ""
+        assert palette.color(QPalette.Base).name() == "#ffffff"
+        assert palette.color(QPalette.Text).name() == "#0000ff"
+        assert palette.color(QPalette.PlaceholderText).alpha() == 128
+        assert palette.color(QPalette.Disabled, QPalette.Text).alpha() == 128
+        assert form.rtb._widget.viewport().palette().color(QPalette.Base).name() == "#ffff00"
+        assert palette.color(QPalette.Window) == form._widget.palette().color(QPalette.Window)
+    finally:
+        form.Unload()

@@ -63,7 +63,8 @@ def editor(qapp):
 
 
 def _texts(menu):
-    return [a.text() for a in menu._submenu.actions() if a.isVisible()]
+    return ["-" if a.isSeparator() else a.text()  # (a separator has no text: Qt would
+            for a in menu._submenu.actions() if a.isVisible()]  # draw it as a heading)
 
 
 def test_menu_bar_and_items(editor):
@@ -271,8 +272,9 @@ def test_designer_canvas_ignores_menus(designer):
     window = PropertiesWindow()
     window.set_designer(d)
     rows = [window.table.item(r, 0).text() for r in range(window.table.rowCount())]
-    assert rows == ["(Name)", "Index", "Caption", "Checked", "Enabled", "Group",
-                    "NegotiatePosition", "Picture", "Shortcut", "Tag", "Visible", "WindowList"]
+    assert rows == ["(Name)", "Index", "Caption", "Checkable", "Checked", "Description",
+                    "Enabled", "Group", "MenuRole", "NegotiatePosition", "Picture", "Shortcut",
+                    "Tag", "Visible", "WindowList"]
     assert d.set_property("Caption", "&Open File...") is None
     assert "Caption='&Open File...'" in d.document.text
     d.select(["mnuFile"])

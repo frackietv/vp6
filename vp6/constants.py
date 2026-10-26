@@ -7,6 +7,7 @@ vpAbortRetryIgnore = 2
 vpYesNoCancel = 3
 vpYesNo = 4
 vpRetryCancel = 5
+vpSaveDiscardCancel = 6  # (Save, Don't Save / Discard, Cancel: closing with unsaved changes)
 
 # --- MsgBox icons -----------------------------------------------------------
 vpCritical = 16
@@ -27,6 +28,9 @@ vpRetry = 4
 vpIgnore = 5
 vpYes = 6
 vpNo = 7
+vpSave = 8
+vpDiscard = 9
+vpExtraButton = 10  # (MsgBox's ExtraButton)
 
 # --- Form.Show --------------------------------------------------------------
 vpModeless = 0
@@ -49,6 +53,11 @@ vpAltMask = 4
 vpLeftJustify = 0
 vpRightJustify = 1
 vpCenter = 2
+
+# --- Label.VerticalAlignment -------------------------------------------------
+vpVAlignTop = 0
+vpVAlignMiddle = 1
+vpVAlignBottom = 2
 
 # --- Form.BorderStyle -------------------------------------------------------
 vpBSNone = 0
@@ -122,6 +131,15 @@ vpDashDot = 3
 vpDashDotDot = 4
 vpInvisible = 5
 vpInsideSolid = 6
+
+# --- DrawCap and DrawJoin (Form, PictureBox, Picture) ------------------------------------
+vpCapAutomatic = 0
+vpCapFlat = 1
+vpCapSquare = 2
+vpCapRound = 3
+vpJoinMiter = 0
+vpJoinBevel = 1
+vpJoinRound = 2
 
 # --- Label.TextFormat -----------------------------------------------------------
 vpPlainText = 0
@@ -197,6 +215,7 @@ vpTbrDefault = 0
 vpTbrCheck = 1
 vpTbrButtonGroup = 2
 vpTbrSeparator = 3
+vpTbrSpacer = 4
 
 # --- Button.Value (Toolbar) -------------------------------------------------------
 vpTbrUnpressed = 0
@@ -205,6 +224,53 @@ vpTbrPressed = 1
 # --- Toolbar.TextAlignment --------------------------------------------------------
 vpTbrTextAlignBottom = 0
 vpTbrTextAlignRight = 1
+vpTbrTextAlignNone = 2
+
+# --- Toolbar.Appearance -----------------------------------------------------------
+vpTbrFlat = 0
+vpTbr3D = 1
+
+# --- System colors (the palette's, as they are now) ------------------------------
+vpScrollBars = 0x80000000
+vpDesktop = 0x80000001
+vpActiveTitleBar = 0x80000002
+vpInactiveTitleBar = 0x80000003
+vpMenuBar = 0x80000004
+vpWindowBackground = 0x80000005
+vpWindowFrame = 0x80000006
+vpMenuText = 0x80000007
+vpWindowText = 0x80000008
+vpTitleBarText = 0x80000009
+vpActiveBorder = 0x8000000A
+vpInactiveBorder = 0x8000000B
+vpApplicationWorkspace = 0x8000000C
+vpHighlight = 0x8000000D
+vpHighlightText = 0x8000000E
+vpButtonFace = 0x8000000F
+vpButtonShadow = 0x80000010
+vpGrayText = 0x80000011
+vpButtonText = 0x80000012
+vpInactiveCaptionText = 0x80000013
+vp3DHighlight = 0x80000014
+vp3DDKShadow = 0x80000015
+vp3DLight = 0x80000016
+vpInfoText = 0x80000017
+vpInfoBackground = 0x80000018
+vpPlaceholderText = 0x80000019
+vpLinkText = 0x8000001A
+vpFormText = 0x8000001B
+
+# --- Menu.MenuRole ----------------------------------------------------------------
+vpMenuRoleAutomatic = 0
+vpMenuRoleNone = 1
+vpMenuRoleAbout = 2
+vpMenuRolePreferences = 3
+vpMenuRoleQuit = 4
+
+# --- ColumnHeader.AutoSize (ListView) ------------------------------------------
+vpLvwColumnFixed = 0
+vpLvwColumnContents = 1
+vpLvwColumnFill = 2
 
 # --- ListView.View ---------------------------------------------------------------
 vpLvwIcon = 0
@@ -247,6 +313,8 @@ vpGridEditButton = 5
 vpGridEditNumber = 6
 vpGridEditFont = 7
 vpGridEditPicture = 8
+vpGridEditTextButton = 9
+vpGridEditCombo = 10
 
 # --- FlexGrid.Sort ----------------------------------------------------------------
 vpGridSortGenericAscending = 1
@@ -262,6 +330,15 @@ vpGridSortStringDescending = 8
 vpGridSelectionFree = 0
 vpGridSelectionByRow = 1
 vpGridSelectionByColumn = 2
+vpGridSelectionNone = 3
+
+# --- FlexGrid.ButtonStyle -----------------------------------------------------------
+vpGridButtonsCompact = 0
+vpGridButtonsRoomy = 1
+
+# --- FlexGrid.ColorPicker -----------------------------------------------------------
+vpGridColorPalette = 0
+vpGridColorEvent = 1
 
 # --- PopupMenu flags (added together) ------------------------------------------------
 vpPopupMenuLeftAlign = 0

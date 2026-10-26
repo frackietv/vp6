@@ -1,7 +1,8 @@
 """Kitchen Sink page: designing a form in a program. A DesignerView shows
 frmDialog.py, a form of this project, as the IDE's designer does: select, move
-and resize its controls, draw new ones with a tool from the list, undo; its
-events are listed. Beside it, VP6's control metadata: the Toolbox's categories
+and resize its controls, draw new ones with a tool from the list (or double-click one: DropControl),
+undo, Align and Make Same Size (the selection to the last one selected); its
+events are listed (FormRenamed too). Beside it, VP6's control metadata: the Toolbox's categories
 and controls (ControlCategories, ControlTypes), and what one is (ControlInfo: its
 icon, description, properties and events)."""
 
@@ -42,6 +43,7 @@ class pgDesigner(Form):
         self.cboCategory.ListIndex = 0
         self.dsgForm.FileName = FORM  # (changes stay here: nothing is saved)
         self.dsgForm_SelChange()
+        self.event("Select two or more controls, then double-click here: Align, MakeSameSize")
 
     # --- the control metadata ---------------------------------------------------------------
     def cboCategory_Click(self):
@@ -85,6 +87,19 @@ class pgDesigner(Form):
 
     def dsgForm_GoToCode(self, Name, Event):
         self.event(f"GoToCode: {Name or 'Form'}_{Event} (a double-click)")
+
+    def dsgForm_FormRenamed(self, OldName, NewName):
+        self.event(f"FormRenamed: {OldName} to {NewName}")
+
+    def lstTypes_DblClick(self):
+        name = self.dsgForm.DropControl(self.lstTypes.Text, 120, 120)
+        self.event(f"DropControl: {name} at 120, 120 in the view")
+
+    def lstEvents_DblClick(self):  # (Align and MakeSameSize, as the Format menu does)
+        if len(self.dsgForm.SelectedControls) > 1:
+            self.dsgForm.Align("left")
+            self.dsgForm.MakeSameSize("both")
+            self.event("Align left, MakeSameSize both: as the last one selected")
 
     def cmdUndo_Click(self):
         if self.dsgForm.CanUndo:

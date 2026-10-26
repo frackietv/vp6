@@ -11,20 +11,19 @@ frame each time the program stops.
 
 from __future__ import annotations
 
-import json
-import os
-
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPalette
 from PySide6.QtNetwork import QHostAddress, QTcpServer
 from PySide6.QtWidgets import (QAbstractItemView, QHeaderView, QMenu, QTreeWidget,
                                QTreeWidgetItem, QVBoxLayout, QWidget)
 
-from ..debugagent import canonical
+from .logic.debugging import DebugProtocol, describe, same_file  # noqa: F401
 from .theme import theme_manager
 
+
 class DebugSession(QObject):
-    """One run of the program under the debugger."""
+    """One run of the program under the debugger: a localhost port it connects
+    to, and the protocol (``logic.debugging.DebugProtocol``) over it."""
 
     connected = Signal()
     paused = Signal(dict)  # the agent's "paused" message: reason, file, line, stack, error
@@ -32,14 +31,10 @@ class DebugSession(QObject):
 
     def __init__(self, breakpoints: dict[str, list[int]], step: bool = False, parent=None):
         super().__init__(parent)
-        self._breakpoints = breakpoints
-        self._step = step
         self._socket = None
-        self._buffer = b""
-        self._next_id = 0
-        self._callbacks: dict[int, object] = {}
-        self.location: dict | None = None  # where it is paused (None: running)
-        self.frame = 0  # the frame of the stack expressions are evaluated in
+        self.protocol = DebugProtocol(self._write, breakpoints, step)
+        self.protocol.paused.connect(self.paused.emit)
+        self.protocol.resumed.connect(self.resumed.emit)
         self.server = QTcpServer(self)
         if not self.server.listen(QHostAddress.LocalHost, 0):
             raise OSError(self.server.errorString())
@@ -50,8 +45,22 @@ class DebugSession(QObject):
         return self.server.serverPort()
 
     @property
+    def location(self) -> dict | None:
+        """Where it is paused (None: running)."""
+        return self.protocol.location
+
+    @property
+    def frame(self) -> int:
+        """The frame of the stack expressions are evaluated in."""
+        return self.protocol.frame
+
+    @frame.setter
+    def frame(self, value: int) -> None:
+        self.protocol.frame = value
+
+    @property
     def is_paused(self) -> bool:
-        return self.location is not None
+        return self.protocol.is_paused
 
     @property
     def is_connected(self) -> bool:
@@ -67,89 +76,49 @@ class DebugSession(QObject):
         socket.readyRead.connect(self._on_ready_read)
         socket.disconnected.connect(self._on_disconnected)
         self.server.close()
-        self._send({"cmd": "start", "breakpoints": self._breakpoints, "step": self._step})
+        self.protocol.connect()
         self.connected.emit()
 
-    def _send(self, message: dict) -> None:
+    def _write(self, data: bytes) -> None:
         if self._socket is not None:
-            self._socket.write((json.dumps(message) + "\n").encode("utf-8"))
+            self._socket.write(data)
             self._socket.flush()
 
     def _on_ready_read(self):
-        self._buffer += bytes(self._socket.readAll())
-        while b"\n" in self._buffer:
-            line, self._buffer = self._buffer.split(b"\n", 1)
-            try:
-                message = json.loads(line.decode("utf-8"))
-            except ValueError:
-                continue
-            self._dispatch(message)
-
-    def _dispatch(self, message: dict) -> None:
-        event = message.get("event")
-        if event == "paused":
-            self.location = message
-            self.frame = 0
-            self.paused.emit(message)
-        elif event == "running":
-            self.location = None
-            self.resumed.emit()
-        elif event == "result":
-            callback = self._callbacks.pop(message.get("id"), None)
-            if callback is not None:
-                callback(message)
+        self.protocol.feed(bytes(self._socket.readAll()))
 
     def _on_disconnected(self):
-        was_paused = self.is_paused
-        self.location = None
         self._socket = None
-        self._callbacks.clear()
-        if was_paused:
-            self.resumed.emit()
+        self.protocol.disconnect()
 
     def close(self) -> None:
         if self._socket is not None:
             self._socket.abort()
             self._socket = None
         self.server.close()
-        self.location = None
+        self.protocol.connected = False
+        self.protocol.location = None
 
     # -- commands ------------------------------------------------------------------------------
     def set_breakpoints(self, breakpoints: dict[str, list[int]]) -> None:
-        self._breakpoints = breakpoints
-        self._send({"cmd": "breakpoints", "breakpoints": breakpoints})
+        self.protocol.set_breakpoints(breakpoints)
 
     def pause(self) -> None:
-        if not self.is_paused:
-            self._send({"cmd": "pause"})
+        self.protocol.pause()
 
     def resume(self, how: str = "continue") -> None:
         """continue, step (into), next (over) or return (out)."""
-        if self.is_paused:
-            self._send({"cmd": how})
+        self.protocol.resume(how)
 
     def apply_changes(self, files: dict[str, str], callback) -> None:
         """Edit and Continue: send the files' new text (path → text) to the
-        paused program; ``callback`` gets what was changed (``changed``,
-        ``added``, ``removed``, ``running``, ``errors``, ``files``)."""
-        if not self.is_paused:
-            callback({"errors": ["The program isn't paused"], "files": []})
-            return
-        self._next_id += 1
-        self._callbacks[self._next_id] = callback
-        self._send({"cmd": "apply", "id": self._next_id, "files": files})
+        paused program (see ``DebugProtocol.apply_changes``)."""
+        self.protocol.apply_changes(files, callback)
 
     def evaluate(self, expression: str, callback, statements: bool = False) -> None:
-        """Evaluate an expression (or, with ``statements``, run a statement) in
-        the current frame while paused; ``callback`` gets the result (``value``
-        and ``type``, or ``error``)."""
-        if not self.is_paused:
-            callback({"error": "The program isn't paused"})
-            return
-        self._next_id += 1
-        self._callbacks[self._next_id] = callback
-        self._send({"cmd": "eval", "id": self._next_id, "expr": expression,
-                    "frame": self.frame, "exec": statements})
+        """Evaluate an expression (or run a statement) in the current frame
+        while paused (see ``DebugProtocol.evaluate``)."""
+        self.protocol.evaluate(expression, callback, statements)
 
 
 class WatchWindow(QWidget):
@@ -277,16 +246,3 @@ class WatchWindow(QWidget):
         menu = self._context_menu()
         menu.exec(self.tree.viewport().mapToGlobal(pos))
         menu.deleteLater()
-
-
-def same_file(a: str, b: str) -> bool:
-    return canonical(a) == canonical(b) if a and b else False
-
-
-def describe(location: dict) -> str:
-    """Where the program is paused, for the status bar."""
-    if not location.get("file"):
-        return "Paused between events"
-    where = f"{os.path.basename(location['file'])}, line {location['line']}"
-    return {"breakpoint": f"Breakpoint at {where}", "error": f"Error at {where}",
-            "pause": f"Paused at {where}"}.get(location.get("reason"), f"Paused at {where}")

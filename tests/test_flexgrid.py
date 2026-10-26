@@ -476,3 +476,58 @@ def test_description_pane(form):
     assert "The second &lt;row&gt;" in pane.text() and grid.TextMatrix(2, 0) in pane.text()
     grid.DescriptionVisible = False
     assert not pane.isVisible() and grid._widget.viewportMargins().bottom() == 0
+
+
+def test_shown_editors_changing_kind_and_headings(qapp):
+    """A cell whose editor changes (a text field to a list, as a property grid
+    shows other properties) shows its new text: the old field, as it goes, doesn't
+    commit its text over it. Heading rows become current, not selected;
+    RowHeight 0 hides a row."""
+    from vp6 import DoEvents, vpGridEditList, vpGridEditText
+
+    class Grid(Form):
+        def InitializeComponent(self):
+            self.grd = FlexGrid(self, Rows=3, Cols=2, FixedRows=0, FixedCols=0, Editable=True,
+                                EditorsShown=True, Width=300, Height=200)
+
+    form = Grid()
+    form.Show()
+    try:
+        grid = form.grd
+
+        def show(row, editor, choices, text):
+            grid.Row, grid.Col = row, 1
+            grid.CellEditor = editor
+            if choices is not None:
+                grid.CellList = choices
+            grid.TextMatrix[row, 1] = text
+
+        show(0, vpGridEditText, None, "Form1")
+        show(1, vpGridEditList, ["0 - A", "1 - B"], "1 - B")
+        DoEvents()
+        show(0, vpGridEditList, ["x", "y"], "y")
+        show(1, vpGridEditList, ["False", "True"], "False")
+        DoEvents()
+        assert grid.TextMatrix[0, 1] == "y" and grid.TextMatrix[1, 1] == "False"
+        combo = grid._widget.cellWidget(0, 1)
+        assert isinstance(combo, QComboBox) and combo.currentText() == "y"
+        from vp6 import vpGridEditCombo  # (an editable box too: its text not typed, kept)
+        show(1, vpGridEditCombo, ["a", "b"], "")
+        DoEvents()
+        show(1, vpGridEditList, ["False", "True"], "True")
+        show(0, vpGridEditText, None, "Form1")
+        DoEvents()
+        assert grid.TextMatrix[1, 1] == "True" and grid.TextMatrix[0, 1] == "Form1"
+        # a heading: clicked, it is the current row but not selected
+        grid.RowHeading[2] = True
+        rect = grid._widget.visualRect(grid._widget.model().index(2, 0))
+        QTest.mouseClick(grid._widget.viewport(), Qt.LeftButton, Qt.NoModifier, rect.center())
+        assert grid.Row == 2 and not grid._widget.selectionModel().isRowSelected(2)
+        grid.RowHeading[2] = False
+        assert grid._item(2, 0).flags() & Qt.ItemIsSelectable
+        grid.RowHeight[1] = 0
+        assert grid.RowHeight(1) == 0 and grid._widget.isRowHidden(1)
+        grid.RowHeight[1] = 22
+        assert grid.RowHeight(1) == 22 and not grid._widget.isRowHidden(1)
+    finally:
+        form.Unload()

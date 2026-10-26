@@ -75,7 +75,8 @@ def _inline(block: QTextBlock, heading: bool = False) -> str:
     def close(count: int) -> None:
         while len(open_) > count:
             kind, value = open_.pop()
-            out.append(f"]({value})" if kind == "link" else value)
+            out.append(f"]({value})" if kind == "link" else
+                       "</span>" if kind == "color" else value)
 
     it = block.begin()
     while not it.atEnd():
@@ -93,6 +94,9 @@ def _inline(block: QTextBlock, heading: bool = False) -> str:
         wanted = []
         if fmt.isAnchor() and fmt.anchorHref():
             wanted.append(("link", fmt.anchorHref()))
+        elif fmt.hasProperty(QTextFormat.ForegroundBrush) and \
+                fmt.foreground().style() != Qt.NoBrush:  # (colored text: an HTML span)
+            wanted.append(("color", fmt.foreground().color().name()))
         if not heading and fmt.fontWeight() > QFont.Normal:
             wanted.append(("mark", "**"))
         if fmt.fontItalic():
@@ -115,7 +119,8 @@ def _inline(block: QTextBlock, heading: bool = False) -> str:
             close(same)
             out.append(pending + lead)
             for kind, value in wanted[same:]:
-                out.append("[" if kind == "link" else value)
+                out.append("[" if kind == "link" else
+                           f'<span style="color:{value}">' if kind == "color" else value)
                 open_.append((kind, value))
         code = any(value.startswith("`") for _kind, value in open_)
         out.append(core.replace(" ", "\\\n") if code else
@@ -143,6 +148,92 @@ def _table_markdown(table) -> str:
         if row == 0:
             rows.append("|" + "|".join(" --- " for _ in range(table.columns())) + "|")
     return "\n".join(rows)
+
+
+# --- colored text: HTML spans in the Markdown -----------------------------------------------------
+
+# Qt's Markdown reader takes inline HTML whole, so a span loses the Markdown
+# inside it: the colors' tags become marks first (private-use characters), and
+# the text between marks is colored once the document is made
+_COLOR_OPEN = re.compile(
+    r"""<span\s+style\s*=\s*(["'])[^"']*?\bcolor\s*:\s*([^;"']+?)\s*(?:;[^"']*)?\1\s*>"""
+    r"""|<font\s+color\s*=\s*(["']?)([^"'\s>]+)\3\s*>""", re.I)
+_COLOR_CLOSE = re.compile(r"</(span|font)\s*>", re.I)
+_MARK_OPEN, _MARK_CLOSE = 0xE000, "\uF8FF"  # (opening marks: U+E000 + the color's number)
+_COLOR_TAG = re.compile(_COLOR_OPEN.pattern + r"|" + _COLOR_CLOSE.pattern, re.I)
+
+
+def _marked(text: str) -> tuple[str, list[str]]:
+    """The Markdown with its color tags as marks (not in code), and the colors."""
+    colors_: list[str] = []
+    if "<" not in text:
+        return text, colors_
+    out, open_tags, fence = [], [], None
+    for line in text.splitlines(keepends=True):
+        match = _FENCE.match(line)
+        if fence is not None or match:
+            if match and (fence is None or match.group(1)[0] == fence[0] and
+                          len(match.group(1)) >= len(fence)):
+                fence = match.group(1) if fence is None else None
+            out.append(line)
+            continue
+        pieces = re.split(r"(`+.+?`+)", line)  # (code spans keep their tags)
+        for index, piece in enumerate(pieces):
+            if index % 2:
+                out.append(piece)
+                continue
+
+            def mark(match):
+                if match.group(0).startswith("</"):
+                    if not open_tags:
+                        return match.group(0)
+                    open_tags.pop()
+                    return _MARK_CLOSE
+                color = (match.group(2) or match.group(4) or "").strip()
+                if QColor(color).isValid() and len(colors_) < 6000:
+                    open_tags.append(color)
+                    colors_.append(color)
+                    return chr(_MARK_OPEN + len(colors_) - 1)
+                return match.group(0)
+
+            out.append(_COLOR_TAG.sub(mark, piece))
+    return "".join(out), colors_
+
+
+def set_markdown(document: QTextDocument, text: str) -> None:
+    """Show Markdown in a document, as ``setMarkdown`` does, and its color
+    spans (``<span style="color:...">``, ``<font color=...>``) as colored text."""
+    marked, colors_ = _marked(text)
+    document.setMarkdown(marked)
+    if not colors_:
+        return
+    raw = document.toRawText()
+    ranges, stack, marks = [], [], []
+    for position, char in enumerate(raw):
+        code = ord(char)
+        if _MARK_OPEN <= code < _MARK_OPEN + len(colors_):
+            stack.append((position, colors_[code - _MARK_OPEN]))
+            marks.append(position)
+        elif char == _MARK_CLOSE and stack:
+            start, color = stack.pop()
+            ranges.append((start, position, color))
+            marks.append(position)
+    undo = document.isUndoRedoEnabled()
+    document.setUndoRedoEnabled(False)
+    try:
+        cursor = QTextCursor(document)
+        for start, end, color in sorted(ranges, key=lambda r: r[1] - r[0], reverse=True):
+            cursor.setPosition(start + 1)  # (outer spans first: inner ones color over them)
+            cursor.setPosition(end, QTextCursor.KeepAnchor)
+            fmt = QTextCharFormat()
+            fmt.setForeground(QColor(color))
+            cursor.mergeCharFormat(fmt)
+        for position in sorted(marks, reverse=True):
+            cursor.setPosition(position)
+            cursor.setPosition(position + 1, QTextCursor.KeepAnchor)
+            cursor.removeSelectedText()
+    finally:
+        document.setUndoRedoEnabled(undo)
 
 
 def markdown_of(document: QTextDocument) -> str:
@@ -594,7 +685,7 @@ class MarkdownBox(_EditorSelection, _TextEditing, Control):
         scrolled, caret = bar.value(), widget.textCursor().position()
         self.__dict__.update(_markdown=v, _loading=True)
         try:  # (Change fires: Text is already the new one)
-            widget.document().setMarkdown(v)
+            set_markdown(widget.document(), v)
         finally:
             self.__dict__["_loading"] = False
         cursor = widget.textCursor()  # (the caret and the view kept in place as it changes)
@@ -606,7 +697,7 @@ class MarkdownBox(_EditorSelection, _TextEditing, Control):
     def TextHTML(self) -> str:
         """The Markdown rendered as HTML (read-only)."""
         document = QTextDocument()
-        document.setMarkdown(self.Text)
+        set_markdown(document, self.Text)
         return document.toHtml()
 
     # -- links ---------------------------------------------------------------------------------
@@ -787,6 +878,29 @@ class MarkdownBox(_EditorSelection, _TextEditing, Control):
         cursor.setPosition(blocks[0].position())
         cursor.setPosition(blocks[-1].position() + blocks[-1].length() - 1,
                            QTextCursor.KeepAnchor)
+
+    # -- a log, a chat ---------------------------------------------------------------------------
+    def AppendText(self, Markdown) -> None:
+        """Add Markdown at the end of Text (a chat's answer as it arrives:
+        joined to the last paragraph unless it starts a new one with a blank
+        line). The view follows the end if it was showing it, as a log's;
+        the caret and the selection stay."""
+        widget = self._widget
+        bar = widget.verticalScrollBar()
+        following = bar.value() >= bar.maximum() - 2
+        if isinstance(widget, _SourceEdit):
+            cursor = QTextCursor(widget.document())
+            cursor.movePosition(QTextCursor.End)
+            cursor.insertText(str(Markdown))
+        else:
+            self.Text = self.Text + str(Markdown)
+        if following:
+            bar.setValue(bar.maximum())
+
+    def ScrollToEnd(self) -> None:
+        """Scroll to the end of the text (the caret stays)."""
+        bar = self._widget.verticalScrollBar()
+        bar.setValue(bar.maximum())
 
     # -- files ---------------------------------------------------------------------------------
     def LoadFile(self, FileName) -> None:
