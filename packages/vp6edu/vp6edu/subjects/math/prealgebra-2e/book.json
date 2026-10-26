@@ -1,0 +1,91 @@
+{
+  "title": "Prealgebra 2e",
+  "publisher": "OpenStax",
+  "authors": ["Lynn Marecek", "MaryAnne Anthony-Smith", "Andrea Honeycutt Mathis"],
+  "link": "https://openstax.org/details/books/prealgebra-2e",
+  "licence": {"name": "CC BY-NC-SA 4.0", "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"},
+  "chapters": [
+    {"number": 1, "title": "Whole Numbers", "sections": [
+      {"number": "1.1", "title": "Introduction to Whole Numbers", "page": "1-1-introduction-to-whole-numbers"},
+      {"number": "1.2", "title": "Add Whole Numbers", "page": "1-2-add-whole-numbers"},
+      {"number": "1.3", "title": "Subtract Whole Numbers", "page": "1-3-subtract-whole-numbers"},
+      {"number": "1.4", "title": "Multiply Whole Numbers", "page": "1-4-multiply-whole-numbers"},
+      {"number": "1.5", "title": "Divide Whole Numbers", "page": "1-5-divide-whole-numbers"}
+    ]},
+    {"number": 2, "title": "The Language of Algebra", "sections": [
+      {"number": "2.1", "title": "Use the Language of Algebra", "page": "2-1-use-the-language-of-algebra"},
+      {"number": "2.2", "title": "Evaluate, Simplify, and Translate Expressions", "page": "2-2-evaluate-simplify-and-translate-expressions"},
+      {"number": "2.3", "title": "Solving Equations Using the Subtraction and Addition Properties of Equality", "page": "2-3-solving-equations-using-the-subtraction-and-addition-properties-of-equality"},
+      {"number": "2.4", "title": "Find Multiples and Factors", "page": "2-4-find-multiples-and-factors"},
+      {"number": "2.5", "title": "Prime Factorization and the Least Common Multiple", "page": "2-5-prime-factorization-and-the-least-common-multiple"}
+    ]},
+    {"number": 3, "title": "Integers", "sections": [
+      {"number": "3.1", "title": "Introduction to Integers", "page": "3-1-introduction-to-integers"},
+      {"number": "3.2", "title": "Add Integers", "page": "3-2-add-integers"},
+      {"number": "3.3", "title": "Subtract Integers", "page": "3-3-subtract-integers"},
+      {"number": "3.4", "title": "Multiply and Divide Integers", "page": "3-4-multiply-and-divide-integers"},
+      {"number": "3.5", "title": "Solve Equations Using Integers; The Division Property of Equality", "page": "3-5-solve-equations-using-integers-the-division-property-of-equality"}
+    ]},
+    {"number": 4, "title": "Fractions", "sections": [
+      {"number": "4.1", "title": "Visualize Fractions", "page": "4-1-visualize-fractions"},
+      {"number": "4.2", "title": "Multiply and Divide Fractions", "page": "4-2-multiply-and-divide-fractions"},
+      {"number": "4.3", "title": "Multiply and Divide Mixed Numbers and Complex Fractions", "page": "4-3-multiply-and-divide-mixed-numbers-and-complex-fractions"},
+      {"number": "4.4", "title": "Add and Subtract Fractions with Common Denominators", "page": "4-4-add-and-subtract-fractions-with-common-denominators"},
+      {"number": "4.5", "title": "Add and Subtract Fractions with Different Denominators", "page": "4-5-add-and-subtract-fractions-with-different-denominators"},
+      {"number": "4.6", "title": "Add and Subtract Mixed Numbers", "page": "4-6-add-and-subtract-mixed-numbers"},
+      {"number": "4.7", "title": "Solve Equations with Fractions", "page": "4-7-solve-equations-with-fractions"}
+    ]},
+    {"number": 5, "title": "Decimals", "sections": [
+      {"number": "5.1", "title": "Decimals", "page": "5-1-decimals"},
+      {"number": "5.2", "title": "Decimal Operations", "page": "5-2-decimal-operations"},
+      {"number": "5.3", "title": "Decimals and Fractions", "page": "5-3-decimals-and-fractions"},
+      {"number": "5.4", "title": "Solve Equations with Decimals", "page": "5-4-solve-equations-with-decimals"},
+      {"number": "5.5", "title": "Averages and Probability", "page": "5-5-averages-and-probability"},
+      {"number": "5.6", "title": "Ratios and Rate", "page": "5-6-ratios-and-rate"},
+      {"number": "5.7", "title": "Simplify and Use Square Roots", "page": "5-7-simplify-and-use-square-roots"}
+    ]},
+    {"number": 6, "title": "Percents", "sections": [
+      {"number": "6.1", "title": "Understand Percent", "page": "6-1-understand-percent"},
+      {"number": "6.2", "title": "Solve General Applications of Percent", "page": "6-2-solve-general-applications-of-percent"},
+      {"number": "6.3", "title": "Solve Sales Tax, Commission, and Discount Applications", "page": "6-3-solve-sales-tax-commission-and-discount-applications"},
+      {"number": "6.4", "title": "Solve Simple Interest Applications", "page": "6-4-solve-simple-interest-applications"},
+      {"number": "6.5", "title": "Solve Proportions and their Applications", "page": "6-5-solve-proportions-and-their-applications"}
+    ]},
+    {"number": 7, "title": "The Properties of Real Numbers", "sections": [
+      {"number": "7.1", "title": "Rational and Irrational Numbers", "page": "7-1-rational-and-irrational-numbers"},
+      {"number": "7.2", "title": "Commutative and Associative Properties", "page": "7-2-commutative-and-associative-properties"},
+      {"number": "7.3", "title": "Distributive Property", "page": "7-3-distributive-property"},
+      {"number": "7.4", "title": "Properties of Identity, Inverses, and Zero", "page": "7-4-properties-of-identity-inverses-and-zero"},
+      {"number": "7.5", "title": "Systems of Measurement", "page": "7-5-systems-of-measurement"}
+    ]},
+    {"number": 8, "title": "Solving Linear Equations", "sections": [
+      {"number": "8.1", "title": "Solve Equations Using the Subtraction and Addition Properties of Equality", "page": "8-1-solve-equations-using-the-subtraction-and-addition-properties-of-equality"},
+      {"number": "8.2", "title": "Solve Equations Using the Division and Multiplication Properties of Equality", "page": "8-2-solve-equations-using-the-division-and-multiplication-properties-of-equality"},
+      {"number": "8.3", "title": "Solve Equations with Variables and Constants on Both Sides", "page": "8-3-solve-equations-with-variables-and-constants-on-both-sides"},
+      {"number": "8.4", "title": "Solve Equations with Fraction or Decimal Coefficients", "page": "8-4-solve-equations-with-fraction-or-decimal-coefficients"}
+    ]},
+    {"number": 9, "title": "Math Models and Geometry", "sections": [
+      {"number": "9.1", "title": "Use a Problem Solving Strategy", "page": "9-1-use-a-problem-solving-strategy"},
+      {"number": "9.2", "title": "Solve Money Applications", "page": "9-2-solve-money-applications"},
+      {"number": "9.3", "title": "Use Properties of Angles, Triangles, and the Pythagorean Theorem", "page": "9-3-use-properties-of-angles-triangles-and-the-pythagorean-theorem"},
+      {"number": "9.4", "title": "Use Properties of Rectangles, Triangles, and Trapezoids", "page": "9-4-use-properties-of-rectangles-triangles-and-trapezoids"},
+      {"number": "9.5", "title": "Solve Geometry Applications: Circles and Irregular Figures", "page": "9-5-solve-geometry-applications-circles-and-irregular-figures"},
+      {"number": "9.6", "title": "Solve Geometry Applications: Volume and Surface Area", "page": "9-6-solve-geometry-applications-volume-and-surface-area"},
+      {"number": "9.7", "title": "Solve a Formula for a Specific Variable", "page": "9-7-solve-a-formula-for-a-specific-variable"}
+    ]},
+    {"number": 10, "title": "Polynomials", "sections": [
+      {"number": "10.1", "title": "Add and Subtract Polynomials", "page": "10-1-add-and-subtract-polynomials"},
+      {"number": "10.2", "title": "Use Multiplication Properties of Exponents", "page": "10-2-use-multiplication-properties-of-exponents"},
+      {"number": "10.3", "title": "Multiply Polynomials", "page": "10-3-multiply-polynomials"},
+      {"number": "10.4", "title": "Divide Monomials", "page": "10-4-divide-monomials"},
+      {"number": "10.5", "title": "Integer Exponents and Scientific Notation", "page": "10-5-integer-exponents-and-scientific-notation"},
+      {"number": "10.6", "title": "Introduction to Factoring Polynomials", "page": "10-6-introduction-to-factoring-polynomials"}
+    ]},
+    {"number": 11, "title": "Graphs", "sections": [
+      {"number": "11.1", "title": "Use the Rectangular Coordinate System", "page": "11-1-use-the-rectangular-coordinate-system"},
+      {"number": "11.2", "title": "Graphing Linear Equations", "page": "11-2-graphing-linear-equations"},
+      {"number": "11.3", "title": "Graphing with Intercepts", "page": "11-3-graphing-with-intercepts"},
+      {"number": "11.4", "title": "Understand Slope of a Line", "page": "11-4-understand-slope-of-a-line"}
+    ]}
+  ]
+}

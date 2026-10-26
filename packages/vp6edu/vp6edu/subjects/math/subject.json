@@ -1,0 +1,21 @@
+{
+  "title": "Mathematics",
+  "description": "From whole numbers to multivariable calculus, with statistics branching from intermediate algebra, after OpenStax's textbooks.",
+  "books": ["prealgebra-2e", "elementary-algebra-2e", "intermediate-algebra-2e",
+            "algebra-and-trigonometry-2e", "precalculus-2e", "calculus-volume-1",
+            "calculus-volume-2", "calculus-volume-3", "introductory-statistics-2e"],
+  "paths": [
+    {"id": "main", "title": "Prealgebra to Calculus",
+     "nodes": ["prealgebra-2e", "elementary-algebra-2e", "intermediate-algebra-2e",
+               "algebra-and-trigonometry-2e", "precalculus-2e", "calculus-volume-1",
+               "calculus-volume-2", "calculus-volume-3", "introductory-statistics-2e"],
+     "edges": [["prealgebra-2e", "elementary-algebra-2e"],
+               ["elementary-algebra-2e", "intermediate-algebra-2e"],
+               ["intermediate-algebra-2e", "algebra-and-trigonometry-2e"],
+               ["algebra-and-trigonometry-2e", "precalculus-2e"],
+               ["precalculus-2e", "calculus-volume-1"],
+               ["calculus-volume-1", "calculus-volume-2"],
+               ["calculus-volume-2", "calculus-volume-3"],
+               ["intermediate-algebra-2e", "introductory-statistics-2e"]]}
+  ]
+}

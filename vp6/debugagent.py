@@ -347,6 +347,15 @@ class Agent:
             self._idle_namespace = namespace
         return self._idle_namespace, self._idle_namespace
 
+    def _store_locals(self, index: int) -> None:
+        """Before Python 3.13 a frame's f_locals is a copy: write it back to the frame."""
+        if sys.version_info >= (3, 13) or not self.frames:
+            return
+        import ctypes
+
+        frame = self.frames[min(max(index, 0), len(self.frames) - 1)]
+        ctypes.pythonapi.PyFrame_LocalsToFast(ctypes.py_object(frame), ctypes.c_int(0))
+
     def _evaluate(self, message: dict) -> None:
         expression = message.get("expr", "")
         globals_, locals_ = self._namespaces(int(message.get("frame", 0)))
@@ -359,6 +368,7 @@ class Agent:
                     raise
                 exec(compile(expression, "<immediate>", "exec", dont_inherit=True), globals_,
                      locals_)
+                self._store_locals(int(message.get("frame", 0)))
                 result = {"value": None}
             else:
                 value = eval(code, globals_, locals_)

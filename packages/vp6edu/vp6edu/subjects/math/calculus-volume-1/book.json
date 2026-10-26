@@ -1,0 +1,66 @@
+{
+  "title": "Calculus Volume 1",
+  "publisher": "OpenStax",
+  "authors": ["Gilbert Strang", "Edwin “Jed” Herman"],
+  "link": "https://openstax.org/details/books/calculus-volume-1",
+  "licence": {"name": "CC BY-NC-SA 4.0", "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"},
+  "chapters": [
+    {"number": 1, "title": "Functions and Graphs", "sections": [
+      {"number": "1.1", "title": "Review of Functions", "page": "1-1-review-of-functions"},
+      {"number": "1.2", "title": "Basic Classes of Functions", "page": "1-2-basic-classes-of-functions"},
+      {"number": "1.3", "title": "Trigonometric Functions", "page": "1-3-trigonometric-functions"},
+      {"number": "1.4", "title": "Inverse Functions", "page": "1-4-inverse-functions"},
+      {"number": "1.5", "title": "Exponential and Logarithmic Functions", "page": "1-5-exponential-and-logarithmic-functions"}
+    ]},
+    {"number": 2, "title": "Limits", "sections": [
+      {"number": "2.1", "title": "A Preview of Calculus", "page": "2-1-a-preview-of-calculus"},
+      {"number": "2.2", "title": "The Limit of a Function", "page": "2-2-the-limit-of-a-function"},
+      {"number": "2.3", "title": "The Limit Laws", "page": "2-3-the-limit-laws"},
+      {"number": "2.4", "title": "Continuity", "page": "2-4-continuity"},
+      {"number": "2.5", "title": "The Precise Definition of a Limit", "page": "2-5-the-precise-definition-of-a-limit"}
+    ]},
+    {"number": 3, "title": "Derivatives", "sections": [
+      {"number": "3.1", "title": "Defining the Derivative", "page": "3-1-defining-the-derivative"},
+      {"number": "3.2", "title": "The Derivative as a Function", "page": "3-2-the-derivative-as-a-function"},
+      {"number": "3.3", "title": "Differentiation Rules", "page": "3-3-differentiation-rules"},
+      {"number": "3.4", "title": "Derivatives as Rates of Change", "page": "3-4-derivatives-as-rates-of-change"},
+      {"number": "3.5", "title": "Derivatives of Trigonometric Functions", "page": "3-5-derivatives-of-trigonometric-functions"},
+      {"number": "3.6", "title": "The Chain Rule", "page": "3-6-the-chain-rule"},
+      {"number": "3.7", "title": "Derivatives of Inverse Functions", "page": "3-7-derivatives-of-inverse-functions"},
+      {"number": "3.8", "title": "Implicit Differentiation", "page": "3-8-implicit-differentiation"},
+      {"number": "3.9", "title": "Derivatives of Exponential and Logarithmic Functions", "page": "3-9-derivatives-of-exponential-and-logarithmic-functions"}
+    ]},
+    {"number": 4, "title": "Applications of Derivatives", "sections": [
+      {"number": "4.1", "title": "Related Rates", "page": "4-1-related-rates"},
+      {"number": "4.2", "title": "Linear Approximations and Differentials", "page": "4-2-linear-approximations-and-differentials"},
+      {"number": "4.3", "title": "Maxima and Minima", "page": "4-3-maxima-and-minima"},
+      {"number": "4.4", "title": "The Mean Value Theorem", "page": "4-4-the-mean-value-theorem"},
+      {"number": "4.5", "title": "Derivatives and the Shape of a Graph", "page": "4-5-derivatives-and-the-shape-of-a-graph"},
+      {"number": "4.6", "title": "Limits at Infinity and Asymptotes", "page": "4-6-limits-at-infinity-and-asymptotes"},
+      {"number": "4.7", "title": "Applied Optimization Problems", "page": "4-7-applied-optimization-problems"},
+      {"number": "4.8", "title": "L’Hôpital’s Rule", "page": "4-8-lhopitals-rule"},
+      {"number": "4.9", "title": "Newton’s Method", "page": "4-9-newtons-method"},
+      {"number": "4.10", "title": "Antiderivatives", "page": "4-10-antiderivatives"}
+    ]},
+    {"number": 5, "title": "Integration", "sections": [
+      {"number": "5.1", "title": "Approximating Areas", "page": "5-1-approximating-areas"},
+      {"number": "5.2", "title": "The Definite Integral", "page": "5-2-the-definite-integral"},
+      {"number": "5.3", "title": "The Fundamental Theorem of Calculus", "page": "5-3-the-fundamental-theorem-of-calculus"},
+      {"number": "5.4", "title": "Integration Formulas and the Net Change Theorem", "page": "5-4-integration-formulas-and-the-net-change-theorem"},
+      {"number": "5.5", "title": "Substitution", "page": "5-5-substitution"},
+      {"number": "5.6", "title": "Integrals Involving Exponential and Logarithmic Functions", "page": "5-6-integrals-involving-exponential-and-logarithmic-functions"},
+      {"number": "5.7", "title": "Integrals Resulting in Inverse Trigonometric Functions", "page": "5-7-integrals-resulting-in-inverse-trigonometric-functions"}
+    ]},
+    {"number": 6, "title": "Applications of Integration", "sections": [
+      {"number": "6.1", "title": "Areas between Curves", "page": "6-1-areas-between-curves"},
+      {"number": "6.2", "title": "Determining Volumes by Slicing", "page": "6-2-determining-volumes-by-slicing"},
+      {"number": "6.3", "title": "Volumes of Revolution: Cylindrical Shells", "page": "6-3-volumes-of-revolution-cylindrical-shells"},
+      {"number": "6.4", "title": "Arc Length of a Curve and Surface Area", "page": "6-4-arc-length-of-a-curve-and-surface-area"},
+      {"number": "6.5", "title": "Physical Applications", "page": "6-5-physical-applications"},
+      {"number": "6.6", "title": "Moments and Centers of Mass", "page": "6-6-moments-and-centers-of-mass"},
+      {"number": "6.7", "title": "Integrals, Exponential Functions, and Logarithms", "page": "6-7-integrals-exponential-functions-and-logarithms"},
+      {"number": "6.8", "title": "Exponential Growth and Decay", "page": "6-8-exponential-growth-and-decay"},
+      {"number": "6.9", "title": "Calculus of the Hyperbolic Functions", "page": "6-9-calculus-of-the-hyperbolic-functions"}
+    ]}
+  ]
+}

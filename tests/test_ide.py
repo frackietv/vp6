@@ -484,6 +484,27 @@ def test_ctrl_c_closes_the_start_dialog_and_quits(tmp_path):
     assert "Traceback" not in err
 
 
+def test_the_start_dialog_is_deleted_after_use(window):
+    from PySide6.QtCore import QEvent, QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from vp6.ide.dialogs import NewProjectDialog
+
+    def cancel():
+        modal = QApplication.activeModalWidget()
+        if isinstance(modal, NewProjectDialog):
+            modal.reject()
+        else:
+            QTimer.singleShot(10, cancel)
+
+    for show in (window.show_start_dialog, window.new_project):
+        QTimer.singleShot(0, cancel)
+        show()
+        QApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        # (left as the window's child, PySide's shutdown deleted it and crashed)
+        assert window.findChildren(NewProjectDialog) == []
+
+
 def test_settings_dir_override(tmp_path, monkeypatch):
     from vp6.ide.theme import ide_settings
 

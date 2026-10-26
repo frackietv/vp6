@@ -23,9 +23,11 @@ def test_version_and_license():
     assert text.startswith("MIT License") and "FrackieTV" in text
     assert PROJECT["authors"] == [{"name": "FrackieTV"}]  # (no email published)
     assert PROJECT["readme"] == "README.md"
-    # The help system is a package of its own (packages/vp6help), on PyPI as vp6help
-    assert PROJECT["dependencies"] == ["PySide6>=6.6", "vp6help>=0.1"]
+    # The help system and the courses are packages of their own (packages/vp6help,
+    # packages/vp6edu), on PyPI as vp6help and vp6edu
+    assert PROJECT["dependencies"] == ["PySide6>=6.6", "vp6help>=0.1", "vp6edu>=0.1"]
     assert (ROOT / "packages" / "vp6help" / "pyproject.toml").exists()
+    assert (ROOT / "packages" / "vp6edu" / "pyproject.toml").exists()
     assert PYPROJECT["tool"]["setuptools"]["packages"]["find"]["include"] == ["vp6", "vp6.*"]
     assert set(PROJECT["optional-dependencies"]["make"]) == {"pyinstaller>=6", "pillow"}
 

@@ -45,6 +45,7 @@ From the source:
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e packages/vp6help   # the help system (vp6help), first
+.venv/bin/pip install -e packages/vp6edu    # the courses (vp6edu), also first
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/vp6                       # start the IDE (or: python -m vp6.ide)
 .venv/bin/vp6 path/to/Project.vp6p      # open a project

@@ -1,0 +1,115 @@
+{
+  "title": "Introductory Statistics 2e",
+  "publisher": "OpenStax",
+  "authors": ["Barbara Illowsky", "Susan Dean"],
+  "link": "https://openstax.org/details/books/introductory-statistics-2e",
+  "licence": {"name": "CC BY-NC-SA 4.0", "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"},
+  "chapters": [
+    {"number": 1, "title": "Sampling and Data", "sections": [
+      {"number": "1.1", "title": "Definitions of Statistics, Probability, and Key Terms", "page": "1-1-definitions-of-statistics-probability-and-key-terms"},
+      {"number": "1.2", "title": "Data, Sampling, and Variation in Data and Sampling", "page": "1-2-data-sampling-and-variation-in-data-and-sampling"},
+      {"number": "1.3", "title": "Frequency, Frequency Tables, and Levels of Measurement", "page": "1-3-frequency-frequency-tables-and-levels-of-measurement"},
+      {"number": "1.4", "title": "Experimental Design and Ethics", "page": "1-4-experimental-design-and-ethics"},
+      {"number": "1.5", "title": "Data Collection Experiment", "page": "1-5-data-collection-experiment"},
+      {"number": "1.6", "title": "Sampling Experiment", "page": "1-6-sampling-experiment"}
+    ]},
+    {"number": 2, "title": "Descriptive Statistics", "sections": [
+      {"number": "2.1", "title": "Stem-and-Leaf Graphs (Stemplots), Line Graphs, and Bar Graphs", "page": "2-1-stem-and-leaf-graphs-stemplots-line-graphs-and-bar-graphs"},
+      {"number": "2.2", "title": "Histograms, Frequency Polygons, and Time Series Graphs", "page": "2-2-histograms-frequency-polygons-and-time-series-graphs"},
+      {"number": "2.3", "title": "Measures of the Location of the Data", "page": "2-3-measures-of-the-location-of-the-data"},
+      {"number": "2.4", "title": "Box Plots", "page": "2-4-box-plots"},
+      {"number": "2.5", "title": "Measures of the Center of the Data", "page": "2-5-measures-of-the-center-of-the-data"},
+      {"number": "2.6", "title": "Skewness and the Mean, Median, and Mode", "page": "2-6-skewness-and-the-mean-median-and-mode"},
+      {"number": "2.7", "title": "Measures of the Spread of the Data", "page": "2-7-measures-of-the-spread-of-the-data"},
+      {"number": "2.8", "title": "Descriptive Statistics", "page": "2-8-descriptive-statistics"}
+    ]},
+    {"number": 3, "title": "Probability Topics", "sections": [
+      {"number": "3.1", "title": "Terminology", "page": "3-1-terminology"},
+      {"number": "3.2", "title": "Independent and Mutually Exclusive Events", "page": "3-2-independent-and-mutually-exclusive-events"},
+      {"number": "3.3", "title": "Two Basic Rules of Probability", "page": "3-3-two-basic-rules-of-probability"},
+      {"number": "3.4", "title": "Contingency Tables", "page": "3-4-contingency-tables"},
+      {"number": "3.5", "title": "Tree and Venn Diagrams", "page": "3-5-tree-and-venn-diagrams"},
+      {"number": "3.6", "title": "Probability Topics", "page": "3-6-probability-topics"}
+    ]},
+    {"number": 4, "title": "Discrete Random Variables", "sections": [
+      {"number": "4.1", "title": "Probability Distribution Function (PDF) for a Discrete Random Variable", "page": "4-1-probability-distribution-function-pdf-for-a-discrete-random-variable"},
+      {"number": "4.2", "title": "Mean or Expected Value and Standard Deviation", "page": "4-2-mean-or-expected-value-and-standard-deviation"},
+      {"number": "4.3", "title": "Binomial Distribution", "page": "4-3-binomial-distribution"},
+      {"number": "4.4", "title": "Geometric Distribution", "page": "4-4-geometric-distribution"},
+      {"number": "4.5", "title": "Hypergeometric Distribution", "page": "4-5-hypergeometric-distribution"},
+      {"number": "4.6", "title": "Poisson Distribution", "page": "4-6-poisson-distribution"},
+      {"number": "4.7", "title": "Discrete Distribution (Playing Card Experiment)", "page": "4-7-discrete-distribution-playing-card-experiment"},
+      {"number": "4.8", "title": "Discrete Distribution (Dice Experiment Using Three Regular Dice)", "page": "4-8-discrete-distribution-dice-experiment-using-three-regular-dice"}
+    ]},
+    {"number": 5, "title": "Continuous Random Variables", "sections": [
+      {"number": "5.1", "title": "Continuous Probability Functions", "page": "5-1-continuous-probability-functions"},
+      {"number": "5.2", "title": "The Uniform Distribution", "page": "5-2-the-uniform-distribution"},
+      {"number": "5.3", "title": "The Exponential Distribution", "page": "5-3-the-exponential-distribution"},
+      {"number": "5.4", "title": "Continuous Distribution", "page": "5-4-continuous-distribution"}
+    ]},
+    {"number": 6, "title": "The Normal Distribution", "sections": [
+      {"number": "6.1", "title": "The Standard Normal Distribution", "page": "6-1-the-standard-normal-distribution"},
+      {"number": "6.2", "title": "Using the Normal Distribution", "page": "6-2-using-the-normal-distribution"},
+      {"number": "6.3", "title": "Normal Distribution (Lap Times)", "page": "6-3-normal-distribution-lap-times"},
+      {"number": "6.4", "title": "Normal Distribution (Pinkie Length)", "page": "6-4-normal-distribution-pinkie-length"}
+    ]},
+    {"number": 7, "title": "The Central Limit Theorem", "sections": [
+      {"number": "7.1", "title": "The Central Limit Theorem for Sample Means (Averages)", "page": "7-1-the-central-limit-theorem-for-sample-means-averages"},
+      {"number": "7.2", "title": "The Central Limit Theorem for Sums", "page": "7-2-the-central-limit-theorem-for-sums"},
+      {"number": "7.3", "title": "Using the Central Limit Theorem", "page": "7-3-using-the-central-limit-theorem"},
+      {"number": "7.4", "title": "Central Limit Theorem (Pocket Change)", "page": "7-4-central-limit-theorem-pocket-change"},
+      {"number": "7.5", "title": "Central Limit Theorem (Cookie Recipes)", "page": "7-5-central-limit-theorem-cookie-recipes"}
+    ]},
+    {"number": 8, "title": "Confidence Intervals", "sections": [
+      {"number": "8.1", "title": "A Single Population Mean using the Normal Distribution", "page": "8-1-a-single-population-mean-using-the-normal-distribution"},
+      {"number": "8.2", "title": "A Single Population Mean using the Student t Distribution", "page": "8-2-a-single-population-mean-using-the-student-t-distribution"},
+      {"number": "8.3", "title": "A Population Proportion", "page": "8-3-a-population-proportion"},
+      {"number": "8.4", "title": "Confidence Interval (Home Costs)", "page": "8-4-confidence-interval-home-costs"},
+      {"number": "8.5", "title": "Confidence Interval (Place of Birth)", "page": "8-5-confidence-interval-place-of-birth"},
+      {"number": "8.6", "title": "Confidence Interval (Women's Heights)", "page": "8-6-confidence-interval-womens-heights"}
+    ]},
+    {"number": 9, "title": "Hypothesis Testing with One Sample", "sections": [
+      {"number": "9.1", "title": "Null and Alternative Hypotheses", "page": "9-1-null-and-alternative-hypotheses"},
+      {"number": "9.2", "title": "Outcomes and the Type I and Type II Errors", "page": "9-2-outcomes-and-the-type-i-and-type-ii-errors"},
+      {"number": "9.3", "title": "Probability Distribution Needed for Hypothesis Testing", "page": "9-3-probability-distribution-needed-for-hypothesis-testing"},
+      {"number": "9.4", "title": "Rare Events, the Sample, Decision and Conclusion", "page": "9-4-rare-events-the-sample-decision-and-conclusion"},
+      {"number": "9.5", "title": "Additional Information and Full Hypothesis Test Examples", "page": "9-5-additional-information-and-full-hypothesis-test-examples"},
+      {"number": "9.6", "title": "Hypothesis Testing of a Single Mean and Single Proportion", "page": "9-6-hypothesis-testing-of-a-single-mean-and-single-proportion"}
+    ]},
+    {"number": 10, "title": "Hypothesis Testing with Two Samples", "sections": [
+      {"number": "10.1", "title": "Two Population Means with Unknown Standard Deviations", "page": "10-1-two-population-means-with-unknown-standard-deviations"},
+      {"number": "10.2", "title": "Two Population Means with Known Standard Deviations", "page": "10-2-two-population-means-with-known-standard-deviations"},
+      {"number": "10.3", "title": "Comparing Two Independent Population Proportions", "page": "10-3-comparing-two-independent-population-proportions"},
+      {"number": "10.4", "title": "Matched or Paired Samples", "page": "10-4-matched-or-paired-samples"},
+      {"number": "10.5", "title": "Hypothesis Testing for Two Means and Two Proportions", "page": "10-5-hypothesis-testing-for-two-means-and-two-proportions"}
+    ]},
+    {"number": 11, "title": "The Chi-Square Distribution", "sections": [
+      {"number": "11.1", "title": "Facts About the Chi-Square Distribution", "page": "11-1-facts-about-the-chi-square-distribution"},
+      {"number": "11.2", "title": "Goodness-of-Fit Test", "page": "11-2-goodness-of-fit-test"},
+      {"number": "11.3", "title": "Test of Independence", "page": "11-3-test-of-independence"},
+      {"number": "11.4", "title": "Test for Homogeneity", "page": "11-4-test-for-homogeneity"},
+      {"number": "11.5", "title": "Comparison of the Chi-Square Tests", "page": "11-5-comparison-of-the-chi-square-tests"},
+      {"number": "11.6", "title": "Test of a Single Variance", "page": "11-6-test-of-a-single-variance"},
+      {"number": "11.7", "title": "Lab 1: Chi-Square Goodness-of-Fit", "page": "11-7-lab-1-chi-square-goodness-of-fit"},
+      {"number": "11.8", "title": "Lab 2: Chi-Square Test of Independence", "page": "11-8-lab-2-chi-square-test-of-independence"}
+    ]},
+    {"number": 12, "title": "Linear Regression and Correlation", "sections": [
+      {"number": "12.1", "title": "Linear Equations", "page": "12-1-linear-equations"},
+      {"number": "12.2", "title": "Scatter Plots", "page": "12-2-scatter-plots"},
+      {"number": "12.3", "title": "The Regression Equation", "page": "12-3-the-regression-equation"},
+      {"number": "12.4", "title": "Testing the Significance of the Correlation Coefficient", "page": "12-4-testing-the-significance-of-the-correlation-coefficient"},
+      {"number": "12.5", "title": "Prediction", "page": "12-5-prediction"},
+      {"number": "12.6", "title": "Outliers", "page": "12-6-outliers"},
+      {"number": "12.7", "title": "Regression (Distance from School)", "page": "12-7-regression-distance-from-school"},
+      {"number": "12.8", "title": "Regression (Textbook Cost)", "page": "12-8-regression-textbook-cost"},
+      {"number": "12.9", "title": "Regression (Fuel Efficiency)", "page": "12-9-regression-fuel-efficiency"}
+    ]},
+    {"number": 13, "title": "F Distribution and One-Way ANOVA", "sections": [
+      {"number": "13.1", "title": "One-Way ANOVA", "page": "13-1-one-way-anova"},
+      {"number": "13.2", "title": "The F Distribution and the F-Ratio", "page": "13-2-the-f-distribution-and-the-f-ratio"},
+      {"number": "13.3", "title": "Facts About the F Distribution", "page": "13-3-facts-about-the-f-distribution"},
+      {"number": "13.4", "title": "Test of Two Variances", "page": "13-4-test-of-two-variances"},
+      {"number": "13.5", "title": "Lab: One-Way ANOVA", "page": "13-5-lab-one-way-anova"}
+    ]}
+  ]
+}

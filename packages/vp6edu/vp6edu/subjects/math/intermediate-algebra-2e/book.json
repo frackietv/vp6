@@ -1,0 +1,103 @@
+{
+  "title": "Intermediate Algebra 2e",
+  "publisher": "OpenStax",
+  "authors": ["Lynn Marecek", "Andrea Honeycutt Mathis"],
+  "link": "https://openstax.org/details/books/intermediate-algebra-2e",
+  "licence": {"name": "CC BY-NC-SA 4.0", "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"},
+  "chapters": [
+    {"number": 1, "title": "Foundations", "sections": [
+      {"number": "1.1", "title": "Use the Language of Algebra", "page": "1-1-use-the-language-of-algebra"},
+      {"number": "1.2", "title": "Integers", "page": "1-2-integers"},
+      {"number": "1.3", "title": "Fractions", "page": "1-3-fractions"},
+      {"number": "1.4", "title": "Decimals", "page": "1-4-decimals"},
+      {"number": "1.5", "title": "Properties of Real Numbers", "page": "1-5-properties-of-real-numbers"}
+    ]},
+    {"number": 2, "title": "Solving Linear Equations", "sections": [
+      {"number": "2.1", "title": "Use a General Strategy to Solve Linear Equations", "page": "2-1-use-a-general-strategy-to-solve-linear-equations"},
+      {"number": "2.2", "title": "Use a Problem Solving Strategy", "page": "2-2-use-a-problem-solving-strategy"},
+      {"number": "2.3", "title": "Solve a Formula for a Specific Variable", "page": "2-3-solve-a-formula-for-a-specific-variable"},
+      {"number": "2.4", "title": "Solve Mixture and Uniform Motion Applications", "page": "2-4-solve-mixture-and-uniform-motion-applications"},
+      {"number": "2.5", "title": "Solve Linear Inequalities", "page": "2-5-solve-linear-inequalities"},
+      {"number": "2.6", "title": "Solve Compound Inequalities", "page": "2-6-solve-compound-inequalities"},
+      {"number": "2.7", "title": "Solve Absolute Value Inequalities", "page": "2-7-solve-absolute-value-inequalities"}
+    ]},
+    {"number": 3, "title": "Graphs and Functions", "sections": [
+      {"number": "3.1", "title": "Graph Linear Equations in Two Variables", "page": "3-1-graph-linear-equations-in-two-variables"},
+      {"number": "3.2", "title": "Slope of a Line", "page": "3-2-slope-of-a-line"},
+      {"number": "3.3", "title": "Find the Equation of a Line", "page": "3-3-find-the-equation-of-a-line"},
+      {"number": "3.4", "title": "Graph Linear Inequalities in Two Variables", "page": "3-4-graph-linear-inequalities-in-two-variables"},
+      {"number": "3.5", "title": "Relations and Functions", "page": "3-5-relations-and-functions"},
+      {"number": "3.6", "title": "Graphs of Functions", "page": "3-6-graphs-of-functions"}
+    ]},
+    {"number": 4, "title": "Systems of Linear Equations", "sections": [
+      {"number": "4.1", "title": "Solve Systems of Linear Equations with Two Variables", "page": "4-1-solve-systems-of-linear-equations-with-two-variables"},
+      {"number": "4.2", "title": "Solve Applications with Systems of Equations", "page": "4-2-solve-applications-with-systems-of-equations"},
+      {"number": "4.3", "title": "Solve Mixture Applications with Systems of Equations", "page": "4-3-solve-mixture-applications-with-systems-of-equations"},
+      {"number": "4.4", "title": "Solve Systems of Equations with Three Variables", "page": "4-4-solve-systems-of-equations-with-three-variables"},
+      {"number": "4.5", "title": "Solve Systems of Equations Using Matrices", "page": "4-5-solve-systems-of-equations-using-matrices"},
+      {"number": "4.6", "title": "Solve Systems of Equations Using Determinants", "page": "4-6-solve-systems-of-equations-using-determinants"},
+      {"number": "4.7", "title": "Graphing Systems of Linear Inequalities", "page": "4-7-graphing-systems-of-linear-inequalities"}
+    ]},
+    {"number": 5, "title": "Polynomials and Polynomial Functions", "sections": [
+      {"number": "5.1", "title": "Add and Subtract Polynomials", "page": "5-1-add-and-subtract-polynomials"},
+      {"number": "5.2", "title": "Properties of Exponents and Scientific Notation", "page": "5-2-properties-of-exponents-and-scientific-notation"},
+      {"number": "5.3", "title": "Multiply Polynomials", "page": "5-3-multiply-polynomials"},
+      {"number": "5.4", "title": "Dividing Polynomials", "page": "5-4-dividing-polynomials"}
+    ]},
+    {"number": 6, "title": "Factoring", "sections": [
+      {"number": "6.1", "title": "Greatest Common Factor and Factor by Grouping", "page": "6-1-greatest-common-factor-and-factor-by-grouping"},
+      {"number": "6.2", "title": "Factor Trinomials", "page": "6-2-factor-trinomials"},
+      {"number": "6.3", "title": "Factor Special Products", "page": "6-3-factor-special-products"},
+      {"number": "6.4", "title": "General Strategy for Factoring Polynomials", "page": "6-4-general-strategy-for-factoring-polynomials"},
+      {"number": "6.5", "title": "Polynomial Equations", "page": "6-5-polynomial-equations"}
+    ]},
+    {"number": 7, "title": "Rational Expressions and Functions", "sections": [
+      {"number": "7.1", "title": "Multiply and Divide Rational Expressions", "page": "7-1-multiply-and-divide-rational-expressions"},
+      {"number": "7.2", "title": "Add and Subtract Rational Expressions", "page": "7-2-add-and-subtract-rational-expressions"},
+      {"number": "7.3", "title": "Simplify Complex Rational Expressions", "page": "7-3-simplify-complex-rational-expressions"},
+      {"number": "7.4", "title": "Solve Rational Equations", "page": "7-4-solve-rational-equations"},
+      {"number": "7.5", "title": "Solve Applications with Rational Equations", "page": "7-5-solve-applications-with-rational-equations"},
+      {"number": "7.6", "title": "Solve Rational Inequalities", "page": "7-6-solve-rational-inequalities"}
+    ]},
+    {"number": 8, "title": "Roots and Radicals", "sections": [
+      {"number": "8.1", "title": "Simplify Expressions with Roots", "page": "8-1-simplify-expressions-with-roots"},
+      {"number": "8.2", "title": "Simplify Radical Expressions", "page": "8-2-simplify-radical-expressions"},
+      {"number": "8.3", "title": "Simplify Rational Exponents", "page": "8-3-simplify-rational-exponents"},
+      {"number": "8.4", "title": "Add, Subtract, and Multiply Radical Expressions", "page": "8-4-add-subtract-and-multiply-radical-expressions"},
+      {"number": "8.5", "title": "Divide Radical Expressions", "page": "8-5-divide-radical-expressions"},
+      {"number": "8.6", "title": "Solve Radical Equations", "page": "8-6-solve-radical-equations"},
+      {"number": "8.7", "title": "Use Radicals in Functions", "page": "8-7-use-radicals-in-functions"},
+      {"number": "8.8", "title": "Use the Complex Number System", "page": "8-8-use-the-complex-number-system"}
+    ]},
+    {"number": 9, "title": "Quadratic Equations and Functions", "sections": [
+      {"number": "9.1", "title": "Solve Quadratic Equations Using the Square Root Property", "page": "9-1-solve-quadratic-equations-using-the-square-root-property"},
+      {"number": "9.2", "title": "Solve Quadratic Equations by Completing the Square", "page": "9-2-solve-quadratic-equations-by-completing-the-square"},
+      {"number": "9.3", "title": "Solve Quadratic Equations Using the Quadratic Formula", "page": "9-3-solve-quadratic-equations-using-the-quadratic-formula"},
+      {"number": "9.4", "title": "Solve Equations in Quadratic Form", "page": "9-4-solve-equations-in-quadratic-form"},
+      {"number": "9.5", "title": "Solve Applications of Quadratic Equations", "page": "9-5-solve-applications-of-quadratic-equations"},
+      {"number": "9.6", "title": "Graph Quadratic Functions Using Properties", "page": "9-6-graph-quadratic-functions-using-properties"},
+      {"number": "9.7", "title": "Graph Quadratic Functions Using Transformations", "page": "9-7-graph-quadratic-functions-using-transformations"},
+      {"number": "9.8", "title": "Solve Quadratic Inequalities", "page": "9-8-solve-quadratic-inequalities"}
+    ]},
+    {"number": 10, "title": "Exponential and Logarithmic Functions", "sections": [
+      {"number": "10.1", "title": "Finding Composite and Inverse Functions", "page": "10-1-finding-composite-and-inverse-functions"},
+      {"number": "10.2", "title": "Evaluate and Graph Exponential Functions", "page": "10-2-evaluate-and-graph-exponential-functions"},
+      {"number": "10.3", "title": "Evaluate and Graph Logarithmic Functions", "page": "10-3-evaluate-and-graph-logarithmic-functions"},
+      {"number": "10.4", "title": "Use the Properties of Logarithms", "page": "10-4-use-the-properties-of-logarithms"},
+      {"number": "10.5", "title": "Solve Exponential and Logarithmic Equations", "page": "10-5-solve-exponential-and-logarithmic-equations"}
+    ]},
+    {"number": 11, "title": "Conics", "sections": [
+      {"number": "11.1", "title": "Distance and Midpoint Formulas; Circles", "page": "11-1-distance-and-midpoint-formulas-circles"},
+      {"number": "11.2", "title": "Parabolas", "page": "11-2-parabolas"},
+      {"number": "11.3", "title": "Ellipses", "page": "11-3-ellipses"},
+      {"number": "11.4", "title": "Hyperbolas", "page": "11-4-hyperbolas"},
+      {"number": "11.5", "title": "Solve Systems of Nonlinear Equations", "page": "11-5-solve-systems-of-nonlinear-equations"}
+    ]},
+    {"number": 12, "title": "Sequences, Series and Binomial Theorem", "sections": [
+      {"number": "12.1", "title": "Sequences", "page": "12-1-sequences"},
+      {"number": "12.2", "title": "Arithmetic Sequences", "page": "12-2-arithmetic-sequences"},
+      {"number": "12.3", "title": "Geometric Sequences and Series", "page": "12-3-geometric-sequences-and-series"},
+      {"number": "12.4", "title": "Binomial Theorem", "page": "12-4-binomial-theorem"}
+    ]}
+  ]
+}

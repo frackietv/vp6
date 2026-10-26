@@ -7,3 +7,7 @@ include tools/*.py
 # The help system VP6 uses, its own project (setup.py makes VP6's help with it)
 include packages/vp6help/pyproject.toml packages/vp6help/README.md packages/vp6help/LICENSE
 recursive-include packages/vp6help/vp6help *.py
+# The courses (vp6edu), its own project too
+include packages/vp6edu/pyproject.toml packages/vp6edu/README.md packages/vp6edu/LICENSE
+recursive-include packages/vp6edu/vp6edu *
+global-exclude *.py[cod]

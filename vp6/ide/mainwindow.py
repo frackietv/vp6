@@ -982,13 +982,21 @@ class MainWindow(QMainWindow):
     # -- project lifecycle ------------------------------------------------------------------------------
     def show_start_dialog(self):
         dialog = NewProjectDialog(self.recent_projects(), self)
-        if dialog.exec():
-            self._handle_project_dialog(dialog)
+        try:
+            if dialog.exec():
+                self._handle_project_dialog(dialog)
+        finally:
+            # (a dialog left as the window's child is deleted by PySide's shutdown,
+            # which crashed when Ctrl+C had closed it)
+            dialog.deleteLater()
 
     def new_project(self):
         dialog = NewProjectDialog(self.recent_projects(), self)
-        if dialog.exec() and self.close_project():
-            self._handle_project_dialog(dialog)
+        try:
+            if dialog.exec() and self.close_project():
+                self._handle_project_dialog(dialog)
+        finally:
+            dialog.deleteLater()
 
     def open_project_dialog(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open Project", "",
@@ -2755,4 +2763,10 @@ def main(argv: list[str] | None = None) -> int:
         window.open_project(project)
     else:
         window.show_start_dialog()
-    return app.exec()
+    code = app.exec()
+    # Delete the closed window (and the dialogs left as its children) while Qt still
+    # runs: left to PySide's shutdown, the widgets were deleted in an order that crashed
+    if not window.isVisible():
+        window.deleteLater()
+        app.sendPostedEvents(None, QEvent.DeferredDelete)
+    return code

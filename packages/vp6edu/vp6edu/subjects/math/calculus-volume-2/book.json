@@ -1,0 +1,66 @@
+{
+  "title": "Calculus Volume 2",
+  "publisher": "OpenStax",
+  "authors": ["Gilbert Strang", "Edwin “Jed” Herman"],
+  "link": "https://openstax.org/details/books/calculus-volume-2",
+  "licence": {"name": "CC BY-NC-SA 4.0", "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"},
+  "chapters": [
+    {"number": 1, "title": "Integration", "sections": [
+      {"number": "1.1", "title": "Approximating Areas", "page": "1-1-approximating-areas", "shared": "calculus-volume-1/5.1"},
+      {"number": "1.2", "title": "The Definite Integral", "page": "1-2-the-definite-integral", "shared": "calculus-volume-1/5.2"},
+      {"number": "1.3", "title": "The Fundamental Theorem of Calculus", "page": "1-3-the-fundamental-theorem-of-calculus", "shared": "calculus-volume-1/5.3"},
+      {"number": "1.4", "title": "Integration Formulas and the Net Change Theorem", "page": "1-4-integration-formulas-and-the-net-change-theorem", "shared": "calculus-volume-1/5.4"},
+      {"number": "1.5", "title": "Substitution", "page": "1-5-substitution", "shared": "calculus-volume-1/5.5"},
+      {"number": "1.6", "title": "Integrals Involving Exponential and Logarithmic Functions", "page": "1-6-integrals-involving-exponential-and-logarithmic-functions", "shared": "calculus-volume-1/5.6"},
+      {"number": "1.7", "title": "Integrals Resulting in Inverse Trigonometric Functions", "page": "1-7-integrals-resulting-in-inverse-trigonometric-functions", "shared": "calculus-volume-1/5.7"}
+    ]},
+    {"number": 2, "title": "Applications of Integration", "sections": [
+      {"number": "2.1", "title": "Areas between Curves", "page": "2-1-areas-between-curves", "shared": "calculus-volume-1/6.1"},
+      {"number": "2.2", "title": "Determining Volumes by Slicing", "page": "2-2-determining-volumes-by-slicing", "shared": "calculus-volume-1/6.2"},
+      {"number": "2.3", "title": "Volumes of Revolution: Cylindrical Shells", "page": "2-3-volumes-of-revolution-cylindrical-shells", "shared": "calculus-volume-1/6.3"},
+      {"number": "2.4", "title": "Arc Length of a Curve and Surface Area", "page": "2-4-arc-length-of-a-curve-and-surface-area", "shared": "calculus-volume-1/6.4"},
+      {"number": "2.5", "title": "Physical Applications", "page": "2-5-physical-applications", "shared": "calculus-volume-1/6.5"},
+      {"number": "2.6", "title": "Moments and Centers of Mass", "page": "2-6-moments-and-centers-of-mass", "shared": "calculus-volume-1/6.6"},
+      {"number": "2.7", "title": "Integrals, Exponential Functions, and Logarithms", "page": "2-7-integrals-exponential-functions-and-logarithms", "shared": "calculus-volume-1/6.7"},
+      {"number": "2.8", "title": "Exponential Growth and Decay", "page": "2-8-exponential-growth-and-decay", "shared": "calculus-volume-1/6.8"},
+      {"number": "2.9", "title": "Calculus of the Hyperbolic Functions", "page": "2-9-calculus-of-the-hyperbolic-functions", "shared": "calculus-volume-1/6.9"}
+    ]},
+    {"number": 3, "title": "Techniques of Integration", "sections": [
+      {"number": "3.1", "title": "Integration by Parts", "page": "3-1-integration-by-parts"},
+      {"number": "3.2", "title": "Trigonometric Integrals", "page": "3-2-trigonometric-integrals"},
+      {"number": "3.3", "title": "Trigonometric Substitution", "page": "3-3-trigonometric-substitution"},
+      {"number": "3.4", "title": "Partial Fractions", "page": "3-4-partial-fractions"},
+      {"number": "3.5", "title": "Other Strategies for Integration", "page": "3-5-other-strategies-for-integration"},
+      {"number": "3.6", "title": "Numerical Integration", "page": "3-6-numerical-integration"},
+      {"number": "3.7", "title": "Improper Integrals", "page": "3-7-improper-integrals"}
+    ]},
+    {"number": 4, "title": "Introduction to Differential Equations", "sections": [
+      {"number": "4.1", "title": "Basics of Differential Equations", "page": "4-1-basics-of-differential-equations"},
+      {"number": "4.2", "title": "Direction Fields and Numerical Methods", "page": "4-2-direction-fields-and-numerical-methods"},
+      {"number": "4.3", "title": "Separable Equations", "page": "4-3-separable-equations"},
+      {"number": "4.4", "title": "The Logistic Equation", "page": "4-4-the-logistic-equation"},
+      {"number": "4.5", "title": "First-Order Linear Equations", "page": "4-5-first-order-linear-equations"}
+    ]},
+    {"number": 5, "title": "Sequences and Series", "sections": [
+      {"number": "5.1", "title": "Sequences", "page": "5-1-sequences"},
+      {"number": "5.2", "title": "Infinite Series", "page": "5-2-infinite-series"},
+      {"number": "5.3", "title": "The Divergence and Integral Tests", "page": "5-3-the-divergence-and-integral-tests"},
+      {"number": "5.4", "title": "Comparison Tests", "page": "5-4-comparison-tests"},
+      {"number": "5.5", "title": "Alternating Series", "page": "5-5-alternating-series"},
+      {"number": "5.6", "title": "Ratio and Root Tests", "page": "5-6-ratio-and-root-tests"}
+    ]},
+    {"number": 6, "title": "Power Series", "sections": [
+      {"number": "6.1", "title": "Power Series and Functions", "page": "6-1-power-series-and-functions"},
+      {"number": "6.2", "title": "Properties of Power Series", "page": "6-2-properties-of-power-series"},
+      {"number": "6.3", "title": "Taylor and Maclaurin Series", "page": "6-3-taylor-and-maclaurin-series"},
+      {"number": "6.4", "title": "Working with Taylor Series", "page": "6-4-working-with-taylor-series"}
+    ]},
+    {"number": 7, "title": "Parametric Equations and Polar Coordinates", "sections": [
+      {"number": "7.1", "title": "Parametric Equations", "page": "7-1-parametric-equations"},
+      {"number": "7.2", "title": "Calculus of Parametric Curves", "page": "7-2-calculus-of-parametric-curves"},
+      {"number": "7.3", "title": "Polar Coordinates", "page": "7-3-polar-coordinates"},
+      {"number": "7.4", "title": "Area and Arc Length in Polar Coordinates", "page": "7-4-area-and-arc-length-in-polar-coordinates"},
+      {"number": "7.5", "title": "Conic Sections", "page": "7-5-conic-sections"}
+    ]}
+  ]
+}

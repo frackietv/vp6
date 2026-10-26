@@ -12,6 +12,7 @@ cd VP6
 python3 -m venv .venv
 .venv/bin/pip install -e packages/vp6help  # the help system VP6 depends on (first: it isn't
                                            # on PyPI until released)
+.venv/bin/pip install -e packages/vp6edu   # the courses (vp6edu), likewise
 .venv/bin/pip install -e ".[dev]"      # editable install: vp6, vp6-run, pytest, build
 .venv/bin/pip install -e ".[dev,make]" # ...and PyInstaller, for vp6-make
 
@@ -725,13 +726,19 @@ python3 -m venv /tmp/vp6-try                 # install the wheel somewhere clean
   `tests/test_packaging.py` checks covers every one), VP6's help
   (`vp6/help/vp6.vp6help`, made by `setup.py` while building), the license
   and the `vp6`, `vp6-run` and `vp6-make` commands. The **source
-  distribution** also has the docs, the tests and vp6help's source
-  (`MANIFEST.in`).
+  distribution** also has the docs, the tests and vp6help's and vp6edu's
+  sources (`MANIFEST.in`).
 * **vp6help** (`packages/vp6help`) is a distribution of its own, which VP6
   requires (`vp6help>=0.1`): build it with
   `.venv/bin/python -m build packages/vp6help --outdir dist`. Its version is
   in its `pyproject.toml` and `vp6help/__init__.py`; raise it (and VP6's
   requirement, when VP6 needs the new one) when it changes.
+* **vp6edu** (`packages/vp6edu`), the courses, is one too (`vp6edu>=0.1`,
+  `.venv/bin/python -m build packages/vp6edu --outdir dist`), pure Python, its
+  version in its `pyproject.toml` and `vp6edu/__init__.py`. Its code is MIT;
+  its lessons are adapted from OpenStax's books, CC BY-NC-SA 4.0, and keep
+  that licence (`packages/vp6edu/LICENSE`). Run `vp6edu-check` after changing
+  a subject.
 * PyPI shows `README.md` as the project's page; its relative links (to
   `docs/`, `FEATURES.md`, `BACKLOG.md`) only work in the repository. Once the
   repository is public, add its address under `[project.urls]` and make those

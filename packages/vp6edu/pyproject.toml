@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=77"]  # (license as an SPDX expression)
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vp6edu"
+version = "0.1.0"
+description = "Courses for VP6 as data: subjects, learning paths of books, lessons with exercises and labs"
+readme = "README.md"
+license = "MIT AND CC-BY-NC-SA-4.0"  # (the code MIT; the lessons adapted from OpenStax's books)
+license-files = ["LICENSE"]
+authors = [{ name = "FrackieTV" }]
+requires-python = ">=3.10"
+dependencies = []
+keywords = ["education", "mathematics", "lessons", "exercises", "openstax", "vp6"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Education",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.scripts]
+vp6edu-check = "vp6edu.check:main"
+
+[tool.setuptools]
+packages = ["vp6edu"]
+
+[tool.setuptools.package-data]
+vp6edu = ["subjects/**/*"]

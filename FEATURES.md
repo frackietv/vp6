@@ -1,5 +1,22 @@
 # VP6 features
 
+**Version:** 0.4.67
+**Date:** 2026-10-26
+
+## Education
+
+- vp6edu, the courses, a package of its own that VP6 depends on (pure Python): subjects as data, each with learning paths of books, chapters and lessons, nothing specific to one subject
+- Mathematics: the whole outline of OpenStax's Prealgebra 2e, Elementary Algebra 2e, Intermediate Algebra 2e, Algebra and Trigonometry 2e, Precalculus 2e, Calculus Volumes 1, 2 and 3, and Introductory Statistics 2e (branching from Intermediate Algebra 2e): 564 sections, each a lesson planned until written, with its number, title and openstax.org link
+- `load_subjects()`, lesson ids (`math/prealgebra-2e/1.2`), each lesson's prerequisites (the sections before it on its path and links of its own)
+- Lessons that books share (the same OpenStax page) referenced rather than copied: Precalculus 2e's chapters 4, 6 and 8–11 are Algebra and Trigonometry 2e's, Calculus Volume 2's chapters 1–2 are Volume 1's 5–6, Volume 3's chapter 1 is Volume 2's 7
+- Every lesson's attribution line (section, book, authors, link, "adapted from", the licence: OpenStax's books are now CC BY-NC-SA 4.0, so the lessons are too)
+- `vp6edu-check`, the validator: paths, numbering, page names, shared and required lessons, prerequisite cycles, written lessons' files and attribution, stray folders
+
+## Fixes
+
+- The Immediate window's assignments in break mode change the program's variables on Python 3.10–3.12 too (they were lost before 3.13)
+- Quitting the IDE no longer crashes now and then after the New Project dialog was shown (Ctrl+C at the start dialog crashed about half the time): the dialog is deleted after use, and the window before PySide shuts down
+
 **Version:** 0.4.66
 **Date:** 2026-10-25
 

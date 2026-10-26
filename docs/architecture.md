@@ -97,6 +97,11 @@ packages/vp6help/       the help system, a project (and wheel) of its own VP6 de
     pydoc.py            help pages of Python packages, read from their code
     maker.py            vp6help-make: documents and packages made into a help file
     viewer.py           vp6help: the help window (contents, index, search, pages)
+packages/vp6edu/        the courses, a project (and wheel) of its own VP6 depends on (no Qt)
+  vp6edu/
+    subjects.py         subjects, learning paths, books, chapters, lessons: load_subjects()
+    check.py            vp6edu-check: the subjects' data and written lessons validated
+    subjects/math/      Mathematics: subject.json, a book.json per OpenStax book, lessons
 setup.py                building the wheel also makes VP6's help (vp6/help/vp6.vp6help)
 tests/                  pytest suite (runs headless)
 tools/apidocs.py        generates the reference tables in docs/api.md
@@ -105,7 +110,8 @@ docs/                   this documentation
 
 vp6help doesn't know about VP6: VP6 uses it (`ShowHelp`, `CommonDialog.ShowHelp`,
 the IDE's Help menu and F1) and `vp6/helpdocs.py` says what VP6's help is made
-of.
+of. Nor does vp6edu, the courses: subjects as data (learning paths of books,
+chapters, lessons) that the IDE's Education parts will read.
 
 The runtime (`vp6/*.py`) never imports the IDE (`vp6/ide`). The IDE imports
 the runtime freely: the designer instantiates runtime forms and controls, the

@@ -1,0 +1,106 @@
+{
+  "title": "Precalculus 2e",
+  "publisher": "OpenStax",
+  "authors": ["Jay Abramson"],
+  "link": "https://openstax.org/details/books/precalculus-2e",
+  "licence": {"name": "CC BY-NC-SA 4.0", "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"},
+  "chapters": [
+    {"number": 1, "title": "Functions", "sections": [
+      {"number": "1.1", "title": "Functions and Function Notation", "page": "1-1-functions-and-function-notation"},
+      {"number": "1.2", "title": "Domain and Range", "page": "1-2-domain-and-range"},
+      {"number": "1.3", "title": "Rates of Change and Behavior of Graphs", "page": "1-3-rates-of-change-and-behavior-of-graphs"},
+      {"number": "1.4", "title": "Composition of Functions", "page": "1-4-composition-of-functions"},
+      {"number": "1.5", "title": "Transformation of Functions", "page": "1-5-transformation-of-functions"},
+      {"number": "1.6", "title": "Absolute Value Functions", "page": "1-6-absolute-value-functions"},
+      {"number": "1.7", "title": "Inverse Functions", "page": "1-7-inverse-functions"}
+    ]},
+    {"number": 2, "title": "Linear Functions", "sections": [
+      {"number": "2.1", "title": "Linear Functions", "page": "2-1-linear-functions"},
+      {"number": "2.2", "title": "Graphs of Linear Functions", "page": "2-2-graphs-of-linear-functions"},
+      {"number": "2.3", "title": "Modeling with Linear Functions", "page": "2-3-modeling-with-linear-functions"},
+      {"number": "2.4", "title": "Fitting Linear Models to Data", "page": "2-4-fitting-linear-models-to-data"}
+    ]},
+    {"number": 3, "title": "Polynomial and Rational Functions", "sections": [
+      {"number": "3.1", "title": "Complex Numbers", "page": "3-1-complex-numbers"},
+      {"number": "3.2", "title": "Quadratic Functions", "page": "3-2-quadratic-functions"},
+      {"number": "3.3", "title": "Power Functions and Polynomial Functions", "page": "3-3-power-functions-and-polynomial-functions"},
+      {"number": "3.4", "title": "Graphs of Polynomial Functions", "page": "3-4-graphs-of-polynomial-functions"},
+      {"number": "3.5", "title": "Dividing Polynomials", "page": "3-5-dividing-polynomials"},
+      {"number": "3.6", "title": "Zeros of Polynomial Functions", "page": "3-6-zeros-of-polynomial-functions"},
+      {"number": "3.7", "title": "Rational Functions", "page": "3-7-rational-functions"},
+      {"number": "3.8", "title": "Inverses and Radical Functions", "page": "3-8-inverses-and-radical-functions"},
+      {"number": "3.9", "title": "Modeling Using Variation", "page": "3-9-modeling-using-variation"}
+    ]},
+    {"number": 4, "title": "Exponential and Logarithmic Functions", "sections": [
+      {"number": "4.1", "title": "Exponential Functions", "page": "4-1-exponential-functions", "shared": "algebra-and-trigonometry-2e/6.1"},
+      {"number": "4.2", "title": "Graphs of Exponential Functions", "page": "4-2-graphs-of-exponential-functions", "shared": "algebra-and-trigonometry-2e/6.2"},
+      {"number": "4.3", "title": "Logarithmic Functions", "page": "4-3-logarithmic-functions", "shared": "algebra-and-trigonometry-2e/6.3"},
+      {"number": "4.4", "title": "Graphs of Logarithmic Functions", "page": "4-4-graphs-of-logarithmic-functions", "shared": "algebra-and-trigonometry-2e/6.4"},
+      {"number": "4.5", "title": "Logarithmic Properties", "page": "4-5-logarithmic-properties", "shared": "algebra-and-trigonometry-2e/6.5"},
+      {"number": "4.6", "title": "Exponential and Logarithmic Equations", "page": "4-6-exponential-and-logarithmic-equations", "shared": "algebra-and-trigonometry-2e/6.6"},
+      {"number": "4.7", "title": "Exponential and Logarithmic Models", "page": "4-7-exponential-and-logarithmic-models", "shared": "algebra-and-trigonometry-2e/6.7"},
+      {"number": "4.8", "title": "Fitting Exponential Models to Data", "page": "4-8-fitting-exponential-models-to-data", "shared": "algebra-and-trigonometry-2e/6.8"}
+    ]},
+    {"number": 5, "title": "Trigonometric Functions", "sections": [
+      {"number": "5.1", "title": "Angles", "page": "5-1-angles"},
+      {"number": "5.2", "title": "Unit Circle: Sine and Cosine Functions", "page": "5-2-unit-circle-sine-and-cosine-functions"},
+      {"number": "5.3", "title": "The Other Trigonometric Functions", "page": "5-3-the-other-trigonometric-functions"},
+      {"number": "5.4", "title": "Right Triangle Trigonometry", "page": "5-4-right-triangle-trigonometry"}
+    ]},
+    {"number": 6, "title": "Periodic Functions", "sections": [
+      {"number": "6.1", "title": "Graphs of the Sine and Cosine Functions", "page": "6-1-graphs-of-the-sine-and-cosine-functions", "shared": "algebra-and-trigonometry-2e/8.1"},
+      {"number": "6.2", "title": "Graphs of the Other Trigonometric Functions", "page": "6-2-graphs-of-the-other-trigonometric-functions", "shared": "algebra-and-trigonometry-2e/8.2"},
+      {"number": "6.3", "title": "Inverse Trigonometric Functions", "page": "6-3-inverse-trigonometric-functions", "shared": "algebra-and-trigonometry-2e/8.3"}
+    ]},
+    {"number": 7, "title": "Trigonometric Identities and Equations", "sections": [
+      {"number": "7.1", "title": "Simplifying and Verifying Trigonometric Identities", "page": "7-1-simplifying-and-verifying-trigonometric-identities"},
+      {"number": "7.2", "title": "Sum and Difference Identities", "page": "7-2-sum-and-difference-identities"},
+      {"number": "7.3", "title": "Double-Angle, Half-Angle, and Reduction Formulas", "page": "7-3-double-angle-half-angle-and-reduction-formulas"},
+      {"number": "7.4", "title": "Sum-to-Product and Product-to-Sum Formulas", "page": "7-4-sum-to-product-and-product-to-sum-formulas"},
+      {"number": "7.5", "title": "Solving Trigonometric Equations", "page": "7-5-solving-trigonometric-equations"},
+      {"number": "7.6", "title": "Modeling with Trigonometric Functions", "page": "7-6-modeling-with-trigonometric-functions"}
+    ]},
+    {"number": 8, "title": "Further Applications of Trigonometry", "sections": [
+      {"number": "8.1", "title": "Non-right Triangles: Law of Sines", "page": "8-1-non-right-triangles-law-of-sines", "shared": "algebra-and-trigonometry-2e/10.1"},
+      {"number": "8.2", "title": "Non-right Triangles: Law of Cosines", "page": "8-2-non-right-triangles-law-of-cosines", "shared": "algebra-and-trigonometry-2e/10.2"},
+      {"number": "8.3", "title": "Polar Coordinates", "page": "8-3-polar-coordinates", "shared": "algebra-and-trigonometry-2e/10.3"},
+      {"number": "8.4", "title": "Polar Coordinates: Graphs", "page": "8-4-polar-coordinates-graphs", "shared": "algebra-and-trigonometry-2e/10.4"},
+      {"number": "8.5", "title": "Polar Form of Complex Numbers", "page": "8-5-polar-form-of-complex-numbers", "shared": "algebra-and-trigonometry-2e/10.5"},
+      {"number": "8.6", "title": "Parametric Equations", "page": "8-6-parametric-equations", "shared": "algebra-and-trigonometry-2e/10.6"},
+      {"number": "8.7", "title": "Parametric Equations: Graphs", "page": "8-7-parametric-equations-graphs", "shared": "algebra-and-trigonometry-2e/10.7"},
+      {"number": "8.8", "title": "Vectors", "page": "8-8-vectors", "shared": "algebra-and-trigonometry-2e/10.8"}
+    ]},
+    {"number": 9, "title": "Systems of Equations and Inequalities", "sections": [
+      {"number": "9.1", "title": "Systems of Linear Equations: Two Variables", "page": "9-1-systems-of-linear-equations-two-variables", "shared": "algebra-and-trigonometry-2e/11.1"},
+      {"number": "9.2", "title": "Systems of Linear Equations: Three Variables", "page": "9-2-systems-of-linear-equations-three-variables", "shared": "algebra-and-trigonometry-2e/11.2"},
+      {"number": "9.3", "title": "Systems of Nonlinear Equations and Inequalities: Two Variables", "page": "9-3-systems-of-nonlinear-equations-and-inequalities-two-variables", "shared": "algebra-and-trigonometry-2e/11.3"},
+      {"number": "9.4", "title": "Partial Fractions", "page": "9-4-partial-fractions", "shared": "algebra-and-trigonometry-2e/11.4"},
+      {"number": "9.5", "title": "Matrices and Matrix Operations", "page": "9-5-matrices-and-matrix-operations", "shared": "algebra-and-trigonometry-2e/11.5"},
+      {"number": "9.6", "title": "Solving Systems with Gaussian Elimination", "page": "9-6-solving-systems-with-gaussian-elimination", "shared": "algebra-and-trigonometry-2e/11.6"},
+      {"number": "9.7", "title": "Solving Systems with Inverses", "page": "9-7-solving-systems-with-inverses", "shared": "algebra-and-trigonometry-2e/11.7"},
+      {"number": "9.8", "title": "Solving Systems with Cramer's Rule", "page": "9-8-solving-systems-with-cramers-rule", "shared": "algebra-and-trigonometry-2e/11.8"}
+    ]},
+    {"number": 10, "title": "Analytic Geometry", "sections": [
+      {"number": "10.1", "title": "The Ellipse", "page": "10-1-the-ellipse", "shared": "algebra-and-trigonometry-2e/12.1"},
+      {"number": "10.2", "title": "The Hyperbola", "page": "10-2-the-hyperbola", "shared": "algebra-and-trigonometry-2e/12.2"},
+      {"number": "10.3", "title": "The Parabola", "page": "10-3-the-parabola", "shared": "algebra-and-trigonometry-2e/12.3"},
+      {"number": "10.4", "title": "Rotation of Axes", "page": "10-4-rotation-of-axes", "shared": "algebra-and-trigonometry-2e/12.4"},
+      {"number": "10.5", "title": "Conic Sections in Polar Coordinates", "page": "10-5-conic-sections-in-polar-coordinates", "shared": "algebra-and-trigonometry-2e/12.5"}
+    ]},
+    {"number": 11, "title": "Sequences, Probability and Counting Theory", "sections": [
+      {"number": "11.1", "title": "Sequences and Their Notations", "page": "11-1-sequences-and-their-notations", "shared": "algebra-and-trigonometry-2e/13.1"},
+      {"number": "11.2", "title": "Arithmetic Sequences", "page": "11-2-arithmetic-sequences", "shared": "algebra-and-trigonometry-2e/13.2"},
+      {"number": "11.3", "title": "Geometric Sequences", "page": "11-3-geometric-sequences", "shared": "algebra-and-trigonometry-2e/13.3"},
+      {"number": "11.4", "title": "Series and Their Notations", "page": "11-4-series-and-their-notations", "shared": "algebra-and-trigonometry-2e/13.4"},
+      {"number": "11.5", "title": "Counting Principles", "page": "11-5-counting-principles", "shared": "algebra-and-trigonometry-2e/13.5"},
+      {"number": "11.6", "title": "Binomial Theorem", "page": "11-6-binomial-theorem", "shared": "algebra-and-trigonometry-2e/13.6"},
+      {"number": "11.7", "title": "Probability", "page": "11-7-probability", "shared": "algebra-and-trigonometry-2e/13.7"}
+    ]},
+    {"number": 12, "title": "Introduction to Calculus", "sections": [
+      {"number": "12.1", "title": "Finding Limits: Numerical and Graphical Approaches", "page": "12-1-finding-limits-numerical-and-graphical-approaches"},
+      {"number": "12.2", "title": "Finding Limits: Properties of Limits", "page": "12-2-finding-limits-properties-of-limits"},
+      {"number": "12.3", "title": "Continuity", "page": "12-3-continuity"},
+      {"number": "12.4", "title": "Derivatives", "page": "12-4-derivatives"}
+    ]}
+  ]
+}

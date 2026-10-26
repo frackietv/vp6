@@ -1,0 +1,100 @@
+{
+  "title": "Elementary Algebra 2e",
+  "publisher": "OpenStax",
+  "authors": ["Lynn Marecek", "MaryAnne Anthony-Smith", "Andrea Honeycutt Mathis"],
+  "link": "https://openstax.org/details/books/elementary-algebra-2e",
+  "licence": {"name": "CC BY-NC-SA 4.0", "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"},
+  "chapters": [
+    {"number": 1, "title": "Foundations", "sections": [
+      {"number": "1.1", "title": "Introduction to Whole Numbers", "page": "1-1-introduction-to-whole-numbers"},
+      {"number": "1.2", "title": "Use the Language of Algebra", "page": "1-2-use-the-language-of-algebra"},
+      {"number": "1.3", "title": "Add and Subtract Integers", "page": "1-3-add-and-subtract-integers"},
+      {"number": "1.4", "title": "Multiply and Divide Integers", "page": "1-4-multiply-and-divide-integers"},
+      {"number": "1.5", "title": "Visualize Fractions", "page": "1-5-visualize-fractions"},
+      {"number": "1.6", "title": "Add and Subtract Fractions", "page": "1-6-add-and-subtract-fractions"},
+      {"number": "1.7", "title": "Decimals", "page": "1-7-decimals"},
+      {"number": "1.8", "title": "The Real Numbers", "page": "1-8-the-real-numbers"},
+      {"number": "1.9", "title": "Properties of Real Numbers", "page": "1-9-properties-of-real-numbers"},
+      {"number": "1.10", "title": "Systems of Measurement", "page": "1-10-systems-of-measurement"}
+    ]},
+    {"number": 2, "title": "Solving Linear Equations and Inequalities", "sections": [
+      {"number": "2.1", "title": "Solve Equations Using the Subtraction and Addition Properties of Equality", "page": "2-1-solve-equations-using-the-subtraction-and-addition-properties-of-equality"},
+      {"number": "2.2", "title": "Solve Equations using the Division and Multiplication Properties of Equality", "page": "2-2-solve-equations-using-the-division-and-multiplication-properties-of-equality"},
+      {"number": "2.3", "title": "Solve Equations with Variables and Constants on Both Sides", "page": "2-3-solve-equations-with-variables-and-constants-on-both-sides"},
+      {"number": "2.4", "title": "Use a General Strategy to Solve Linear Equations", "page": "2-4-use-a-general-strategy-to-solve-linear-equations"},
+      {"number": "2.5", "title": "Solve Equations with Fractions or Decimals", "page": "2-5-solve-equations-with-fractions-or-decimals"},
+      {"number": "2.6", "title": "Solve a Formula for a Specific Variable", "page": "2-6-solve-a-formula-for-a-specific-variable"},
+      {"number": "2.7", "title": "Solve Linear Inequalities", "page": "2-7-solve-linear-inequalities"}
+    ]},
+    {"number": 3, "title": "Math Models", "sections": [
+      {"number": "3.1", "title": "Use a Problem-Solving Strategy", "page": "3-1-use-a-problem-solving-strategy"},
+      {"number": "3.2", "title": "Solve Percent Applications", "page": "3-2-solve-percent-applications"},
+      {"number": "3.3", "title": "Solve Mixture Applications", "page": "3-3-solve-mixture-applications"},
+      {"number": "3.4", "title": "Solve Geometry Applications: Triangles, Rectangles, and the Pythagorean Theorem", "page": "3-4-solve-geometry-applications-triangles-rectangles-and-the-pythagorean-theorem"},
+      {"number": "3.5", "title": "Solve Uniform Motion Applications", "page": "3-5-solve-uniform-motion-applications"},
+      {"number": "3.6", "title": "Solve Applications with Linear Inequalities", "page": "3-6-solve-applications-with-linear-inequalities"}
+    ]},
+    {"number": 4, "title": "Graphs", "sections": [
+      {"number": "4.1", "title": "Use the Rectangular Coordinate System", "page": "4-1-use-the-rectangular-coordinate-system"},
+      {"number": "4.2", "title": "Graph Linear Equations in Two Variables", "page": "4-2-graph-linear-equations-in-two-variables"},
+      {"number": "4.3", "title": "Graph with Intercepts", "page": "4-3-graph-with-intercepts"},
+      {"number": "4.4", "title": "Understand Slope of a Line", "page": "4-4-understand-slope-of-a-line"},
+      {"number": "4.5", "title": "Use the Slope-Intercept Form of an Equation of a Line", "page": "4-5-use-the-slope-intercept-form-of-an-equation-of-a-line"},
+      {"number": "4.6", "title": "Find the Equation of a Line", "page": "4-6-find-the-equation-of-a-line"},
+      {"number": "4.7", "title": "Graphs of Linear Inequalities", "page": "4-7-graphs-of-linear-inequalities"}
+    ]},
+    {"number": 5, "title": "Systems of Linear Equations", "sections": [
+      {"number": "5.1", "title": "Solve Systems of Equations by Graphing", "page": "5-1-solve-systems-of-equations-by-graphing"},
+      {"number": "5.2", "title": "Solving Systems of Equations by Substitution", "page": "5-2-solving-systems-of-equations-by-substitution"},
+      {"number": "5.3", "title": "Solve Systems of Equations by Elimination", "page": "5-3-solve-systems-of-equations-by-elimination"},
+      {"number": "5.4", "title": "Solve Applications with Systems of Equations", "page": "5-4-solve-applications-with-systems-of-equations"},
+      {"number": "5.5", "title": "Solve Mixture Applications with Systems of Equations", "page": "5-5-solve-mixture-applications-with-systems-of-equations"},
+      {"number": "5.6", "title": "Graphing Systems of Linear Inequalities", "page": "5-6-graphing-systems-of-linear-inequalities"}
+    ]},
+    {"number": 6, "title": "Polynomials", "sections": [
+      {"number": "6.1", "title": "Add and Subtract Polynomials", "page": "6-1-add-and-subtract-polynomials"},
+      {"number": "6.2", "title": "Use Multiplication Properties of Exponents", "page": "6-2-use-multiplication-properties-of-exponents"},
+      {"number": "6.3", "title": "Multiply Polynomials", "page": "6-3-multiply-polynomials"},
+      {"number": "6.4", "title": "Special Products", "page": "6-4-special-products"},
+      {"number": "6.5", "title": "Divide Monomials", "page": "6-5-divide-monomials"},
+      {"number": "6.6", "title": "Divide Polynomials", "page": "6-6-divide-polynomials"},
+      {"number": "6.7", "title": "Integer Exponents and Scientific Notation", "page": "6-7-integer-exponents-and-scientific-notation"}
+    ]},
+    {"number": 7, "title": "Factoring", "sections": [
+      {"number": "7.1", "title": "Greatest Common Factor and Factor by Grouping", "page": "7-1-greatest-common-factor-and-factor-by-grouping"},
+      {"number": "7.2", "title": "Factor Trinomials of the Form x2+bx+c", "page": "7-2-factor-trinomials-of-the-form-x2-bx-c"},
+      {"number": "7.3", "title": "Factor Trinomials of the Form ax2+bx+c", "page": "7-3-factor-trinomials-of-the-form-ax2-bx-c"},
+      {"number": "7.4", "title": "Factor Special Products", "page": "7-4-factor-special-products"},
+      {"number": "7.5", "title": "General Strategy for Factoring Polynomials", "page": "7-5-general-strategy-for-factoring-polynomials"},
+      {"number": "7.6", "title": "Quadratic Equations", "page": "7-6-quadratic-equations"}
+    ]},
+    {"number": 8, "title": "Rational Expressions and Equations", "sections": [
+      {"number": "8.1", "title": "Simplify Rational Expressions", "page": "8-1-simplify-rational-expressions"},
+      {"number": "8.2", "title": "Multiply and Divide Rational Expressions", "page": "8-2-multiply-and-divide-rational-expressions"},
+      {"number": "8.3", "title": "Add and Subtract Rational Expressions with a Common Denominator", "page": "8-3-add-and-subtract-rational-expressions-with-a-common-denominator"},
+      {"number": "8.4", "title": "Add and Subtract Rational Expressions with Unlike Denominators", "page": "8-4-add-and-subtract-rational-expressions-with-unlike-denominators"},
+      {"number": "8.5", "title": "Simplify Complex Rational Expressions", "page": "8-5-simplify-complex-rational-expressions"},
+      {"number": "8.6", "title": "Solve Rational Equations", "page": "8-6-solve-rational-equations"},
+      {"number": "8.7", "title": "Solve Proportion and Similar Figure Applications", "page": "8-7-solve-proportion-and-similar-figure-applications"},
+      {"number": "8.8", "title": "Solve Uniform Motion and Work Applications", "page": "8-8-solve-uniform-motion-and-work-applications"},
+      {"number": "8.9", "title": "Use Direct and Inverse Variation", "page": "8-9-use-direct-and-inverse-variation"}
+    ]},
+    {"number": 9, "title": "Roots and Radicals", "sections": [
+      {"number": "9.1", "title": "Simplify and Use Square Roots", "page": "9-1-simplify-and-use-square-roots"},
+      {"number": "9.2", "title": "Simplify Square Roots", "page": "9-2-simplify-square-roots"},
+      {"number": "9.3", "title": "Add and Subtract Square Roots", "page": "9-3-add-and-subtract-square-roots"},
+      {"number": "9.4", "title": "Multiply Square Roots", "page": "9-4-multiply-square-roots"},
+      {"number": "9.5", "title": "Divide Square Roots", "page": "9-5-divide-square-roots"},
+      {"number": "9.6", "title": "Solve Equations with Square Roots", "page": "9-6-solve-equations-with-square-roots"},
+      {"number": "9.7", "title": "Higher Roots", "page": "9-7-higher-roots"},
+      {"number": "9.8", "title": "Rational Exponents", "page": "9-8-rational-exponents"}
+    ]},
+    {"number": 10, "title": "Quadratic Equations", "sections": [
+      {"number": "10.1", "title": "Solve Quadratic Equations Using the Square Root Property", "page": "10-1-solve-quadratic-equations-using-the-square-root-property"},
+      {"number": "10.2", "title": "Solve Quadratic Equations by Completing the Square", "page": "10-2-solve-quadratic-equations-by-completing-the-square"},
+      {"number": "10.3", "title": "Solve Quadratic Equations Using the Quadratic Formula", "page": "10-3-solve-quadratic-equations-using-the-quadratic-formula"},
+      {"number": "10.4", "title": "Solve Applications Modeled by Quadratic Equations", "page": "10-4-solve-applications-modeled-by-quadratic-equations"},
+      {"number": "10.5", "title": "Graphing Quadratic Equations in Two Variables", "page": "10-5-graphing-quadratic-equations-in-two-variables"}
+    ]}
+  ]
+}

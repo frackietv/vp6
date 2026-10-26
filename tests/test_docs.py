@@ -38,7 +38,8 @@ def test_every_source_file_is_in_the_source_reference():
     for path in sorted((ROOT / "vp6").rglob("*.py")) + sorted((ROOT / "tools").glob("*.py")) + \
             sorted((ROOT / "packages").rglob("*.py")) + [ROOT / "setup.py"]:
         relative = path.relative_to(ROOT).as_posix()
-        if "templates" in path.parts:  # template files are described by name
+        if "templates" in path.parts or "subjects" in path.parts:  # (described by name:
+            # template files, and lessons' exercises.py)
             found = f"`{path.name}`" in reference or path.name in reference
         else:
             found = f"`{relative}`" in reference

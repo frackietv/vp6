@@ -1,0 +1,66 @@
+{
+  "title": "Calculus Volume 3",
+  "publisher": "OpenStax",
+  "authors": ["Gilbert Strang", "Edwin “Jed” Herman"],
+  "link": "https://openstax.org/details/books/calculus-volume-3",
+  "licence": {"name": "CC BY-NC-SA 4.0", "url": "https://creativecommons.org/licenses/by-nc-sa/4.0/"},
+  "chapters": [
+    {"number": 1, "title": "Parametric Equations and Polar Coordinates", "sections": [
+      {"number": "1.1", "title": "Parametric Equations", "page": "1-1-parametric-equations", "shared": "calculus-volume-2/7.1"},
+      {"number": "1.2", "title": "Calculus of Parametric Curves", "page": "1-2-calculus-of-parametric-curves", "shared": "calculus-volume-2/7.2"},
+      {"number": "1.3", "title": "Polar Coordinates", "page": "1-3-polar-coordinates", "shared": "calculus-volume-2/7.3"},
+      {"number": "1.4", "title": "Area and Arc Length in Polar Coordinates", "page": "1-4-area-and-arc-length-in-polar-coordinates", "shared": "calculus-volume-2/7.4"},
+      {"number": "1.5", "title": "Conic Sections", "page": "1-5-conic-sections", "shared": "calculus-volume-2/7.5"}
+    ]},
+    {"number": 2, "title": "Vectors in Space", "sections": [
+      {"number": "2.1", "title": "Vectors in the Plane", "page": "2-1-vectors-in-the-plane"},
+      {"number": "2.2", "title": "Vectors in Three Dimensions", "page": "2-2-vectors-in-three-dimensions"},
+      {"number": "2.3", "title": "The Dot Product", "page": "2-3-the-dot-product"},
+      {"number": "2.4", "title": "The Cross Product", "page": "2-4-the-cross-product"},
+      {"number": "2.5", "title": "Equations of Lines and Planes in Space", "page": "2-5-equations-of-lines-and-planes-in-space"},
+      {"number": "2.6", "title": "Quadric Surfaces", "page": "2-6-quadric-surfaces"},
+      {"number": "2.7", "title": "Cylindrical and Spherical Coordinates", "page": "2-7-cylindrical-and-spherical-coordinates"}
+    ]},
+    {"number": 3, "title": "Vector-Valued Functions", "sections": [
+      {"number": "3.1", "title": "Vector-Valued Functions and Space Curves", "page": "3-1-vector-valued-functions-and-space-curves"},
+      {"number": "3.2", "title": "Calculus of Vector-Valued Functions", "page": "3-2-calculus-of-vector-valued-functions"},
+      {"number": "3.3", "title": "Arc Length and Curvature", "page": "3-3-arc-length-and-curvature"},
+      {"number": "3.4", "title": "Motion in Space", "page": "3-4-motion-in-space"}
+    ]},
+    {"number": 4, "title": "Differentiation of Functions of Several Variables", "sections": [
+      {"number": "4.1", "title": "Functions of Several Variables", "page": "4-1-functions-of-several-variables"},
+      {"number": "4.2", "title": "Limits and Continuity", "page": "4-2-limits-and-continuity"},
+      {"number": "4.3", "title": "Partial Derivatives", "page": "4-3-partial-derivatives"},
+      {"number": "4.4", "title": "Tangent Planes and Linear Approximations", "page": "4-4-tangent-planes-and-linear-approximations"},
+      {"number": "4.5", "title": "The Chain Rule", "page": "4-5-the-chain-rule"},
+      {"number": "4.6", "title": "Directional Derivatives and the Gradient", "page": "4-6-directional-derivatives-and-the-gradient"},
+      {"number": "4.7", "title": "Maxima/Minima Problems", "page": "4-7-maxima-minima-problems"},
+      {"number": "4.8", "title": "Lagrange Multipliers", "page": "4-8-lagrange-multipliers"}
+    ]},
+    {"number": 5, "title": "Multiple Integration", "sections": [
+      {"number": "5.1", "title": "Double Integrals over Rectangular Regions", "page": "5-1-double-integrals-over-rectangular-regions"},
+      {"number": "5.2", "title": "Double Integrals over General Regions", "page": "5-2-double-integrals-over-general-regions"},
+      {"number": "5.3", "title": "Double Integrals in Polar Coordinates", "page": "5-3-double-integrals-in-polar-coordinates"},
+      {"number": "5.4", "title": "Triple Integrals", "page": "5-4-triple-integrals"},
+      {"number": "5.5", "title": "Triple Integrals in Cylindrical and Spherical Coordinates", "page": "5-5-triple-integrals-in-cylindrical-and-spherical-coordinates"},
+      {"number": "5.6", "title": "Calculating Centers of Mass and Moments of Inertia", "page": "5-6-calculating-centers-of-mass-and-moments-of-inertia"},
+      {"number": "5.7", "title": "Change of Variables in Multiple Integrals", "page": "5-7-change-of-variables-in-multiple-integrals"}
+    ]},
+    {"number": 6, "title": "Vector Calculus", "sections": [
+      {"number": "6.1", "title": "Vector Fields", "page": "6-1-vector-fields"},
+      {"number": "6.2", "title": "Line Integrals", "page": "6-2-line-integrals"},
+      {"number": "6.3", "title": "Conservative Vector Fields", "page": "6-3-conservative-vector-fields"},
+      {"number": "6.4", "title": "Green’s Theorem", "page": "6-4-greens-theorem"},
+      {"number": "6.5", "title": "Divergence and Curl", "page": "6-5-divergence-and-curl"},
+      {"number": "6.6", "title": "Surface Integrals", "page": "6-6-surface-integrals"},
+      {"number": "6.7", "title": "Stokes’ Theorem", "page": "6-7-stokes-theorem"},
+      {"number": "6.8", "title": "The Divergence Theorem", "page": "6-8-the-divergence-theorem"}
+    ]},
+    {"number": 7, "title": "Second-Order Differential Equations", "sections": [
+      {"number": "7.1", "title": "Second-Order Linear Equations", "page": "7-1-second-order-linear-equations"},
+      {"number": "7.2", "title": "Nonhomogeneous Linear Equations", "page": "7-2-nonhomogeneous-linear-equations"},
+      {"number": "7.3", "title": "Applications", "page": "7-3-applications"},
+      {"number": "7.4", "title": "Series Solutions of Differential Equations", "page": "7-4-series-solutions-of-differential-equations"}
+    ]}
+  ]
+}
