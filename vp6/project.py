@@ -24,6 +24,7 @@ A project file is an executable Python script that starts the program::
         "arguments_help": "",         # the program's arguments, for --help
         "package": "",                # the Python package it is ("": none)
         "command": "",                # its wheel's command ("": its name)
+        "lesson": "",                 # the vp6edu lesson it is the lab of ("": none)
         "groups": [                   # how the Project panel shows them
             {"group": "Forms", "items": ["Form1.py"]},
             {"group": "Modules", "items": ["Module1.py"]},
@@ -69,6 +70,10 @@ other modules. The program is started from the package (``run_package``, e.g.
 by a console entry point) and finds its files there (``App.Path``).
 ``command`` is the command a wheel installs for it (empty: the project's name),
 e.g. ``myapp-gui``.
+
+``lesson`` makes the project a lesson's lab (``vp6.ide.logic.education``): the
+id of a vp6edu lesson (``math/prealgebra-2e/1.2``), whose Lesson window the
+IDE opens with the project.
 """
 
 from __future__ import annotations
@@ -90,7 +95,7 @@ _END_RE = re.compile(r"^# endregion\b.*$", re.M)
 
 _FIELDS = ("name", "type", "startup", "forms", "modules", "user_controls", "color_scheme", "icon",
            "version", "product_name", "company_name", "description", "arguments",
-           "arguments_help", "package", "command", "groups")
+           "arguments_help", "package", "command", "lesson", "groups")
 _COMMENTS = {
     "icon": "the program's icon: image files (sizes of it), or []",
     "type": '"exe" (GUI) or "console"',
@@ -104,6 +109,7 @@ _COMMENTS = {
     "arguments_help": "the program's own arguments, shown by --help",
     "package": 'the Python package it is ("": none), e.g. "myapp.gui"',
     "command": 'the command its wheel installs ("": its name)',
+    "lesson": 'the vp6edu lesson it is the lab of ("": none)',
 }
 
 _TEMPLATE = '''#!/bin/sh
@@ -160,6 +166,7 @@ class Project:
     arguments_help: str = ""  # the program's own arguments, listed by --help
     package: str = ""  # the Python package the project's folder is ("": none)
     command: str = ""  # the command its wheel installs ("": the project's name)
+    lesson: str = ""  # the vp6edu lesson (its id) whose lab the project is ("": none)
     # The Project panel's tree (None: Forms and Modules groups); compared by tree()
     groups: list | None = field(default=None, compare=False)
     path: str = field(default="", compare=False)  # the .vp6p file

@@ -103,6 +103,11 @@ its own with `mistakes={"7": "That's 3 + 4: multiply instead."}`.
 | `Pair((2, 3))` | the same ordered pair or tuple | `names` for `x = 2, y = 3` |
 | `Point(2, 3)`, `Line("y = 2x + 1")` | the point, or two points on the line, placed on a graph, or typed | `tolerance` |
 
+An exercise whose answer is a `Point` or a `Line` is answered on a Graph in
+VP6's Lesson window; `graph={...}` (the Graph's properties, e.g.
+`{"XMin": -5, "XMax": 5}`) puts any other exercise on one, an
+`Inequality` on a number line.
+
 `generators(module)` lists a module's makers (its public functions of one
 argument), `load_exercises(path)` loads an `exercises.py`, and
 `verify(maker)` checks that over many seeds each exercise's own answer

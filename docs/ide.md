@@ -176,6 +176,51 @@ Files Codex changes show at once in the form designer and the code window,
 and the files changed in the IDE are saved before each message, as for
 Claude.
 
+### Lessons
+
+<!-- keywords: lesson, Lesson window, education, vp6edu, exercises, lab, Try It, progress -->
+
+The courses of **vp6edu** (Mathematics, after OpenStax's books) are lessons,
+each with a **lab**: a small VP6 project to change and run. Opening a lesson
+makes its project the first time, a copy of the lesson's `lab/` folder, in
+`VP6 Lessons/<subject>/<book>/<section>` (e.g. `VP6 Lessons/math/prealgebra-2e/1.2`);
+after that the same project is opened again, with your changes. Its project
+file says which lesson it is (`"lesson": "math/prealgebra-2e/1.2"`) and has
+the lesson's title as its Description.
+
+Opening a lesson's project opens the **Lesson window** beside its forms (View >
+Lesson Window opens it again), with three tabs:
+
+* **Lesson:** the lesson, with its maths: the objectives, worked examples,
+  key terms. A **Try It** has a field of its own: type the answer and press
+  Enter or Check, and it says whether it's right. At the end are the
+  attribution and a link to the section on openstax.org. Scrolled to the
+  end, the lesson counts as read.
+* **Exercises:** one exercise after another, with new numbers each time.
+  Type the answer (fractions, powers, roots and so on are read as you'd
+  write them: `3/4`, `x^2`, `√2`), or place it on the graph (a point, a line
+  through two points, intervals on a number line), then **Check**. **Hint**
+  gives the hints one at a time, **Show Solution** the worked solution (a
+  right answer after it isn't counted), **New Numbers** another exercise of
+  the same kind, **Next Exercise** the next kind. The score counts the kinds
+  answered right.
+* **Lab:** what to try with the lab project. **Run the Lab** (or F5) runs
+  it; double-click one of its forms to open it in the designer. The lab is
+  plain VP6 code: change it as you like.
+
+**Previous Lesson** and **Next Lesson** go along the learning path (to the
+written lessons; at a book's end, to the next book's first), opening their
+projects beside this one. Your progress in each lesson (read, the exercises
+right and tried, the lab run) is kept in the IDE's settings; **Reset
+Progress** forgets it.
+
+A lesson's `lesson.md` is Markdown with maths. A Try It's answer is a fenced
+block of language `answer` holding one of vp6edu's answers (`Number(5)`,
+`Number(Fraction(3, 4), form="simplest")`, `Point(2, 3)`...), where the field
+goes; the section headed `## Lab` (to the next heading or a `---` rule) is
+the Lab tab's text. The exercises are the functions of its `exercises.py`
+(see vp6edu's README).
+
 ## Files
 
 A project is a folder with a `Name.vp6p` project file listing forms, modules,

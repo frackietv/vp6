@@ -2271,13 +2271,17 @@ class Exercise:
     """One exercise: its ``prompt`` (Markdown with maths), its ``answer`` (an
     ``Answer``), ``hints`` given one at a time, a worked ``solution``
     (Markdown), the ``skill`` it practises, and the ``seed`` it was made from.
-    ``check`` counts ``tries`` and sets ``solved``."""
+    ``graph``: the answer is placed on a Graph with these properties (a dict
+    of the Graph's property names, ``{}`` for its defaults); a ``Point`` or
+    ``Line`` answer is placed on one without it. ``check`` counts ``tries``
+    and sets ``solved``."""
     prompt: str
     answer: Answer
     hints: list[str] = field(default_factory=list)
     solution: str = ""
     skill: str = ""
     seed: int | None = None
+    graph: dict | None = None
     tries: int = 0
     hints_shown: int = 0
     solved: bool = False

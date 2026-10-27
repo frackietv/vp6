@@ -1,5 +1,16 @@
 # VP6 features
 
+**Version:** 0.4.71
+**Date:** 2026-10-27
+
+## Education: lesson projects and the Lesson window
+
+- A lesson becomes a VP6 project made from its lab, in `VP6 Lessons/<subject>/<book>/<section>`; its project file says which lesson it is (`"lesson"`) and has the lesson's title as its Description; opened again, the same project comes back with the student's changes
+- Opening such a project opens the Lesson window beside its forms (View > Lesson Window), with three tabs: the lesson with its maths and Try Its checked in place, the attribution and a link to the section on openstax.org; the exercises one after another, typed or placed on a Graph (a point, a line, intervals on a number line), with Check, Hint, Show Solution, New Numbers, Next Exercise and a score; the lab, what to try with it, Run the Lab (F5) and its forms
+- Previous Lesson and Next Lesson along the learning path; progress kept per lesson in the IDE's settings (read, exercises right and tried, the lab run; not started, in progress or done), with Reset Progress
+- Lessons' `lesson.md`: Try It answers as `answer` blocks, the Lab tab's text from its `## Lab` section; vp6edu 0.1.2: an exercise can be answered on a Graph (`Exercise.graph`)
+- Light and dark
+
 **Version:** 0.4.70
 **Date:** 2026-10-27
 

@@ -1,11 +1,5 @@
 # VP6 backlog
 
-- **[Education]** Step 5, lesson projects and the Lesson window. A lesson opened from the Education tab (step 6) becomes a VP6 project made from the lesson's `lab/`, as `samples.create` makes a sample. Its .vp6p has a `lesson` key (the lesson's id) and the lesson's title as its Description. When the project already exists it's reopened, not made again. Opening such a project opens the Lesson window (an MDI child, `vp6/ide/lessonwindow.py`, its Qt-free part in `vp6/ide/logic/education.py`), with three tabs:
-  - **Lesson:** the lesson's Markdown with maths; objectives, worked examples with Try It answers checked in place, key terms, the attribution footer and a link to the OpenStax section;
-  - **Exercises:** one exercise after another, answered in a field or on a Graph, with Check, Hint, Show Solution, New Numbers and a score;
-  - **Lab:** what to try with the lab project; F5 runs it; its forms are listed. The lab is plain VP6 code the student changes.
-
-  Previous and Next go along the path. Progress is kept per lesson in the IDE's settings (read; exercises right and tried; lab run), with Reset Progress. Tests use a stand-in lesson in a temporary subject.
 - **[Education]** Step 6, the New Project dialog's fourth tab, Education, after New, Existing and Recent:
   - a Subject drop-down listing the subjects vp6edu has (Mathematics for now);
   - the subject's learning path drawn as a graph (a widget of its own): each book a node with its title and a progress bar, arrows between the books, the Statistics branch leaving Intermediate Algebra; laid out from the path's graph, scrolling when wider than the dialog, light and dark;

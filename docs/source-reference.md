@@ -2737,6 +2737,24 @@ Captures the IDE process's stdout and stderr for the Output window.
 * `pump_process_output(process, window)` connects a `QProcess`'s stdout and
   stderr to the window.
 
+### `vp6/ide/lessonwindow.py` (≈490 lines)
+
+The Lesson window (its logic in `logic/education.py`). `MarkdownView` (a
+`QTextBrowser` as tall as its text: vp6help's `to_html`, `texdraw.install`
+for the formulas, links in the theme's colour, pictures from the lesson's
+folder; `set_markdown`, `set_html(make)` remade when the theme changes).
+`TryIt` (a field, Check, the result in place; a Try It that can't be read
+says why). `_GraphHost` (a `_PanelHost` for the Graph an exercise is
+answered on). **`LessonWindow(lesson, project)`**: the header and the
+progress (`state_label`), `tabs`: Lesson (`lesson_views`, `try_its`,
+`footer` with the openstax.org link; `_check_read` at the scroll's end),
+Exercises (`session`, `prompt`, `answer_field` or `graph`, `check`, `hint`,
+`show_solution`, `new_numbers`, `next_exercise`, `feedback`, `score_label`),
+Lab (`lab_view`, `run_button`, `forms`, `lab_ran`); `previous_lesson`/
+`next_lesson` with their buttons, `reset_progress(ask)`. Signals
+`lessonRequested(lesson)`, `runRequested`, `formRequested(path)`,
+`progressChanged`.
+
 ### `vp6/ide/terminalpanel.py` (≈170 lines)
 
 The Terminal window: a shell in the IDE, run by the Terminal control.
@@ -3676,6 +3694,31 @@ Project Properties (`project_specs`, `project_values`,
 (`unique_file`, `import_names`, `file_name_error`, `is_identifier`,
 `relative`). `DEFAULT_LOCATION`.
 
+### `vp6/ide/logic/education.py` (≈450 lines)
+
+Lessons in the IDE without Qt. **Projects:** `SUBJECT_ROOTS` (the subjects'
+folders; none: vp6edu's own; tests set it), `subjects`, `find_lesson`,
+`LESSONS_FOLDER`/`default_root`, `project_folder(root, lesson)`
+(`<root>/<subject>/<book>/<section>`), `root_of` (back from a project's
+folder), `project_name` (`Lesson1_2`), `existing_project` (a `.vp6p` whose
+`lesson` is the id), `create_lesson_project` (reopened when there; else the
+lab copied: its own `.vp6p`'s files and startup, or its `.py` files sorted
+into forms, by their designer region, and modules, starting in Form1 or a
+module's `Main`; `FileExistsError` for a folder with other files).
+**The path:** `path_lessons` (the first path's books in Kahn's order, the
+path's order breaking ties), `neighbour(lesson, ±1)` (planned lessons
+skipped). **Text:** `parse_lesson` → `LessonText(title, parts, lab)`: `Part`s
+of Markdown and ```` ```answer ```` blocks, the `## Lab` sections (to the next
+`#`/`##` heading or rule) apart; fences followed so headings in code don't
+count; `answer_names`, `try_it_answer` (evaluated with vp6edu.answers' names,
+`Fraction`, `math`; ValueError). **Progress:** `Progress` (read, right, tried,
+exercises, lab_run; `state`: `NOT_STARTED`, `IN_PROGRESS`, `DONE`),
+`progress`/`save_progress`/`reset_progress` (JSON under
+`education/progress/<id>` in `settings`). **Exercises:** `graph_settings`
+(PlaceMode from a Point, Line or Inequality answer), `ExerciseSession`
+(`of_lesson`, `go`, `new_numbers`, `check` counting right unless the
+solution was shown, `hint`, `solution`, `score_text`).
+
 ### `vp6/ide/logic/propertygrid.py` (≈120 lines)
 
 How the Properties window reads and writes values: `value_text(kind, value,
@@ -4005,7 +4048,8 @@ along a letter both are linear in; `EQUATION_FORMS`, `solved_for`), `Pair`,
 `Solutions` (`NO_SOLUTION`, `ALL_REAL`, `±` expanded), `Inequality`
 (`Interval`, `_intervals` merged, `_complement`, `_intersection`; mistakes:
 endpoint, flipped). **Exercises:** `Exercise` (hints one at a time, tries,
-solved), `load_exercises`, `generators` (public one-argument functions),
+solved; `graph`: the Graph's properties when it's answered on one),
+`load_exercises`, `generators` (public one-argument functions),
 `make` (a seeded `random.Random`), `verify` (each seed's answer `text` checks
 right).
 
@@ -4155,6 +4199,7 @@ All tests run headless. `conftest.py`:
 | `test_vp6help.py` | The help system: Markdown to HTML (blocks, tight and loose and nested lists, task items, tables with alignment and escaped pipes, inline markup, links, pictures, autolinks); making a help file (pages, titles, links between documents rewritten, pictures included, missing links warned about, anchors on every heading, the contents to a depth or flat, index keywords from headings, lone code names, comments and meta tags (not linked code), sections' text without scripts; the same documents making the same bytes; the home page; errors; the command line with an @file); Python packages read without importing (classes, signatures, properties, attributes, constants in groups, private names, re-exports, bases linked and inherited members), following imported packages (not the standard library; excluded ones), compiled modules inspected, a package in a help file; the file (lookups, filters, regular expressions, case, search counts and order, not a help file); the viewer (home, contents, links, pictures, back and forward, web links, missing pages, Locate, the index's filter and options, keywords with several topics and a context, search highlighting with options, requests and one window per file, colors from the palette, the command line's `--list`); vp6help's pyproject. |
 | `test_answers.py` | Checking answers (vp6edu.answers): reading typed maths leniently (mixed numbers, vulgar fractions, percents, thousands, Unicode operators, superscripts, roots, implicit multiplication, absolute values, functions; why something can't be read; undefined values), equivalence at random points; every kind: choices (one, many, by letter, index or text), numbers (exact, tolerance, approximations, rounding, every form, simplified roots, units and conversions, money), expressions (equivalence, letters, signs; simplified, expanded, standard, factored completely), equations (multiples, solved for a letter, slope-intercept and standard forms), solutions (lists, `or`, sets, ±, none, all), inequalities (both notations, unions, endpoints, flipped, the notation asked for, a number line's intervals), pairs, points and lines on a graph; known mistakes; exercises (makers loaded from a file, seeds, hints, tries, `verify` over many seeds, broken makers); no Qt. |
 | `test_vp6edu.py` | The courses (vp6edu): the Mathematics outline (books, chapters, sections, authors, licence, all planned), the learning path and its Statistics branch, lesson ids, links and folders, prerequisites along the path (a chapter's and a book's first section, the branch, all of them), shared lessons (Precalculus from Algebra and Trigonometry, the Calculus volumes) and their folders and attribution, the attribution line, vp6edu's subjects passing the check; a stand-in subject in a temporary folder: written lessons (missing files, the attribution reflowed or missing, exercises that don't compile, drafts), shared and required lessons, mistakes in the data (references, numbering, statuses, page names, sharing a sharing lesson, stray folders, cycles), paths (unknown books, edges, cycles), unreadable files; `vp6edu-check`'s command line; vp6edu's pyproject (no Qt). |
+| `test_lessons.py` | Lesson projects and the Lesson window, with a stand-in subject in a temporary folder: a project made from a lab (forms and modules sorted, the `lesson` key and Description, reopened with the student's changes kept, a folder of other files refused, a lab with its own project), the `lesson` key in project files, lessons along the path (planned ones skipped, across books, a branch), where neighbours go, `lesson.md` split (Try Its, the Lab sections to a rule, fences), Try It answers, progress in the settings and its states, exercises one after another (unreadable answers not counted, a solution shown, seeds, graph answers); the window in the IDE (its tabs, a Try It checked, the link, exercises typed and placed on the Graph, the score, the lab's forms, running the lab, Reset Progress), Previous and Next, a project whose lesson isn't installed. |
 | `test_samples.py` | The New Project dialog's categories (Standard EXE and Console Application at the top level then the Sample Projects folder; Kitchen Sink and the Graphics folder in it; Projection and Perspectives in that; folders opened by double-click and Open, no template while one is chosen, its contents described; `select_template`); Projection: a project of a single startup form; the isometric projection (the view along the diagonal, the axes 120° apart and equally long, Z up, the angles shown); the eight projections (their axes, angles and lengths; each drawn solid); solid faces covering the middle and the axes behind the model, the wireframe showing them through and its corners; the model turning at the rate sliders' speeds (a rate of 0, Rotate off, past 180°), its angle sliders setting it; what the mouse takes (the space, the model, an axis's end and label; the pointer); dragging an axis (just that one, the angles no longer 120°, a general parallel projection), then the space (the skew kept), double-click and Reset view going back; dragging the space turning the axes (still orthographic, the elevation stopping at 90°); dragging the model turning it around the camera's axes, the axes staying; resizing; the models' toggles (one at a time, each hit by the mouse; the torus's hole; the house's wireframe and edges); the models' faces (flat, unit normals, outward for convex parts and away from the torus's tube; within the axes); the separations (every pair of boxes, a street on the ground, none for overlapping boxes); the parts drawn back to front (the boxes turned round, the park before its trees, a part facing away left out); `hull` and `overlap`; without OpenGL (offscreen: chkOpenGL off and disabled, the PictureBox shown, glView as large); OpenGL's projection (`View` placing points where Project does, a dragged axis too, nearer in front; the vertices of every model's faces, decals and edges, the axes). Perspectives: a project of a single startup form, 3-point first; the six perspectives (each N-point, its vanishing points' places, drawn solid); linear (2-point: X and Y on the horizon, lines along an axis heading for its vanishing point, upright lines upright, nearer bigger; 1-point: Y's up and right of the model's center); curvilinear (fisheye: +Y in the middle, four on the rim, edges bending; cylindrical: four on the horizon a quarter turn apart, Z's at infinity; spherical: −Y in the middle of the half behind, rim points in both halves); dragging a vanishing point (just that one; double-click going back; one at infinity at the edge, dragged to a point; a fisheye's, the other way going behind); vanishing points at infinity (parallel lines that way; none left: a parallel projection, still solid; back to a point inside the picture; on the fisheye's rim); dragging the space (sideways: along the horizon, Z still at infinity; down: 3-point) and the model; the Distance (the vanishing points staying, the model smaller; inside the cube: every face, ahead and behind); the perspective lines (each axis's and the horizon, none when off) and the fisheye's rim; what the mouse takes; every model in every perspective, solid and wireframe, the boxes back to front; resizing (the sphere's halves side by side); `clip`, `crosses_seam`, `slerp`, `inside`, `look`; without OpenGL; OpenGL's pictures (a linear `View` placing points where Map does and each axis's direction at its vanishing point, the farthest; each cube face's `View(k)` seeing its own quarter turn; the perspective lines' vertices). |
 | `test_claude.py` | The IDE's Claude window and chats, with a stand-in for Claude Code (a script speaking stream-json, keeping transcripts and a login as it does): the transcripts folder's name; sessions listed with their titles (the IDE's name, Claude Code's, the first thing asked; its own commands and notes skipped; empty ones not listed), renamed and deleted; a transcript's messages; times; `claude auth status` read; finding the command; tool summaries; a chat kept running between messages and resumed (in a new mode) after it ended; no Claude Code; asking before a tool (Deny, Always Allow, not asked again); the chat window (Enter and Shift+Enter, its title, Send/Stop, Markdown, the cost, an error with the login link); Stop; a resumed session's transcript; the panel without Claude Code and with it (the login, the sessions, New/Open/Rename/Delete, the menu); in the IDE: hidden by default and tabbed, sessions in the MDI area in the project's folder, listed after a reply, opened once, Edit > Copy, closed with the project or their window (Claude Code ending), Log In through the Terminal window; drawn; files Claude changes shown at once in the designer and the code window (unsaved changes saved before the message, the change undoable), files changed by another program (the watcher; its own saves not a change), a file changed here and on disk (kept or read again, as the user says), reloading only what changed (a cursor, a breakpoint, an emoji). |
 | `test_codex.py` | The IDE's Codex window and chats, with a stand-in for `codex app-server` (a script speaking its JSON-RPC, keeping threads and a login as it does): finding the command and Codex's folder; the account described; sessions from threads, the listing's parameters, the modes' policies, a command without its shell; the server started when asked (initialized first, kept running, errors); no Codex; a chat (the thread started in the folder, the mode's policies on each turn, unsubscribed at the end); two chats on one server each taking their own thread's messages; asking before a command (accept, decline, acceptForSession); a resumed thread's turns, the server ending while busy and started again (the thread resumed); Stop (turn/interrupt); the chat window (its title, Send/Stop, the time, a denied command, a file change asked about and made, the mode remembered, an error with the login link); a resumed session shown; the panel without Codex and with it (Log In in the browser, Log Out, the folder's sessions only, the latest first, Open/New/Rename/Delete); in the IDE: hidden by default and tabbed, sessions in the MDI area sharing the panel's server, listed after a reply, opened once, closed with the project; logging in from a chat's link; files Codex changes shown at once in the designer and the code window; the server ended with the IDE; drawn. |

@@ -933,6 +933,21 @@ def _chat(p):  # a speech bubble with a spark: Claude's sessions
     p.setPen(QPen(C.ink, 1))
 
 
+
+def _lesson(p):  # an open book with a formula's line: a vp6edu lesson
+    p.setBrush(C.paper)
+    for side in (-1, 1):
+        p.drawPolygon([QPointF(12, 6), QPointF(12 + side * 9, 4), QPointF(12 + side * 9, 19),
+                       QPointF(12, 21)])
+    p.setPen(QPen(QColor("#2f6fd6"), 1.4))
+    for y in (9, 12.5):
+        p.drawLine(QPointF(5, y), QPointF(10, y + 0.5))
+    p.drawLine(QPointF(14, 9.5), QPointF(19, 9))
+    p.drawLine(QPointF(16.5, 6.8), QPointF(16.5, 11.8))
+    p.drawLine(QPointF(14, 14.5), QPointF(19, 14))
+    p.setPen(QPen(C.ink, 1))
+
+
 _DRAWERS = {
     "Pointer": _pointer, "PictureBox": _picturebox, "Label": _label, "TextBox": _textbox,
     "Frame": _frame, "CommandButton": _commandbutton, "CheckBox": _checkbox,
@@ -949,6 +964,7 @@ _DRAWERS = {
     "DockPanel": _dockpanel, "UserControl": _usercontrol,
     "CommonDialog": _commondialog, "WebView": _webview, "WebBrowser": _webbrowser,
     "Form": _form, "Module": _module, "Project": _folder, "Console": _console, "Chat": _chat,
+    "Lesson": _lesson,
     "New": _new, "Open": _open, "Save": _save, "Run": _run, "Stop": _stop, "Pause": _pause,
     "Sun": _sun, "Moon": _moon, "KitchenSink": _kitchensink, "Isometric": _isometric,
     "SpinBox": _spinbox, "DTPicker": _dtpicker, "MonthView": _monthview, "Dial": _dial,

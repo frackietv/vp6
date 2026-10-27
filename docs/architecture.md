@@ -784,6 +784,7 @@ PROJECT = {
     "arguments_help": "--open FILE    open FILE at the start",   # listed by --help
     "package": "",                      # the Python package it is ("": none)
     "command": "",                      # its wheel's command ("": its name)
+    "lesson": "",                       # the vp6edu lesson it is the lab of ("": none)
     "groups": [                         # how the Project panel shows them (not folders)
         {"group": "Forms", "items": ["frmCalculator.py"]},
         {"group": "Modules", "items": []}

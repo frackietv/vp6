@@ -37,11 +37,13 @@ from .debugger import DebugSession, WatchWindow, describe, same_file
 from .debugpanel import DebugPanel
 from .designer import FormDesigner, is_identifier
 from .logic.commandline import argument_parser, parse_arguments  # noqa: F401
-from .logic.projects import create_project
+from .logic import education
+from .logic.projects import DEFAULT_LOCATION, create_project
 from .dialogs import AboutDialog, MakeDialog, NewProjectDialog, ProjectPropertiesDialog
 from .splash import SplashScreen
 from .documents import Document, FormDocument, open_document
 from .findreplace import FindReplaceDialog, ProjectFiles, ask_line
+from .lessonwindow import LessonWindow
 from .objectbrowser import ObjectBrowser
 from .options import OptionsDialog
 from .outline import OutlineWindow
@@ -382,6 +384,8 @@ class MainWindow(QMainWindow):
                                 tip="OpenAI's Codex: the login and the project's sessions")
         self.act_view_outline = a("Outli&ne Window", self._show_outline,
                                   tip="The structure of the current file")
+        self.act_view_lesson = a("L&esson Window", lambda: self.show_lesson(),
+                                 tip="The lesson whose lab this project is")
 
         self.act_help_contents = a("&Contents", lambda: self.show_help(),
                                    tip="VP6's help: its table of contents")
@@ -447,7 +451,8 @@ class MainWindow(QMainWindow):
             edit.addSeparator() if act is None else edit.addAction(act)
 
         view = bar.addMenu("&View")
-        for act in (self.act_view_code, self.act_view_object, self.act_view_browser, None,
+        for act in (self.act_view_code, self.act_view_object, self.act_view_browser,
+                    self.act_view_lesson, None,
                     self.act_view_immediate,
                     self.act_view_output, self.act_view_debug, self.act_view_terminal,
                     self.act_view_claude, self.act_view_codex,
@@ -904,6 +909,7 @@ class MainWindow(QMainWindow):
                     self.act_add_user_control, self.act_add_file, self.act_add_folder,
                     self.act_project_props):
             act.setEnabled(has_project)
+        self.act_view_lesson.setEnabled(has_project and bool(self.project.lesson))
         paused = self.paused
         self.act_run.setEnabled(has_project and (not self.running or paused))
         self.act_run.setText("&Continue" if paused else "&Start")
@@ -1088,8 +1094,66 @@ class MainWindow(QMainWindow):
                 self.view_code(module)
         elif startup_form:
             self.view_object(startup_form)
+        if project.lesson:
+            self.show_lesson()
         self.statusBar().showMessage(f"Opened {project.path}", 5000)
         return True
+
+    # -- lessons (vp6edu) ---------------------------------------------------------------------
+    def lesson_windows(self) -> list[QMdiSubWindow]:
+        return [sub for sub in self.mdi.subWindowList()
+                if isinstance(sub.widget(), LessonWindow)]
+
+    def lesson_window(self) -> LessonWindow | None:
+        subs = self.lesson_windows()
+        return subs[0].widget() if subs else None
+
+    def show_lesson(self) -> LessonWindow | None:
+        """View > Lesson Window: the Lesson window of the lesson whose lab the
+        project is (opened with such a project)."""
+        if self.project is None or not self.project.lesson:
+            return None
+        subs = self.lesson_windows()
+        if subs:
+            self._activate(subs[0])
+            return subs[0].widget()
+        lesson = education.find_lesson(self.project.lesson)
+        if lesson is None:
+            self.statusBar().showMessage(
+                f"There's no lesson {self.project.lesson} in the courses installed", 8000)
+            return None
+        window = LessonWindow(lesson, self.project)
+        window.lessonRequested.connect(
+            lambda other: QTimer.singleShot(0, self, lambda: self.open_lesson(other)))
+        window.runRequested.connect(lambda: self.run_project())
+        window.formRequested.connect(self.view_object)
+        sub = self.mdi.addSubWindow(window)
+        sub.setAttribute(Qt.WA_DeleteOnClose, True)
+        sub.installEventFilter(self)
+        sub.setWindowIcon(icons.icon("Lesson"))
+        sub.setWindowTitle(window.title)
+        sub.resize(780, 600)
+        self._activate(sub)
+        return window
+
+    def open_lesson(self, lesson, root: str | None = None) -> bool:
+        """Open a lesson's project, made from its lab the first time, under
+        ``root`` (by default where this lesson project's neighbours are, else
+        the VP6 Lessons folder of the projects' location)."""
+        if root is None:
+            current = education.find_lesson(self.project.lesson) \
+                if self.project is not None and self.project.lesson else None
+            root = education.root_of(self.project.directory, current) if current else \
+                education.default_root(DEFAULT_LOCATION)
+        try:
+            path = education.create_lesson_project(lesson, education.project_folder(root, lesson))
+        except OSError as exc:
+            QMessageBox.warning(self, "Open Lesson", f"The lesson's project couldn't be made:\n"
+                                f"{exc}")
+            return False
+        if not self.close_project():
+            return False
+        return self.open_project(path)
 
     def _add_document(self, doc: Document):
         self.documents[doc.path] = doc
@@ -2259,6 +2323,9 @@ class MainWindow(QMainWindow):
         self.process = process
         # The project file is itself the program's launcher script
         process.start(sys.executable, ["-u", self.project.path] + self.run_arguments())
+        lesson = self.lesson_window()
+        if lesson is not None:
+            lesson.lab_ran()
         self.immediate.set_running(self.project.type == "console")
         self._update_title()
         self._update_actions()
