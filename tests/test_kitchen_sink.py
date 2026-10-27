@@ -1467,6 +1467,37 @@ def test_graphicsview_page(sink):
     assert os.path.isfile(page.lblItem.Caption[len("Saved as "):])
 
 
+def test_graph_page(sink):
+    page = _page(sink, "graph")
+    graph = page.grfMath
+    assert graph.Items.Count == 8 and page.lblInfo.Caption.startswith("The slope of AB is 0.8")
+    page.b.X = page.a.X
+    page.grfMath_PointMoved(page.b)
+    assert "undefined" in page.lblInfo.Caption
+    graph.Picture  # (painted with the Paint event's line)
+    for index in range(page.cboShow.ListCount):
+        page.cboShow.ListIndex = index
+        graph.Picture  # (every one draws)
+        assert all(item._error is None for item in graph.Items)
+    page.cboShow.ListIndex = 4  # (place a point)
+    assert page.cmdCheck.Enabled
+    page.cmdCheck._widget.click()
+    assert page.lblInfo.Caption == "Place your answer on the graph first"
+    x, y = graph._mapping()[0](3, -2)
+    QTest.mouseClick(graph._widget, Qt.LeftButton, Qt.NoModifier, QPoint(round(x), round(y)))
+    page.cmdCheck._widget.click()
+    assert page.lblInfo.Caption.startswith("Right")
+    page.cboShow.ListIndex = 3  # (the number line)
+    graph.AddInterval(-2, 3, LowClosed=False)
+    graph._placed.append(graph.Items(1))
+    page.cmdCheck._widget.click()
+    assert page.lblInfo.Caption.startswith("Right")
+    page.cboShow.ListIndex = 5
+    assert page.lblInfo.Caption.startswith("Median ")
+    page.cmdCopy._widget.click()
+    assert page.lblInfo.Caption == "The graph is on the clipboard"
+
+
 def test_chart_page(sink):
     page = _page(sink, "chart")
     page.cboType.ListIndex = vp6.vpChartPie

@@ -613,6 +613,17 @@ vpLegendBottom = 2
 vpLegendLeft = 3
 vpLegendRight = 4
 
+# --- Graph.Mode ---------------------------------------------------------------------------
+vpGraphPlane = 0
+vpGraphNumberLine = 1
+vpGraphData = 2
+
+# --- Graph.PlaceMode ----------------------------------------------------------------------
+vpPlaceNone = 0
+vpPlacePoint = 1
+vpPlaceLine = 2
+vpPlaceInterval = 3
+
 # --- MediaPlayer.State --------------------------------------------------------------------
 vpMediaStopped = 0
 vpMediaPlaying = 1

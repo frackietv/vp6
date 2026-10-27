@@ -48,7 +48,7 @@ NAME_PREFIX = {
     "HotKey": "HotKey", "CommandLink": "Link", "ToolButton": "ToolButton",
     "ButtonBox": "ButtonBox", "ToolBox": "ToolBox", "PageFrame": "PageFrame",
     "ScrollPanel": "ScrollPanel", "ColumnView": "ColumnView", "DBGrid": "DBGrid",
-    "GraphicsView": "Graphics", "Chart": "Chart", "SvgImage": "Svg",
+    "GraphicsView": "Graphics", "Chart": "Chart", "Graph": "Graph", "SvgImage": "Svg",
     "MediaPlayer": "MediaPlayer", "PdfViewer": "Pdf", "OpenGLView": "GLView",
     "QuickView": "QuickView", "UndoView": "UndoView", "Winsock": "Winsock",
     "FileWatcher": "FileWatcher", "DesignerView": "Designer",

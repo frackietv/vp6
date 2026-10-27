@@ -23,6 +23,7 @@ from pgEmbedded import pgEmbedded
 from pgFiles import pgFiles
 from pgGL import pgGL
 from pgGlobals import pgGlobals
+from pgGraph import pgGraph
 from pgGraphicsView import pgGraphicsView
 from pgGrid import pgGrid
 from pgIDE import pgIDE
@@ -62,8 +63,9 @@ PAGES = {  # (in the index's order)
     "intro": pgIntro, "buttons": pgButtons, "inputs": pgInputs, "columns": pgColumns,
     "data": pgData, "dbgrid": pgDBGrid, "files": pgFiles, "grid": pgGrid,
     "morebuttons": pgMoreButtons, "lists": pgLists, "listview": pgListView, "chart": pgChart,
-    "zorder": pgZOrder, "drawing": pgDrawing, "graphicsview": pgGraphicsView, "glqml": pgGL,
-    "pictures": pgPictures, "media": pgMedia, "scrollbars": pgScrollBars, "values": pgValues,
+    "zorder": pgZOrder, "drawing": pgDrawing, "graph": pgGraph, "graphicsview": pgGraphicsView,
+    "glqml": pgGL, "pictures": pgPictures, "media": pgMedia, "scrollbars": pgScrollBars,
+    "values": pgValues,
     "tabs": pgTabs, "terminal": pgTerminal, "code": pgCode, "editing": pgEditing,
     "markdown": pgMarkdown, "richtext": pgRichText, "text": pgText, "timer": pgTimer,
     "tree": pgTree, "undo": pgUndo, "web": pgWeb, "schemes": pgSchemes, "dialogs": pgDialogs,
@@ -96,7 +98,7 @@ class Form1(Form):
         self.picNav = PictureBox(self, Left=0, Top=0, Width=220, Height=572, BorderStyle=0,
                                  Align=3, TabIndex=3)
         self.tvwIndex = TreeView(self.picNav, Left=0, Top=0, Width=220, Height=572,
-                                 Items=['Introduction|intro', 'Controls|controls', '    Buttons and options|buttons', '    Calendars, numbers and keys|inputs', '    ColumnView|columns', '    Data control|data', '    DBGrid|dbgrid', '    Drives, folders and files|files', '    FlexGrid|grid', '    Link, tool and dialog buttons|morebuttons', '    Lists|lists', '    ListView|listview', '    Graphics Controls|graphics_controls', '        Charts|chart', '        Lines, shapes and z-order|zorder', '        Drawing|drawing', '        GraphicsView|graphicsview', '        OpenGL and QML|glqml', '        Pictures|pictures', '    Media, SVG and PDF|media', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    TabStrip|tabs', '    Terminal|terminal', '    Text Input Controls|text_input_controls', '        CodeBox|code', '        Editing text|editing', '        Markdown|markdown', '        RichTextBox|richtext', '        Text and labels|text', '    Timer|timer', '    TreeView|tree', '    Undo history|undo', '    Web pages|web', 'Forms and dialogs|forms_section', '    Color schemes|schemes', '    Dialogs|dialogs', '    Keyboard|keyboard', '    MDI and popup forms|mdi', '    Mouse|mouse', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Docking panels|docking', '    Forms inside forms|embedded', '    Pages and scrolling panels|pages', '    Scrolling|scrolling', 'Programming|programming', '    App, Screen, settings...|globals', '    Building an IDE|ide', '    Control arrays|arrays', '    Designing forms|designer', '    Menus|menus', '    Network and files|network', '    Running programs|process', '    Your own controls|usercontrol'],
+                                 Items=['Introduction|intro', 'Controls|controls', '    Buttons and options|buttons', '    Calendars, numbers and keys|inputs', '    ColumnView|columns', '    Data control|data', '    DBGrid|dbgrid', '    Drives, folders and files|files', '    FlexGrid|grid', '    Link, tool and dialog buttons|morebuttons', '    Lists|lists', '    ListView|listview', '    Graphics Controls|graphics_controls', '        Charts|chart', '        Lines, shapes and z-order|zorder', '        Drawing|drawing', '        Graph (mathematics)|graph', '        GraphicsView|graphicsview', '        OpenGL and QML|glqml', '        Pictures|pictures', '    Media, SVG and PDF|media', '    Scroll bars|scrollbars', '    Sliders, progress and spinners|values', '    TabStrip|tabs', '    Terminal|terminal', '    Text Input Controls|text_input_controls', '        CodeBox|code', '        Editing text|editing', '        Markdown|markdown', '        RichTextBox|richtext', '        Text and labels|text', '    Timer|timer', '    TreeView|tree', '    Undo history|undo', '    Web pages|web', 'Forms and dialogs|forms_section', '    Color schemes|schemes', '    Dialogs|dialogs', '    Keyboard|keyboard', '    MDI and popup forms|mdi', '    Mouse|mouse', 'Layout|layout_section', '    Docked panes and Splitter|layout', '    Docking panels|docking', '    Forms inside forms|embedded', '    Pages and scrolling panels|pages', '    Scrolling|scrolling', 'Programming|programming', '    App, Screen, settings...|globals', '    Building an IDE|ide', '    Control arrays|arrays', '    Designing forms|designer', '    Menus|menus', '    Network and files|network', '    Running programs|process', '    Your own controls|usercontrol'],
                                  TabIndex=4,
                                  ToolTipText='The topics: its nodes were typed in the designer (Items)')
         self.splNav = Splitter(self, Left=220, Top=0, Width=6, Height=572, MinSize=150,

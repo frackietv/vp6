@@ -1,14 +1,5 @@
 # VP6 backlog
 
-- **[Education]** Step 4, a Graph control for mathematics (`vp6/graph.py`, Toolbox category Graphics):
-  - a coordinate plane: axes, a grid, labels, ticks in multiples of π for trigonometry, equal or free scales, pan and zoom with the mouse;
-  - plots: functions given as Python callables or as expression text (`AddFunction`, with a domain; holes and asymptotes left unjoined), parametric and polar curves, points, segments, rays, vectors, polygons, regions shaded between curves, half-planes of inequalities, labels with maths (step 2);
-  - a number-line mode (open or closed points, intervals) for Prealgebra and inequalities;
-  - a data mode for statistics: histograms, dot plots, box plots, scatter plots with a fitted line;
-  - interaction: draggable points (`PointMoved`), `Click(X, Y)` in graph coordinates, a point or line placed as an answer (read by step 3);
-  - the graphics methods over it, `Picture`/`EditCopy`, light and dark.
-
-  A Kitchen Sink page, the docs' generated section, and tests with grabs.
 - **[Education]** Step 5, lesson projects and the Lesson window. A lesson opened from the Education tab (step 6) becomes a VP6 project made from the lesson's `lab/`, as `samples.create` makes a sample. Its .vp6p has a `lesson` key (the lesson's id) and the lesson's title as its Description. When the project already exists it's reopened, not made again. Opening such a project opens the Lesson window (an MDI child, `vp6/ide/lessonwindow.py`, its Qt-free part in `vp6/ide/logic/education.py`), with three tabs:
   - **Lesson:** the lesson's Markdown with maths; objectives, worked examples with Try It answers checked in place, key terms, the attribution footer and a link to the OpenStax section;
   - **Exercises:** one exercise after another, answered in a field or on a Graph, with Check, Hint, Show Solution, New Numbers and a score;

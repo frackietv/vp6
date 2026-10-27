@@ -1,5 +1,20 @@
 # VP6 features
 
+**Version:** 0.4.70
+**Date:** 2026-10-27
+
+## The Graph control
+
+- A coordinate plane for mathematics (Toolbox: Graphics): axes, a grid with finer lines between, numbered ticks that fit (or `XStep`/`YStep`), ticks in multiples of π for trigonometry (`PiTicks`), equal or free scales, the axes' names (with maths), panned by dragging and zoomed with the wheel, `ZoomToFit`, `ResetView`
+- Functions as Python functions or as typed maths (`"2x + 1"`, `"x²"`, `"sin x"`, `"y = 1/(x - 2)"`, read as answers are), over a domain; asymptotes and holes are left unjoined; parametric and polar curves; points (closed or open), segments, rays, lines, vectors, polygons, regions shaded between curves, inequalities shaded where they hold (their edge dashed when strict), labels with maths
+- Lines, segments, vectors and polygons can follow points the user drags; a point can slide along a curve (`On`); `PointMoved(Item)` as it moves, in steps of `Snap`
+- A number line mode: open and closed points, intervals with arrows for no end
+- A data mode for statistics: histograms (Sturges' rule or bins of your own), dot plots, box plots (the quartiles as OpenStax's statistics takes them), scatter plots with the least-squares line, its slope, intercept and correlation; the view fits the data
+- `Click(X, Y)` and the mouse events in the graph's coordinates; answers placed with the mouse (`PlaceMode`: a point, a line through two points, intervals on the number line), read as `Answer` in the shapes `vp6edu.answers` checks
+- Each plot is a `GraphItem` in `Items` (by Index or Key), with its color (the next of six, light or dark, unless set), width, style, fill, label and its own values; changing one redraws the graph
+- The graphics methods draw in the graph's coordinates over the plots, in Paint or kept as the view moves; `Picture`, `EditCopy`; light and dark
+- The Kitchen Sink's Graph (mathematics) page: functions and dragged points, trigonometry, inequalities, a number line and a point to place and check, statistics, a scatter plot
+
 **Version:** 0.4.69
 **Date:** 2026-10-26
 

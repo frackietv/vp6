@@ -43,7 +43,7 @@ TOOLBOX_CATEGORIES = (
     ("Containers", ("Frame", "TabStrip", "ToolBox", "PageFrame", "ScrollPanel", "Splitter",
                     "DockPanel", "Toolbar", "StatusBar")),
     ("Graphics", ("PictureBox", "Image", "SvgImage", "Shape", "Line", "ImageList",
-                  "GraphicsView", "Chart", "OpenGLView")),
+                  "GraphicsView", "Chart", "Graph", "OpenGLView")),
     ("Lists", ("TreeView", "ListView", "ColumnView", "FlexGrid", "UndoView")),
     ("Text", ("RichTextBox", "CodeBox", "MarkdownBox")),
     ("Files", ("DriveListBox", "DirListBox", "FileListBox", "CommonDialog", "FileWatcher")),

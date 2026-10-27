@@ -816,6 +816,22 @@ def _chart(p):
         p.drawRect(QRectF(x, 21 - h, 4, h))
 
 
+def _graph(p):
+    p.setBrush(C.paper)
+    p.drawRect(QRectF(2, 2, 20, 20))
+    p.setPen(QPen(C.ink, 1))
+    p.drawLine(QPointF(12, 3), QPointF(12, 21))  # the axes
+    p.drawLine(QPointF(3, 12), QPointF(21, 12))
+    p.setPen(QPen(C.blue, 1.6))
+    path = QPainterPath()  # a parabola
+    path.moveTo(5, 4)
+    path.quadTo(12, 26, 19, 4)
+    p.drawPath(path)
+    p.setPen(QPen(C.ink, 1))
+    p.setBrush(QColor("#d4332b"))
+    p.drawEllipse(QPointF(16.5, 9), 2, 2)  # a point to drag
+
+
 def _svgimage(p):
     p.setPen(QPen(C.ink, 1, Qt.DashLine))
     p.setBrush(Qt.NoBrush)
@@ -940,7 +956,7 @@ _DRAWERS = {
     "CommandLink": _commandlink, "ToolButton": _toolbutton, "ButtonBox": _buttonbox,
     "ToolBox": _toolbox_control, "PageFrame": _pageframe, "ScrollPanel": _scrollpanel,
     "ColumnView": _columnview, "DBGrid": _dbgrid, "GraphicsView": _graphicsview,
-    "Chart": _chart, "SvgImage": _svgimage, "MediaPlayer": _mediaplayer,
+    "Chart": _chart, "Graph": _graph, "SvgImage": _svgimage, "MediaPlayer": _mediaplayer,
     "PdfViewer": _pdfviewer, "OpenGLView": _openglview, "QuickView": _quickview,
     "UndoView": _undoview, "WizardForm": _wizardform,
     "Perspective": _perspective, "ToolboxList": _toolbox_list,

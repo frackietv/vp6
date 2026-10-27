@@ -36,6 +36,7 @@ from .views import ColumnView, UndoStack, UndoView
 from .dbgrid import DBGrid
 from .graphicsview import GraphicsView
 from .chart import Chart
+from .graph import Graph, GraphItem
 from .media import MediaPlayer, PdfViewer, SvgImage
 from .opengl import OpenGLView, QuickView
 from .designerview import DesignerView
@@ -45,7 +46,7 @@ from .picture import FileIcon, LoadPicture, Picture, SavePicture
 from .printer import Printer, Printers
 from .usercontrol import Property, UserControl
 
-__version__ = "0.4.69"
+__version__ = "0.4.70"
 
 __all__ = [
     "App", "Beep", "Clipboard", "Command", "Debug", "DeleteSetting", "DoEvents", "End",
@@ -58,7 +59,7 @@ __all__ = [
     "Data", "Database", "Recordset", "Field", "OpenDatabase", "CreateDatabase",
     "SpinBox", "DTPicker", "MonthView", "Dial", "LCDNumber", "FontComboBox", "HotKey",
     "CommandLink", "ToolButton", "ButtonBox", "ToolBox", "PageFrame", "ScrollPanel",
-    "ColumnView", "UndoView", "UndoStack", "DBGrid", "GraphicsView", "Chart",
+    "ColumnView", "UndoView", "UndoStack", "DBGrid", "GraphicsView", "Chart", "Graph", "GraphItem",
     "SvgImage", "MediaPlayer", "PdfViewer", "OpenGLView", "QuickView",
     "RGB", "RGBA", "QBColor", "vpBlack", "vpBlue", "vpCyan", "vpGreen", "vpMagenta", "vpRed",
     "vpWhite", "vpYellow",

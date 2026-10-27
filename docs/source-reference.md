@@ -868,6 +868,50 @@ Menu), each with `_add_validation` and `_add_mouse_members`.
 * `_scheme_changed(dark)`: called by `Form._dark_changed` for the controls
   that have it; the light or dark chart theme.
 
+### `vp6/graph.py` (≈2000 lines)
+
+* `function_of(text, variables)`: typed maths (read by `vp6edu.answers.read`,
+  after `_definition` drops a `y =` / `f(x) =`) turned into Python code over
+  floats by `_python` (`_pow` keeps odd roots of negatives real, its
+  exponent's denominator found by `_exact`) and `exec`'d in `_NAMESPACE`;
+  `_real` makes any function safe to sample (nan where it fails or isn't
+  real). `_relations` splits an inequality (or a chain) into `(g, op)` with
+  g(x, y) op 0.
+* Ticks: `nice_step` (1, 2, 5 × 10ⁿ at least so many pixels apart),
+  `pi_step`/`pi_text` (fractions of π), `number_text`, `_ticks`, `_minor`.
+  Statistics: `five_numbers` (the halves' medians), `histogram_bins`
+  (Sturges' rule or edges), `least_squares`.
+* `GraphItem`: one class for every kind; its fields (`_FIELDS` by kind, with
+  `_COMMON_FIELDS`) are read and set through `__getattr__`/`__setattr__`
+  (anything else is an error), `_COMPUTED` the read-only ones; `_ends`: the
+  point items a line follows; `_function` compiles a field once
+  (`_compiled`); `_error`: a program's function that failed (reported once
+  by `_paint_item`, not drawn again until the item changes). `_Items` is
+  `Graph.Items` (removing a point removes what follows it).
+* `Graph` (`Drawing`, `Control`): a `_GraphWidget` (a QFrame) paints it
+  (`_paint`: background, grid, the items in three layers (`_FILLED`, lines,
+  `_ON_TOP`), the axes, then the graphics methods). `_area` (inside the
+  numbers in Data mode), `_view` (the ranges with EqualScales applied; a
+  number line's Y around 0), `_set_view`, `_mapping` (to and from pixels).
+  `_function_path` samples a pixel apart and bisects big jumps (`join`, in
+  clamped pixels: a pole's sides stay apart and break the path, a steep
+  curve's come together); `_paint_half_plane` for inequalities linear in y
+  (`_linear_in_y`), else cells and marching squares (`_contour`).
+  `_paint_curve_label` tries spots near where a curve leaves the view.
+  `draw_text`/`text_width`: text with `$…$` formulas (vp6help's `texdraw`).
+* The graphics methods: `Drawing` with the scale from the view
+  (`_scale_factors`, `_set_scale_part`, `Scale`; `_values["ScaleMode"]` is
+  User); outside Paint each call is kept (`_record`: run on a scratch painter
+  to move the current point, with the drawing properties of the moment) and
+  `_replay`'d at every paint; `Cls` clears them.
+* The mouse (`_on_qt_event`): the wheel zooms (`_zoom`); `_press_at` takes a
+  draggable point or interval end (`_handle_at`), starts a placed interval or
+  a pan; `_move_to` drags (`_snapped`, `_move_end`: past the edge an end is
+  infinite, past the other end they swap); `_release_at` tells a click
+  (an interval end opened or closed, `_place` for PlaceMode) and fires
+  `Click(X, Y)` (`EventArgs`). `_placed` holds what the user placed:
+  `Answer`, `ClearAnswer`; `Intervals` as `vp6edu.answers.Interval`s.
+
 ### `vp6/media.py` (≈520 lines)
 
 * `SvgImage`: `_SvgWidget` paints a `QSvgRenderer` into its rectangle
@@ -3391,7 +3435,14 @@ explorer-style.
   plan: rooms, text, a door path, a movable table and bed, chairs as
   groups; turn, zoom, fit, SavePicture, PrintOut), **`pgChart.py`** (a Chart
   whose ChartType comes from a ComboBox, a legend, a log scale, new data,
-  EditCopy, PointSelected), **`pgMedia.py`** (an SvgImage of `vp6.svg`, a
+  EditCopy, PointSelected), **`pgGraph.py`** (a Graph showing, from a
+  ComboBox: functions as text and Python with an asymptote, A and B dragged
+  with the line through them and its slope, P sliding along the parabola and
+  dropped to the axis in Paint, a hole; π ticks with sine, cosine, a polar
+  cardioid, a parametric circle and a vector; inequalities and a region; a
+  number line and a point placed as answers checked with `vp6edu.answers`;
+  a histogram with a box plot; a scatter plot with its fitted line and a dot
+  plot; Fit, Reset, Copy), **`pgMedia.py`** (an SvgImage of `vp6.svg`, a
   MediaPlayer playing `tone.wav`, a PdfViewer showing a PDF the Printer
   makes, Find), **`pgGL.py`** (an OpenGLView animating with glScissor and
   glClear, Samples, a Circle and Print over it, Available, a QuickView of QML that raises QmlEvent and sets a label with
@@ -4040,6 +4091,7 @@ All tests run headless. `conftest.py`:
 
 | File | Covers |
 |---|---|
+| `test_graph.py` | Graph: `function_of` (typed maths, definitions, odd roots, undefined and unreal values, other variables, errors), ticks (`nice_step`, `pi_step`, `pi_text`, `number_text`), statistics (`five_numbers` against OpenStax's example, `histogram_bins`, `least_squares`); the view (EqualScales, Scale and ScaleLeft, ResetView, the number line's), ZoomToFit and Data mode fitting a histogram; items (Keys and Index, fields and the typo guard, a point On a curve, lines and polygons following points, computed values, removing what follows a point, errors); every kind drawing; pixels (an asymptote not joined, a domain, an inequality's side), light and dark colors, a failing function reported once; the mouse (Click and MouseDown in graph units, dragging a point in Snap steps, panning, the wheel, PanZoom off), placing a point, a line and number-line intervals checked by `vp6edu.answers`; the graphics methods kept and moving with the view, Cls, Paint over the plots; Picture, EditCopy; the designer's prefix and Toolbox category. |
 | `test_chart.py` | Chart: `parse_chart_data`; ChartData as rows with labels, numbers alone and a Recordset; Data, SetData, RowLabel, ColumnLabel; every ChartType's series; PointSelected from a bar and a slice; Legend, the Y axis's range, LogScale, SeriesColors; the dark and light chart themes following the form; EditCopy and Picture. |
 | `test_containers.py` | Containers with pages and the ScrollPanel: a ToolBox's Pages (Keys, SelectedItem, PageChange, a control's Page read and set, pages added before it, Enabled, Remove); a PageFrame (CurrentPage, AddPage, RemovePage, a control array element loaded on its template's page, PageCount); a ScrollPanel's content size, ScrollTop and Scroll, EnsureVisible, ScrollWidth/ScrollHeight; `Page=` in the form file, right after the container; the designer: a ToolBox's header clicked to edit a page, controls drawn on the page shown, a selected control's page shown, Previous/Next Page, pasting onto the page shown, a page removed moving its controls (and Undo); a PageFrame's badge, the wheel scrolling a ScrollPanel. |
 | `test_dbgrid.py` | DBGrid: `parse_db_column`; the records and columns (Columns lines, NumberFormat, hidden, the new row), rows following the Data control both ways (the bound TextBox, Bookmark), editing a cell (BeforeUpdate cancelling, AfterUpdate), adding a record in the last row, deleting the selected rows (BeforeDelete), the Properties window showing its Columns lines. |

@@ -319,6 +319,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `ItemMoved` | Item |
 | `SelectionChanged` | none |
 | `PointSelected` | Series, DataPoint |
+| `PointMoved` | Item |
 | `StateChange` | none |
 | `PositionChange` | none |
 | `Done` | none |
@@ -338,6 +339,7 @@ first, before the arguments below: `def cmdDigit_Click(self, Index)`,
 | `Validate` (Data) | Action, Save |
 | `SelChange` (MonthView) | StartDate, EndDate |
 | `ButtonClick` (ButtonBox) | Index |
+| `Click` (Graph) | X, Y |
 <!-- END GENERATED -->
 
 What the arguments mean:
@@ -4311,6 +4313,118 @@ Default size 401 × 281. Property groups: Position, Font.
 Events: `PointSelected(Series, DataPoint)`, `Click`, `DblClick`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `PointSelected`.
 <!-- END GENERATED -->
 
+### Graph
+
+<!-- keywords: GraphItem, coordinate plane, number line, function graph, plot, histogram, box plot, scatter plot, inequality -->
+
+A coordinate plane for mathematics: functions, points the user drags,
+lines, regions and inequalities, a number line, and plots of data. Each
+`Add…` method returns a `GraphItem`.
+
+```python
+f = self.grfPlane.AddFunction("x^2/4 - 3", Label="$y = x^2/4 - 3$")
+a = self.grfPlane.AddPoint(-4, -2, Draggable=True, Label="A")
+b = self.grfPlane.AddPoint(2, 3, Draggable=True, Label="B")
+self.grfPlane.AddLine(a, b)                     # follows A and B
+self.grfPlane.AddPoint(3, On=f, Draggable=True)  # slides along the curve
+
+def grfPlane_PointMoved(self, Item):
+    self.lblSlope.Caption = f"slope {(b.Y - a.Y) / (b.X - a.X):g}"
+```
+
+* **The view:** `XMin`, `XMax`, `YMin`, `YMax`; `EqualScales` (a unit as
+  long across as up: the shorter range grows); `XStep`/`YStep` (the
+  numbered ticks; 0: as many as fit); `PiTicks` (the X axis in multiples
+  of π: π/2, π, 3π/2...); `ShowGrid`, `ShowAxes`, `ShowNumbers`;
+  `XLabel`/`YLabel` (`$…$` in them is maths); `GridColor`, `BackColor`,
+  `ForeColor`. `PanZoom`: dragging the plane moves it, the wheel zooms.
+  `ZoomToFit()` shows everything plotted, `ResetView()` the view it was made
+  with; `Scale(X1, Y1, X2, Y2)` and `ScaleLeft`... set the view too.
+* `Mode`: `vpGraphPlane`, `vpGraphNumberLine` (one axis, for points and
+  intervals) or `vpGraphData` (axes at the edges, for statistics; adding
+  data fits the view to it).
+* **Plots:** `AddFunction(F, XMin, XMax)` (F a Python function or text:
+  `"2x + 1"`, `"sin x"`, `"y = 1/(x - 2)"`, read as `vp6edu.answers` reads
+  a student's answer; asymptotes and holes are left unjoined),
+  `AddParametric(X, Y, TMin, TMax)` (functions or text in t),
+  `AddPolar(R, ThetaMin, ThetaMax)` (text in θ, `theta` or t),
+  `AddPoint(X, Y, Open, Draggable, On)`, `AddSegment`, `AddRay`, `AddLine`,
+  `AddVector` (X1, Y1, X2, Y2, or two point items they follow),
+  `AddPolygon(Points)`, `AddRegion(F, G, XMin, XMax)` (shaded between two
+  curves; G unset: the X axis), `AddInequality("y < 2x + 1")` (where it
+  holds, shaded; its edge dashed when strict; `"-2 < x < 3"`,
+  `"x^2 + y^2 <= 9"` too), `AddLabel(Text, X, Y, Alignment)` (with `$…$`
+  maths), `AddInterval(Low, High, LowClosed, HighClosed)` (None: no end).
+  For data: `AddHistogram(Values, Bins)` (`Edges`, `Counts`),
+  `AddDotPlot(Values)`, `AddBoxPlot(Values, Y, Height)` (`Min`, `Q1`,
+  `Median`, `Q3`, `Max`: the quartiles are the halves' medians, as
+  OpenStax's statistics books take them) and `AddScatter(Points, Ys,
+  FitLine)` (`Slope`, `Intercept`, `Correlation`). `Items` holds them (by
+  Index from 1 or by `Key`; `Count`, `Remove`, `Clear`); `Clear()` removes
+  them all.
+* **A `GraphItem`:** `Kind`, `Key`, `Index`, `Color` (unset: the next of
+  the graph's colors, light or dark), `Width`, `Style` (`vpSolid`,
+  `vpDash`, `vpDot`...), `FillColor`, `Visible`, `Label`, `Tag`,
+  `Remove()`; a point's `X`, `Y`, `Open`, `Size`, `Draggable`, `On`; a
+  line's `X1`, `Y1`, `X2`, `Y2` and `Points`; a function's `Value(X)`; an
+  interval's `Low`, `High`, `LowClosed`, `HighClosed`. A name a kind
+  doesn't have is an error.
+* **The mouse:** `PointMoved(Item)` as a point (or an interval's end) is
+  dragged, in steps of `Snap` (0: anywhere); `Click(X, Y)` and the mouse
+  events give the graph's coordinates.
+* **Answers:** `PlaceMode` `vpPlacePoint` (a click places the point),
+  `vpPlaceLine` (two clicks: the line through them) or `vpPlaceInterval`
+  (drag along the number line; click an end to open or close it; past the
+  edge: no end). `Answer` is what was placed, the way `vp6edu.answers`
+  checks it: `Point(3, -2).check(grf.Answer)`, `Line("y = 2x + 1")`,
+  `Inequality("-2 < x <= 3")`. `Intervals` are all the number line's;
+  `ClearAnswer()`.
+* The graphics methods draw in the graph's coordinates over the plots: in
+  `Paint`, or outside it (kept, and drawn where the view then is, until
+  `Cls`). `Picture` and `EditCopy()` give what it shows. It follows the
+  form's light or dark scheme.
+
+<!-- BEGIN GENERATED: control Graph -->
+Default size 321 × 241. Property groups: Position, Colors, Font, Common.
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `BorderStyle` | enum | 1 - Fixed Single | 0 - None, 1 - Fixed Single. A border around it |
+| `CausesValidation` | bool | `True` | Moving the focus here first fires the Validate event of the control leaving it (False: e.g. a Help or Cancel button that mustn't wait for a valid value) |
+| `DragIcon` | file path | `''` | The picture shown while it is dragged; unset = an image of the control |
+| `DragMode` | enum | 0 - Manual | 0 - Manual, 1 - Automatic. Automatic: pressing the mouse on it drags it (no Click or MouseDown); Manual: its Drag method does |
+| `DrawCap` | enum | 0 - Automatic | 0 - Automatic, 1 - Flat, 2 - Square, 3 - Round. The ends of lines: Automatic as VB's (round when wider than 1, else not covering the end point), or flat, square or round |
+| `DrawJoin` | enum | 0 - Miter | 0 - Miter, 1 - Bevel, 2 - Round. The corners where lines meet (a polygon's, a path's): pointed, cut off or round |
+| `DrawStyle` | enum | 0 - Solid | 0 - Solid, 1 - Dash, 2 - Dot, 3 - Dash-Dot, 4 - Dash-Dot-Dot, 5 - Transparent, 6 - Inside Solid. The lines the graphics methods draw |
+| `DrawWidth` | number (int or float) | `1` | The width of the lines the graphics methods draw, in pixels (a fraction too, e.g. 0.5 on a Picture with a PixelRatio of 2) |
+| `EqualScales` | bool | `True` | A unit as long across as up (the shorter range grows to fit); not in Data mode |
+| `FillColor` | color | (default) | The fill of Circle and Line boxes (FillStyle); unset = ForeColor |
+| `FillStyle` | enum | 1 - Transparent | 0 - Solid, 1 - Transparent, 2 - Horizontal Line, 3 - Vertical Line, 4 - Upward Diagonal, 5 - Downward Diagonal, 6 - Cross, 7 - Diagonal Cross. How Circle and Line with a box (B) fill what they draw |
+| `FontScale` | number (int or float) | `1` | Print's text drawn that many times larger, as a magnified drawing shows it (its letters scaled, spaced as at the Font's own size) |
+| `GridColor` | color | (default) | The grid lines; unset = a faint ForeColor |
+| `Mode` | enum | 0 - Plane | 0 - Plane, 1 - Number Line, 2 - Data. A coordinate plane, a number line (one axis: points and intervals) or a plot of data (axes at the edges) |
+| `MouseIcon` | file path | `''` | The pointer's picture when MousePointer is Custom |
+| `MousePointer` | enum | 0 - Default | 0 - Default, 1 - Arrow, 2 - Cross, 3 - I-Beam, 4 - Icon, 5 - Size, 6 - Size NE SW, 7 - Size N S, 8 - Size NW SE, 9 - Size W E, 10 - Up Arrow, 11 - Hourglass, 12 - No Drop, 13 - Arrow and Hourglass, 14 - Arrow and Question, 15 - Size All, 99 - Custom. The mouse pointer's shape over it (Custom: its MouseIcon picture) |
+| `OLEDropMode` | enum | 0 - None | 0 - None, 1 - Manual. Manual: text and files dropped from other programs fire OLEDragOver and OLEDragDrop (None: the control's own behavior) |
+| `PanZoom` | bool | `True` | Dragging the plane moves it and the mouse wheel zooms (at run time) |
+| `PiTicks` | bool | `False` | The X axis numbered in multiples of π (π/2, π, 3π/2...), for trigonometry |
+| `PlaceMode` | enum | 0 - None | 0 - None, 1 - Point, 2 - Line, 3 - Interval. What the user places as an answer (Answer): a point with a click, a line with two, intervals dragged along a number line |
+| `ShowAxes` | bool | `True` | The axes |
+| `ShowGrid` | bool | `True` | Grid lines at the ticks |
+| `ShowNumbers` | bool | `True` | The ticks' numbers |
+| `Snap` | number (int or float) | `1` | Points dragged or placed move in steps of Snap (0: anywhere) |
+| `XLabel` | str | `'x'` | The X axis's name (maths between dollar signs) |
+| `XMax` | number (int or float) | `10` | The largest X shown |
+| `XMin` | number (int or float) | `-10` | The smallest X shown |
+| `XStep` | number (int or float) | `0` | The numbered ticks' step along X; 0: as many as fit |
+| `YLabel` | str | `'y'` | The Y axis's name (maths between dollar signs) |
+| `YMax` | number (int or float) | `10` | The largest Y shown |
+| `YMin` | number (int or float) | `-10` | The smallest Y shown |
+| `YStep` | number (int or float) | `0` | The numbered ticks' step along Y; 0: as many as fit |
+
+Events: `Click(X, Y)`, `PointMoved(Item)`, `Paint`, `DblClick`, `GotFocus`, `LostFocus`, `KeyDown(KeyCode, Shift)`, `KeyPress(KeyAscii)`, `KeyUp(KeyCode, Shift)`, `MouseDown(Button, Shift, X, Y)`, `MouseMove(Button, Shift, X, Y)`, `MouseUp(Button, Shift, X, Y)`, `Validate`, `DragDrop(Source, X, Y)`, `DragOver(Source, X, Y, State)`, `OLEDragDrop(Data, Effect, Button, Shift, X, Y)`, `OLEDragOver(Data, Effect, Button, Shift, X, Y, State)`. Default event (double-click in the designer): `Click`.
+<!-- END GENERATED -->
+
 ### SvgImage
 
 An Image for SVG files that stays sharp at any size.
@@ -4998,7 +5112,7 @@ parameters, e.g. `["KeyCode", "Shift"]`), `IsDefault`.
 [`CommandLink`](#commandlink), [`ToolButton`](#toolbutton), [`ButtonBox`](#buttonbox),
 [`ToolBox`](#toolbox), [`PageFrame`](#pageframe), [`ScrollPanel`](#scrollpanel),
 [`ColumnView`](#columnview), [`DBGrid`](#dbgrid), [`GraphicsView`](#graphicsview),
-[`Chart`](#chart), [`SvgImage`](#svgimage), [`MediaPlayer`](#mediaplayer),
+[`Chart`](#chart), [`Graph` and `GraphItem`](#graph), [`SvgImage`](#svgimage), [`MediaPlayer`](#mediaplayer),
 [`PdfViewer`](#pdfviewer), [`OpenGLView`](#openglview), [`QuickView`](#quickview),
 [`UndoView` and `UndoStack`](#undoview-and-undostack),
 [`Menu`](#menu), [`WizardForm`](#wizard-forms), and
@@ -5175,6 +5289,8 @@ All constants are plain ints or strings.
 | ButtonBox: a custom button's ButtonRole | `vpRoleAccept`, `vpRoleReject`, `vpRoleDestructive`, `vpRoleAction`, `vpRoleHelp`, `vpRoleYes`, `vpRoleNo`, `vpRoleReset`, `vpRoleApply` | 0, 1, 2, 3, 4, 5, 6, 7, 8 |
 | Chart.ChartType | `vpChartLine`, `vpChartSpline`, `vpChartArea`, `vpChartBar`, `vpChartStackedBar`, `vpChartPercentBar`, `vpChartHorizontalBar`, `vpChartPie`, `vpChartScatter` | 0, 1, 2, 3, 4, 5, 6, 7, 8 |
 | Chart.Legend | `vpLegendNone`, `vpLegendTop`, `vpLegendBottom`, `vpLegendLeft`, `vpLegendRight` | 0, 1, 2, 3, 4 |
+| Graph.Mode | `vpGraphPlane`, `vpGraphNumberLine`, `vpGraphData` | 0, 1, 2 |
+| Graph.PlaceMode | `vpPlaceNone`, `vpPlacePoint`, `vpPlaceLine`, `vpPlaceInterval` | 0, 1, 2, 3 |
 | MediaPlayer.State | `vpMediaStopped`, `vpMediaPlaying`, `vpMediaPaused` | 0, 1, 2 |
 | PdfViewer.ZoomMode and PdfViewer.PageMode | `vpZoomCustom`, `vpZoomFitWidth`, `vpZoomFitPage`, `vpPageSingle`, `vpPageMulti` | 0, 1, 2, 0, 1 |
 | QuickView.ResizeMode | `vpQmlViewToRoot`, `vpQmlRootToView` | 0, 1 |
