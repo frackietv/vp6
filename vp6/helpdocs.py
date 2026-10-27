@@ -28,7 +28,7 @@ __all__ = ["DOCUMENTS", "TITLE", "make_help", "help_file", "sources_hash", "pack
 TITLE = "VP6 Help"
 # The documents, in the order of the help's contents (paths from the source's root)
 DOCUMENTS = ("README.md", "docs/ide.md", "docs/api.md", "docs/development-guide.md",
-             "docs/architecture.md", "docs/source-reference.md",
+             "docs/education.md", "docs/architecture.md", "docs/source-reference.md",
              "packages/vp6help/README.md", "FEATURES.md")
 FLAT = ("FEATURES.md",)  # (the release notes: one entry in the contents)
 FILE_NAME = "vp6.vp6help"

@@ -9,6 +9,8 @@ section by section: Prealgebra 2e → Elementary Algebra 2e → Intermediate
 Algebra 2e → Algebra and Trigonometry 2e → Precalculus 2e → Calculus Volumes
 1, 2 and 3, with Introductory Statistics 2e branching from Intermediate
 Algebra 2e. The whole outline is here; lessons are *planned* until written.
+Written so far: Prealgebra 2e's chapter 1, Whole Numbers, the model for
+every other chapter (VP6's `docs/education.md` is the guide to writing one).
 
 ```python
 from vp6edu import load_subjects
@@ -23,7 +25,13 @@ lesson.attribution                                # the line its lesson.md carri
 vp6edu-check                          # validate the subjects and the written lessons
 vp6edu-check --subjects DIR           # ...of another folder of subjects
 vp6edu-check --attribution math/prealgebra-2e/1.2
+vp6edu-check --labs                   # ...and run every lesson's lab (needs VP6)
 ```
+
+For a written lesson it checks its formulas (with vp6help, when installed),
+its Try Its' answers, its links to other lessons (`lesson:<id>`), its parts,
+and every exercise maker over many seeds (`--seeds`, 50 by default): each
+exercise's own answer must check right.
 
 ## The data
 
@@ -57,7 +65,10 @@ A section may also have:
 * `"shared": "<book>/<section>"`: the same section in an earlier book (the
   same OpenStax page), whose lesson it is; it has no folder of its own;
 * `"requires": ["<book>/<section>", ...]`: prerequisites of its own, besides
-  the section before it on its path.
+  the section before it on its path;
+* `"kind": "review"` or `"test"`: the chapter's review or practice test,
+  after its sections, numbered `<chapter>-review` and `<chapter>-test`
+  (`label`: "Chapter 1 Review"; `heading`: "Chapter 1: Review Exercises").
 
 A lesson's id is `<subject>/<book>/<section>`.
 
@@ -111,7 +122,8 @@ VP6's Lesson window; `graph={...}` (the Graph's properties, e.g.
 `generators(module)` lists a module's makers (its public functions of one
 argument), `load_exercises(path)` loads an `exercises.py`, and
 `verify(maker)` checks that over many seeds each exercise's own answer
-(`answer.text`) checks right.
+(`answer.text`) checks right. `answer_of("Number(5)")` reads an answer
+written as Python, as a lesson's Try It is.
 
 ## Licence
 

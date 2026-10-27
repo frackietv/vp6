@@ -6,7 +6,8 @@ with three tabs:
 * **Lesson:** ``lesson.md`` with its maths (vp6help's Markdown, the formulas
   drawn by ``texdraw``), its Try Its' answers checked in place, the
   attribution footer and a link to the section on openstax.org; scrolled to
-  the end, the lesson counts as read.
+  the end, the lesson counts as read. A link to ``lesson:<id>`` (a Be
+  Prepared's) opens that lesson.
 * **Exercises:** the makers of ``exercises.py`` one after another, answered
   in a field or on a Graph (``education.graph_settings``), with Check,
   Hint, Show Solution, New Numbers, Next Exercise and the score.
@@ -23,7 +24,7 @@ from __future__ import annotations
 import html
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QPalette, QTextOption
+from PySide6.QtGui import QColor, QDesktopServices, QPalette, QTextOption
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QListWidgetItem, QMessageBox, QPushButton, QScrollArea, QSizePolicy,
                                QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
@@ -44,11 +45,15 @@ def _colors() -> dict:
 
 class MarkdownView(QTextBrowser):
     """Markdown with maths, as tall as its text (the page around it scrolls);
-    links open in the browser, pictures are found in ``folder``."""
+    links open in the browser, but ``lesson:<id>`` ones are given to
+    ``lessonClicked``; pictures are found in ``folder``."""
+
+    lessonClicked = Signal(str)  # a lesson's id
 
     def __init__(self, text: str = "", folder: str = "", parent=None):
         super().__init__(parent)
-        self.setOpenExternalLinks(True)
+        self.setOpenLinks(False)
+        self.anchorClicked.connect(self._link_clicked)
         self.setFrameShape(QFrame.NoFrame)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -79,6 +84,12 @@ class MarkdownView(QTextBrowser):
         self.markdown, self._html = "", make
         self.setHtml(make())
         self._fit()
+
+    def _link_clicked(self, url) -> None:
+        if url.scheme() == "lesson":
+            self.lessonClicked.emit(url.path())
+        else:
+            QDesktopServices.openUrl(url)
 
     def _link_color(self) -> None:
         palette = self.palette()
@@ -185,7 +196,7 @@ class LessonWindow(QWidget):
         except OSError:
             source = f"# {lesson.number} {lesson.title}\n\nThis lesson isn't written yet."
         self.text = education.parse_lesson(source)
-        self.title = f"Lesson {lesson.number}: {lesson.title}"
+        self.title = f"{lesson.label}: {lesson.title}"
         self.setWindowTitle(self.title)
 
         header = QLabel(f"<b>{html.escape(lesson.book.title)}</b> · "
@@ -215,7 +226,7 @@ class LessonWindow(QWidget):
         for button, other in ((self.previous_button, self.previous_lesson),
                               (self.next_button, self.next_lesson)):
             if other is not None:
-                button.setToolTip(f"{other.number} {other.title} ({other.book.title})")
+                button.setToolTip(f"{other.heading} ({other.book.title})")
         self.reset_button = QPushButton("Reset Progress")
         self.reset_button.clicked.connect(lambda: self.reset_progress())
         bottom = QHBoxLayout()
@@ -246,10 +257,11 @@ class LessonWindow(QWidget):
                 self.try_its.append(widget)
             else:
                 widget = MarkdownView(part.text, folder)
+                widget.lessonClicked.connect(self.open_linked)
                 self.lesson_views.append(widget)
             column.addWidget(widget)
         lesson = self.lesson
-        footer = (f"*{lesson.number} {lesson.title}* on openstax.org: <{lesson.link}>")
+        footer = (f"*{lesson.heading}* on openstax.org: <{lesson.link}>")
         if lesson.attribution not in "\n".join(p.text for p in self.text.parts):
             footer = lesson.attribution + "\n\n" + footer  # (an unwritten lesson's)
         self.footer = MarkdownView(footer, folder)
@@ -263,6 +275,16 @@ class LessonWindow(QWidget):
         bar.valueChanged.connect(lambda *_: self._check_read())
         bar.rangeChanged.connect(lambda *_: self._check_read())
         return self.lesson_scroll
+
+    def open_linked(self, lesson_id: str) -> None:
+        """A ``lesson:`` link in the text: that lesson, opened (its id is the
+        whole id or ``book/section`` in this subject)."""
+        try:
+            other = self.lesson.subject.lesson(lesson_id)
+        except KeyError:
+            return
+        if other is not self.lesson:
+            self.lessonRequested.emit(other)
 
     def _check_read(self) -> None:
         """Scrolled to the lesson's end (or all of it showing): read."""

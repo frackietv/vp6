@@ -1757,6 +1757,13 @@ replace the public `vp6.run()` function on the package, and `run(Form1)` in
 programs would then fail.
 
 
+`try_forms(folder, wait)` loads each form in a folder (its `.py` files with
+a designer region), shows it, runs the event loop for `wait` ms and unloads
+it, returning the errors (run-time errors in its handlers too, caught by
+replacing `app.report_runtime_error`); offscreen unless `vp6.app` was
+already imported; the folder's modules are dropped from `sys.modules`
+after. vp6edu-check's `--labs` uses it.
+
 Starts a project. `run_project(path)`:
 
 1. loads the project; with `--help` (`HELP_OPTION`) among the program's
@@ -1918,7 +1925,9 @@ prepended to `PYTHONPATH` for programs started with F5.
     `show_menu_editor`, which opens it for `_current_designer()`: the active
     designer, or the designer of the form whose code window is active.
 * **Project lifecycle:**
-  * `show_start_dialog`, `new_project` (the dialog deleted once used),
+  * `show_start_dialog`, `new_project(tab)` (the dialog deleted once used;
+    Help > Education, `act_help_education`, opens it on the Education tab;
+    `_handle_project_dialog` opens a "lesson" with `open_lesson`),
     `open_project_dialog`, `open_project(path)`, `close_project()`;
   * `save_all()`, `_confirm_save`, `project_properties`, `_set_startup`,
     `_project_scheme`;
@@ -2742,18 +2751,33 @@ Captures the IDE process's stdout and stderr for the Output window.
 The Lesson window (its logic in `logic/education.py`). `MarkdownView` (a
 `QTextBrowser` as tall as its text: vp6help's `to_html`, `texdraw.install`
 for the formulas, links in the theme's colour, pictures from the lesson's
-folder; `set_markdown`, `set_html(make)` remade when the theme changes).
+folder; `set_markdown`, `set_html(make)` remade when the theme changes; links open
+in the browser, `lesson:<id>` ones go to `lessonClicked`).
 `TryIt` (a field, Check, the result in place; a Try It that can't be read
 says why). `_GraphHost` (a `_PanelHost` for the Graph an exercise is
 answered on). **`LessonWindow(lesson, project)`**: the header and the
 progress (`state_label`), `tabs`: Lesson (`lesson_views`, `try_its`,
-`footer` with the openstax.org link; `_check_read` at the scroll's end),
+`footer` with the openstax.org link; `_check_read` at the scroll's end;
+`open_linked` for a `lesson:` link), titled by the lesson's `label`,
 Exercises (`session`, `prompt`, `answer_field` or `graph`, `check`, `hint`,
 `show_solution`, `new_numbers`, `next_exercise`, `feedback`, `score_label`),
 Lab (`lab_view`, `run_button`, `forms`, `lab_ran`); `previous_lesson`/
 `next_lesson` with their buttons, `reset_progress(ask)`. Signals
 `lessonRequested(lesson)`, `runRequested`, `formRequested(path)`,
 `progressChanged`.
+
+### `vp6/ide/learningpath.py` (≈200 lines)
+
+`LearningPathView`: the Education tab's map of a learning path. `set_path(path,
+progress)` places the books with `education.layout_path` (`node_rect`:
+`NODE_WIDTH`, `NODE_HEIGHT`, `GAP_X`, `GAP_Y`, `MARGIN`) and counts each
+book's lessons done (`education.book_progress`; `refresh_progress`); its size
+is fixed to them (`sizeHint`), so a scroll area scrolls it. Painted from the
+palette and the theme (`colors`): rounded nodes with the title, "n of m
+done" and a progress bar, the selected one outlined in the highlight;
+arrows from a book's side to the next's, a branch leaving a book's bottom in
+a curve (`_arrow`). A click (`book_at`) or the arrow keys choose a book:
+`bookChosen(id)`; `select(book, emit)`.
 
 ### `vp6/ide/terminalpanel.py` (≈170 lines)
 
@@ -3478,10 +3502,19 @@ explorer-style.
   a category's templates, then its folders, on the right: `exe` and `console`
   at the top level, `kitchensink` in Sample Projects, `projection` and
   `perspectives` in Sample Projects/Graphics; double-click or Open on a folder opens it; with name and
-  location), the Existing tab (browse) and the Recent tab. `select_category`,
-  `select_template`; `template` is None while a folder is chosen. After
-  `exec()`, `result_action` is `"new"` (see `template`, `project_name`,
-  `project_location`) or `"open"` (see `open_path`). Also `DEFAULT_LOCATION`
+  location), the Existing tab (browse), the Recent tab and the Education tab
+  (`subject_box`; `path_view`, a `LearningPathView` in `path_scroll`, as high
+  as its rows plus a scroll bar that isn't drawn over it; `lessons`, a tree
+  of the book's chapters and lessons with their states, planned ones greyed,
+  the one to go on with chosen; `lesson_text`, a `MarkdownView` of
+  `education.lesson_description`; `lesson_location`; `lesson_message` for a
+  planned lesson refused). `select_category`, `select_template`; `template`
+  is None while a folder is chosen; `subject`, `book`, `chosen_lesson`. The
+  tab opened is `tab` ("education": Help > Education), else the last used
+  (`TAB_KEY`, saved in `done`); the subject and book are kept with
+  `education.remember`. After `exec()`, `result_action` is `"new"` (see
+  `template`, `project_name`, `project_location`), `"open"` (see
+  `open_path`) or `"lesson"` (see `lesson`, `lesson_root`). Also `DEFAULT_LOCATION`
   (`~/VP6 Projects`), `TEMPLATES` (key, title, icon, description, category:
   a `/` path, `""` the top level), `categories()` and `next_free_name`.
 * `ProjectPropertiesDialog` edits the name, type, startup object and color
@@ -3711,10 +3744,17 @@ skipped). **Text:** `parse_lesson` → `LessonText(title, parts, lab)`: `Part`s
 of Markdown and ```` ```answer ```` blocks, the `## Lab` sections (to the next
 `#`/`##` heading or rule) apart; fences followed so headings in code don't
 count; `answer_names`, `try_it_answer` (evaluated with vp6edu.answers' names,
-`Fraction`, `math`; ValueError). **Progress:** `Progress` (read, right, tried,
-exercises, lab_run; `state`: `NOT_STARTED`, `IN_PROGRESS`, `DONE`),
-`progress`/`save_progress`/`reset_progress` (JSON under
-`education/progress/<id>` in `settings`). **Exercises:** `graph_settings`
+`Fraction`, `math`: vp6edu.answers' `answer_of`; ValueError). **Progress:**
+`Progress` (read, right, tried, exercises, lab_run; `state`: `NOT_STARTED`,
+`IN_PROGRESS`, `DONE`), `progress`/`save_progress`/`reset_progress` (JSON
+under `education/progress/<id>` in `settings`); `lesson_state` ("planned"
+too), `book_progress` (done, written, lessons). **The Education tab:**
+`layout_path` (columns one past the furthest book followed, rows: the first
+of a column on its predecessor's row, branches below), `first_lesson` (the
+one in progress, else not started), `lesson_objectives` (the `## Learning
+Objectives` section), `lesson_description` (Markdown: heading, objectives or
+planned, the lessons before it with their states), `remember`/`remembered`
+(`TAB_KEY`: the subject and book). **Exercises:** `graph_settings`
 (PlaceMode from a Point, Line or Inequality answer), `ExerciseSession`
 (`of_lesson`, `go`, `new_numbers`, `check` counting right unless the
 solution was shown, `hint`, `solution`, `score_text`).
@@ -3978,15 +4018,19 @@ title, description, `books` in order, `paths`) has `books` (each a folder
 with `book.json`: title, publisher, authors, link, `licence`, chapters with
 their sections) and `LearningPath`s (`nodes`, `edges`; `predecessors`,
 `successors`, `roots`, `books`). A `Book` has `Chapter`s, a chapter
-`Lesson`s, one per section: `number` ("1.2"), `title`, `page` (the
+`Lesson`s, one per section, then its review and test (`kind`: `KINDS`,
+numbered `1-review`, `1-test`; `label` "Lesson 1.2" or "Chapter 1 Review",
+`heading` "1.2 Add Whole Numbers" or "Chapter 1: Review Exercises"):
+`number` ("1.2"), `title`, `page` (the
 openstax.org page's name, so `link`), `own_status` (`planned` or `written`:
 `STATES`), `shared` (the same OpenStax page in an earlier book: the lesson
 it is, its `source`, whose `status`, `folder` and `attribution` it takes) and
 `requires` (prerequisites of its own). A lesson's `id` is
 `<subject>/<book>/<section>`, its files `<book>/<chapter>/<section>/`
 (`lesson_md`, `exercises`, `lab`). `prerequisites`: the lessons it requires,
-the section before it in its book, or for a book's first the last section of
-each book before it on the paths; `Subject.all_prerequisites` follows them
+the section before it in its book (a section passes over reviews and tests;
+a test follows the review), or for a book's first the last lesson of each
+book before it on the paths; `Subject.all_prerequisites` follows them
 all. `Subject.lesson(ref)` takes an id or `book/section`. `attribution`: the
 line every written lesson carries (section, book, authors, publisher, link,
 licence). `load_subject(folder)`, `load_subjects(*roots)` (vp6edu's own,
@@ -3995,8 +4039,9 @@ JSON, unknown or missing keys, wrong types, a book twice) raises
 `SubjectError` naming the file.
 
 Lesson folders (`subjects/<subject>/<book>/<chapter>/<section>/`) hold
-`lesson.md`, `exercises.py` and `lab/`; their files are described here by
-name, not one by one.
+`lesson.md`, `exercises.py` and `lab/` (its `Form1.py`...); their files are
+described here by name, not one by one. `docs/education.md` is the guide to
+writing them.
 
 ### `packages/vp6edu/vp6edu/check.py` (≈260 lines)
 
@@ -4009,9 +4054,18 @@ required and shared lessons that exist (a shared lesson sharing the written
 one, not one that shares in turn, nor its own book; its title compared, a
 warning); prerequisite cycles; written lessons' files (`lesson.md` starting
 with a heading and carrying `attribution`, reflowed or not; `exercises.py`
-compiling; `lab/` with files); folders that aren't a chapter's or a lesson's,
-or a shared lesson's own. `summary(subject)`; `main` (`--subjects DIR`,
-`--attribution ID`, `-q`; exit 1 on errors).
+compiling; `lab/` with files); a chapter's review and test after its
+sections, in that order, numbered `<chapter>-<kind>`, their pages starting
+`<chapter>-`; folders that aren't a chapter's or a lesson's, or a shared
+lesson's own. Written lessons in depth: `_check_lesson_text` (formulas laid
+out by vp6help's `tex.layout` when installed: `_formula_problems`; Try Its'
+answers read by `answer_of` and checking their own text; `lesson:` links;
+`SECTION_PARTS` missing: warnings), `_check_exercises` (loads; `EXERCISES`
+10–20 makers for a section, a warning; `verify` over `seeds`, `SEEDS` = 50;
+prompts', hints' and solutions' formulas), `check_lab` (with `labs`: a copy
+of the lab tried by `vp6.runner.try_forms`). `summary(subject)`; `main`
+(`--subjects DIR`, `--attribution ID`, `--labs`, `--seeds N`, `-q`; exit 1
+on errors).
 
 ### `packages/vp6edu/vp6edu/answers.py` (≈2350 lines)
 
@@ -4051,7 +4105,8 @@ endpoint, flipped). **Exercises:** `Exercise` (hints one at a time, tries,
 solved; `graph`: the Graph's properties when it's answered on one),
 `load_exercises`, `generators` (public one-argument functions),
 `make` (a seeded `random.Random`), `verify` (each seed's answer `text` checks
-right).
+right); `answer_names`, `answer_of` (an answer from its Python, as a Try It
+writes it).
 
 ### `packages/vp6edu/vp6edu/subjects/math/`
 
@@ -4065,6 +4120,19 @@ earlier book: Precalculus 2e's chapters 4, 6 and 8–11 (Algebra and
 Trigonometry 2e's 6, 8, 10–13; its chapters 1–3, 5 and 7 are pages of their
 own, even where titles match), Calculus Volume 2's 1–2 (Volume 1's 5–6),
 Volume 3's 1 (Volume 2's 7): 60 sections.
+
+Written: *Prealgebra 2e* chapter 1, Whole Numbers, the pilot every later
+chapter follows (`prealgebra-2e/1/`): 1.1 to 1.5, `1-review` and `1-test`.
+Each `lesson.md` has objectives, Be Prepared with links back, worked
+examples and Try Its, key concepts and the Lab text; each `exercises.py`
+10–20 makers (the review's and test's wrap the sections', loaded with
+`load_exercises`, and add two-step problems); each `lab/Form1.py` a program:
+place value with draggable digits and rounding on a Graph number line
+(1.1), column addition step by step (1.2), subtraction as hops on a number
+line, back or counting up (1.3), arrays and area with partial products
+(1.4), counters dealt into groups with a remainder (1.5), Beat the Clock, an
+arithmetic game keeping its best score with SaveSetting (review), a
+whole-number calculator (test).
 
 ## Build: `setup.py`
 

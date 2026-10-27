@@ -6,7 +6,10 @@ authors, link, licence and the chapters with their sections). Each section is
 a lesson, ``planned`` until it's written; a written lesson is the folder
 ``<book>/<chapter>/<section>/`` with ``lesson.md``, ``exercises.py`` and
 ``lab/``. A section that another book already has (the same OpenStax page) is
-``shared``: it refers to that lesson instead of being written twice.
+``shared``: it refers to that lesson instead of being written twice. A
+chapter can end with lessons of another ``kind``: its ``review`` (numbered
+``<chapter>-review``) and its ``test`` (``<chapter>-test``), after its
+sections.
 
     from vp6edu import load_subjects
     math = load_subjects()["math"]
@@ -25,12 +28,13 @@ from pathlib import Path
 SUBJECTS = Path(__file__).resolve().parent / "subjects"  # the subjects vp6edu comes with
 
 STATES = ("planned", "written")
+KINDS = ("section", "review", "test")  # a chapter's sections, then its review and test
 
 _SUBJECT_KEYS = {"title", "description", "books", "paths"}
 _PATH_KEYS = {"id", "title", "nodes", "edges"}
 _BOOK_KEYS = {"title", "publisher", "authors", "link", "licence", "chapters"}
 _CHAPTER_KEYS = {"number", "title", "sections"}
-_SECTION_KEYS = {"number", "title", "page", "status", "shared", "requires"}
+_SECTION_KEYS = {"number", "title", "page", "status", "shared", "requires", "kind"}
 
 
 class SubjectError(ValueError):
@@ -74,6 +78,7 @@ class Lesson:
     own_status: str = "planned"
     shared: str | None = None   # the id of the lesson this one is
     requires: list[str] = field(default_factory=list)  # ids of lessons of its own
+    kind: str = "section"       # "review" or "test": the chapter's, after its sections
 
     @property
     def book(self) -> Book:
@@ -90,6 +95,21 @@ class Lesson:
     @property
     def link(self) -> str:
         return f"https://openstax.org/books/{self.book.id}/pages/{self.page}"
+
+    @property
+    def label(self) -> str:
+        """How it's called: "Lesson 1.2", "Chapter 1 Review", "Chapter 1 Test"."""
+        if self.kind == "section":
+            return f"Lesson {self.number}"
+        return f"Chapter {self.chapter.number} {self.kind.capitalize()}"
+
+    @property
+    def heading(self) -> str:
+        """Its number and title, as the book has them: "1.2 Add Whole Numbers",
+        "Chapter 1: Review Exercises"."""
+        if self.kind == "section":
+            return f"{self.number} {self.title}"
+        return f"Chapter {self.chapter.number}: {self.title}"
 
     @property
     def source(self) -> Lesson:
@@ -126,12 +146,15 @@ class Lesson:
     def prerequisites(self) -> list[Lesson]:
         """The lessons this one follows: the section before it on its path
         (the last sections of the books before, for a book's first) and the
-        lessons it requires of its own."""
+        lessons it requires of its own. A chapter's review follows its last
+        section, its test the review; sections pass over reviews and tests."""
         found = [self.subject.lesson(ref) for ref in self.requires]
         lessons = self.book.lessons()
         at = lessons.index(self)
-        if at:
-            found.append(lessons[at - 1])
+        before = [each for each in lessons[:at]
+                  if self.kind == "test" or each.kind == "section"]
+        if before:
+            found.append(before[-1])
         else:
             for path in self.subject.paths:
                 for before in path.predecessors(self.book.id):
@@ -150,7 +173,7 @@ class Lesson:
         book = source.book
         authors = ", ".join(book.authors[:-1]) + " and " + book.authors[-1] \
             if len(book.authors) > 1 else "".join(book.authors)
-        return (f'Adapted from "{source.number} {source.title}" in *{book.title}* by '
+        return (f'Adapted from "{source.heading}" in *{book.title}* by '
                 f"{authors} ({book.publisher}), <{source.link}>, licensed under "
                 f"[{book.licence.name}]({book.licence.url}).")
 
@@ -304,13 +327,14 @@ def _load_book(subject: Subject, book_id: str) -> Book:
         for j, section in enumerate(chapter_data["sections"]):
             here = f"{at}.sections[{j}]"
             _keys(section, _SECTION_KEYS, {"number", "title", "page"}, here)
-            for key in ("number", "title", "page", "status", "shared"):
+            for key in ("number", "title", "page", "status", "shared", "kind"):
                 if key in section and not isinstance(section[key], str):
                     raise SubjectError(f"{here}: {key}: not a string")
             chapter.lessons.append(Lesson(
                 chapter, section["number"], section["title"], section["page"],
                 section.get("status", "planned"), section.get("shared"),
-                _strings(section.get("requires", []), f"{here}: requires")))
+                _strings(section.get("requires", []), f"{here}: requires"),
+                section.get("kind", "section")))
         book.chapters.append(chapter)
     return book
 

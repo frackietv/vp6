@@ -28,17 +28,22 @@ progress.
   the lab run) is kept in the IDE's settings under
   ``education/progress/<lesson id>`` (``progress``, ``save_progress``,
   ``reset_progress``); ``Progress.state`` is "not started", "in progress" or
-  "done".
+  "done"; ``lesson_state`` is "planned" for a lesson not written yet;
+  ``book_progress`` counts a book's lessons done.
+* **The Education tab** (the New Project dialog's): ``layout_path`` places a
+  learning path's books in columns (each after the books it follows) and
+  rows (a branch below the books before it); ``lesson_description`` is a
+  lesson's objectives (from its ``lesson.md``) and what comes before it;
+  ``first_lesson`` is the one to go on with. The tab's choices are kept
+  under ``education/tab`` (``remember``, ``remembered``).
 """
 
 from __future__ import annotations
 
 import json
-import math
 import os
 import shutil
 from dataclasses import asdict, dataclass, field
-from fractions import Fraction
 
 from . import settings as _settings
 
@@ -188,6 +193,115 @@ def path_lessons(subject) -> list:
             for lesson in subject.books[b].lessons()]
 
 
+def layout_path(path) -> dict:
+    """Where a learning path's books go: ``{book id: (column, row)}``. A
+    book's column is one past the furthest book it follows; the first book
+    of a column takes the row of the book it follows (a straight line along
+    the main path), the others the rows below (branches)."""
+    nodes = list(path.nodes)
+    column: dict[str, int] = {}
+
+    def depth(node, seen=()):
+        if node not in column:
+            before = [a for a in path.predecessors(node) if a in nodes and a not in seen]
+            column[node] = 1 + max((depth(a, seen + (node,)) for a in before), default=-1)
+        return column[node]
+
+    for node in nodes:
+        depth(node)
+    places: dict[str, tuple[int, int]] = {}
+    taken: set[tuple[int, int]] = set()
+    for node in sorted(nodes, key=lambda n: (column[n], nodes.index(n))):
+        before = [places[a] for a in path.predecessors(node) if a in places]
+        row = min((r for _, r in before), default=0)
+        while (column[node], row) in taken:
+            row += 1
+        places[node] = (column[node], row)
+        taken.add(places[node])
+    return places
+
+
+def lesson_state(lesson) -> str:
+    """"planned" (not written yet), else the student's: not started, in
+    progress or done."""
+    return "planned" if lesson.planned else progress(lesson.id).state
+
+
+def book_progress(book) -> tuple[int, int, int]:
+    """(lessons done, lessons written, lessons) of a book."""
+    lessons = book.lessons()
+    written = [lesson for lesson in lessons if not lesson.planned]
+    done = sum(1 for lesson in written if progress(lesson.id).state == DONE)
+    return done, len(written), len(lessons)
+
+
+def first_lesson(book):
+    """The lesson to go on with in a book: the first written one in
+    progress, else the first written one not done, else its first."""
+    lessons = book.lessons()
+    written = [lesson for lesson in lessons if not lesson.planned]
+    for wanted in (IN_PROGRESS, NOT_STARTED):
+        for lesson in written:
+            if progress(lesson.id).state == wanted:
+                return lesson
+    return lessons[0] if lessons else None
+
+
+def lesson_objectives(lesson) -> str:
+    """The first paragraph or list under a written lesson's ``## Learning
+    Objectives`` heading (its Markdown), or ""."""
+    try:
+        text = lesson.lesson_md.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    found, inside = [], False
+    for line in text.splitlines():
+        if inside and (line.startswith("#") or (found and not line.strip())):
+            break
+        if line.startswith("#"):
+            inside = line.lstrip("#").strip().lower() in ("learning objectives", "objectives")
+        elif inside and line.strip():
+            found.append(line)
+    return "\n".join(found)
+
+
+def lesson_description(lesson) -> str:
+    """A lesson in Markdown, for the Education tab: what it is, its
+    objectives (or that it's planned) and the lessons before it, with their
+    states."""
+    lines = [f"**{lesson.heading}** · {lesson.book.title}"]
+    if lesson.planned:
+        lines.append(f"Not written yet: it will follow [the book's section]({lesson.link}).")
+    else:
+        objectives = lesson_objectives(lesson)
+        lines.append(f"By the end of it you'll be able to:\n\n{objectives}" if objectives
+                     else f"Adapted from [the book's section]({lesson.link}).")
+    before = lesson.prerequisites
+    if before:
+        lines.append("**Before it:** " + "; ".join(
+            f"{each.heading} ({lesson_state(each)})" for each in before))
+    else:
+        lines.append("**Before it:** nothing: it's where the path starts.")
+    return "\n\n".join(lines)
+
+
+TAB_KEY = "education/tab"
+
+
+def remember(subject: str, book: str) -> None:
+    """The Education tab's subject and book, kept for next time."""
+    _settings.settings().setValue(TAB_KEY, json.dumps({"subject": subject, "book": book}))
+
+
+def remembered() -> dict:
+    """The Education tab's last subject and book (``{}`` the first time)."""
+    try:
+        data = json.loads(_settings.settings().value(TAB_KEY, "") or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def neighbour(lesson, step: int):
     """The written lesson ``step`` (1 or -1) along the path from this one, or
     None at the path's end."""
@@ -283,26 +397,17 @@ def parse_lesson(markdown: str) -> LessonText:
 def answer_names() -> dict:
     """What a Try It's answer is written with: vp6edu.answers' names,
     Fraction and math."""
-    from vp6edu import answers
+    from vp6edu.answers import answer_names as names
 
-    names = {name: getattr(answers, name) for name in answers.__all__}
-    names.update(Fraction=Fraction, math=math, pi=math.pi, inf=math.inf)
-    return names
+    return names()
 
 
 def try_it_answer(source: str):
     """A Try It's answer from its Python (``Number(Fraction(3, 4))``);
     ValueError (what's wrong) when it isn't one."""
-    from vp6edu.answers import Answer
+    from vp6edu.answers import answer_of
 
-    try:
-        value = eval(compile(source, "<answer>", "eval", dont_inherit=True),  # noqa: S307
-                     {"__builtins__": __builtins__, **answer_names()})
-    except Exception as error:  # noqa: BLE001 (the lesson's mistake, shown in its place)
-        raise ValueError(f"{type(error).__name__}: {error}") from None
-    if not isinstance(value, Answer):
-        raise ValueError(f"{source!r} isn't an answer (Number(...), Choice(...)...)")
-    return value
+    return answer_of(source)
 
 
 # --- progress ----------------------------------------------------------------------------------

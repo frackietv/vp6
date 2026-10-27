@@ -201,6 +201,69 @@ def run_project(path: str) -> int:
     return run(find_form_class(project, project.startup))
 
 
+def try_forms(folder: str, wait: int = 150) -> list[str]:
+    """Each form in a folder (its ``.py`` files with a designer region)
+    loaded, made, shown, its events handled for ``wait`` milliseconds and
+    unloaded, the folder first on ``sys.path``: what went wrong, as
+    ``"Form1.py: ZeroDivisionError: ..."`` lines (run-time errors in its
+    event handlers too). vp6edu-check's ``--labs`` tries lessons' labs so;
+    the window system is offscreen unless an application was already made."""
+    import importlib.util
+
+    if "vp6.app" not in sys.modules:
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    os.environ.setdefault("VP6_NO_ERROR_DIALOG", "1")
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    from . import app, formfile
+
+    app.ensure_app()
+    problems: list[str] = []
+    errors: list[BaseException] = []
+    reporter = app.report_runtime_error
+    app.report_runtime_error = errors.append  # (call_handler reports through it)
+    folder = os.path.abspath(folder)
+    before = set(sys.modules)
+    sys.path.insert(0, folder)
+    try:
+        forms = []
+        for root, dirs, files in os.walk(folder):
+            dirs[:] = sorted(d for d in dirs if d != "__pycache__")
+            for name in sorted(files):
+                path = os.path.join(root, name)
+                if name.endswith(".py"):
+                    with open(path, encoding="utf-8") as f:
+                        source = f.read()
+                    if formfile.is_form_source(source):
+                        forms.append((path, source))
+        if not forms:
+            problems.append("there's no form")
+        for path, source in forms:
+            errors.clear()
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    f"_vp6_tried_{len(sys.modules)}_{os.path.basename(path)[:-3]}", path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                form = getattr(module, formfile.find_form_class(source))()
+                form.Show()
+                loop = QEventLoop()
+                QTimer.singleShot(wait, loop.quit)  # (its timers and first paints)
+                loop.exec()
+                form.Unload()
+            except Exception as error:  # noqa: BLE001 (the program's code)
+                errors.append(error)
+            relative = os.path.relpath(path, folder).replace(os.sep, "/")
+            problems += [f"{relative}: {type(e).__name__}: {e}" for e in errors]
+    finally:
+        app.report_runtime_error = reporter
+        sys.path.remove(folder)
+        for name in set(sys.modules) - before:  # (the folder's modules: not kept)
+            if str(getattr(sys.modules[name], "__file__", "") or "").startswith(folder):
+                del sys.modules[name]
+    return problems
+
+
 def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vp6-run", description="Run a VP6 project (as running its project file does).",

@@ -178,11 +178,27 @@ Claude.
 
 ### Lessons
 
-<!-- keywords: lesson, Lesson window, education, vp6edu, exercises, lab, Try It, progress -->
+<!-- keywords: lesson, Lesson window, education, Education tab, learning path, vp6edu, exercises, lab, Try It, progress -->
 
 The courses of **vp6edu** (Mathematics, after OpenStax's books) are lessons,
-each with a **lab**: a small VP6 project to change and run. Opening a lesson
-makes its project the first time, a copy of the lesson's `lab/` folder, in
+each with a **lab**: a small VP6 project to change and run. A chapter's
+sections are its lessons, followed by its **review** and its **practice
+test**.
+
+**The Education tab** of the New Project dialog (File > New Project, or Help >
+Education) is where lessons are chosen. Pick a **Subject**; its learning path
+is drawn as a map of books, each with its title and a bar of the lessons
+you've done, arrows leading from each book to the ones that follow it (the
+Statistics branch leaves Intermediate Algebra). It scrolls when it's wider
+than the dialog. Click a book (or use the arrow keys) and its chapters and
+lessons are listed with their states: *not started*, *in progress* or
+*done*; lessons not written yet are greyed out. Under the list are the
+chosen lesson's objectives and the lessons before it. **Open** (or a double
+click) opens the lesson under the **Location** (by default `VP6 Lessons` in
+your projects' folder). The dialog remembers the tab, the subject and the
+book.
+
+Opening a lesson makes its project the first time, a copy of the lesson's `lab/` folder, in
 `VP6 Lessons/<subject>/<book>/<section>` (e.g. `VP6 Lessons/math/prealgebra-2e/1.2`);
 after that the same project is opened again, with your changes. Its project
 file says which lesson it is (`"lesson": "math/prealgebra-2e/1.2"`) and has
@@ -212,14 +228,15 @@ Lesson Window opens it again), with three tabs:
 written lessons; at a book's end, to the next book's first), opening their
 projects beside this one. Your progress in each lesson (read, the exercises
 right and tried, the lab run) is kept in the IDE's settings; **Reset
-Progress** forgets it.
+Progress** forgets it. A link to another lesson in the text (a Be Prepared's
+"go back to 1.1") opens that lesson.
 
 A lesson's `lesson.md` is Markdown with maths. A Try It's answer is a fenced
 block of language `answer` holding one of vp6edu's answers (`Number(5)`,
 `Number(Fraction(3, 4), form="simplest")`, `Point(2, 3)`...), where the field
 goes; the section headed `## Lab` (to the next heading or a `---` rule) is
-the Lab tab's text. The exercises are the functions of its `exercises.py`
-(see vp6edu's README).
+the Lab tab's text. The exercises are the functions of its `exercises.py`.
+[Writing Lessons](education.md) is the guide to all of it.
 
 ## Files
 

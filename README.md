@@ -97,6 +97,7 @@ The samples are in the **Sample Projects** folder:
 | [source-reference.md](docs/source-reference.md) | find what each source file contains and how it connects to the rest |
 | [api.md](docs/api.md) | write VP6 programs: forms, controls, properties, events, functions, constants |
 | [development-guide.md](docs/development-guide.md) | set up a dev environment and extend VP6: new properties, events, controls, IDE commands, panels, themes, settings, frame styles, icons; testing and pitfalls |
+| [education.md](docs/education.md) | write lessons for vp6edu's courses: `lesson.md` with maths, `exercises.py` and the answer kinds, the lab project, attribution, `vp6edu-check` |
 
 **Suggested reading order.**
 

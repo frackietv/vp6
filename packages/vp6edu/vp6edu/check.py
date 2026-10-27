@@ -3,27 +3,47 @@
     vp6edu-check                       # vp6edu's own subjects
     vp6edu-check --subjects DIR        # the subjects in DIR (a folder of subject folders)
     vp6edu-check --attribution ID      # the attribution line lesson ID's lesson.md needs
+    vp6edu-check --labs                # and run every written lesson's lab (needs VP6)
 
 It checks the data (books on the paths, the paths without cycles, chapters
-and sections numbered in order, openstax.org page names, shared lessons and
-required ones pointing at lessons that exist, no prerequisite cycles), and
-every written lesson's files: ``lesson.md`` with its attribution line,
-``exercises.py`` that compiles, a ``lab/`` with files in it; and that no
-folder is left that isn't a lesson's. Exits with 1 when something is wrong.
+and sections numbered in order, a chapter's review and test after them,
+openstax.org page names, shared lessons and required ones pointing at
+lessons that exist, no prerequisite cycles), and every written lesson:
+
+* ``lesson.md``: its ``# `` heading and attribution line, its formulas
+  (laid out by vp6help's TeX, when vp6help is installed), its Try Its'
+  answers (each one's own answer checks right), its links to other lessons
+  (``lesson:<id>``) and, for a section, its parts (Learning Objectives, Be
+  Prepared, Key Concepts: warnings);
+* ``exercises.py``: it loads, has 10–20 makers (a warning otherwise), and
+  over ``--seeds`` seeds (50) every exercise has a prompt whose formulas lay
+  out and an answer whose own text checks right;
+* ``lab/``: it has files; with ``--labs`` its forms are loaded with VP6,
+  shown offscreen and unloaded, any run-time error being a problem.
+
+And that no folder is left that isn't a lesson's. Exits with 1 when
+something is wrong.
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from .subjects import (STATES, Lesson, Subject, SubjectError, load_subject, load_subjects,
+from .subjects import (KINDS, STATES, Lesson, Subject, SubjectError, load_subject, load_subjects,
                        subject_folders)
 
 _PAGE = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
+_LESSON_LINK = re.compile(r"\]\(lesson:([^)\s]+)\)")
+_ANSWER_BLOCK = re.compile(r"^ {0,3}```answer[ \t]*\n(.*?)^ {0,3}```", re.M | re.S)
+SEEDS = 50  # the seeds each exercise maker is tried with
+EXERCISES = (10, 20)  # how many makers a section's exercises.py should have
+SECTION_PARTS = ("Learning Objectives", "Be Prepared", "Key Concepts")
 
 
 @dataclass
@@ -36,8 +56,9 @@ class Problem:
         return f"{self.where}: {'warning: ' if self.warning else ''}{self.message}"
 
 
-def check(*roots) -> list[Problem]:
-    """The problems of every subject in these folders (vp6edu's own by default)."""
+def check(*roots, seeds: int = SEEDS, labs: bool = False) -> list[Problem]:
+    """The problems of every subject in these folders (vp6edu's own by
+    default); ``labs`` runs the written lessons' labs too (with VP6)."""
     problems = []
     seen = {}
     for folder in subject_folders(*roots):
@@ -49,11 +70,11 @@ def check(*roots) -> list[Problem]:
         if subject.id in seen:
             problems.append(Problem(subject.id, f"also in {seen[subject.id]}"))
         seen[subject.id] = folder
-        problems += check_subject(subject)
+        problems += check_subject(subject, seeds, labs)
     return problems
 
 
-def check_subject(subject: Subject) -> list[Problem]:
+def check_subject(subject: Subject, seeds: int = SEEDS, labs: bool = False) -> list[Problem]:
     problems = []
 
     def problem(where, message, warning=False):
@@ -73,10 +94,21 @@ def check_subject(subject: Subject) -> list[Problem]:
                 problem(where, f"chapter {chapter.number} has no title")
             if not chapter.lessons:
                 problem(where, f"chapter {chapter.number} has no sections")
-            for j, lesson in enumerate(chapter.lessons, 1):
-                if lesson.number != f"{chapter.number}.{j}":
-                    problem(lesson.id, f"numbered where {chapter.number}.{j} was expected")
-                _check_lesson(lesson, problem)
+            sections = [each for each in chapter.lessons if each.kind == "section"]
+            ends = [each for each in chapter.lessons if each.kind != "section"]
+            for lesson in chapter.lessons:
+                expected = f"{chapter.number}.{sections.index(lesson) + 1}" \
+                    if lesson in sections else f"{chapter.number}-{lesson.kind}"
+                if lesson.number != expected:
+                    problem(lesson.id, f"numbered where {expected} was expected")
+                _check_lesson(lesson, problem, seeds, labs)
+            if chapter.lessons != sections + ends:
+                problem(where, f"chapter {chapter.number}'s review and test aren't after its "
+                               "sections")
+            if [e.kind for e in ends] not in ([], ["review"], ["test"], ["review", "test"]):
+                problem(where, f"chapter {chapter.number} ends with "
+                               f"{', '.join(e.kind for e in ends)}: a review, then a test")
+
         _check_folders(book, problem)
     _check_cycles(subject, problem)
     return problems
@@ -121,11 +153,14 @@ def _check_paths(subject: Subject, problem):
             problem(f"{subject.id}/{book}", "on no learning path", warning=True)
 
 
-def _check_lesson(lesson: Lesson, problem):
+def _check_lesson(lesson: Lesson, problem, seeds: int = SEEDS, labs: bool = False):
     where = lesson.id
     if not lesson.title.strip():
         problem(where, "no title")
-    prefix = lesson.number.replace(".", "-") + "-"
+    if lesson.kind not in KINDS:
+        problem(where, f"kind {lesson.kind!r} isn't one of {', '.join(KINDS)}")
+    prefix = lesson.number.replace(".", "-") + "-" if lesson.kind == "section" \
+        else f"{lesson.chapter.number}-"
     if not _PAGE.fullmatch(lesson.page) or not lesson.page.startswith(prefix):
         problem(where, f"page {lesson.page!r} isn't an openstax.org page name "
                        f"starting {prefix!r}")
@@ -156,10 +191,10 @@ def _check_lesson(lesson: Lesson, problem):
             problem(where, f"shares {source.id} titled {source.title!r}", warning=True)
         return
     if lesson.own_status == "written":
-        _check_written(lesson, problem)
+        _check_written(lesson, problem, seeds, labs)
 
 
-def _check_written(lesson: Lesson, problem):
+def _check_written(lesson: Lesson, problem, seeds: int = SEEDS, labs: bool = False):
     where = lesson.id
     if not lesson.lesson_md.is_file():
         problem(where, "written, but has no lesson.md")
@@ -169,6 +204,7 @@ def _check_written(lesson: Lesson, problem):
             problem(where, "lesson.md doesn't start with a # heading")
         if " ".join(lesson.attribution.split()) not in " ".join(text.split()):
             problem(where, f"lesson.md lacks its attribution: {lesson.attribution}")
+        _check_lesson_text(lesson, text, problem)
     if not lesson.exercises.is_file():
         problem(where, "written, but has no exercises.py")
     else:
@@ -177,8 +213,104 @@ def _check_written(lesson: Lesson, problem):
                     dont_inherit=True)
         except SyntaxError as error:
             problem(where, f"exercises.py line {error.lineno}: {error.msg}")
+        else:
+            _check_exercises(lesson, problem, seeds)
     if not lesson.lab.is_dir() or not any(p.is_file() for p in lesson.lab.rglob("*")):
         problem(where, "written, but its lab/ has no files")
+    elif labs:
+        for message in check_lab(lesson):
+            problem(where, f"lab: {message}")
+
+
+def _formula_problems(text: str) -> list[str]:
+    """The formulas in Markdown that vp6help's TeX can't lay out (none
+    without vp6help)."""
+    try:
+        from vp6help import tex
+    except ImportError:
+        return []
+    found = []
+    for span in tex.math_spans(text):
+        try:
+            tex.layout(span.tex, tex.Metrics(), span.display)
+        except (tex.TexError, RecursionError) as error:
+            found.append(f"${span.tex}$: {error or 'too deep'}")
+    return found
+
+
+def _check_lesson_text(lesson: Lesson, text: str, problem):
+    from .answers import answer_of
+
+    where = f"{lesson.id} lesson.md"
+    for message in _formula_problems(text):
+        problem(where, f"a formula that can't be laid out: {message}")
+    for block in _ANSWER_BLOCK.findall(text):
+        try:
+            answer = answer_of(block.strip())
+        except ValueError as error:
+            problem(where, f"a Try It's answer that can't be read: {error}")
+            continue
+        result = answer.check(answer.text)
+        if not result.right:
+            problem(where, f"the Try It answer {block.strip()}: its own text "
+                           f"{answer.text!r} checks {result.status}")
+    for ref in _LESSON_LINK.findall(text):
+        try:
+            lesson.subject.lesson(ref)
+        except KeyError:
+            problem(where, f"links to lesson {ref}, which isn't one")
+    if lesson.kind == "section":
+        headings = {line[3:].strip().lower() for line in text.splitlines()
+                    if line.startswith("## ")}
+        for part in SECTION_PARTS:
+            if part.lower() not in headings:
+                problem(where, f"has no ## {part}", warning=True)
+
+
+def _check_exercises(lesson: Lesson, problem, seeds: int):
+    from .answers import generators, load_exercises, make, verify
+
+    where = f"{lesson.id} exercises.py"
+    try:
+        makers = generators(load_exercises(lesson.exercises))
+    except Exception as error:  # noqa: BLE001 (the lesson's code)
+        problem(where, f"can't be loaded: {type(error).__name__}: {error}")
+        return
+    low, high = EXERCISES
+    if lesson.kind == "section" and not low <= len(makers) <= high:
+        problem(where, f"has {len(makers)} exercises, not {low}–{high}", warning=True)
+    if not makers:
+        problem(where, "has no exercises")
+    for maker in makers:
+        found = verify(maker, range(seeds))
+        for message in found[:3]:
+            problem(where, message)
+        if found:
+            continue
+        for seed in range(seeds):
+            exercise = make(maker, seed)
+            text = "\n\n".join([exercise.prompt, exercise.solution, *exercise.hints])
+            bad = _formula_problems(text)
+            if bad:
+                problem(where, f"{maker.__name__}, seed {seed}: a formula that can't be "
+                               f"laid out: {bad[0]}")
+                break
+
+
+def check_lab(lesson: Lesson) -> list[str]:
+    """What goes wrong running a lesson's lab with VP6 (``vp6.runner.try_forms``
+    on a copy of it): each form made, shown offscreen and unloaded."""
+    try:
+        from vp6.runner import try_forms
+    except ImportError:
+        return ["VP6 isn't installed, so the lab can't be run"]
+    folder = tempfile.mkdtemp(prefix="vp6edu-lab-")
+    try:
+        shutil.copytree(lesson.lab, folder, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        return try_forms(folder)
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def _check_folders(book, problem):
@@ -245,6 +377,10 @@ def main(argv=None) -> int:
                              "may be given more than once)")
     parser.add_argument("--attribution", metavar="ID",
                         help="print the attribution line lesson ID needs, and stop")
+    parser.add_argument("--labs", action="store_true",
+                        help="also run every written lesson's lab offscreen (needs VP6)")
+    parser.add_argument("--seeds", metavar="N", type=int, default=SEEDS,
+                        help=f"the seeds each exercise is tried with ({SEEDS})")
     parser.add_argument("-q", "--quiet", action="store_true",
                         help="print only the problems")
     args = parser.parse_args(argv)
@@ -258,7 +394,7 @@ def main(argv=None) -> int:
             print(f"vp6edu-check: {error}", file=sys.stderr)
             return 1
         return 0
-    problems = check(*roots)
+    problems = check(*roots, seeds=args.seeds, labs=args.labs)
     for each in problems:
         print(each)
     if not args.quiet:

@@ -15,7 +15,7 @@ The core is pure Python (no Qt). The lessons are adapted from OpenStax's
 books, each one attributed: see ``Lesson.attribution``.
 """
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 from .subjects import (SUBJECTS, Book, Chapter, LearningPath, Lesson, Licence,  # noqa: E402
                        Subject, SubjectError, load_subject, load_subjects)

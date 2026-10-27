@@ -414,3 +414,196 @@ def test_running_the_lab_counts(window, subject, tmp_path, monkeypatch):
     assert education.progress("edu/book-b/1.1").lab_run
     window.process = None
     window._end_debugging()
+
+
+# --- the Education tab --------------------------------------------------------------------
+
+def test_a_path_laid_out(subject):
+    path = subject.paths[0]
+    assert education.layout_path(path) == {"book-a": (0, 0), "book-b": (1, 0), "book-c": (1, 1)}
+    from vp6edu import load_subjects
+
+    places = education.layout_path(load_subjects()["math"].paths[0])
+    assert [places[b] for b in ("prealgebra-2e", "intermediate-algebra-2e",
+                                "algebra-and-trigonometry-2e", "calculus-volume-3")] == [
+        (0, 0), (2, 0), (3, 0), (7, 0)]
+    assert places["introductory-statistics-2e"] == (3, 1)  # (the branch, below)
+
+
+def test_states_and_progress_of_books(subject, memory_settings):
+    book = subject.books["book-a"]
+    states = [education.lesson_state(lesson) for lesson in book.lessons()]
+    assert states == [education.NOT_STARTED, "planned", education.NOT_STARTED]
+    assert education.book_progress(book) == (0, 2, 3)
+    assert education.first_lesson(book).number == "1.1"
+    education.save_progress("edu/book-a/1.1", education.Progress(read=True, lab_run=True,
+                                                                  exercises=0))
+    assert education.lesson_state(book.lessons()[0]) == education.DONE
+    assert education.book_progress(book) == (1, 2, 3)
+    assert education.first_lesson(book).number == "1.3"  # (the one to go on with)
+    education.save_progress("edu/book-a/1.3", education.Progress(read=True))
+    assert education.first_lesson(book).number == "1.3"
+    assert education.first_lesson(subject.books["book-b"]).number == "1.1"
+
+
+def test_a_lessons_description(subject, memory_settings):
+    lesson = subject.lesson("book-a/1.3")
+    assert education.lesson_objectives(lesson) == "- Add whole numbers."
+    text = education.lesson_description(lesson)
+    assert text.startswith("**1.3 Multiplying** · Book A")
+    assert "- Add whole numbers." in text and "**Before it:** 1.2 Subtracting (planned)" in text
+    planned = education.lesson_description(subject.lesson("book-a/1.2"))
+    assert "Not written yet" in planned and "1-2-subtracting" in planned
+    assert "where the path starts" in education.lesson_description(subject.lesson("book-a/1.1"))
+    assert education.remembered() == {}
+    education.remember("edu", "book-b")
+    assert education.remembered() == {"subject": "edu", "book": "book-b"}
+
+
+def test_the_learning_path_view(qapp, subject, memory_settings):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    from vp6.ide.learningpath import LearningPathView
+    from vp6.ide.theme import DARK, LIGHT, theme_manager
+
+    view = LearningPathView()
+    chosen = []
+    view.bookChosen.connect(chosen.append)
+    view.set_path(subject.paths[0])
+    assert view.progress == {"book-a": (0, 2, 3), "book-b": (0, 1, 1), "book-c": (0, 1, 1)}
+    width, height = view.width(), view.height()
+    assert (width, height) == (2 * view.MARGIN + 2 * view.NODE_WIDTH + view.GAP_X,
+                               2 * view.MARGIN + 2 * view.NODE_HEIGHT + view.GAP_Y)
+    assert view.node_rect("book-c").top() > view.node_rect("book-b").top()
+    QTest.mouseClick(view, Qt.LeftButton, pos=view.node_rect("book-b").center().toPoint())
+    assert chosen == ["book-b"] and view.selected == "book-b"
+    QTest.mouseClick(view, Qt.LeftButton, pos=QPoint(2, 2))  # (no book there)
+    assert chosen == ["book-b"]
+    QTest.keyClick(view, Qt.Key_Right)
+    assert chosen[-1] == "book-c"
+    QTest.keyClick(view, Qt.Key_Left)
+    QTest.keyClick(view, Qt.Key_Left)
+    assert view.selected == "book-a"
+    # light and dark: the bars and arrows follow the theme (the rest, the palette)
+    manager = theme_manager()
+    state = manager.state
+    try:
+        manager.select(LIGHT)
+        light, light_image = view.colors(), view.grab().toImage()
+        manager.select(DARK)
+        dark, dark_image = view.colors(), view.grab().toImage()
+    finally:
+        manager.apply(state)
+    assert light["track"].lightness() > 128 > dark["track"].lightness()
+    assert light_image != dark_image
+
+
+def test_the_education_tab(qapp, subject, memory_settings, tmp_path):
+    from vp6.ide.dialogs import TAB_NAMES, NewProjectDialog
+
+    dialog = NewProjectDialog([], tab="education")
+    try:
+        assert TAB_NAMES[dialog.tabs.currentIndex()] == "education"
+        assert dialog.tabs.tabText(3) == "Education"
+        assert [dialog.subject_box.itemText(i) for i in range(dialog.subject_box.count())] == \
+            ["Education"]
+        assert dialog.subject.id == "edu" and dialog.book.id == "book-a"
+        assert set(dialog.path_view.places) == {"book-a", "book-b", "book-c"}
+        chapter = dialog.lessons.topLevelItem(0)
+        assert chapter.text(0) == "1  Whole Numbers" and chapter.isExpanded()
+        rows = [(chapter.child(i).text(0), chapter.child(i).text(1))
+                for i in range(chapter.childCount())]
+        assert rows == [("1.1  Adding", "not started"), ("1.2  Subtracting", "planned"),
+                        ("1.3  Multiplying", "not started")]
+        assert chapter.child(1).foreground(0).color() != chapter.child(0).foreground(0).color()
+        assert dialog.chosen_lesson.id == "edu/book-a/1.1"
+        assert "Add whole numbers" in dialog.lesson_text.toPlainText()
+        # a planned lesson can't be opened
+        dialog.lessons.setCurrentItem(chapter.child(1))
+        assert "Not written yet" in dialog.lesson_text.toPlainText()
+        dialog._accept()
+        assert dialog.result_action is None and "isn't written yet" in \
+            dialog.lesson_message.text()
+        # another book, chosen on the path; a lesson in it opened
+        dialog.path_view.select("book-c", emit=True)
+        assert dialog.book.id == "book-c" and dialog.chosen_lesson.id == "edu/book-c/1.1"
+        assert education.remembered() == {"subject": "edu", "book": "book-c"}
+        dialog.lesson_location.setText(str(tmp_path / "Lessons"))
+        dialog._accept()
+        assert dialog.result_action == "lesson" and dialog.lesson.id == "edu/book-c/1.1"
+        assert dialog.lesson_root == str(tmp_path / "Lessons")
+    finally:
+        dialog.deleteLater()
+    # the tab and the book are remembered
+    dialog = NewProjectDialog([])
+    try:
+        assert TAB_NAMES[dialog.tabs.currentIndex()] == "education"
+        assert dialog.book.id == "book-c"
+        dialog.tabs.setCurrentIndex(0)
+        dialog.reject()
+    finally:
+        dialog.deleteLater()
+    dialog = NewProjectDialog([])
+    assert TAB_NAMES[dialog.tabs.currentIndex()] == "new"
+    dialog.deleteLater()
+
+
+def test_help_education_opens_a_lesson(window, subject, memory_settings, tmp_path,
+                                       monkeypatch):
+    from vp6.ide.dialogs import NewProjectDialog
+
+    seen = []
+
+    def choose(dialog):
+        seen.append(dialog.tabs.tabText(dialog.tabs.currentIndex()))
+        dialog.lesson_location.setText(str(tmp_path / "Lessons"))
+        dialog._accept_lesson()
+        return dialog.result()
+
+    monkeypatch.setattr(NewProjectDialog, "exec", choose)
+    window.act_help_education.trigger()
+    assert seen == ["Education"]
+    assert window.project.lesson == "edu/book-a/1.1"
+    assert window.project.directory == str(tmp_path / "Lessons" / "edu" / "book-a" / "1.1")
+    assert window.lesson_window() is not None
+
+
+def test_links_to_lessons(window, subject, tmp_path):
+    from PySide6.QtCore import QUrl
+
+    assert window.open_lesson(subject.lesson("book-a/1.3"), str(tmp_path / "L"))
+    lesson = window.lesson_window()
+    asked = []
+    lesson.lessonRequested.connect(asked.append)
+    view = lesson.lesson_views[0]
+    view.anchorClicked.emit(QUrl("lesson:edu/book-a/1.1"))
+    lesson.open_linked("book-b/1.1")
+    lesson.open_linked("book-a/9.9")  # (no such lesson: nothing)
+    lesson.open_linked("edu/book-a/1.3")  # (itself: nothing)
+    assert [each.id for each in asked] == ["edu/book-a/1.1", "edu/book-b/1.1"]
+
+
+# --- the written lessons' labs ------------------------------------------------------------
+
+def test_forms_tried_offscreen(qapp, tmp_path):
+    from vp6.runner import try_forms
+
+    good = formfile.new_form_source("Form1", "Good")
+    bad = formfile.new_form_source("Form2", "Bad").replace(
+        "\nif __name__", "\n    def Form_Load(self):\n        1 / 0\n\n\nif __name__")
+    (tmp_path / "Form1.py").write_text(good)
+    (tmp_path / "Form2.py").write_text(bad)
+    (tmp_path / "Helpers.py").write_text("x = 1\n")
+    assert try_forms(str(tmp_path)) == ["Form2.py: ZeroDivisionError: division by zero"]
+    assert str(tmp_path) not in __import__("sys").path
+    (tmp_path / "Form1.py").unlink()
+    (tmp_path / "Form2.py").unlink()
+    assert try_forms(str(tmp_path)) == ["there's no form"]
+
+
+def test_the_written_lessons_pass_vp6edu_check_with_their_labs(qapp):
+    from vp6edu import check as edu_check
+
+    assert edu_check.check(labs=True) == []
+    assert edu_check.main(["--labs", "-q", "--seeds", "10"]) == 0

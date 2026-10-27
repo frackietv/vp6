@@ -1,18 +1,5 @@
 # VP6 backlog
 
-- **[Education]** Step 6, the New Project dialog's fourth tab, Education, after New, Existing and Recent:
-  - a Subject drop-down listing the subjects vp6edu has (Mathematics for now);
-  - the subject's learning path drawn as a graph (a widget of its own): each book a node with its title and a progress bar, arrows between the books, the Statistics branch leaving Intermediate Algebra; laid out from the path's graph, scrolling when wider than the dialog, light and dark;
-  - choosing a node lists its chapters and lessons in a tree, each lesson showing its state (planned ones greyed out; not started; in progress; done), with the lesson's description and prerequisites under the tree.
-
-  Open makes or reopens the lesson project under the Location (by default a `VP6 Lessons` folder there, then subject/book/section) and opens it (`result_action` "lesson"). The tab, subject and node are remembered, and Help > Education opens the tab. Tests and screenshots (light, dark, macOS).
-- **[Education]** Step 7, the pilot and the authoring guide: Prealgebra 2e chapter 1 (Whole Numbers) written in full as the model for every later chapter.
-  - Each section is a lesson: objectives, a Be Prepared check linking to the lessons it needs, the explanation with worked examples and Try Its, the key concepts.
-  - Each section has 10–20 generated exercises across its skills, word problems included.
-  - Each section has a lab, e.g. place value with draggable digits, rounding on a number line, an arithmetic game.
-  - The chapter ends with a review and a test.
-
-  `docs/education.md`, also in VP6's help, covers writing a lesson: Markdown and maths, `exercises.py` and the answer kinds, the lab project, attribution, `vp6edu-check`. `vp6edu-check` passes for every written lesson and the tests run it: prompts render, every exercise's own answer passes its check over many seeds, and the lab project loads and its forms run offscreen.
 - **[Education]** Prealgebra 2e, chapters 2–6 (The Language of Algebra, Integers, Fractions, Decimals, Percents): lessons, exercises and labs as in step 7. Labs e.g. integer chips and the number line, fraction bars, a decimal place-value explorer, a percent bar.
 - **[Education]** Prealgebra 2e, chapters 7–11 (The Properties of Real Numbers, Solving Linear Equations, Math Models and Geometry, Polynomials, Graphs). Labs e.g. a balance for equations, perimeter and area by dragging a shape's corners, plotting points and lines on a Graph.
 - **[Education]** Elementary Algebra 2e, chapters 1–5 (Foundations, Solving Linear Equations and Inequalities, Math Models, Graphs, Systems of Linear Equations). Labs e.g. slope from two draggable points, slope-intercept sliders, where two lines cross, inequalities on a number line.

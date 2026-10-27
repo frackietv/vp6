@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.4.72
+**Date:** 2026-10-27
+
+## Education: the Education tab and the first chapter
+
+- The New Project dialog's Education tab (also Help > Education): choose a subject and see its learning path drawn as a map of books, each with its title and a progress bar of the lessons done, arrows to the books that follow and the Statistics branch leaving Intermediate Algebra; it scrolls when wider than the dialog, light and dark
+- Choose a book on the map (click or arrow keys) to list its chapters and lessons with their states: not started, in progress, done, or greyed out while not written yet; under the list, the lesson's objectives and the lessons before it
+- Open makes or reopens the lesson's project under the Location (`VP6 Lessons` in the projects' folder by default) and opens it with its Lesson window; the tab, the subject and the book are remembered
+- Prealgebra 2e's chapter 1, Whole Numbers, written in full as the model for every later chapter: five lessons (whole numbers, adding, subtracting, multiplying, dividing), each with objectives, a Be Prepared check linking back to the lessons it needs, worked examples and Try Its, key concepts, 12 to 13 generated exercises with word problems, and a lab: place value with draggable digits and rounding on a number line, column addition step by step, subtraction as hops on a number line, arrays and area with partial products, counters shared into groups with a remainder
+- The chapter ends with a review (an arithmetic game as its lab, keeping its best score) and a practice test (a whole-number calculator to extend)
+- Links to other lessons in a lesson's text open them; chapters can end with a review and a test (vp6edu 0.1.3: lesson kinds, `label`, `heading`, `answer_of`)
+- `vp6edu-check` checks written lessons in depth: formulas laid out, Try Its' answers, links to lessons, a section's parts, 10–20 exercises each tried over many seeds (`--seeds`), and with `--labs` every lab's forms run offscreen; the tests run it
+- Writing Lessons (`docs/education.md`, also in VP6's help): Markdown and maths, `exercises.py` and the answer kinds, the lab project, attribution, `vp6edu-check`
+
 **Version:** 0.4.71
 **Date:** 2026-10-27
 

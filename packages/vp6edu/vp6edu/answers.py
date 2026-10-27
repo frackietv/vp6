@@ -2368,8 +2368,29 @@ def verify(generator, seeds=range(25)) -> list[str]:
     return problems
 
 
+def answer_names() -> dict:
+    """What an answer written as Python (a Try It's) can use: this module's
+    names, ``Fraction``, ``math``, ``pi`` and ``inf``."""
+    names = {name: globals()[name] for name in __all__}
+    names.update(Fraction=Fraction, math=math, pi=math.pi, inf=math.inf)
+    return names
+
+
+def answer_of(source: str) -> Answer:
+    """An answer from its Python, as a lesson's Try It writes it
+    (``Number(Fraction(3, 4))``); ValueError (what's wrong) when it isn't one."""
+    try:
+        found = eval(compile(source, "<answer>", "eval", dont_inherit=True),  # noqa: S307
+                     {"__builtins__": __builtins__, **answer_names()})
+    except Exception as error:  # noqa: BLE001 (the lesson's mistake, reported)
+        raise ValueError(f"{type(error).__name__}: {error}") from None
+    if not isinstance(found, Answer):
+        raise ValueError(f"{source!r} isn't an answer (Number(...), Choice(...)...)")
+    return found
+
+
 __all__ = ["RIGHT", "NOT_YET", "UNREADABLE", "NO_SOLUTION", "ALL_REAL", "NUMBER_FORMS",
            "EQUATION_FORMS", "Unreadable", "Result", "Node", "read", "value", "equivalent",
            "Answer", "Choice", "Number", "Expression", "Equation", "Pair", "Point", "Line",
            "Solutions", "Inequality", "Interval", "Exercise", "load_exercises", "generators",
-           "make", "verify"]
+           "make", "verify", "answer_names", "answer_of"]

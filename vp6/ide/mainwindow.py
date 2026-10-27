@@ -319,7 +319,7 @@ class MainWindow(QMainWindow):
 
     def _create_actions(self):
         a = self._action
-        self.act_new = a("&New Project…", self.new_project, QKeySequence.New, "New")
+        self.act_new = a("&New Project…", lambda: self.new_project(), QKeySequence.New, "New")
         self.act_open = a("&Open Project…", self.open_project_dialog, QKeySequence.Open, "Open")
         self.act_save = a("&Save Project", self.save_all, QKeySequence.Save, "Save")
         self.act_save_as = a("Save Project &As…", lambda: self.save_project_as())
@@ -393,6 +393,9 @@ class MainWindow(QMainWindow):
                                 tip="VP6's help: the index of keywords")
         self.act_help_search = a("&Search…", lambda: self.show_help(search_tab=True),
                                  tip="VP6's help: search all of it")
+        self.act_help_education = a("&Education…", lambda: self.new_project(tab="education"),
+                                    tip="Lessons: a subject's learning path, its books and "
+                                        "lessons, your progress")
         self.act_context_help = a("Context &Help", lambda: self.context_help(), "F1",
                                   tip="Help on what is selected: the word in the code, the "
                                       "property, the control or the tool")
@@ -522,7 +525,7 @@ class MainWindow(QMainWindow):
 
         help_menu = bar.addMenu("&Help")
         for act in (self.act_help_contents, self.act_help_index, self.act_help_search,
-                    None, self.act_context_help, None):
+                    None, self.act_context_help, None, self.act_help_education, None):
             help_menu.addSeparator() if act is None else help_menu.addAction(act)
         # Qt moves an "About" item into the application menu on macOS
         # (AboutRole), which would leave Help without one: this one stays put
@@ -996,8 +999,9 @@ class MainWindow(QMainWindow):
             # which crashed when Ctrl+C had closed it)
             dialog.deleteLater()
 
-    def new_project(self):
-        dialog = NewProjectDialog(self.recent_projects(), self)
+    def new_project(self, tab: str | None = None):
+        """File > New Project (Help > Education: on its Education tab)."""
+        dialog = NewProjectDialog(self.recent_projects(), self, tab=tab)
         try:
             if dialog.exec() and self.close_project():
                 self._handle_project_dialog(dialog)
@@ -1045,6 +1049,8 @@ class MainWindow(QMainWindow):
         elif dialog.result_action == "new":
             path = create_project(dialog.project_location, dialog.project_name, dialog.template)
             self.open_project(path)
+        elif dialog.result_action == "lesson":
+            self.open_lesson(dialog.lesson, dialog.lesson_root)
 
     def open_project(self, path: str) -> bool:
         try:
