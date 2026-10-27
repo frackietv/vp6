@@ -2,7 +2,10 @@
 syntax colored (Mode = vpMarkdownSource), a visual editor (vpMarkdownVisual) and a
 rendered preview (vpMarkdownPreview). Editing either editor updates the other two (their
 Change events); the buttons format the selection in the editor used last (ApplyFormat);
-Append adds a line at the end (AppendText) and shows it (ScrollToEnd)."""
+Append adds a line at the end (AppendText) and shows it (ScrollToEnd). Formulas
+($...$ in the text, $$...$$ displayed, TeX) are drawn in the visual editor and the
+preview; the Math button (vpMarkdownMath) makes one of the selection, or turns one back
+into its TeX."""
 
 from vp6 import *
 
@@ -26,6 +29,14 @@ Colors: <span style="color:#c0392b">red, **bold** too</span> and <font color="#2
 
 > A quote, and [a link](https://www.python.org): click it in the preview.
 
+## Maths
+
+Formulas in the text, $a^2 + b^2 = c^2$ and $0.\\overline{3} = \\frac{1}{3}$, or on their own:
+
+$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
+
+$$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2} \\qquad \\begin{pmatrix} 1 & 0 \\\\ 0 & 1 \\end{pmatrix}$$
+
 ```python
 print("Hello from VP6")
 ```
@@ -42,7 +53,7 @@ print("Hello from VP6")
 # The format of each button of cmdFormat, in order
 FORMATS = (vpMarkdownBold, vpMarkdownItalic, vpMarkdownStrikeThru, vpMarkdownCode,
            vpMarkdownHeading1, vpMarkdownHeading2, vpMarkdownHeading3, vpMarkdownParagraph,
-           vpMarkdownBulletList, vpMarkdownNumberedList, vpMarkdownQuote)
+           vpMarkdownBulletList, vpMarkdownNumberedList, vpMarkdownQuote, vpMarkdownMath)
 
 
 class pgMarkdown(Form):
@@ -76,34 +87,37 @@ class pgMarkdown(Form):
         self.cmdFormat[7] = CommandButton(self, Caption='Text', Left=332, Top=12, Width=50,
                                           Height=29, TabIndex=8,
                                           ToolTipText='A plain paragraph (vpMarkdownParagraph)')
-        self.cmdFormat[8] = CommandButton(self, Caption='- List', Left=390, Top=12, Width=70,
+        self.cmdFormat[8] = CommandButton(self, Caption='- List', Left=390, Top=12, Width=62,
                                           Height=29, TabIndex=9,
                                           ToolTipText='A bulleted list (vpMarkdownBulletList)')
-        self.cmdFormat[9] = CommandButton(self, Caption='1. List', Left=462, Top=12, Width=70,
+        self.cmdFormat[9] = CommandButton(self, Caption='1. List', Left=454, Top=12, Width=62,
                                           Height=29, TabIndex=10,
                                           ToolTipText='A numbered list (vpMarkdownNumberedList)')
-        self.cmdFormat[10] = CommandButton(self, Caption='Quote', Left=534, Top=12, Width=70,
+        self.cmdFormat[10] = CommandButton(self, Caption='Quote', Left=518, Top=12, Width=60,
                                            Height=29, TabIndex=11,
                                            ToolTipText='A quote (vpMarkdownQuote)')
+        self.cmdFormat[11] = CommandButton(self, Caption='Math', Left=580, Top=12, Width=48,
+                                           Height=29, TabIndex=12,
+                                           ToolTipText='A formula of the TeX selected, or the TeX of a formula (vpMarkdownMath)')
         self.lblSource = Label(self, Caption='Source', Left=16, Top=50, Width=196, Height=20,
-                               FontBold=True, TabIndex=12)
+                               FontBold=True, TabIndex=13)
         self.lblVisual = Label(self, Caption='Visual editor', Left=222, Top=50, Width=196,
-                               Height=20, FontBold=True, TabIndex=13)
+                               Height=20, FontBold=True, TabIndex=14)
         self.lblPreview = Label(self, Caption='Preview', Left=428, Top=50, Width=196, Height=20,
-                                FontBold=True, TabIndex=14)
+                                FontBold=True, TabIndex=15)
         self.mdSource = MarkdownBox(self, Text='', Left=16, Top=72, Width=196, Height=330,
-                                    TabIndex=15,
+                                    TabIndex=16,
                                     ToolTipText='Mode = vpMarkdownSource: the Markdown, colored')
         self.mdVisual = MarkdownBox(self, Mode=1, Text='', Left=222, Top=72, Width=196, Height=330,
-                                    TabIndex=16,
+                                    TabIndex=17,
                                     ToolTipText='Mode = vpMarkdownVisual: edited as it reads')
         self.mdPreview = MarkdownBox(self, Mode=2, Text='', Left=428, Top=72, Width=196,
-                                     Height=330, TabIndex=17,
+                                     Height=330, TabIndex=18,
                                      ToolTipText='Mode = vpMarkdownPreview: rendered, read-only')
         self.lblStatus = Label(self, Caption='', Left=16, Top=410, Width=500, Height=22,
-                               TabIndex=18)
+                               TabIndex=19)
         self.cmdAppend = CommandButton(self, Caption='&Append', Left=530, Top=406, Width=94,
-                                       Height=28, TabIndex=19,
+                                       Height=28, TabIndex=20,
                                        ToolTipText='AppendText: a colored line at the end, then ScrollToEnd')
     # endregion
 

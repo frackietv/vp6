@@ -25,7 +25,7 @@ def test_version_and_license():
     assert PROJECT["readme"] == "README.md"
     # The help system and the courses are packages of their own (packages/vp6help,
     # packages/vp6edu), on PyPI as vp6help and vp6edu
-    assert PROJECT["dependencies"] == ["PySide6>=6.6", "vp6help>=0.1", "vp6edu>=0.1"]
+    assert PROJECT["dependencies"] == ["PySide6>=6.6", "vp6help>=0.1.1", "vp6edu>=0.1"]
     assert (ROOT / "packages" / "vp6help" / "pyproject.toml").exists()
     assert (ROOT / "packages" / "vp6edu" / "pyproject.toml").exists()
     assert PYPROJECT["tool"]["setuptools"]["packages"]["find"]["include"] == ["vp6", "vp6.*"]

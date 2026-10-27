@@ -1459,7 +1459,7 @@ self.mdNotes.ApplyFormat(vpMarkdownBold)         # **the selection**; again: und
   selected: the word at the caret in the visual editor, the markers around
   the caret in the source), and the same format again removes it:
   `vpMarkdownBold`, `vpMarkdownItalic`, `vpMarkdownStrikeThru`,
-  `vpMarkdownCode` (the text); `vpMarkdownHeading1` to `3`,
+  `vpMarkdownCode`, `vpMarkdownMath` (the text); `vpMarkdownHeading1` to `3`,
   `vpMarkdownBulletList`, `vpMarkdownNumberedList`, `vpMarkdownQuote` and
   `vpMarkdownParagraph` (plain again) for the selection's paragraphs.
   Ctrl+B and Ctrl+I are bold and italic. In the preview it does nothing.
@@ -1473,6 +1473,20 @@ self.mdNotes.ApplyFormat(vpMarkdownBold)         # **the selection**; again: und
   editor and the preview (any color name or `#rrggbb`; Markdown inside it,
   `**bold**`, `` `code` ``..., still works; in code it stays as it is). Text
   colored in the visual editor is written back as such a span.
+* **Formulas:** `$…$` in the text and `$$…$$` on its own (displayed,
+  centred) are mathematics in TeX, drawn in the visual editor and the preview
+  in the text's font, size and colour (light or dark, sharp at any
+  resolution): `$x^2$` shows $x^2$, `$\frac{1}{2}$` shows $\frac{1}{2}$.
+  `Text` keeps their source, copying gives it (pasting `$…$` text makes
+  formulas), and the source editor colors them. A `$` that opens one is
+  followed by something other than a space, the closing one follows
+  something and isn't followed by a digit (`$5 and $10` stays text; `\$` is
+  a dollar sign; code is never maths). A formula that can't be read shows
+  its source in red (its tooltip says why). In the visual editor,
+  `ApplyFormat(vpMarkdownMath)` makes a formula of the TeX selected, and the
+  TeX of a formula selected (or at the caret) to edit it; in the source, it
+  puts `$` around the selection. What TeX is understood:
+  [Mathematics in Markdown](#mathematics-in-markdown).
 * **A log or a chat:** `AppendText(Markdown)` adds Markdown at the end of
   `Text` (joined to the last paragraph, unless it starts with a blank line);
   the view follows the end if it was showing it. `ScrollToEnd()` scrolls to
@@ -1481,6 +1495,50 @@ self.mdNotes.ApplyFormat(vpMarkdownBold)         # **the selection**; again: und
   and `SaveFile(FileName)` read and write the Markdown. `Locked` makes the
   editors read-only. It can be [bound](#data) to a field (`DataSource`,
   `DataField`).
+
+#### Mathematics in Markdown
+
+<!-- keywords: TeX, LaTeX, formula, equation, maths, math -->
+
+Formulas are TeX, the subset that mathematics lessons need, laid out the way
+TeX lays them out (its spacing between symbols, its display and text styles,
+smaller scripts). The MarkdownBox and VP6's help both show them; the TeX is
+read and laid out by vp6help's `tex` module (pure Python) and drawn by
+`texdraw` (Qt).
+
+| Write | For |
+| --- | --- |
+| `x^2`, `x_1`, `x_{i,j}^{2}`, `f'(x)` | exponents, subscripts, primes |
+| `\frac{a}{b}`, `\dfrac`, `\tfrac`, `\binom{n}{k}` | fractions (`\dfrac` as displayed), binomials |
+| `\sqrt{x}`, `\sqrt[3]{x}` | roots |
+| `\alpha` … `\omega`, `\Gamma` … `\Omega`, `\varepsilon`, `\varphi` | Greek letters |
+| `= < > \le \ge \ne \approx \equiv \sim \cong \propto \in \subset \to \Rightarrow \iff` | relations and arrows (`\not=`, `\not\in`: negated) |
+| `+ - \pm \mp \cdot \times \div \cup \cap \circ` | operators (a `-` with nothing before it is a sign) |
+| `\infty \partial \nabla \angle \triangle \degree \ldots \cdots \forall \exists \emptyset` | symbols |
+| `\sum_{i=1}^{n}`, `\prod`, `\int_a^b`, `\iint`, `\oint`, `\lim_{x \to 0}`, `\max`, `\min` | big operators and limits: their bounds below and above when displayed (`\limits`, `\nolimits` to choose) |
+| `\sin \cos \tan \log \ln \exp \det \gcd`, `\operatorname{lcm}` | functions, upright |
+| `\left( \frac{a}{b} \right)`, `\left\{ x \middle\vert x > 0 \right\}`, `\left. \right\vert`, `\big( \Big[ \bigg\{ \Bigg(` | delimiters that grow: `( ) [ ] \{ \} \vert \Vert \langle \rangle \lfloor \rfloor \lceil \rceil /` (`.`: none) |
+| `\lvert x \rvert`, `\lVert v \rVert` | absolute values and norms (bars typed as they are work too) |
+| `\begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}` | matrices: `matrix`, `pmatrix`, `bmatrix`, `Bmatrix`, `vmatrix`, `Vmatrix`, `smallmatrix`, `array{lcr}` |
+| `\begin{cases} x & x \ge 0 \\ -x & x < 0 \end{cases}` | cases (`dcases`, `rcases`) |
+| `\begin{aligned} 2x + 3 &= 7 \\ x &= 2 \end{aligned}` | lines aligned at their `&` (`gathered`: centred) |
+| `\text{if } x > 0`, `\textbf`, `\textit` | words (their spaces kept) |
+| `\mathrm{d}x`, `\mathbf{v}`, `\mathbb{R}`, `\mathcal{L}`, `\boldsymbol{\alpha}` | fonts |
+| `0.\overline{3}`, `\underline{x}`, `\bar{x}`, `\hat{x}`, `\tilde{x}`, `\dot{x}`, `\ddot{x}`, `\vec{v}` | repeating decimals, accents, vectors |
+| `\overrightarrow{AB}`, `\overleftrightarrow{AB}`, `\underbrace{a+b}_{2}`, `\overset{?}{=}` | rays, lines, braces, stacks |
+| `\boxed{x = 2}`, `\cancel{x}`, `\phantom{x}` | an answer boxed, a factor crossed out, room left |
+| `\color{red} x`, `\textcolor{blue}{y}` | colours (names or `#rrggbb`) |
+| `\, \: \; \! \quad \qquad`, `\displaystyle`, `\textstyle`, `\scriptstyle` | spaces and styles |
+| `a \bmod b`, `\pmod{n}` | modular arithmetic |
+
+So `$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$` shows
+$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$, and on a line of its own:
+
+$$\sum_{k=1}^{n} k = \frac{n(n+1)}{2}$$
+
+Commas between digits separate thousands (`1,000`); with a space after them
+they separate (`(1, 2)`). The rest of TeX (macros, `\def`, environments not
+listed) isn't understood: such a formula shows its source in red.
 
 <!-- BEGIN GENERATED: control MarkdownBox -->
 Default size 321 × 201. Property groups: Position, Colors, Font, Common.
@@ -4772,6 +4830,10 @@ vp6help-make -o MyApp.vp6help docs/ --package mymodule      # and a Python refer
 vp6help MyApp.vp6help --keyword Open                         # show it (--help: more)
 ```
 
+Markdown documents can have formulas, `$…$` and `$$…$$`, as in a
+[MarkdownBox](#mathematics-in-markdown); the viewer draws them in the page's
+font and colours, and copying them gives their TeX.
+
 The index has the documents' headings, a name in code that starts a table
 row or stands alone in a paragraph (`` **`Open(path)`** `` gives `Open`),
 and the keywords of `<!-- keywords: Open, Load -->` comments. VP6's own help
@@ -5089,7 +5151,7 @@ All constants are plain ints or strings.
 | ScaleMode (Form, PictureBox, Printer, Picture; ScaleX / ScaleY) | `vpUser`, `vpTwips`, `vpPoints`, `vpPixels`, `vpCharacters`, `vpInches`, `vpMillimeters`, `vpCentimeters`, `vpHimetric` | 0, 1, 2, 3, 4, 5, 6, 7, 8 |
 | Terminal.TerminalType | `vpTermXterm256Color`, `vpTermXterm`, `vpTermVT100`, `vpTermVT102`, `vpTermVT220`, `vpTermAnsi` | 0, 1, 2, 3, 4, 5 |
 | MarkdownBox.Mode | `vpMarkdownSource`, `vpMarkdownVisual`, `vpMarkdownPreview` | 0, 1, 2 |
-| MarkdownBox.ApplyFormat | `vpMarkdownBold`, `vpMarkdownItalic`, `vpMarkdownStrikeThru`, `vpMarkdownCode`, `vpMarkdownParagraph`, `vpMarkdownHeading1`, `vpMarkdownHeading2`, `vpMarkdownHeading3`, `vpMarkdownBulletList`, `vpMarkdownNumberedList`, `vpMarkdownQuote` | 1, 2, 3, 4, 10, 11, 12, 13, 20, 21, 22 |
+| MarkdownBox.ApplyFormat | `vpMarkdownBold`, `vpMarkdownItalic`, `vpMarkdownStrikeThru`, `vpMarkdownCode`, `vpMarkdownMath`, `vpMarkdownParagraph`, `vpMarkdownHeading1`, `vpMarkdownHeading2`, `vpMarkdownHeading3`, `vpMarkdownBulletList`, `vpMarkdownNumberedList`, `vpMarkdownQuote` | 1, 2, 3, 4, 5, 10, 11, 12, 13, 20, 21, 22 |
 | MDIForm.Arrange | `vpCascade`, `vpTileHorizontal`, `vpTileVertical`, `vpArrangeIcons` | 0, 1, 2, 3 |
 | MDIForm.ViewMode | `vpMDIWindows`, `vpMDITabs` | 0, 1 |
 | Printer.Orientation | `vpPRORPortrait`, `vpPRORLandscape` | 1, 2 |

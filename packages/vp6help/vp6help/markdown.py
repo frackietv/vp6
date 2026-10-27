@@ -6,7 +6,9 @@ paragraphs, emphasis (``*``, ``_``, ``**``, ``__``, ``~~``), code spans and
 fenced or indented code blocks, links and images (inline, ``<autolinks>`` and
 bare URLs), block quotes, nested bullet and ordered lists (task items too),
 tables with alignment, horizontal rules, hard line breaks and raw HTML (blocks,
-comments and inline tags pass through untouched).
+comments and inline tags pass through untouched); formulas, ``$…$`` in the text
+and ``$$…$$`` displayed (``vp6help.tex``), as ``<img src="vp6math:...">`` pictures
+that the viewer draws (``vp6help.texdraw.install``).
 
     html = to_html(text)
 """
@@ -16,7 +18,9 @@ from __future__ import annotations
 import html as _html
 import re
 
-__all__ = ["to_html", "escape"]
+from . import tex
+
+__all__ = ["to_html", "escape", "math_html"]
 
 TAB = 4
 
@@ -29,11 +33,21 @@ _LIST = re.compile(r"^( {0,3})([-*+]|\d{1,9}[.)])([ \t]+|$)")
 _HTML_BLOCK = re.compile(r"^ {0,3}<(?:!--|/?[A-Za-z][\w-]*(?:[\s/>]|$)|!\[CDATA\[|\?|![A-Z])")
 _TABLE_RULE = re.compile(r"^ {0,3}\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$")
 _TASK = re.compile(r"^\[([ xX])\][ \t]+")
+_DISPLAY_MATH = re.compile(r"^ {0,3}\$\$")
 
 
 def escape(text: str, quote: bool = False) -> str:
     """HTML-escape text (and double quotes, for attribute values)."""
     return _html.escape(text, quote=quote)
+
+
+def math_html(source: str, display: bool = False) -> str:
+    """A formula's HTML: a picture the viewer draws (its source as the alt text)."""
+    from urllib.parse import quote
+
+    kind = "display" if display else "inline"
+    return (f'<img class="math" src="vp6math:{kind},{quote(source, safe="")}" '
+            f'alt="{escape(source, True)}" />')
 
 
 def to_html(text: str) -> str:
@@ -97,6 +111,20 @@ def _blocks(lines: list[str]) -> list[tuple[str, object]]:
             blocks.append(("hr", None))
             i += 1
             continue
+        if _DISPLAY_MATH.match(line):  # $$ ... $$ on lines of their own: a displayed formula
+            j, found = i, None
+            text = "\n".join(lines[i:])
+            spans = tex.math_spans(text)
+            if spans and spans[0].start == len(line) - len(line.lstrip(" ")) and \
+                    spans[0].display:
+                rest = text[spans[0].end:]
+                if not rest.split("\n", 1)[0].strip():
+                    found = spans[0]
+                    j = i + text[:spans[0].end].count("\n") + 1
+            if found is not None:
+                blocks.append(("math", found.tex))
+                i = j
+                continue
         if _indent(line) >= 4:
             code = []
             while i < n and (not lines[i].strip() or _indent(lines[i]) >= 4):
@@ -280,6 +308,8 @@ def _render(blocks, tight: bool) -> list[str]:
             out.append(f"<pre><code{cls}>{escape(code)}</code></pre>")
         elif kind == "hr":
             out.append("<hr />")
+        elif kind == "math":
+            out.append(f'<p align="center">{math_html(data, True)}</p>')
         elif kind == "html":
             out.append(data)
         elif kind == "quote":
@@ -317,6 +347,8 @@ def _render(blocks, tight: bool) -> list[str]:
 
 
 def _join_lines(lines: list[str]) -> str:
+    if any("$" in line for line in lines) and len(lines) > 1:
+        lines = _keep_formulas_whole(lines)
     parts = []
     for k, line in enumerate(lines):
         last = k == len(lines) - 1
@@ -327,6 +359,28 @@ def _join_lines(lines: list[str]) -> str:
         else:
             parts.append(inline(line.strip()))
     return "\n".join(parts)
+
+
+def _keep_formulas_whole(lines: list[str]) -> list[str]:
+    """A paragraph's lines, those a formula spans joined into one."""
+    text = "\n".join(lines)
+    starts, offset = [], 0
+    for line in lines:
+        starts.append(offset)
+        offset += len(line) + 1
+
+    def line_of(position):
+        k = 0
+        while k + 1 < len(starts) and starts[k + 1] <= position:
+            k += 1
+        return k
+
+    merged = list(lines)
+    for span in reversed(tex.math_spans(text)):
+        first, last = line_of(span.start), line_of(span.end - 1)
+        if first < last:
+            merged[first:last + 1] = [" ".join(merged[first:last + 1])]
+    return merged
 
 
 # --- inline ---------------------------------------------------------------------------------
@@ -352,6 +406,13 @@ def inline(text: str) -> str:
         return f"\x00{len(store) - 1}\x00"
 
     text = _code_spans(text, keep)
+    if "$" in text:  # (formulas before escapes and emphasis: TeX has backslashes and stars)
+        pieces, position = [], 0
+        for span in tex.math_spans(text):
+            pieces.append(text[position:span.start])
+            pieces.append(keep(math_html(span.tex, span.display)))
+            position = span.end
+        text = "".join(pieces) + text[position:]
     text = _ESCAPABLE.sub(lambda m: keep(escape(m.group(1))), text)
     text = _AUTOLINK.sub(lambda m: keep(f'<a href="{escape(m.group(1), True)}">'
                                         f'{escape(m.group(1))}</a>'), text)

@@ -17,6 +17,12 @@ is edited; then ``Text`` is what ``markdown_of`` writes for its document.
 ``ApplyFormat`` (Ctrl+B and Ctrl+I too) formats the selection in either
 editor: bold, italic, strikethrough, code, headings, a paragraph, lists, a
 quote. Pictures with relative paths are found in the form's folder.
+
+Formulas (``$…$`` in the text, ``$$…$$`` displayed; TeX, as vp6help's
+``tex`` reads it) are drawn in the visual editor and the preview in the
+text's font and colour, written back as their source, copied as TeX, and
+colored in the source; ``ApplyFormat(vpMarkdownMath)`` makes one of the
+selection (or turns one back into its TeX to edit).
 """
 
 from __future__ import annotations
@@ -28,6 +34,7 @@ from PySide6.QtGui import (QColor, QDesktopServices, QFont, QFontDatabase, QImag
                            QSyntaxHighlighter, QTextBlock, QTextBlockFormat, QTextCharFormat, QTextCursor,
                            QTextDocument, QTextFormat, QTextListFormat)
 from PySide6.QtWidgets import QFrame, QPlainTextEdit, QTextEdit
+from vp6help import tex, texdraw
 
 from . import colors
 from ._props import P, enum_choices
@@ -37,10 +44,10 @@ from .controls import (_COLORS, _COMMON, _FONT, CONTROL_TYPES, Control, _add_mou
 MODE_SOURCE, MODE_VISUAL, MODE_PREVIEW = 0, 1, 2
 
 # ApplyFormat's formats (vpMarkdownBold...)
-BOLD, ITALIC, STRIKE, CODE = 1, 2, 3, 4
+BOLD, ITALIC, STRIKE, CODE, MATH = 1, 2, 3, 4, 5
 PARAGRAPH, HEADING1, HEADING2, HEADING3 = 10, 11, 12, 13
 BULLETS, NUMBERS, QUOTE = 20, 21, 22
-_MARKERS = {BOLD: "**", ITALIC: "*", STRIKE: "~~", CODE: "`"}
+_MARKERS = {BOLD: "**", ITALIC: "*", STRIKE: "~~", CODE: "`", MATH: "$"}
 
 _HEADING_SIZE = 4  # (a heading's FontSizeAdjustment is this minus its level, as Qt's own)
 _QUOTE_MARGIN = 40
@@ -50,7 +57,7 @@ _QUOTE_MARGIN = 40
 
 def _escape(text: str) -> str:
     """Plain text in Markdown: the characters that would format it escaped."""
-    text = re.sub(r"([\\`*\[\]<|])", r"\\\1", text)
+    text = re.sub(r"([\\`*\[\]<|$])", r"\\\1", text)
     text = re.sub(r"(?<!\w)_|_(?!\w)", r"\\_", text)  # (snake_case stays as it is)
     return text.replace("~~", "\\~\\~")
 
@@ -84,6 +91,9 @@ def _inline(block: QTextBlock, heading: bool = False) -> str:
         it += 1
         fmt = fragment.charFormat()
         text = fragment.text()
+        math = texdraw.is_math(fmt)
+        if math:  # (a formula: its source, $...$)
+            text = texdraw.formula_text(fmt) * text.count(texdraw.OBJECT)
         if fmt.isImageFormat():
             image = fmt.toImageFormat()
             alt = image.property(QTextFormat.ImageAltText) or ""
@@ -103,7 +113,7 @@ def _inline(block: QTextBlock, heading: bool = False) -> str:
             wanted.append(("mark", "*"))
         if fmt.fontStrikeOut():
             wanted.append(("mark", "~~"))
-        if fmt.fontFixedPitch():
+        if fmt.fontFixedPitch() and not math:
             wanted.append(("mark", "``" if "`" in text else "`"))
         core = text.strip()
         if not core:  # (only spaces: no markers of their own)
@@ -123,7 +133,7 @@ def _inline(block: QTextBlock, heading: bool = False) -> str:
                            f'<span style="color:{value}">' if kind == "color" else value)
                 open_.append((kind, value))
         code = any(value.startswith("`") for _kind, value in open_)
-        out.append(core.replace(" ", "\\\n") if code else
+        out.append(core if math else core.replace(" ", "\\\n") if code else
                    _escape(core).replace(" ", "\\\n"))
         pending = trail
     close(0)
@@ -200,13 +210,60 @@ def _marked(text: str) -> tuple[str, list[str]]:
     return "".join(out), colors_
 
 
+# Qt's Markdown reader would read TeX's backslashes and stars as Markdown: each
+# formula becomes a mark (a private-use character, U+F0000 + its number) first,
+# and then the formula itself once the document is made
+_MATH_MARK = 0xF0000
+
+
 def set_markdown(document: QTextDocument, text: str) -> None:
-    """Show Markdown in a document, as ``setMarkdown`` does, and its color
-    spans (``<span style="color:...">``, ``<font color=...>``) as colored text."""
+    """Show Markdown in a document, as ``setMarkdown`` does, its color spans
+    (``<span style="color:...">``, ``<font color=...>``) as colored text and
+    its formulas (``$…$``, ``$$…$$``) drawn."""
+    spans = tex.math_spans(text)[:0xFFFD]
+    if spans:
+        pieces, position = [], 0
+        for number, span in enumerate(spans):
+            pieces.append(text[position:span.start])
+            pieces.append(chr(_MATH_MARK + number))
+            position = span.end
+        text = "".join(pieces) + text[position:]
     marked, colors_ = _marked(text)
     document.setMarkdown(marked)
-    if not colors_:
-        return
+    if spans:  # (first: the color marks' positions count one per character)
+        _math_marks(document, spans)
+    if colors_:
+        _color_marks(document, colors_)
+
+
+def _math_marks(document: QTextDocument, spans: list) -> None:
+    """The formulas in place of their marks (centred when one is a paragraph)."""
+    found, position = [], 0
+    for char in document.toRawText():
+        code = ord(char)
+        if _MATH_MARK <= code < _MATH_MARK + len(spans):
+            found.append((position, spans[code - _MATH_MARK]))
+        position += 2 if code > 0xFFFF else 1
+    texdraw.register(document)
+    undo = document.isUndoRedoEnabled()
+    document.setUndoRedoEnabled(False)
+    try:
+        cursor = QTextCursor(document)
+        for position, span in reversed(found):
+            cursor.setPosition(position)
+            cursor.setPosition(position + 2, QTextCursor.KeepAnchor)
+            cursor.insertText(texdraw.OBJECT, texdraw.math_format(cursor.charFormat(), span.tex,
+                                                                  span.display))
+            if span.display and cursor.block().text().strip() == texdraw.OBJECT:
+                fmt = cursor.blockFormat()
+                fmt.setAlignment(Qt.AlignHCenter)
+                cursor.setBlockFormat(fmt)
+    finally:
+        document.setUndoRedoEnabled(undo)
+
+
+def _color_marks(document: QTextDocument, colors_: list[str]) -> None:
+    """Colored text in place of the color marks."""
     raw = document.toRawText()
     ranges, stack, marks = [], [], []
     for position, char in enumerate(raw):
@@ -311,13 +368,24 @@ def markdown_of(document: QTextDocument) -> str:
     return "\n\n".join(out) + "\n" if out else ""
 
 
+def _pieces(text: str) -> list:
+    """Text split into plain pieces and its formulas (MathSpans)."""
+    out, position = [], 0
+    for span in tex.math_spans(text):
+        out.append(text[position:span.start])
+        out.append(span)
+        position = span.end
+    out.append(text[position:])
+    return out
+
+
 # --- the source editor's colors --------------------------------------------------------------
 
 _MD_COLORS = {  # (on a light background, on a dark one)
     "heading": ("#0b5cad", "#6cb6ff"), "markup": ("#8c8c8c", "#7f8790"),
     "code": ("#a31515", "#ce9178"), "link": ("#0b5cad", "#6cb6ff"),
     "url": ("#7a7a7a", "#8b949e"), "list": ("#af00db", "#c586c0"),
-    "quote": ("#4f7a4f", "#8fbf8f"),
+    "quote": ("#4f7a4f", "#8fbf8f"), "math": ("#0b7a6b", "#4ec9b0"),
 }
 _FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 _HEADING = re.compile(r"^\s{0,3}(#{1,6})(\s|$)")
@@ -337,7 +405,8 @@ _CODE_SPAN = re.compile(r"(`+)(.+?)\1")
 
 class _MarkdownHighlighter(QSyntaxHighlighter):
     """Colors the Markdown source line by line; a block's state is 1 inside
-    a fenced code block (``` or ~~~: the fence in ``fences``)."""
+    a fenced code block (``` or ~~~: the fence in ``fences``), 2 inside a
+    displayed formula ($$ on lines of its own)."""
 
     def __init__(self, document):
         super().__init__(document)
@@ -385,11 +454,20 @@ class _MarkdownHighlighter(QSyntaxHighlighter):
                 self.setCurrentBlockState(1)
             return
         self.setCurrentBlockState(0)
-        if fence:
+        math_from = 0
+        if self.previousBlockState() == 2:  # inside $$ ... $$
+            end = _display_end(text)
+            if end < 0:
+                self.setFormat(0, len(text), formats["math"])
+                self.setCurrentBlockState(2)
+                return
+            self.setFormat(0, end, formats["math"])
+            math_from = end
+        elif fence:
             self.setFormat(0, len(text), formats["markup"])
             self.setCurrentBlockState(1)
             return
-        start = 0
+        start = math_from
         heading = _HEADING.match(text)
         if heading:
             self.setFormat(0, len(text), formats["heading"])
@@ -429,6 +507,14 @@ class _MarkdownHighlighter(QSyntaxHighlighter):
             self.setFormat(match.start(5), 1, formats["markup"])
         for match in _CODE_SPAN.finditer(text, start):
             self.setFormat(match.start(), match.end() - match.start(), formats["code"])
+        rest = text[math_from:]
+        spans = tex.math_spans(rest)
+        for span in spans:
+            self.setFormat(math_from + span.start, span.end - span.start, formats["math"])
+        opening = _display_start(rest, spans)
+        if opening >= 0:  # (a $$ that ends on a later line)
+            self.setFormat(math_from + opening, len(rest) - opening, formats["math"])
+            self.setCurrentBlockState(2)
 
     def _fence_char(self) -> str:
         """The character of the fence that opened the code block this line is in."""
@@ -440,6 +526,44 @@ class _MarkdownHighlighter(QSyntaxHighlighter):
                 return match.group(1)[0]
             block = block.previous()
         return "`"
+
+
+def _display_end(text: str) -> int:
+    """Where the $$ closing a displayed formula ends in a line (-1: not in it)."""
+    k = 0
+    while k < len(text) - 1:
+        if text[k] == "\\":
+            k += 2
+            continue
+        if text.startswith("$$", k):
+            return k + 2
+        k += 1
+    return -1
+
+
+def _display_start(text: str, spans: list) -> int:
+    """Where a $$ opens a displayed formula the line doesn't close (-1: none)."""
+    k = 0
+    for span in spans:
+        found = _unescaped_dollars(text, k, span.start)
+        if found >= 0:
+            return found
+        k = span.end
+    return _unescaped_dollars(text, k, len(text))
+
+
+def _unescaped_dollars(text: str, start: int, end: int) -> int:
+    k = start
+    while k < end - 1:
+        if text[k] == "\\":
+            k += 2
+            continue
+        if text[k] == "`":
+            return -1
+        if text.startswith("$$", k):
+            return k
+        k += 1
+    return -1
 
 
 # --- the editors ---------------------------------------------------------------------------------
@@ -495,6 +619,22 @@ class _VisualEdit(QTextEdit):
     def keyPressEvent(self, event):
         if not self.box._format_key(event) and not self._paragraph_key(event):
             super().keyPressEvent(event)
+
+    def createMimeDataFromSelection(self):
+        """Formulas are copied as their TeX (``$...$``)."""
+        return texdraw.mime_data(self.textCursor()) or super().createMimeDataFromSelection()
+
+    def insertFromMimeData(self, source):
+        """Pasted text's ``$...$`` formulas become formulas."""
+        if not source.hasHtml() and source.hasText() and "$" in source.text() and \
+                tex.math_spans(source.text()) and not self.isReadOnly():
+            cursor = self.textCursor()
+            cursor.beginEditBlock()
+            texdraw.insert_text(cursor, source.text())
+            cursor.endEditBlock()
+            self.setTextCursor(cursor)
+            return
+        super().insertFromMimeData(source)
 
     def loadResource(self, kind, url):
         """A picture wider than the control is shown smaller, to fit."""
@@ -695,9 +835,10 @@ class MarkdownBox(_EditorSelection, _TextEditing, Control):
 
     @property
     def TextHTML(self) -> str:
-        """The Markdown rendered as HTML (read-only)."""
+        """The Markdown rendered as HTML (read-only; formulas as their ``$TeX$``)."""
         document = QTextDocument()
         set_markdown(document, self.Text)
+        texdraw.to_source(document)
         return document.toHtml()
 
     # -- links ---------------------------------------------------------------------------------
@@ -722,9 +863,11 @@ class MarkdownBox(_EditorSelection, _TextEditing, Control):
     def ApplyFormat(self, Format: int) -> None:
         """Format the selection (or the caret's word or paragraph) in either
         editor, the same again undoing it: vpMarkdownBold, vpMarkdownItalic,
-        vpMarkdownStrikeThru, vpMarkdownCode (the text); vpMarkdownHeading1 to
-        3, vpMarkdownParagraph, vpMarkdownBulletList, vpMarkdownNumberedList,
-        vpMarkdownQuote (its paragraphs). Nothing in the preview."""
+        vpMarkdownStrikeThru, vpMarkdownCode, vpMarkdownMath (the text: in the
+        visual editor, its TeX becomes a formula, a formula its TeX again);
+        vpMarkdownHeading1 to 3, vpMarkdownParagraph, vpMarkdownBulletList,
+        vpMarkdownNumberedList, vpMarkdownQuote (its paragraphs). Nothing in the
+        preview."""
         Format = int(Format)
         if self._mode() == MODE_PREVIEW or self._widget.isReadOnly():
             return
@@ -740,6 +883,8 @@ class MarkdownBox(_EditorSelection, _TextEditing, Control):
                     self._source_inline(cursor, _MARKERS[Format])
                 else:
                     self._source_blocks(cursor, Format)
+            elif Format == MATH:
+                self._visual_math(cursor)
             elif Format in _MARKERS:
                 self._visual_inline(cursor, Format)
             else:
@@ -830,6 +975,44 @@ class MarkdownBox(_EditorSelection, _TextEditing, Control):
             cursor.mergeCharFormat(fmt)
         else:
             self._widget.mergeCurrentCharFormat(fmt)
+
+    def _visual_math(self, cursor: QTextCursor) -> None:
+        """The selection's TeX as a formula; formulas selected (or at the
+        caret) back to their TeX, selected."""
+        document = self._widget.document()
+        if not cursor.hasSelection():
+            position = cursor.position()
+            for at in (position - 1, position):  # (a formula just before or after the caret)
+                if 0 <= at < document.characterCount() - 1 and \
+                        document.characterAt(at) == texdraw.OBJECT:
+                    probe = QTextCursor(document)
+                    probe.setPosition(at + 1)
+                    if texdraw.is_math(probe.charFormat()):
+                        cursor.setPosition(at)
+                        cursor.setPosition(at + 1, QTextCursor.KeepAnchor)
+                        break
+            else:
+                cursor.select(QTextCursor.WordUnderCursor)
+        if not cursor.hasSelection():
+            return
+        start = cursor.selectionStart()
+        if texdraw.has_math(cursor):
+            source = "".join(piece.tex if isinstance(piece, tex.MathSpan) else piece
+                             for piece in _pieces(texdraw.text_of(cursor)))
+            plain = QTextCharFormat(cursor.charFormat())
+            plain.clearProperty(QTextFormat.ObjectType)
+            plain.setVerticalAlignment(QTextCharFormat.AlignNormal)
+            cursor.insertText(source, plain)
+            cursor.setPosition(start)
+            cursor.setPosition(start + len(source.encode("utf-16-le")) // 2,
+                               QTextCursor.KeepAnchor)
+            return
+        source = cursor.selectedText().replace(chr(0x2029), " ").strip()
+        if not source:
+            return
+        texdraw.insert_math(cursor, source)
+        cursor.setPosition(start)
+        cursor.setPosition(start + 1, QTextCursor.KeepAnchor)
 
     def _visual_blocks(self, cursor: QTextCursor, format_: int) -> None:
         document = self._widget.document()

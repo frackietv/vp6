@@ -1081,7 +1081,7 @@ The Terminal control.
 mouse is the program's, as the keys are); the generic mouse handling fires
 them otherwise.
 
-### `vp6/markdown.py` (≈810 lines)
+### `vp6/markdown.py` (≈1100 lines)
 
 The MarkdownBox control.
 
@@ -1109,11 +1109,26 @@ The MarkdownBox control.
   marks is colored (`mergeCharFormat`, outer spans first) and the marks
   removed, with undo off. `_inline` writes a fragment's foreground (not a
   link's) back as `<span style="color:#rrggbb">`.
+* Formulas: before Qt's reader sees the text (it would read TeX's
+  backslashes and stars as Markdown), `set_markdown` replaces each formula
+  that `vp6help.tex.math_spans` finds with a mark (`_MATH_MARK`, `U+F0000` +
+  its number: astral, two UTF-16 units), then `_math_marks` replaces each mark
+  with a formula object (`texdraw.math_format` of the format where it is:
+  bold, a heading's size, a color span's colour), a displayed formula alone in
+  its paragraph centred; this runs before `_color_marks` (which counts one
+  position per character). `_inline` writes a formula fragment back as its
+  source (`texdraw.formula_text`, one per object character, unescaped,
+  inside the emphasis markers); `_escape` escapes `$`. `_VisualEdit` copies a
+  selection with formulas as text with their TeX (`texdraw.mime_data`) and
+  pastes plain text's formulas as formulas (`texdraw.insert_text`).
+  `TextHTML` turns formulas back into their source (`texdraw.to_source`).
 * `_MarkdownHighlighter` colors the source (`_MD_COLORS`, light and dark;
   `_merge` adds a format character by character so bold and italic
   combine): a block state of 1 inside fenced code (`_fence_char` finds the
   opening fence), headings, rules, quotes, list markers, table bars, then
-  `_INLINE` emphasis, `_LINK` links and pictures, `_CODE_SPAN`.
+  `_INLINE` emphasis, `_LINK` links and pictures, `_CODE_SPAN`, then
+  formulas (`"math"`; a block state of 2 inside a `$$` display that goes on
+  over lines: `_display_end`, `_display_start`).
 * `_SourceEdit` (a `QPlainTextEdit`): Ctrl+B/I (`MarkdownBox._format_key`)
   and `_continue_list` (Enter after `_LIST_CONTINUE`'s prefix). `_VisualEdit`
   (a `QTextEdit`, also the preview): `_paragraph_key` (Enter after a heading
@@ -1133,7 +1148,9 @@ was there). `_apply_editing` sets read-only (Preview or Locked) and the
   interaction flags. `ApplyFormat` works on the source with markers and line
   prefixes (`_source_inline`, `_source_blocks`) and on the visual editor with
   character and block formats as Qt's Markdown reader makes them
-  (`_visual_inline`, `_visual_blocks`: heading level with bold and
+  (`_visual_inline`; `_visual_math`: the selection's TeX becomes a formula
+  (`texdraw.insert_math`), formulas selected or at the caret their TeX,
+  selected; `_visual_blocks`: heading level with bold and
   `FontSizeAdjustment` `_HEADING_SIZE - level`, `createList`, the quote's
   level and margins). Validation and mouse members are added
   (`_add_validation`, `_add_mouse_members`); registered in `CONTROL_TYPES`
@@ -2778,7 +2795,8 @@ The Claude window and the chat windows (the Codex window's are kinds of them).
   `state_text`, passed on to `_show_text`, `_show_tool(name,
   summary)`, `_show_tool_error(text)` and `_show_error`. It has `view` (a `QTextBrowser`: "You" and "Claude" headings by
   `_append` when the speaker changes; the user's text escaped, Claude's as
-  Markdown with `vp6help.markdown.to_html`; tool uses dimmed, tool errors
+  Markdown with `vp6help.markdown.to_html` (formulas drawn: `texdraw.install`
+  after each answer with one); tool uses dimmed, tool errors
   and failed results red, with a `vp6:login` link (`_link_clicked`:
   `loginRequested`) when it's about the login), `question` (Allow, Always
   Allow, Deny for the first of `_questions`: `answer()`; Always Allow also
@@ -3114,8 +3132,9 @@ explorer-style.
   * `pgMarkdown.py`: three MarkdownBoxes with the same text (`SAMPLE`):
     Source, Visual and Preview; each editor's Change shows its Text in the
     other two (`show_everywhere`, a `syncing` flag stopping the echo), the
-    `cmdFormat` buttons (a control array, `FORMATS`) call ApplyFormat on the
-    editor used last (GotFocus), the preview's LinkClick in the status label;
+    `cmdFormat` buttons (a control array, `FORMATS`, Math last) call ApplyFormat
+    on the editor used last (GotFocus), the preview's LinkClick in the status
+    label; the sample has a Maths section (formulas inline and displayed);
   * `pgEditing.py`: the editing API as a small code editor (a Courier
     TextBox with AcceptsTab): line and column in SelChange, Undo/Redo buttons
     following CanUndo/CanRedo (ClearUndo after loading), Indent at the line's
@@ -3705,7 +3724,7 @@ keyword, a keyword's topics in the documents' order (`entries`);
 (sections, most matches first, counting the heading too).
 `compile_pattern` makes a filter or search a regular expression.
 
-### `packages/vp6help/vp6help/markdown.py` (≈430 lines)
+### `packages/vp6help/vp6help/markdown.py` (≈490 lines)
 
 Markdown to HTML in pure Python, GitHub-style. `_blocks` parses lines into
 blocks (fenced and indented code, ATX and setext headings, rules, quotes,
@@ -3715,7 +3734,77 @@ tables (`_cells`: pipes in code spans and `\|` don't split)); `_render`
 writes them. `inline` handles a line: code spans first (`_code_spans`),
 then escapes, autolinks, raw tags, images, links, bare URLs, kept as
 placeholders while the rest is escaped and emphasized (`_emphasis`:
-`snake_case` and `__init__`-like words stay as they are).
+`snake_case` and `__init__`-like words stay as they are). Formulas are
+taken out right after the code spans (`tex.math_spans`) as `math_html`
+pictures (`<img class="math" src="vp6math:inline,<TeX, %-quoted>" alt="TeX">`,
+`display` for `$$`); a `$$` starting a block whose formula ends its line is
+a `math` block (`_DISPLAY_MATH`, rendered in a centred `<p>`), so its lines
+aren't read as Markdown; `_keep_formulas_whole` joins a paragraph's lines
+that a formula spans (`inline` works a line at a time).
+
+### `packages/vp6help/vp6help/tex.py` (≈1670 lines)
+
+Mathematics in pure Python. `math_spans(text)` finds the formulas of some
+Markdown (`MathSpan`: start, end, TeX, display), skipping code
+(`_code_ranges`: fenced blocks line by line, then code spans), escaped
+dollars, a `$` followed by a space, a closing `$` after a space or before a
+digit (`_inline_end`), formulas across a blank line (`_display_end` for
+`$$`). `_Parser` reads TeX into a math list: `Atom`s (class `ord`, `op`,
+`bin`, `rel`, `open`, `close`, `punct`, `inner`; a nucleus, `sup`, `sub`,
+`limits`, `color`), `Space` (mu), `StyleSet`; nuclei `Sym` (text, font
+`rm`/`it`/`bf`/`bfit`/`tt`), `BigOp` (`sum` or `int` family), lists
+(groups), `Frac`, `Radical`, `Delimited` (with `Middle`s), `SizedDelim`,
+`Accent`, `Decoration` (overline, arrows, braces, cancel, boxed, phantom),
+`Stack`, `Array` (environments), `TextRun`, `Negated`. The tables
+(`_GREEK`, `_SYMBOLS` by class, `_BIG_OPERATORS`, `_FUNCTIONS`,
+`_LIMIT_FUNCTIONS`, `_DELIMITERS`, `_NEGATIONS`, `_SPACES`, `_FONTS`,
+`_TEXT_FONTS`, `_ENVIRONMENTS`) say what is understood; `_BY_CHAR` classes
+symbols typed as themselves; `\mathbb`/`\mathcal` letters come from
+`_letter_in`; a comma between digits is ordinary. Errors are `TexError`
+(message, position). `_Layout` follows TeX's Appendix G: `hlist` (binary
+operators made ordinary where they join nothing, `_SPACING` between
+classes in mu, the medium and thick ones not in scripts), `scripts` (rule
+18: `_SIGMA`'s Computer Modern parameters, scaled by the font's x-height
+ratio), `operator` (rule 13: big operators scaled and centred on the axis,
+limits stacked with `_BIG_OP_SPACING`), `fraction` (rule 15), `radical`
+(rule 11: the surd drawn as three strokes), `delimited`/`delimiter_size`
+(rule 19: 90%, 0.5 em short at most), `delimiter` (the font's glyph when
+tall enough, else drawn: parentheses filled from two curves, brackets and
+bars as rules, braces and angles stroked), `accent`, `decoration`, `stack`,
+`negated`, `array` (cells in text or display style, struts, a quad between
+columns, `aligned`'s pairs right/left with `{}` before the relation, centred
+on the axis, delimiters around). `Box` holds items at offsets and its
+width, height, depth, italic correction and whether it is one glyph;
+`layout(source, metrics, display)` flattens it into `Layout(width, ascent,
+descent, items)` of `Text`, `Rule` and `Shape` (path commands) from the
+baseline; `render` gives the source in `ERROR_COLOR` with the message for a
+formula that doesn't parse. `Metrics` is made up (every glyph half an em),
+for tests and as the interface `texdraw.QtMetrics` implements.
+
+### `packages/vp6help/vp6help/texdraw.py` (≈430 lines)
+
+Formulas with Qt. `QtMetrics(font)` measures with `QFontMetricsF` (advance,
+tight ink bounds, the italic correction from ink past the advance) in fonts
+set in pixels (`qfont`, so any device draws what was measured; the base em
+from the point size at the screen's logical DPI), the x-height, the axis
+from `+`'s ink, a rule thickness. `paint(painter, layout, metrics, x, y,
+color)` draws it (text, filled rules, filled or stroked paths; named colours,
+the error colour from `error_color`). `layout_of` keeps layouts by source,
+display and `QFont.key()`. In a `QTextDocument` a formula is one
+`U+FFFC` with a char format of object type `MATH_OBJECT` holding
+`TEX_PROPERTY` and `DISPLAY_PROPERTY` (`math_format`, from the text's
+format where it goes: its resolved font gives the size, the pen the
+colour); `_MathObject` (a `QPyTextObject`, `register`ed on the document's
+layout) sizes and draws them. Qt puts an `AlignBaseline` object with only
+the font's descent (`QFontMetricsF`) below the baseline, so a deeper formula
+is `AlignMiddle` (Qt makes the line's ascent and descent from half the
+integer `QFontMetrics` x-height but draws the object centred in the whole
+line: `drawObject` finds the line, `_line_at`, and draws on its baseline);
+`_padding` adds the room either needs. `install(document)` turns the
+`vp6math:` pictures of vp6help's HTML into formulas; `insert_math`,
+`insert_text` (text with `$…$`), `text_of` (the selection with formulas as
+their source, `formula_text`), `has_math`, `mime_data` (copying: text only),
+`to_source` (every formula back to text).
 
 ### `packages/vp6help/vp6help/pydoc.py` (≈620 lines)
 
@@ -3761,6 +3850,9 @@ keywords with their topics as children when there are several) and Search
 (results: topic, location, matches); `HelpBrowser` (a `QTextBrowser`) reads
 pages and pictures from the file in `loadResource` for `vp6help:///path`
 addresses (`help_url`, `page_of`), a missing page shows `_missing_page`;
+`doSetSource` installs the page's formulas (`texdraw.install`; their
+`vp6math:` pictures load as a blank pixel meanwhile) and
+`createMimeDataFromSelection` copies them as TeX;
 links to other schemes go to `QDesktopServices`. The toolbar: Back,
 Forward, Home, Locate (`locate_in_contents`); zoom keys. `show_page`,
 `show_index`, `show_keyword(keyword, context)` (the topic whose title or
@@ -3946,6 +4038,7 @@ All tests run headless. `conftest.py`:
 | `test_file_controls.py` | DriveListBox, DirListBox and FileListBox: `file_matches` patterns; the drives (`user_drives`, Drive set from any path, a missing one raising, Refresh); the DirListBox's Path, negative and positive `List` indexes, ListIndex and Click, ShowHidden, Refresh, no Change for the same folder, opening a folder by double-click (and the FileListBox following); the FileListBox's Pattern (case-insensitive, several, `*.*`), Hidden, FileName selecting, setting Pattern and Path, Refresh keeping the selection, no AddItem/RemoveItem/Clear, MultiSelect; clicking a file; Toolbox, icons and Toolbox order. |
 | `test_text_editing.py` | The editing API of a multi-line TextBox and a RichTextBox (each test runs on both) and a single-line TextBox: LineCount, GetLine, GetLineFromChar, GetCharFromLine, GetColumnFromChar and IndexErrors; CurrentLine/CurrentColumn (keeping the column, clamping to the line) and SelChange (once per move, also for a selection); CaretLeft/Top/Height against the lines and GetCharFromPoint; FirstVisibleLine, ScrollToCaret and ScrollLeft; Undo, Redo, CanUndo, CanRedo, ClearUndo (no Change, the caret kept); AcceptsTab (and across a MultiLine rebuild). |
 | `test_markdown.py` | The MarkdownBox: `markdown_of` writing back what it read (headings, emphasis, lists nested and numbered, quotes, links, pictures, fenced code, tables, tasks, rules, escapes), a table after a code block, a list after another, spaces outside the markers, escaping; registration (Toolbox, events, validation and mouse members, binding, icon); the three modes (read-only preview, Locked, TextHTML), changing Mode keeping the text; typing in the visual editor writing Markdown, Ctrl+B/Ctrl+I, SelStart clamped to the editor; setting Text firing Change with the new text; colored text (spans and font tags, Markdown inside, code untouched, written back by `markdown_of`), AppendText and ScrollToEnd; ApplyFormat in the source (markers wrapped and unwrapped, the caret between new ones, lists, headings, quotes, paragraphs, a bad format) and in the visual editor (code, the caret's word, lists switched and removed, quotes, headings like Qt's own); Enter continuing lists in the source (numbers counting on, tasks, an empty item ending it) and in the visual editor (after a heading, an empty item); the source's colors (heading, list, markers, code fence, link and URL, dark ones on a dark BackColor); links (LinkClick in the preview, a plain click while editing doing nothing, Ctrl+click opening the browser); wide pictures fitted; LoadFile and SaveFile. |
+| `test_maths.py` | Mathematics in Markdown: formulas found (inline and displayed, money and escaped dollars and spaces not, never in code, across a line but not a blank one); TeX's errors (each message, the source shown in the error colour instead); everything understood laid out in both styles; layouts compared with made-up metrics: scripts (raised and lowered, smaller, primes), spacing classes (binary, relation, a sign, punctuation, operators, none in scripts, thousands separators, explicit spaces), fonts (italic letters, upright digits and capital Greek, `\mathbb`...), fractions (the bar on the axis, display and text styles, centring, binomials), roots, operators and limits (displayed, beside, integrals, `\limits`, centred on the axis), delimiters growing (drawn, as tall as TeX wants, `\middle`, `\big`...), matrices, cases, aligned and arrays, accents, overlines, arrows, boxes, colours and styles; vp6help's HTML (pictures, display blocks across lines, a formula over two lines, tables, headings); with Qt: metrics following the font, a glyph drawn pixel for pixel as the font's, colours light and dark, high DPI, `\color` and errors in red; the MarkdownBox (formulas in the preview and the visual editor, centred displays, the format where they are, `markdown_of` writing them back, TextHTML; on the line's baseline, shallow and deep; following FontSize and the colours; errors' tooltips; copying as TeX and pasting formulas, a typed dollar escaped; ApplyFormat(vpMarkdownMath) both ways and in the source; the source's colors, over lines too); the help viewer (formulas drawn, copied as TeX, zoomed, kept on reload). |
 | `test_richtextbox.py` | The RichTextBox: text and selection (SelText across lines, replacing, clamping, Change and SelChange); formatting the selection (every Sel... property, None when mixed, the ForeColor where no color was set, None resetting the color); the format of what is typed next; paragraph alignment (one, mixed); AppendText (its own format, the selection kept, the view following the end only when it was there); Find (after the selection, match case, whole word, End, no highlight); GetLineFromChar; TextHTML, SelHTML, SaveFile/LoadFile by extension and FileType; MaxLength trimming; Locked against typing; pasting HTML without pictures or tables; ScrollBars and BorderStyle; Toolbox, icon and constants. |
 | `test_list_items.py` | ListBox and ComboBox per-item properties: ItemData read and set (any value, None until set, `IndexError` past the end), values and fonts moving with their items when sorted or another is removed, VB's `ItemData(ListIndex)`, ItemBold, ItemItalic and ItemForeColor (and None again), ItemImage by Key or Index in the ImageList (an unknown one raising, following its changes, cleared), a picture file without one.; NewIndex (at an Index, sorted in, the mark removed, -1 after RemoveItem and Clear), TopIndex, Selected set and SelCount with MultiSelect, a Checkbox ListBox (ItemCheck from the user only, not for other item changes, new items checkable, back to Standard), a Simple Combo (its list shown, choosing an item, free text, ItemData, changing Style keeping everything without Click), DropDown.; List(i) changed in place (ListBox, ComboBox, a Simple Combo) |
 | `test_listview.py` | The ListView: its designer lines (`parse_column`, `parse_list_item`); ListItems (Index and Key, SubItems read and set, Add at an Index, Text, Key changes, errors, Remove, Clear); ColumnHeaders (labels, widths, alignments of existing and new cells, a new column, HideColumnHeaders); the four views keeping one selection, MultiSelect; sorting by the Text or a SubItem (as text), new and renamed items sorted in; ItemClick, HitTest and ColumnClick from the mouse, ItemCheck from the user but not code, Checkboxes off; Icons in the Icon view and SmallIcons in the others, unknown ones raising, an ImageList's changes; the form file round trip; the designer (the Properties window's Columns and Items); Toolbox, icon and constants. |

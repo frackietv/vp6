@@ -18,6 +18,8 @@ Any page, place, keyword or search can be asked for:
     show_help("MyHelp.vp6help", keyword="MsgBox")       # from Python (a Qt program)
 
 Pages are addressed as ``vp6help:///<page path>#<anchor>`` inside the viewer.
+Formulas (``$…$`` in the Markdown) are drawn in the page's font and colours;
+copying them gives their TeX.
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QHBoxLayout, QLabel, QLi
                                QTextBrowser, QTextEdit, QToolBar, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
-from . import __version__
+from . import __version__, texdraw
 from .helpfile import HelpFile, compile_pattern
 
 __all__ = ["SCHEME", "HelpViewer", "show_help", "main"]
@@ -109,7 +111,18 @@ class HelpBrowser(QTextBrowser):
                 getattr(self.viewer, "browser", None) is self:
             self.viewer._restyle()
 
+    def doSetSource(self, name, type=QTextDocument.UnknownResource):
+        super().doSetSource(name, type)
+        texdraw.install(self.document())  # (the page's formulas: drawn, not pictures)
+
+    def createMimeDataFromSelection(self):
+        return texdraw.mime_data(self.textCursor()) or super().createMimeDataFromSelection()
+
     def loadResource(self, kind, url):
+        if url.scheme() == texdraw.SCHEME:  # (a formula: drawn once the page is in)
+            image = QImage(1, 1, QImage.Format_ARGB32)
+            image.fill(0)
+            return image
         if url.scheme() != SCHEME:
             return super().loadResource(kind, url)
         help_ = self.viewer.help

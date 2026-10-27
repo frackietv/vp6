@@ -50,6 +50,32 @@ show_help("MyHelp.vp6help", keyword="Open")
 
 Arguments can come from a file: `vp6help-make @MyHelp.args`.
 
+## Mathematics
+
+Markdown documents can have formulas in TeX: `$…$` in the text, `$$…$$` on
+lines of their own (displayed, centred). The viewer draws them in the page's
+font and colours (dark too, zoomed too, sharp on any screen), and copying
+them gives their TeX. A `$` that opens a formula is followed by something
+other than a space and the closing one isn't followed by a digit, so
+`$5 and $10` stays text; `\$` is a dollar sign; code is never maths. A
+formula that can't be read shows its source in red.
+
+The TeX understood is what mathematics lessons need: fractions, exponents and
+subscripts, roots, Greek letters, relations, operators and arrows, absolute
+values, delimiters that grow (`\left( … \right)`), sums, products, integrals
+and limits with their bounds, functions, matrices, `cases`, `aligned`, text,
+fonts (`\mathbb{R}`...), accents and vectors, `\overline` for repeating
+decimals, braces, `\boxed`, `\cancel`, colours, spaces and styles.
+
+* `vp6help.tex` (pure Python) finds the formulas in Markdown (`math_spans`),
+  reads them (`parse`, `TexError`) and lays them out as TeX does (`layout`,
+  `render`: boxes with baselines, TeX's spacing classes and styles), as text,
+  rules and shapes to draw, measured through a `Metrics`.
+* `vp6help.texdraw` (Qt) measures a QFont (`QtMetrics`), paints a layout
+  (`paint`), and puts formulas into a `QTextDocument` as inline objects that
+  follow the text's font and colour (`insert_math`, `install`, `text_of`,
+  `mime_data` for copying, `insert_text` for pasting).
+
 ## The file
 
 A `.vp6help` file is a zip archive: `vp6help.json` (the title, home page,

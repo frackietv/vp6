@@ -1,6 +1,5 @@
 # VP6 backlog
 
-- **[Education]** Step 2, mathematics in Markdown: inline `$…$` and display `$$…$$` formulas in a TeX subset: fractions, exponents and subscripts, roots, Greek letters, relations and operators (≤ ≠ ± · ×), absolute values, parentheses that grow, sums, integrals and limits with their bounds, matrices, `cases`, `\text`, an overline for repeating decimals, vectors. A Qt-free module in vp6help parses them and lays them out (boxes with baselines, TeX's spacing classes). vp6help's viewer and the MarkdownBox (Preview and Visual) draw them in the text's font and colour (light and dark, the font size followed, high DPI). The source stays `$…$` in `Text` and is copied as TeX. A formula that doesn't parse shows its source in red. Documented with the Markdown docs, shown on the Kitchen Sink's MarkdownBox page, and tested by comparing layouts and grabs.
 - **[Education]** Step 3, checking answers: `vp6edu.answers`, pure Python (no sympy). A student's typed maths is read leniently (`2x`, `x^2`, `3(x+1)`, `sqrt(x)`, `√`, `π`, `½`, mixed numbers `2 1/3`, percents, `1,000`) and checked by kind:
   - a choice (one or many);
   - a number: exact with `Fraction`, or within a tolerance, in a required form when asked (simplest form, a decimal to n places, scientific notation);

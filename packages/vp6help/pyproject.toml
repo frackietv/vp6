@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vp6help"
-version = "0.1.0"
+version = "0.1.1"
 description = "Help files like the old .chm help: a maker (Markdown, HTML, Python packages) and a viewer with contents, index and search"
 readme = "README.md"
 license = "MIT"

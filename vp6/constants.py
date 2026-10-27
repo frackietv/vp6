@@ -423,6 +423,7 @@ vpMarkdownBold = 1
 vpMarkdownItalic = 2
 vpMarkdownStrikeThru = 3
 vpMarkdownCode = 4
+vpMarkdownMath = 5
 vpMarkdownParagraph = 10
 vpMarkdownHeading1 = 11
 vpMarkdownHeading2 = 12

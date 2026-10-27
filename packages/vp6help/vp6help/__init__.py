@@ -11,7 +11,7 @@
     show_help("MyHelp.vp6help", keyword="Open")
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .helpfile import HelpFile, IndexEntry, SearchHit  # noqa: E402
 

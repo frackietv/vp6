@@ -521,6 +521,9 @@ class ChatWindow(QWidget):
         if who in ("user", "assistant"):
             self._speaker = who
         self.view.append(body)
+        if "vp6math:" in body:  # (formulas in the answer: drawn)
+            from vp6help import texdraw
+            texdraw.install(self.view.document())
         self.view.moveCursor(QTextCursor.End)
         self.view.ensureCursorVisible()
 

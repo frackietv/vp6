@@ -1,5 +1,19 @@
 # VP6 features
 
+**Version:** 0.4.68
+**Date:** 2026-10-26
+
+## Mathematics in Markdown
+
+- Formulas in TeX: `$…$` in the text, `$$…$$` displayed on lines of their own (centred), in VP6's help and help files made with vp6help, in the MarkdownBox's visual editor and preview, and in the Claude and Codex chats' answers
+- Laid out as TeX does: its spacing between symbols (ordinary, operators, binary, relations, opening, closing, punctuation), display and text styles, scripts and scripts of scripts smaller, fractions on the maths axis, roots, big operators centred on the axis with their limits below and above when displayed
+- The TeX that lessons need: fractions and binomials, exponents, subscripts and primes, roots, Greek letters, relations, operators and arrows (negated with `\not`), absolute values, norms and delimiters that grow (`\left`, `\middle`, `\right`, `\big` to `\Bigg`), sums, products, integrals and limits with their bounds, functions, matrices, `cases`, `aligned`, `gathered`, `array`, text, fonts (`\mathbb{R}`...), accents and vectors, `\overline` for repeating decimals, rays and lines, braces, `\overset`, `\boxed`, `\cancel`, colours, spaces and styles; commas between digits separate thousands
+- Drawn in the text's font, size and colour, light or dark, sharp at any resolution, on the text's baseline; zooming the help makes them bigger; a formula that can't be read shows its source in red (its tooltip says why)
+- `$5 and $10` stays text, `\$` is a dollar sign, code is never maths
+- The source stays `$…$` in the MarkdownBox's `Text`; copying formulas gives their TeX, pasting `$…$` text makes formulas, the source editor colors them, a dollar typed in the visual editor is written as `\$`
+- `ApplyFormat(vpMarkdownMath)`: the TeX selected becomes a formula, a formula becomes its TeX again to edit (in the source: `$` around the selection); the Kitchen Sink's Markdown page has a Math button and formulas
+- vp6help 0.1.1: `vp6help.tex` (pure Python: finding formulas in Markdown, reading TeX, laying it out as text, rules and shapes) and `vp6help.texdraw` (Qt: measuring a font, painting, formulas as inline objects in a `QTextDocument`); its README and VP6's API reference list the TeX understood
+
 **Version:** 0.4.67
 **Date:** 2026-10-26
 
