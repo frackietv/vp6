@@ -2,7 +2,11 @@
 
 * ``load_subjects()`` (``vp6edu.subjects``) reads the subjects vp6edu has
   (Mathematics, after OpenStax's textbooks) or those in other folders;
-* ``vp6edu-check`` (``vp6edu.check``) validates them and their written lessons.
+* ``vp6edu-check`` (``vp6edu.check``) validates them and their written lessons;
+* ``vp6edu.answers`` reads a student's typed maths and checks it against an
+  answer of a kind (a choice, a number, an expression, an equation's
+  solutions, an inequality, a point or line on a graph...), and makes
+  ``Exercise``s from the makers in a lesson's ``exercises.py``.
 
     from vp6edu import load_subjects
     lesson = load_subjects()["math"].lesson("math/prealgebra-2e/1.2")
@@ -11,7 +15,7 @@ The core is pure Python (no Qt). The lessons are adapted from OpenStax's
 books, each one attributed: see ``Lesson.attribution``.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .subjects import (SUBJECTS, Book, Chapter, LearningPath, Lesson, Licence,  # noqa: E402
                        Subject, SubjectError, load_subject, load_subjects)

@@ -1,12 +1,5 @@
 # VP6 backlog
 
-- **[Education]** Step 3, checking answers: `vp6edu.answers`, pure Python (no sympy). A student's typed maths is read leniently (`2x`, `x^2`, `3(x+1)`, `sqrt(x)`, `√`, `π`, `½`, mixed numbers `2 1/3`, percents, `1,000`) and checked by kind:
-  - a choice (one or many);
-  - a number: exact with `Fraction`, or within a tolerance, in a required form when asked (simplest form, a decimal to n places, scientific notation);
-  - an expression: equivalence by evaluating at random points (exact fractions where possible), and a required form when asked (factored, expanded, simplified radicals);
-  - an equation's solutions as a set, an inequality's or interval's solution (`x > 3`, `(3, ∞)`, a number line), an ordered pair or tuple, a point or line placed on a Graph (step 4), units.
-
-  Known mistakes (a sign error, the reciprocal, an unsimplified answer) get their own feedback. Every check returns right, not yet, or unreadable, with a message. An `Exercise` holds its prompt (Markdown with maths), its answer, hints given one at a time, and a worked solution. Functions in a lesson's `exercises.py` make exercises from a seeded `random.Random`, so each try can have new numbers. Tests cover every kind.
 - **[Education]** Step 4, a Graph control for mathematics (`vp6/graph.py`, Toolbox category Graphics):
   - a coordinate plane: axes, a grid, labels, ticks in multiples of π for trigonometry, equal or free scales, pan and zoom with the mouse;
   - plots: functions given as Python callables or as expression text (`AddFunction`, with a domain; holes and asymptotes left unjoined), parametric and polar curves, points, segments, rays, vectors, polygons, regions shaded between curves, half-planes of inequalities, labels with maths (step 2);

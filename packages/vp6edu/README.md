@@ -61,6 +61,53 @@ A section may also have:
 
 A lesson's id is `<subject>/<book>/<section>`.
 
+## Exercises and checking answers
+
+A lesson's `exercises.py` has functions that make exercises from a seeded
+`random.Random`, so each try can have new numbers; `vp6edu.answers` checks
+what the student types:
+
+```python
+from fractions import Fraction
+from vp6edu.answers import Exercise, Number, make
+
+def add_fractions(rng):
+    b = rng.randint(3, 9)
+    a = rng.randint(1, b - 2)
+    return Exercise(f"Add $\\frac{{{a}}}{{{b}}} + \\frac{{1}}{{{b}}}$.",
+                    Number(Fraction(a + 1, b), form="simplest"),
+                    hints=["The denominators are the same.", "Add the numerators."],
+                    solution="Add the numerators and keep the denominator.")
+
+exercise = make(add_fractions, seed=7)   # the same seed, the same numbers
+result = exercise.check("6/8")           # Result(status, message, mistake)
+result.status, result.message            # "not yet", "Right, but simplify it: ..."
+exercise.hint()                          # the hints, one at a time
+```
+
+Typed maths is read leniently: `2x`, `x^2`, `x²`, `3(x+1)`, `sqrt(x)`, `√x`,
+`π`, `½`, `2 1/3`, `25%`, `1,000`, `×`, `÷`, `−`, `|x|`. Every check returns
+`right`, `not yet` or `unreadable`, with a message, and names the known
+mistake it found (`sign`, `reciprocal`, `unsimplified`, `form`, `rounding`,
+`approximate`, `units`, `swapped`, `endpoint`, `flipped`...). A lesson adds
+its own with `mistakes={"7": "That's 3 + 4: multiply instead."}`.
+
+| Kind | Right when | Asks for |
+| --- | --- | --- |
+| `Choice("B", options)` | the option (or options, given a list) chosen by letter, index or text | |
+| `Number(value)` | the same number, exactly (fractions) or within `tolerance`, or rounded to `places` | `form`: integer, fraction, simplest, mixed, decimal, percent, scientific, simplified, any; `units` (with `convert`) |
+| `Expression("2(x+3)")` | it equals the answer at random points | `form`: simplified, expanded, standard, factored |
+| `Equation("y = 2x + 1")` | it says the same (a multiple, or the same solutions) | `form`: slope-intercept, standard; `solved_for` |
+| `Solutions([2, -3])` | the same set of solutions (`NO_SOLUTION`, `ALL_REAL`) | |
+| `Inequality("x > 3")` | the same set, in inequality or interval notation, or a number line's `Interval`s | `form`: interval, inequality |
+| `Pair((2, 3))` | the same ordered pair or tuple | `names` for `x = 2, y = 3` |
+| `Point(2, 3)`, `Line("y = 2x + 1")` | the point, or two points on the line, placed on a graph, or typed | `tolerance` |
+
+`generators(module)` lists a module's makers (its public functions of one
+argument), `load_exercises(path)` loads an `exercises.py`, and
+`verify(maker)` checks that over many seeds each exercise's own answer
+(`answer.text`) checks right.
+
 ## Licence
 
 vp6edu's code is under the MIT License. OpenStax publishes the books under

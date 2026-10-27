@@ -1,5 +1,15 @@
 # VP6 features
 
+**Version:** 0.4.69
+**Date:** 2026-10-26
+
+## Education: checking answers
+
+- vp6edu 0.1.1 with `vp6edu.answers` (pure Python, no sympy): a student's typed maths read leniently: `2x`, `x^2`, `x²`, `3(x+1)`, `sqrt(x)`, `√x`, `π`, `½`, mixed numbers (`2 1/3`), percents, `1,000`, `×`, `÷`, `−`, `|x|`, `sin^2 x`, scientific notation; when it can't be read, the message says why
+- Answers of every kind, each checked as right, not yet or unreadable, with a message: a choice (one or many, by letter, number or the option's text); a number (exact with fractions, within a tolerance, rounded to some places, in a form: integer, fraction, simplest form, mixed number, decimal, percent, scientific notation, simplified roots; with units, converted when allowed); an expression (equal at random points, exactly where it can be; simplified, expanded, standard or completely factored when asked); an equation (the same equation however written; slope-intercept or standard form, solved for a letter); an equation's solutions as a set (`x = ±3`, no solution, all real numbers); an inequality's solution in inequality or interval notation, or as a number line's intervals; an ordered pair or tuple; a point or a line placed on a graph
+- Known mistakes get their own feedback: a sign error, the reciprocal, an unsimplified answer, the wrong form, rounding, an approximation where the exact value is wanted, a percent or place value slip, missing or other units, coordinates swapped, an endpoint included or not, an inequality pointing the wrong way, the right slope with the wrong intercept; lessons add their own
+- Exercises: a prompt (Markdown with maths), an answer, hints given one at a time, a worked solution; made by the functions in a lesson's `exercises.py` from a seeded random generator, so each try can have new numbers; `verify` checks that every exercise's own answer passes over many seeds
+
 **Version:** 0.4.68
 **Date:** 2026-10-26
 
