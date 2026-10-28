@@ -254,6 +254,9 @@ def _check_lesson_text(lesson: Lesson, text: str, problem):
         if not result.right:
             problem(where, f"the Try It answer {block.strip()}: its own text "
                            f"{answer.text!r} checks {result.status}")
+        if _unlisted_choice(answer):
+            problem(where, f"the Try It answer {block.strip()}: a Choice without options "
+                           "(they're shown as buttons)", warning=True)
     for ref in _LESSON_LINK.findall(text):
         try:
             lesson.subject.lesson(ref)
@@ -265,6 +268,12 @@ def _check_lesson_text(lesson: Lesson, text: str, problem):
         for part in SECTION_PARTS:
             if part.lower() not in headings:
                 problem(where, f"has no ## {part}", warning=True)
+
+
+def _unlisted_choice(answer) -> bool:
+    from .answers import Choice
+
+    return isinstance(answer, Choice) and not answer.options
 
 
 def _check_exercises(lesson: Lesson, problem, seeds: int):
@@ -287,6 +296,9 @@ def _check_exercises(lesson: Lesson, problem, seeds: int):
             problem(where, message)
         if found:
             continue
+        if _unlisted_choice(make(maker, 0).answer):
+            problem(where, f"{maker.__name__}: a Choice without options (they're shown "
+                           "as buttons)", warning=True)
         for seed in range(seeds):
             exercise = make(maker, seed)
             text = "\n\n".join([exercise.prompt, exercise.solution, *exercise.hints])

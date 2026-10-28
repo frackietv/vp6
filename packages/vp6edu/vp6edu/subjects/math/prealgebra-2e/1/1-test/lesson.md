@@ -64,7 +64,7 @@ Number(210000)
 Number(406)
 ```
 
-**11.** What is $15 \div 0$? (A) $0$ (B) $15$ (C) $1$ (D) undefined (1.5)
+**11.** What is $15 \div 0$? (1.5)
 
 ```answer
 Choice("D", ["0", "15", "1", "undefined"])

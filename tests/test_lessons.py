@@ -254,6 +254,15 @@ def test_try_it_answers():
         education.try_it_answer("Nothing(5)")
 
 
+def test_choices_are_given_as_buttons():
+    answer = education.try_it_answer('Choice("B", ["$1$", "0", "1/2"])')
+    assert education.choice_options(answer) == ([("A", "1"), ("B", "0"), ("C", "1/2")], False)
+    assert education.choice_options(education.try_it_answer('Choice(["A"], ["x", "y"])'))[1]
+    assert education.choice_options(education.try_it_answer('Choice([], ["x", "y"])'))[1]
+    assert education.choice_options(education.try_it_answer('Choice("B")')) is None
+    assert education.choice_options(education.try_it_answer("Number(5)")) is None
+
+
 # --- progress and exercises ---------------------------------------------------------------
 
 def test_progress_is_kept_in_the_settings(memory_settings):
@@ -378,6 +387,64 @@ def test_opening_a_lesson_project_opens_the_lesson_window(window, subject, tmp_p
     lesson.reset_progress(ask=False)
     assert education.progress("edu/book-a/1.1").right == []
     assert lesson.record.exercises == 2
+
+
+CHOICE_EXERCISES = '''\
+from vp6edu.answers import Choice, Exercise
+
+
+def pick_one(rng):
+    return Exercise("Which is even?", Choice("B", ["1", "2", "3"]))
+
+
+def all_that_apply(rng):
+    return Exercise("Which are odd?", Choice(["A", "C"], ["1", "2", "3"]))
+
+
+def none_apply(rng):
+    return Exercise("Which are negative?", Choice([], ["1", "2", "3"]))
+'''
+
+
+def test_multiple_choices_are_radio_buttons_or_check_boxes(window, subject, tmp_path):
+    from PySide6.QtWidgets import QCheckBox, QRadioButton
+
+    lesson = subject.lesson("book-a/1.3")
+    lesson.lesson_md.write_text(LESSON_MD.format(
+        number=lesson.number, title=lesson.title, attribution=lesson.attribution).replace(
+        "Number(5)", 'Choice("B", ["$1$", "0", "2"])'))
+    lesson.exercises.write_text(CHOICE_EXERCISES)
+    assert window.open_lesson(lesson, str(tmp_path / "VP6 Lessons"))
+    w = window.lesson_window()
+    # A Try It: radio buttons, one at a time, in place of the field
+    try_it = w.try_its[0]
+    choices = try_it.choices
+    assert try_it.field.isHidden() and not choices.several
+    assert all(isinstance(b, QRadioButton) for b in choices.buttons)
+    assert [b.text() for b in choices.buttons] == ["(A)  1", "(B)  0", "(C)  2"]
+    assert try_it.check().message == "Choose an option."
+    choices.buttons[2].click()
+    assert not try_it.check().right
+    choices.buttons[1].click()
+    assert choices.response() == ["B"] and try_it.check().right
+    # Exercises: radio buttons for one answer...
+    assert w.answer_field.isHidden() and w.choices is not None and not w.choices.several
+    assert all(isinstance(b, QRadioButton) for b in w.choices.buttons)
+    w.choices.choose("B")
+    assert w.check().right
+    # ...check boxes for every one that's right
+    w.next_exercise()
+    assert w.choices.several and all(isinstance(b, QCheckBox) for b in w.choices.buttons)
+    assert not w.choices.note.isHidden()
+    assert "at least one" in w.check().message
+    w.choices.buttons[0].click()
+    assert "another one" in w.check().message
+    w.choices.buttons[2].click()
+    assert w.choices.response() == ["A", "C"] and w.check().right
+    # ...and none of them, checked as nothing checked
+    w.next_exercise()
+    assert w.choices.response() == [] and w.check().right
+    assert w.score_label.text() == "3 of 3 right (3 tried)"
 
 
 def test_previous_and_next_go_along_the_path(window, subject, tmp_path):

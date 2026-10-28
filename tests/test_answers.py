@@ -111,6 +111,19 @@ def test_a_choice_of_many():
     assert "another one" in answer.check("A").message
     assert answer.check("A, B").message == "B isn't right."
     assert answer.text == "A, C"
+    assert answer.check([]).message == "Not yet: at least one of them is right."
+    assert status(answer, "none") == NOT_YET
+
+
+def test_a_choice_of_none():
+    answer = Choice([], ["x", "y", "z"])
+    assert answer.many and answer.text == "none"
+    for response in ("none", "None of them.", "none of the above", [], ()):
+        assert status(answer, response) == RIGHT, response
+    assert status(answer, "A") == NOT_YET
+    one = Choice("A", ["x", "y"])  # (choosing nothing isn't an answer to a choice of one)
+    assert one.check([]).message == "Choose an option."
+    assert status(one, "none") == UNREADABLE
 
 
 # --- numbers -------------------------------------------------------------------------------

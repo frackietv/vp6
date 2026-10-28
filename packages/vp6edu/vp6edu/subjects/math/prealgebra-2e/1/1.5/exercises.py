@@ -30,7 +30,7 @@ def one_zero_and_itself(rng):
     case, answer = rng.choice([(f"{n} \\div 1", str(n)), (f"{n} \\div {n}", "1"),
                                (f"0 \\div {n}", "0"), (f"{n} \\div 0", "undefined")])
     options = [str(n), "1", "0", "undefined"]
-    return Exercise(f"What is ${case}$?\n\n(A) ${n}$  (B) $1$  (C) $0$  (D) undefined",
+    return Exercise(f"What is ${case}$?",
                     Choice(answer, options),
                     hints=["Think of the multiplication: what times the divisor gives the "
                            "dividend?", "No number times 0 gives anything but 0."],

@@ -1,5 +1,14 @@
 # VP6 features
 
+**Version:** 0.4.73
+**Date:** 2026-10-27
+
+## Education: multiple choices as buttons
+
+- A multiple choice in a lesson (a Try It or an exercise) is answered with buttons under the question, not typed: radio buttons when one option is right (a, b, c or d), check boxes when every option that's right is to be checked (a, b, c, a and b, a and c, b and c, all of them, or none of them)
+- With check boxes, checking nothing answers "none of them"; checking some of the right ones says how many more there are (vp6edu 0.1.4: `Choice([], options)` for none, `"none"` typed)
+- The pilot chapter's questions no longer list their options in the text; `vp6edu-check` warns of a `Choice` without options, and Writing Lessons says how to write each kind
+
 **Version:** 0.4.72
 **Date:** 2026-10-27
 

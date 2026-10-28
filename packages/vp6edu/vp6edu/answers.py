@@ -1188,8 +1188,13 @@ def _labels(count):
 
 class Choice(Answer):
     """A multiple choice: ``correct`` is an option's letter (``"B"``), index or
-    text, or a list of them when several are right. Responses: ``"b"``,
-    ``"(B)"``, ``"B, D"``, an option's text, an index or a list."""
+    text, or a list of them when several can be right (``[]`` when none is).
+    Responses: ``"b"``, ``"(B)"``, ``"B, D"``, an option's text, an index or a
+    list; ``"none"`` (or an empty list) for none of them. The Lesson window
+    shows the options as radio buttons, or as check boxes when several can be
+    right."""
+
+    NONE = ("none", "none of them", "none of these", "none of the above")
 
     def __init__(self, correct, options=(), mistakes=None):
         super().__init__(mistakes)
@@ -1219,11 +1224,16 @@ class Choice(Answer):
 
     @property
     def text(self):
-        return ", ".join(sorted(self.correct))
+        return ", ".join(sorted(self.correct)) or "none"
 
     def _read(self, response):
         if isinstance(response, (list, tuple, set, frozenset)):
-            return frozenset(self._label(item) for item in response)
+            got = frozenset(self._label(item) for item in response)
+            if not got and not self.many:
+                raise Unreadable("Choose an option.")
+            return got
+        if self.many and " ".join(str(response).split()).strip(".").lower() in self.NONE:
+            return frozenset()
         if isinstance(response, int):
             return frozenset([self._label(response)])
         text = str(response).strip()
@@ -1252,6 +1262,8 @@ class Choice(Answer):
         if known:
             return known
         wrong, missing = got - self.correct, self.correct - got
+        if self.many and not got:
+            return Result(NOT_YET, "Not yet: at least one of them is right.")
         if self.many and not wrong:
             more = "another one is" if len(missing) == 1 else f"{len(missing)} more are"
             return Result(NOT_YET, f"Those are right, but {more} too.")

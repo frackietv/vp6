@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 from dataclasses import asdict, dataclass, field
 
@@ -408,6 +409,20 @@ def try_it_answer(source: str):
     from vp6edu.answers import answer_of
 
     return answer_of(source)
+
+
+def choice_options(answer) -> tuple[list[tuple[str, str]], bool] | None:
+    """A multiple choice's options, shown as buttons rather than typed:
+    ``([(letter, text)], several)``, ``several`` when more than one (or none)
+    can be right, so they're check boxes, not radio buttons. None for other
+    answers and for a Choice without options (its letter is typed). An
+    option's ``$…$`` loses its dollars (the buttons don't lay out maths)."""
+    from vp6edu.answers import Choice
+
+    if not isinstance(answer, Choice) or not answer.options:
+        return None
+    texts = [re.sub(r"\$([^$]*)\$", r"\1", str(option)) for option in answer.options]
+    return list(zip(answer.labels, texts)), answer.many
 
 
 # --- progress ----------------------------------------------------------------------------------

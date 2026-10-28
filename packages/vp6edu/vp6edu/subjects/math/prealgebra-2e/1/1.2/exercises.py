@@ -44,8 +44,7 @@ def order_of_addends(rng):
 
 def name_the_parts(rng):
     a, b = rng.randint(10, 99), rng.randint(10, 99)
-    return Exercise(f"In ${a} + {b} = {a + b}$, what is ${a + b}$ called?\n\n"
-                    "(A) an addend  (B) the sum  (C) the plus",
+    return Exercise(f"In ${a} + {b} = {a + b}$, what is ${a + b}$ called?",
                     Choice("B", ["an addend", "the sum", "the plus"]),
                     hints=["The numbers added are addends; the result has its own name."],
                     solution=f"${a + b}$ is the sum; ${a}$ and ${b}$ are the addends.",

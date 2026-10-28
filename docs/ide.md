@@ -209,12 +209,15 @@ Lesson Window opens it again), with three tabs:
 
 * **Lesson:** the lesson, with its maths: the objectives, worked examples,
   key terms. A **Try It** has a field of its own: type the answer and press
-  Enter or Check, and it says whether it's right. At the end are the
+  Enter or Check, and it says whether it's right. A multiple choice has
+  its options instead: radio buttons when one is right, check boxes when
+  you're to check every one that's right (or none). At the end are the
   attribution and a link to the section on openstax.org. Scrolled to the
   end, the lesson counts as read.
 * **Exercises:** one exercise after another, with new numbers each time.
   Type the answer (fractions, powers, roots and so on are read as you'd
-  write them: `3/4`, `x^2`, `√2`), or place it on the graph (a point, a line
+  write them: `3/4`, `x^2`, `√2`), choose it (radio buttons for one
+  answer, check boxes for all that apply), or place it on the graph (a point, a line
   through two points, intervals on a number line), then **Check**. **Hint**
   gives the hints one at a time, **Show Solution** the worked solution (a
   right answer after it isn't counted), **New Numbers** another exercise of

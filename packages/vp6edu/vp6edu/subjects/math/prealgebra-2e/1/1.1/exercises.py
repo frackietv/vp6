@@ -58,8 +58,7 @@ def counting_or_whole(rng):
                (f"{rng.randint(1, 20)}.{rng.randint(1, 9)}", "neither")]
     shown, kind = rng.choice(numbers)
     options = ["both", "only a whole number", "neither"]
-    return Exercise(f"Is ${shown}$ a counting number, a whole number, both or neither?\n\n"
-                    "(A) both  (B) only a whole number  (C) neither",
+    return Exercise(f"Is ${shown}$ a counting number, a whole number, both or neither?",
                     Choice(kind, options),
                     hints=["The counting numbers start at 1; the whole numbers at 0.",
                            "Fractions and decimals that aren't whole are neither."],
@@ -88,8 +87,7 @@ def place_of_a_digit(rng):
     i = rng.randrange(len(text))
     place = _PLACES[len(text) - 1 - i]
     options = list(_PLACES[:len(text)])
-    return Exercise(f"In ${_tex(n)}$, what is the place value of the digit ${text[i]}$?\n\n"
-                    "Type the place's name (ones, tens, hundreds, thousands, ten thousands...).",
+    return Exercise(f"In ${_tex(n)}$, what is the place value of the digit ${text[i]}$?",
                     Choice(place, options),
                     hints=["Count the places from the right: ones, tens, hundreds, then "
                            "thousands, ten thousands, hundred thousands, millions..."],
@@ -128,9 +126,7 @@ def name_a_number(rng):
              _name(n // 1000 * 1000), _name(int(str(n)[::-1].lstrip("0") or 1))} - {_name(n)}
     options = [_name(n)] + sorted(wrong)[:3]
     rng.shuffle(options)
-    letters = "ABCD"
-    listed = "\n".join(f"- ({letters[i]}) {option}" for i, option in enumerate(options))
-    return Exercise(f"Which is the name of ${_tex(n)}$?\n\n{listed}",
+    return Exercise(f"Which is the name of ${_tex(n)}$?",
                     Choice(options.index(_name(n)), options),
                     hints=["Split the number into periods of three digits from the right.",
                            "Name each period's number, then the period's name."],

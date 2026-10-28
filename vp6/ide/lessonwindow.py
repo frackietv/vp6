@@ -9,7 +9,8 @@ with three tabs:
   the end, the lesson counts as read. A link to ``lesson:<id>`` (a Be
   Prepared's) opens that lesson.
 * **Exercises:** the makers of ``exercises.py`` one after another, answered
-  in a field or on a Graph (``education.graph_settings``), with Check,
+  in a field, with buttons (a multiple choice: ``ChoiceButtons``) or on a
+  Graph (``education.graph_settings``), with Check,
   Hint, Show Solution, New Numbers, Next Exercise and the score.
 * **Lab:** the lesson's ``## Lab`` section, Run the Lab (F5) and the lab's
   forms (a double click opens one's designer).
@@ -25,9 +26,10 @@ import html
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QPalette, QTextOption
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-                               QListWidgetItem, QMessageBox, QPushButton, QScrollArea, QSizePolicy,
-                               QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
+                               QListWidget, QListWidgetItem, QMessageBox, QPushButton,
+                               QRadioButton, QScrollArea, QSizePolicy, QTabWidget, QTextBrowser,
+                               QVBoxLayout, QWidget)
 
 from . import icons
 from .logic import education
@@ -115,8 +117,45 @@ class MarkdownView(QTextBrowser):
         self._fit()
 
 
+class ChoiceButtons(QWidget):
+    """A multiple choice's options (``education.choice_options``): radio
+    buttons when one is right, check boxes when several (or none) can be."""
+
+    def __init__(self, options: list[tuple[str, str]], several: bool, parent=None):
+        super().__init__(parent)
+        self.several = several
+        self.labels = [label for label, _ in options]
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        self.group = QButtonGroup(self)
+        self.group.setExclusive(not several)
+        self.buttons: list = []
+        for label, text in options:
+            button = (QCheckBox if several else QRadioButton)(f"({label})  {text}")
+            self.group.addButton(button)
+            self.buttons.append(button)
+            layout.addWidget(button)
+        if several:
+            self.note = QLabel("Check every one that's right (or none of them).")
+            self.note.setStyleSheet(f"color: {_colors()['dim']}")
+            layout.addWidget(self.note)
+
+    def response(self) -> list[str]:
+        """The letters checked (for ``Choice.check``)."""
+        return [label for label, button in zip(self.labels, self.buttons) if button.isChecked()]
+
+    def choose(self, *labels: str) -> None:
+        """Check these options (and no others)."""
+        self.group.setExclusive(False)
+        for label, button in zip(self.labels, self.buttons):
+            button.setChecked(label in labels)
+        self.group.setExclusive(not self.several)
+
+
 class TryIt(QWidget):
-    """A Try It's answer field in the lesson, checked in place."""
+    """A Try It's answer field in the lesson (or its options, for a multiple
+    choice), checked in place."""
 
     def __init__(self, source: str, parent=None):
         super().__init__(parent)
@@ -131,17 +170,30 @@ class TryIt(QWidget):
             self.problem = ""
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 2, 6, 8)
-        self.field = QLineEdit()
+        self.field = QLineEdit(self)
         self.field.setPlaceholderText("Your answer")
         self.field.returnPressed.connect(self.check)
         self.button = QPushButton("Check")
         self.button.clicked.connect(self.check)
         self.result = QLabel()
         self.result.setWordWrap(True)
-        layout.addWidget(QLabel("Try it:"))
-        layout.addWidget(self.field, 2)
-        layout.addWidget(self.button)
-        layout.addWidget(self.result, 3)
+        options = education.choice_options(self.answer)
+        self.choices = ChoiceButtons(*options) if options else None
+        if self.choices is not None:  # (the options, with Check and the result under them)
+            self.field.hide()
+            layout.addWidget(QLabel("Try it:"), 0, Qt.AlignTop)
+            column = QVBoxLayout()
+            column.addWidget(self.choices)
+            row = QHBoxLayout()
+            row.addWidget(self.button)
+            row.addWidget(self.result, 1)
+            column.addLayout(row)
+            layout.addLayout(column, 1)
+        else:
+            layout.addWidget(QLabel("Try it:"))
+            layout.addWidget(self.field, 2)
+            layout.addWidget(self.button)
+            layout.addWidget(self.result, 3)
         if self.problem:  # (the lesson's mistake: shown where the field would be)
             self.field.setEnabled(False)
             self.button.setEnabled(False)
@@ -158,7 +210,8 @@ class TryIt(QWidget):
     def check(self):
         if self.answer is None:
             return None
-        result = self.answer.check(self.field.text())
+        response = self.choices.response() if self.choices else self.field.text()
+        result = self.answer.check(response)
         self._show(result.message or result.status, "right" if result.right else "wrong")
         return result
 
@@ -316,6 +369,10 @@ class LessonWindow(QWidget):
         self.answer_field.setPlaceholderText("Your answer")
         self.answer_field.returnPressed.connect(lambda: self.check())
         column.addWidget(self.answer_field)
+        self.choice_box = QWidget()  # (the options of a multiple choice)
+        QVBoxLayout(self.choice_box).setContentsMargins(0, 0, 0, 0)
+        self.choices = None
+        column.addWidget(self.choice_box)
         self.graph_box = QWidget()
         self.graph_box.setMinimumHeight(280)
         QVBoxLayout(self.graph_box).setContentsMargins(0, 0, 0, 0)
@@ -365,6 +422,7 @@ class LessonWindow(QWidget):
             widget.setEnabled(ready)
         self.feedback.set_markdown("")
         self._set_graph(None)
+        self._set_choices(None)
         if not ready:
             self.exercise_label.setText("")
             self.prompt.set_markdown(self.exercise_problem or "This lesson has no exercises yet.")
@@ -379,7 +437,9 @@ class LessonWindow(QWidget):
         self.answer_field.clear()
         graph = education.graph_settings(exercise)
         self._set_graph(graph)
-        self.answer_field.setVisible(graph is None)
+        options = education.choice_options(exercise.answer) if graph is None else None
+        self._set_choices(options)
+        self.answer_field.setVisible(graph is None and options is None)
         self.hint_button.setEnabled(exercise.hints_left > 0)
         self.score_label.setText(session.score_text())
 
@@ -397,8 +457,18 @@ class LessonWindow(QWidget):
         self.graph_box.layout().addWidget(self.graph._widget)
         self.graph._widget.show()
 
+    def _set_choices(self, options) -> None:
+        if self.choices is not None:
+            self.choices.hide()
+            self.choices.deleteLater()
+            self.choices = None
+        self.choice_box.setVisible(options is not None)
+        if options is not None:
+            self.choices = ChoiceButtons(*options)
+            self.choice_box.layout().addWidget(self.choices)
+
     def check(self):
-        """Check the answer given (typed, or placed on the graph)."""
+        """Check the answer given (typed, chosen, or placed on the graph)."""
         if not (self.session and self.session.makers):
             return None
         if self.graph is not None:
@@ -406,6 +476,8 @@ class LessonWindow(QWidget):
             if response is None or response == []:
                 self._feedback("Place your answer on the graph first.", "wrong")
                 return None
+        elif self.choices is not None:
+            response = self.choices.response()
         else:
             response = self.answer_field.text()
         result = self.session.check(response)

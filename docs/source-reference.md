@@ -2753,13 +2753,17 @@ The Lesson window (its logic in `logic/education.py`). `MarkdownView` (a
 for the formulas, links in the theme's colour, pictures from the lesson's
 folder; `set_markdown`, `set_html(make)` remade when the theme changes; links open
 in the browser, `lesson:<id>` ones go to `lessonClicked`).
-`TryIt` (a field, Check, the result in place; a Try It that can't be read
-says why). `_GraphHost` (a `_PanelHost` for the Graph an exercise is
+`ChoiceButtons(options, several)` (a multiple choice's options: radio buttons in
+an exclusive `QButtonGroup`, or check boxes with a note when several or none
+can be right; `response()` the letters checked, `choose(*labels)`).
+`TryIt` (a field, or `choices` for a multiple choice; Check, the result in
+place; a Try It that can't be read says why). `_GraphHost` (a `_PanelHost` for the Graph an exercise is
 answered on). **`LessonWindow(lesson, project)`**: the header and the
 progress (`state_label`), `tabs`: Lesson (`lesson_views`, `try_its`,
 `footer` with the openstax.org link; `_check_read` at the scroll's end;
 `open_linked` for a `lesson:` link), titled by the lesson's `label`,
-Exercises (`session`, `prompt`, `answer_field` or `graph`, `check`, `hint`,
+Exercises (`session`, `prompt`, `answer_field`, `choices` in `choice_box`
+(`_set_choices`) or `graph`, `check`, `hint`,
 `show_solution`, `new_numbers`, `next_exercise`, `feedback`, `score_label`),
 Lab (`lab_view`, `run_button`, `forms`, `lab_ran`); `previous_lesson`/
 `next_lesson` with their buttons, `reset_progress(ask)`. Signals
@@ -3744,7 +3748,9 @@ skipped). **Text:** `parse_lesson` → `LessonText(title, parts, lab)`: `Part`s
 of Markdown and ```` ```answer ```` blocks, the `## Lab` sections (to the next
 `#`/`##` heading or rule) apart; fences followed so headings in code don't
 count; `answer_names`, `try_it_answer` (evaluated with vp6edu.answers' names,
-`Fraction`, `math`: vp6edu.answers' `answer_of`; ValueError). **Progress:**
+`Fraction`, `math`: vp6edu.answers' `answer_of`; ValueError), `choice_options`
+(a `Choice`'s `(letter, text)` options for buttons, dollars dropped, and
+whether several can be right; None to type the answer). **Progress:**
 `Progress` (read, right, tried, exercises, lab_run; `state`: `NOT_STARTED`,
 `IN_PROGRESS`, `DONE`), `progress`/`save_progress`/`reset_progress` (JSON
 under `education/progress/<id>` in `settings`); `lesson_state` ("planned"
@@ -4059,7 +4065,8 @@ sections, in that order, numbered `<chapter>-<kind>`, their pages starting
 `<chapter>-`; folders that aren't a chapter's or a lesson's, or a shared
 lesson's own. Written lessons in depth: `_check_lesson_text` (formulas laid
 out by vp6help's `tex.layout` when installed: `_formula_problems`; Try Its'
-answers read by `answer_of` and checking their own text; `lesson:` links;
+answers read by `answer_of` and checking their own text; a `Choice` without
+options, a warning: `_unlisted_choice`; `lesson:` links;
 `SECTION_PARTS` missing: warnings), `_check_exercises` (loads; `EXERCISES`
 10–20 makers for a section, a warning; `verify` over `seeds`, `SEEDS` = 50;
 prompts', hints' and solutions' formulas), `check_lab` (with `labs`: a copy
@@ -4093,7 +4100,9 @@ factored: `_irreducible`). **Units:** `_UNIT_TABLE` (length, mass, time,
 volume, area, angles, money, temperatures, mph), `_unit` (powers, `square`,
 `cubic`, `/` and `per`), `_split_units` (a leading `$`, a trailing unit).
 **Kinds** (`Answer`: `_read`, `_judge`, `_same_answer`, `_known` for
-`mistakes`; `text` is the answer as typed): `Choice`, `Number` (tolerance,
+`mistakes`; `text` is the answer as typed): `Choice` (one right, or a list:
+several or none, `NONE`'s words or an empty list; an empty choice of one is
+unreadable), `Number` (tolerance,
 `places` with `_rounded`, `NUMBER_FORMS`, units and `convert`; mistakes:
 rounding, approximate, sign, reciprocal, percent, place value), `Expression`,
 `Equation` (`_equations_equivalent`: a constant multiple, or the same zeros

@@ -31,7 +31,7 @@ On a **number line** the whole numbers are equally spaced marks, $0$ at the left
 
 *Solution.* The counting numbers start at $1$: $7$, $12$ and $100$. The whole numbers are those and $0$: $0$, $7$, $12$ and $100$. Neither list has $2.5$ or $\frac{3}{4}$.
 
-**Try it.** Which one of these is a whole number but not a counting number? (A) $1$ (B) $0$ (C) $\frac{1}{2}$ (D) $10$
+**Try it.** Which one of these is a whole number but not a counting number?
 
 ```answer
 Choice("B", ["1", "0", "1/2", "10"])
@@ -83,7 +83,7 @@ Numbers from twenty-one to ninety-nine take a hyphen, and we never say "and" in 
 
 *Solution.* The periods are $7$ millions, $045$ thousands and $312$ ones: *seven million, forty-five thousand, three hundred twelve*.
 
-**Try it.** Which is the name of $30{,}506$? (A) thirty thousand, fifty-six (B) three thousand, five hundred six (C) thirty thousand, five hundred six (D) thirty thousand, five hundred sixty
+**Try it.** Which is the name of $30{,}506$?
 
 ```answer
 Choice("C", ["thirty thousand, fifty-six", "three thousand, five hundred six", "thirty thousand, five hundred six", "thirty thousand, five hundred sixty"])

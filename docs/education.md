@@ -140,7 +140,7 @@ def add_three_digit_numbers(rng):
 | Kind | For | Example |
 |---|---|---|
 | `Number` | a number: exact, within a `tolerance`, rounded to `places`, in a `form`, with `units` | `Number(5137)`, `Number(Fraction(3, 4), form="simplest")` |
-| `Choice` | one option (or several) by letter or text | `Choice("B", ["1", "0", "1/2", "10"])` |
+| `Choice` | one option, or every one that's right (several or none) | `Choice("B", ["1", "0", "1/2", "10"])`, `Choice(["A", "C"], [...])` |
 | `Expression` | an expression, equivalent, maybe in a form | `Expression("2x + 6", form="expanded")` |
 | `Equation` | an equation, maybe solved for a letter | `Equation("y = 2x + 1")` |
 | `Solutions` | an equation's solutions, as a set | `Solutions([2, -3])` |
@@ -155,8 +155,19 @@ type them:
 Number(a - b, mistakes={str(b - a): "Less than turns the order round."})
 ```
 
-A `Choice`'s options must be in the prompt (a list, `(A) … (B) …`): the
-student types the letter or the option's text.
+A multiple choice is answered with buttons, not typed: the Lesson window
+shows a `Choice`'s options under the question, lettered `(A)`, `(B)`…
+Don't list them in the prompt as well.
+
+* **One answer** (a, b, c or d): `Choice("B", options)`, shown as **radio
+  buttons**.
+* **Every one that's right** (a, b, c, a and b, a and c, b and c, all of
+  them, none of them): `Choice(["A", "C"], options)`, shown as **check
+  boxes**; `Choice([], options)` when none is right. Don't write the
+  combinations as options of their own.
+* Options are plain text: the buttons don't lay out maths, so a `$15$`
+  shows as `15`. Keep `\frac` and other TeX out of them (write `1/2`).
+* A `Choice` needs its options (`vp6edu-check` warns of one without them).
 
 ## The Lab Project: `lab/`
 
@@ -210,7 +221,8 @@ lessons, prerequisites without cycles) and every written lesson:
 * `lesson.md`: its heading and attribution; every formula lays out; every
   Try It's answer can be read, and its own answer checks right; every
   `lesson:` link leads to a lesson; a section has Learning Objectives, Be
-  Prepared and Key Concepts (warnings).
+  Prepared and Key Concepts (warnings); a `Choice` has its options
+  (a warning).
 * `exercises.py`: it loads; a section has 10 to 20 makers (a warning
   otherwise); over 50 seeds each maker makes an exercise whose prompt has
   something in it, whose formulas (prompt, hints, solution) lay out, and
